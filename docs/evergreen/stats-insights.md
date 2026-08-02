@@ -13,7 +13,7 @@ covers:
   - packages/client/src/pages/settings/SettingsInsightsPage.tsx
   - packages/client/src/pages/settings/SettingsStatsLayoutPage.tsx
   - packages/client/src/pages/settings/SettingsTodoStatsLayoutPage.tsx
-last-reviewed: 2026-07-31
+last-reviewed: 2026-08-01
 ---
 
 # 统计与洞察

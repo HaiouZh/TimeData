@@ -1,10 +1,11 @@
 import { renderToStaticMarkup } from "react-dom/server";
+import { MemoryRouter } from "react-router";
 import { describe, expect, it } from "vitest";
 import StyleguidePage from "./StyleguidePage.js";
 
 describe("StyleguidePage", () => {
   it("renders token and typography sections", () => {
-    const html = renderToStaticMarkup(<StyleguidePage />);
+    const html = renderToStaticMarkup(<MemoryRouter><StyleguidePage /></MemoryRouter>);
     expect(html).toContain("设计语言预览");
     expect(html).toContain("--color-accent");
     expect(html).toContain("--color-track-agent");
@@ -23,7 +24,7 @@ describe("StyleguidePage", () => {
   });
 
   it("lists the typography and number role classes", () => {
-    const html = renderToStaticMarkup(<StyleguidePage />);
+    const html = renderToStaticMarkup(<MemoryRouter><StyleguidePage /></MemoryRouter>);
     expect(html).toContain("td-text-display");
     expect(html).toContain("td-num");
     expect(html).toContain("td-time");

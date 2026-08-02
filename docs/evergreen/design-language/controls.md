@@ -9,7 +9,7 @@ covers:
   - scripts/check-design-language.mjs
 contracts:
   - packages/client/src/components/ui/**
-last-reviewed: 2026-07-31
+last-reviewed: 2026-08-01
 ---
 
 # 设计语言 · 控件库
@@ -43,6 +43,25 @@ last-reviewed: 2026-07-31
 | `ActionToastBar.tsx` | — | 轻提示条（toast 视觉 + 动作按钮），非原生控件替代件 |
 
 控件本身在棘轮豁免目录内（它们是对原生元素的合法封装），可以内部使用原生元素。
+
+### 基座组件（页面壳 / 状态占位，2026-08-01 批 1 落地）
+
+非原生控件替代件，但跨页面消费，契约如下：
+
+| 组件 | 契约 | 定位 |
+|---|---|---|
+| `PageBackButton.tsx` | `{ to?: string; onClick?: () => void; label?: string }`；`to` 存在渲染 `Link` 否则 `button`；`hotarea-lg` 圆形 + Phosphor `CaretLeft`；`aria-label` 默认「返回」 | 全站唯一返回导航形态（44px 触控下限） |
+| `PageHeader.tsx` | `{ title: string; back?: ReactNode; actions?: ReactNode; className?: string; children?: ReactNode }`；sticky 顶栏 `bg-page/95 backdrop-blur` + `td-text-title truncate`；`children` 是 header 内第二行（保持 sticky） | 统一页面壳：返回位 + 标题 + 右侧动作区；透明度全站 `/95` |
+| `EmptyState.tsx` | `{ icon?: ReactNode; title: string; description?: string; action?: ReactNode; variant?: "card" \| "inline" }`；card = `rounded-card bg-surface`，inline = 轻提示 | 全站唯一空态组件；图标走 Phosphor，**无 emoji**（拍板） |
+| `LoadingState.tsx` | `{ label?: string; className?: string }`；默认「正在加载…」，居中 + `td-text-body text-ink-3`，`className` 透传（页面用它套 flex-1 等布局） | 替换「正在加载…」裸文本 |
+| `StatusBanner.tsx` | `{ tone: "info" \| "warn" \| "danger"; children }`；容器 + tone（info 中性 / warn / danger 语义色） | 状态条统一容器；具体文案由消费页填（全量状态收口见批 3） |
+
+定位方式：全站页面级返回一律 `PageBackButton`；页面顶部导航壳一律 `PageHeader`（无导航壳语义的页面不强造，如统计卡片页）；空态一律 `EmptyState`；页面级加载占位一律 `LoadingState`。
+
+### 热区与内容色点语义类（index.css @layer components）
+
+- `.hotarea-sm / .hotarea-md / .hotarea-lg`：32 / 36 / 44px 固定正方形触控热区档（44px = 触控下限），替代散装 `size-8/9/11` + 文字 padding 按钮。
+- `.content-dot`：6px 圆点（styleguide 6px 规范），承载分类 / 项目 / 状态身份色；颜色由调用方提供，hover 放大供辨识。替代散装 `size-2.5` / `h-2 w-2` 色点。
 
 `Sheet` 的 `portal?: boolean` 决定弹层挂在原地还是 `document.body`，默认 `false`（就地渲染）。`DateField` / `TimeField` 同样透传 `portal`。
 

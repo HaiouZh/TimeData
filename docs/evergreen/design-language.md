@@ -97,6 +97,9 @@ last-reviewed: 2026-08-02
 - 禁止裸字号 `text-{xs,sm,base,lg,xl,2xl…}` 与字号任意值 `text-[…px|rem]`：规则 `bare-text-size`，须用 `.td-text-{caption,label,body,title,display}` 语义类（`.css` 与测试文件豁免）。
 - 禁止全局浮层裸高 z-index（`z-30/40/50/60/70`、`z-[…]`）：规则 `bare-zindex`，须用 `z-[var(--z-*)]`；局部 stacking `z-10`/`z-20` 放行（测试文件豁免）。注：`60` 不在当前 `--z-*` 阶梯（30/40/50/70）里，列在禁单是防新造全局层级；规则实际禁除 `0/10/20` 外的一切数字档。
 - 禁止裸任意尺寸/间距/定位值（`w-[34px]`、`top-[4.75rem]` 等纯数字+单位）：规则 `bare-arbitrary-value`，收进 token 或标准 Tailwind 阶；`calc()`/`var()` 例外，字号任意值归 `bare-text-size`（测试文件豁免）。数值无法落进 token 阶梯又确属某功能专有（如某区限高）时，正当出口是在 `index.css` 里加一条**功能语义类**（如 `.todo-project-group-body { max-height: 45vh; }`）交组件消费——不是在组件里留裸任意值，也不是进 allowlist。转盘 / 弹层 / 图表框 / 星图画布等专有几何集中在 `index.css` 的「功能几何语义类」块。**该块统一放 `@layer components`**：顶层裸规则会压过 Tailwind utilities，调用方就盖不住默认值了（如 `TagFilterPanel` 用 `max-h-28` 覆盖默认限高、速记日期气泡用 `sm:top-20` 覆盖吸顶位）。
+- 禁止手写单选筛选分段（同一元素 `aria-pressed={` + `rounded-pill`）：规则 `handwritten-segmented-control`，须用 `SegmentedControl`（`role=radiogroup`）；`role=tablist/tab` 的视图切换语义页与 `SegmentedControl` 自身豁免（测试文件豁免）。
+- 禁止裸文本空态（`py-10` + `text-center` 组合）：规则 `bare-text-empty-state`，须用 `EmptyState`（card/inline 档）；`EmptyState` 组件自身豁免（测试文件豁免）。
+- 禁止 `<h1>` 不带 `td-text-title`/`td-text-display` 排版类：规则 `h1-without-title-size`，页面标题层级分裂（`td-text-body font-medium` 当 h1）是历史遗留形态（测试文件豁免）。
 
 `scripts/design-language-allowlist.json` 是显式例外登记簿，每项写明 `file`、`rule`、`lineText`、`reason`、`ownerBatch`、`removeBy`。脚本按 `file + rule + lineText` 精确匹配并报告 stale 条目；新增代码不得通过 allowlist 绕过棘轮。当前长期例外是 `categoryColors.ts` 的用户内容分类预设色，属于业务数据而非 UI chrome，其余设计语言规则均直接拦截违规。
 

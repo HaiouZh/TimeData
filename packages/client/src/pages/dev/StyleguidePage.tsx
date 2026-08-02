@@ -1,5 +1,11 @@
 import { useState } from "react";
+import { CaretLeft } from "@phosphor-icons/react";
+import { Icon } from "../../components/Icon.js";
+import { EmptyState } from "../../components/ui/EmptyState.js";
+import { LoadingState } from "../../components/ui/LoadingState.js";
+import { PageBackButton } from "../../components/ui/PageBackButton.js";
 import { SegmentedControl } from "../../components/ui/SegmentedControl.js";
+import { StatusBanner } from "../../components/ui/StatusBanner.js";
 import { Switch } from "../../components/ui/Switch.js";
 
 /** 用户内容身份色（见 ADR 0026）。色块预览与「真实形态验收台」两处共用这一份，不各列一遍。 */
@@ -256,6 +262,62 @@ export default function StyleguidePage() {
             <div className="flex items-center gap-3">
               <span className="td-text-label text-ink-2">Switch</span>
               <Switch ariaLabel="预览开关" checked={switched} onChange={setSwitched} />
+            </div>
+          </div>
+        </Section>
+
+        <Section title="基座组件">
+          <div className="space-y-4 rounded-card border border-border bg-surface p-4">
+            <div className="flex flex-wrap items-center gap-6">
+              <div>
+                <span className="block mb-1.5 td-text-label text-ink-2">PageBackButton（link 态）</span>
+                <PageBackButton to="/dev/styleguide" />
+              </div>
+              <div>
+                <span className="block mb-1.5 td-text-label text-ink-2">PageBackButton（button 态）</span>
+                <PageBackButton onClick={() => {}} />
+              </div>
+              <div>
+                <span className="block mb-1.5 td-text-label text-ink-2">热区档 sm / md / lg</span>
+                <div className="flex items-center gap-2">
+                  <span className="hotarea-sm flex items-center justify-center rounded-pill border border-border bg-surface text-ink-2">
+                    <Icon icon={CaretLeft} size={14} />
+                  </span>
+                  <span className="hotarea-md flex items-center justify-center rounded-pill border border-border bg-surface text-ink-2">
+                    <Icon icon={CaretLeft} size={16} />
+                  </span>
+                  <span className="hotarea-lg flex items-center justify-center rounded-pill border border-border bg-surface text-ink-2">
+                    <Icon icon={CaretLeft} size={18} />
+                  </span>
+                </div>
+              </div>
+            </div>
+            <div>
+              <span className="block mb-1.5 td-text-label text-ink-2">EmptyState（card / inline）</span>
+              <div className="space-y-2">
+                <EmptyState title="还没有记录" description="记录后会出现在这里" />
+                <EmptyState variant="inline" title="今天还没有记录" />
+              </div>
+            </div>
+            <div>
+              <span className="block mb-1.5 td-text-label text-ink-2">LoadingState</span>
+              <LoadingState label="正在加载…" className="rounded-card bg-surface-elevated px-4 py-8" />
+            </div>
+            <div>
+              <span className="block mb-1.5 td-text-label text-ink-2">StatusBanner（info / warn / danger）</span>
+              <div className="space-y-2">
+                <StatusBanner tone="info">同步进行中</StatusBanner>
+                <StatusBanner tone="warn">部分记录未同步</StatusBanner>
+                <StatusBanner tone="danger">同步失败，请重试</StatusBanner>
+              </div>
+            </div>
+            <div>
+              <span className="block mb-1.5 td-text-label text-ink-2">内容色点 content-dot</span>
+              <div className="flex items-center gap-2">
+                <span aria-hidden="true" className="content-dot rounded-pill" style={{ backgroundColor: "var(--tint-1)" }} />
+                <span aria-hidden="true" className="content-dot rounded-pill" style={{ backgroundColor: "var(--tint-5)" }} />
+                <span aria-hidden="true" className="content-dot rounded-pill" style={{ backgroundColor: "var(--tint-9)" }} />
+              </div>
             </div>
           </div>
         </Section>
