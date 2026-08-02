@@ -1403,7 +1403,9 @@ export default function QuickNotesPage() {
                       key={item.key}
                       data-date-label={item.label}
                       data-local-date={item.localDate}
-                      className="quick-note-date-divider sticky top-2 z-10 flex items-center justify-center gap-2"
+                      // w-fit mx-auto 是承重的：DateField 基础类带 w-full，容器不收窄
+                      // 药丸就会被撑成通栏（w-full 解析成父级宽），别当排版类顺手删掉。
+                      className="quick-note-date-divider sticky top-2 z-10 mx-auto flex w-fit items-center gap-2"
                     >
                       <DateField
                         value={item.localDate}

@@ -2142,7 +2142,9 @@ describe("多选 × 置顶（QN-09/11）", () => {
 
     await unmount(root);
   });
+}, PAGE_TEST_TIMEOUT_MS);
 
+describe("主线日期条", () => {
   it("列表里每条日期条都是跳转入口，且带 sticky 判定所需的 data 属性", async () => {
     await db.quickNotes.bulkAdd([
       {
