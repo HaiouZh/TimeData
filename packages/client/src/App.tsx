@@ -30,7 +30,7 @@ export function AppShell() {
   useFavicon(location.pathname);
 
   return (
-    <div className="flex h-dvh bg-page text-ink">
+    <div className="td-safe-top td-safe-x flex h-dvh bg-page text-ink">
       <AndroidBackButtonHandler />
       {isWideScreen && <DesktopSidebar />}
       <div className="flex min-w-0 flex-1 flex-col">

@@ -381,6 +381,20 @@ details[open] > summary .ts-collapse-caret {
   .quick-note-action-menu {
     min-width: 120px;
   }
+
+  /* 安全区（刘海 / 圆角 / 手势条）：仅随 viewport-fit=cover 生效，桌面 env() 为 0 零变化。
+     只挂根容器——它是非滚动层、自带 bg-page，padding 区域由自身底色绘制，内容永远不钻
+     进刘海底下；bottom 留给底部导航批次用。 */
+  .td-safe-top {
+    padding-top: env(safe-area-inset-top);
+  }
+  .td-safe-x {
+    padding-left: env(safe-area-inset-left);
+    padding-right: env(safe-area-inset-right);
+  }
+  .td-safe-bottom {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
 }
 
 /*
