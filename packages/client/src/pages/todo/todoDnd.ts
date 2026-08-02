@@ -62,6 +62,7 @@ export type TodoDragOperation =
   | { kind: "reorder"; containerId: string }
   | { kind: "move-to-parent"; parentId: string }
   | { kind: "promote-to-root"; pool: TodoPool }
+  | { kind: "promote-to-hand" }
   | { kind: "schedule-root"; pool: TodoPool }
   | { kind: "assign-to-project"; goalId: string };
 
@@ -238,6 +239,17 @@ export function resolveTodoDragOperation({
   // 注意：此刻它对返回值零影响——下面四个分支都要求 active 是 pool/parent，落到末尾同样 return null。
   // 留着是为了让「项目容器不作 active」这条规则在代码里有据可依，且将来新增分支时不至于漏掉它。
   if (active.kind === "project") return null;
+
+  // hand → parent:X —— 手头行被收纳为 X 的子任务（区内收纳）
+  if (active.kind === "hand" && target.kind === "parent") {
+    return { kind: "move-to-parent", parentId: target.parentId };
+  }
+
+  // parent:X → hand —— 子任务升为根任务并站到手头。落库走 taskNesting.promoteTaskToHand
+  //（先升根再抓，grabTaskToHand 对子任务的硬拒因此不会被这条路径触发）。
+  if (active.kind === "parent" && target.kind === "hand") {
+    return { kind: "promote-to-hand" };
+  }
 
   // child → pool：升级为 root（child 不允许把别的 root 拖进来——一层约束）
   if (active.kind === "parent" && target.kind === "pool") {

@@ -716,16 +716,14 @@ describe("hand 容器（手头区拖拽排序）", () => {
     ).toBeNull();
   });
 
-  it("手头行拖到 parent 容器 → null（手头行不能缩进成子任务）", () => {
+  it("手头行拖到 parent 容器 → move-to-parent（区内收纳）", () => {
     expect(
       resolveTodoDragOperation({ activeContainerId: "hand", targetContainerId: "parent:r1", activeParentId: null }),
-    ).toBeNull();
+    ).toEqual({ kind: "move-to-parent", parentId: "r1" });
   });
 
-  it("手头行带 child 缩进手势（跨行悬停）仍 → null，不把手头行变成子任务", () => {
-    // 承重单位：clamp 只修视觉（x 夹 0），判定层靠 resolveTodoDragOperation 对 hand 的兜底才不缩进。
-    // handleDragMove 对手头源早退是页面侧防线；这里锁的是纯函数契约——将来若有人给
-    // canBecomeChild 加 active 判断或给 hand 开放拖出，这条立刻红。
+  it("手头行带 child 缩进手势 → move-to-parent（收纳到悬停的根行底下）", () => {
+    // 原用例锁的是「手头行恒不缩进」，批 1 已推翻该行为；现在锁的是缩进手势真的落成收纳。
     expect(
       resolveTodoDragWithIndent({
         activeContainerId: "hand",
@@ -736,7 +734,13 @@ describe("hand 容器（手头区拖拽排序）", () => {
         rootAboveId: "t1",
         targetContainer: { kind: "pool", pool: "today" },
       }),
-    ).toBeNull();
+    ).toEqual({ kind: "move-to-parent", parentId: "t1" });
+  });
+
+  it("子任务拖到 hand 容器 → promote-to-hand（升根并站到手头）", () => {
+    expect(
+      resolveTodoDragOperation({ activeContainerId: "parent:p1", targetContainerId: "hand", activeParentId: "p1" }),
+    ).toEqual({ kind: "promote-to-hand" });
   });
 
   it("hoveredRootIdFromOver 对 hand 容器恒返回 null（手头行不作缩进父）", () => {
