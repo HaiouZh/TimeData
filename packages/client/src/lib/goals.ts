@@ -65,7 +65,7 @@ function omitGoalNote(goal: Goal): Goal {
   return rest;
 }
 
-function sameGoalMember(left: GoalMemberRef, right: GoalMemberRef): boolean {
+export function sameGoalMember(left: GoalMemberRef, right: GoalMemberRef): boolean {
   return left.kind === right.kind && left.id === right.id;
 }
 
@@ -193,6 +193,41 @@ export async function addGoalMember(
   return nextGoal;
 }
 
+/**
+ * 移除成员的事务内原语。**必须在已开启的 rw 事务内调用**，事务表须含
+ * goals / goalLayoutPins / tasks / syncLog。抽出来是为了让「拖拽收纳时清项目归属」
+ * 与「手动移出项目」共用同一份连带逻辑（钉点回收、prerequisites 边、touch），
+ * 两条路径行为不会漂。
+ */
+export async function removeGoalMemberInCurrentTransaction(
+  goal: Goal,
+  ref: GoalMemberRef,
+  timestamp: string,
+  now?: Date,
+): Promise<Goal> {
+  const members = goal.members ?? [];
+  if (!members.some((member) => sameGoalMember(member, ref))) {
+    return GoalSchema.parse({ ...goal, members, prerequisites: goal.prerequisites ?? [] });
+  }
+
+  const nextMembers = members.filter((member) => !sameGoalMember(member, ref));
+  const nextPrerequisites = (goal.prerequisites ?? []).filter(
+    (edge) => !sameGoalMember(edge.blocker, ref) && !sameGoalMember(edge.blocked, ref),
+  );
+  const next = GoalSchema.parse({
+    ...goal,
+    members: nextMembers,
+    prerequisites: nextPrerequisites,
+    updatedAt: timestamp,
+  });
+  await db.goals.put(next);
+  await recordSyncLog("goals", next.id, "update", timestamp);
+  // 移出成员：同事务回收它在本 Goal 下的布局钉点，不留孤儿。
+  await deleteGoalMemberPinInCurrentTransaction({ goalId: goal.id, nodeKind: ref.kind, nodeId: ref.id }, now);
+  await touchTasksInCurrentTransaction(releasedProjectTaskIds(goal, next), timestamp);
+  return next;
+}
+
 export async function removeGoalMember(
   goalId: string,
   ref: GoalMemberRef,
@@ -204,29 +239,7 @@ export async function removeGoalMember(
   await db.transaction("rw", db.goals, db.goalLayoutPins, db.tasks, db.syncLog, async () => {
     const goal = await db.goals.get(goalId);
     if (!goal) throw new Error("目标不存在");
-
-    const members = goal.members ?? [];
-    if (!members.some((member) => sameGoalMember(member, ref))) {
-      nextGoal = GoalSchema.parse({ ...goal, members, prerequisites: goal.prerequisites ?? [] });
-      return;
-    }
-
-    const nextMembers = members.filter((member) => !sameGoalMember(member, ref));
-    const nextPrerequisites = (goal.prerequisites ?? []).filter(
-      (edge) => !sameGoalMember(edge.blocker, ref) && !sameGoalMember(edge.blocked, ref),
-    );
-    const next = GoalSchema.parse({
-      ...goal,
-      members: nextMembers,
-      prerequisites: nextPrerequisites,
-      updatedAt: timestamp,
-    });
-    await db.goals.put(next);
-    await recordSyncLog("goals", next.id, "update", timestamp);
-    // 移出成员：同事务回收它在本 Goal 下的布局钉点，不留孤儿。
-    await deleteGoalMemberPinInCurrentTransaction({ goalId, nodeKind: ref.kind, nodeId: ref.id }, options.now);
-    await touchTasksInCurrentTransaction(releasedProjectTaskIds(goal, next), timestamp);
-    nextGoal = next;
+    nextGoal = await removeGoalMemberInCurrentTransaction(goal as Goal, ref, timestamp, options.now);
   });
 
   if (!nextGoal) throw new Error("目标不存在");

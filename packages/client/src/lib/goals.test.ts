@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import type { Goal } from "@timedata/shared";
 import { db, resetDb } from "../test/dbReset.js";
 import {
   addGoal,
@@ -16,6 +17,7 @@ import {
   prerequisiteLossOnAssignMany,
   ProjectAssignError,
   removeGoalMember,
+  removeGoalMemberInCurrentTransaction,
   updateGoal,
   updateGoalPrerequisites,
 } from "./goals.js";
@@ -1135,5 +1137,41 @@ describe("prerequisiteLossOnAssignMany", () => {
     ]);
 
     expect(await prerequisiteLossOnAssignMany(["t1", "t2"], null)).toBeNull();
+  });
+});
+
+describe("removeGoalMemberInCurrentTransaction", () => {
+  it("在外部事务内移除成员，行为与 removeGoalMember 一致", async () => {
+    const goal = await addGoal({ title: "P1", kind: "project" });
+    await seedMembers();
+    await addGoalMember(goal.id, { kind: "task", id: "task-1" });
+
+    const ts = "2026-08-02T00:00:00.000Z";
+    await db.transaction("rw", db.goals, db.goalLayoutPins, db.tasks, db.syncLog, async () => {
+      const row = await db.goals.get(goal.id);
+      await removeGoalMemberInCurrentTransaction(row as Goal, { kind: "task", id: "task-1" }, ts);
+    });
+
+    const after = await db.goals.get(goal.id);
+    expect(after?.members ?? []).toHaveLength(0);
+    // timestamp 契约：原语必须用调用方传入的时间戳，不得内部自取当下——
+    // 复合事务要靠它让多次写入落同一个时间点。
+    expect(after?.updatedAt).toBe(ts);
+  });
+
+  it("成员不存在时不写库，返回原 goal", async () => {
+    const goal = await addGoal({ title: "P2", kind: "project" });
+    const before = await db.goals.get(goal.id);
+
+    await db.transaction("rw", db.goals, db.goalLayoutPins, db.tasks, db.syncLog, async () => {
+      const row = await db.goals.get(goal.id);
+      await removeGoalMemberInCurrentTransaction(
+        row as Goal,
+        { kind: "task", id: "从来不是成员" },
+        "2026-08-02T00:00:00.000Z",
+      );
+    });
+
+    expect((await db.goals.get(goal.id))?.updatedAt).toBe(before?.updatedAt);
   });
 });
