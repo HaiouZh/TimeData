@@ -365,3 +365,33 @@ describe("手头区拖拽排序", () => {
     await unmount(root);
   });
 });
+
+describe("手头区父子收纳", () => {
+  it("pendingTotal 传入时用它做标题计数", async () => {
+    const { host, root } = await renderSection(
+      <AtHandSection
+        atHand={[task({ id: "a", title: "A" })]}
+        session={session({})}
+        resumable={[]}
+        pendingTotal={3}
+        {...handlers}
+      />,
+    );
+    expect(host.textContent).toContain("3");
+    await unmount(root);
+  });
+
+  it("indentTargetId 命中的行拿到缩进高亮环", async () => {
+    const { host, root } = await renderSection(
+      <AtHandSection
+        atHand={[task({ id: "a", title: "A" }), task({ id: "b", title: "B" })]}
+        session={session({})}
+        resumable={[]}
+        indentTargetId="a"
+        {...handlers}
+      />,
+    );
+    expect(host.querySelectorAll(".ring-accent")).toHaveLength(1);
+    await unmount(root);
+  });
+});

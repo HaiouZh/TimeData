@@ -24,6 +24,10 @@ export interface AtHandSectionProps {
   metaChip?: (task: Task) => ReactNode;
   /** 场便签保存：空串已归一为 null;不传则标题不可编辑。 */
   onUpdateNote?: (note: string | null) => void;
+  /** 标题计数值（含子任务的未完总数）。不传则回落为未完根任务数。 */
+  pendingTotal?: number;
+  /** 缩进候选父：命中该 id 的行渲染高亮环。 */
+  indentTargetId?: string | null;
 }
 
 function sessionDateLabel(iso: string): string {
@@ -119,6 +123,8 @@ export function AtHandSection({
   goalLinkedIds,
   metaChip,
   onUpdateNote,
+  pendingTotal,
+  indentTargetId,
 }: AtHandSectionProps) {
   if (session === null && resumable.length === 0) return null;
 
@@ -173,7 +179,7 @@ export function AtHandSection({
       <AtHandHeading
         // 换场强制重挂：清掉编辑态与非受控 input 残值，防止把旧场预填文本保存进新活跃场。
         key={session.id}
-        count={pending.length}
+        count={pendingTotal ?? pending.length}
         note={session.note}
         onSaveNote={onUpdateNote ? (value) => onUpdateNote(value.trim() === "" ? null : value) : undefined}
         action={
@@ -197,7 +203,8 @@ export function AtHandSection({
                   <TaskRow
                     task={task}
                     pool="inbox"
-                    childrenModeOverride="static"
+                    childrenModeOverride="draggable"
+                    indentTargetActive={indentTargetId === task.id}
                     dragHandle={handle}
                     extraAction={releaseAction}
                     onToggle={onToggle}
