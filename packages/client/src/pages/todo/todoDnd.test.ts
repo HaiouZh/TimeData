@@ -743,7 +743,13 @@ describe("hand 容器（手头区拖拽排序）", () => {
     ).toEqual({ kind: "promote-to-hand" });
   });
 
-  it("hoveredRootIdFromOver 对 hand 容器恒返回 null（手头行不作缩进父）", () => {
+  it("hoveredRootIdFromOver 对 hand 容器只认手头区来源", () => {
+    // 手头区内：手头行可作收纳父
+    expect(hoveredRootIdFromOver("hand", "t1", "hand")).toBe("t1");
+    // 外区来源：不作收纳父——收纳只在手头区内成立，跨区拖不亮高亮也不落库
+    expect(hoveredRootIdFromOver("hand", "t1", "pool:inbox")).toBeNull();
+    expect(hoveredRootIdFromOver("hand", "t1", "pool:today")).toBeNull();
+    // 来源缺失时保守拒绝
     expect(hoveredRootIdFromOver("hand", "t1")).toBeNull();
   });
 

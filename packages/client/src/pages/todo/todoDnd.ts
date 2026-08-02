@@ -278,20 +278,28 @@ export function resolveTodoDragOperation({
  * 由一次 drag-over 的目标，反查它归属的 root 任务 id（用于缩进候选父判定）。
  * - 池容器（pool:today/inbox）：over 自身就是根行，root = overId。
  * - parent 容器（parent:<X>）：root = X（无论 over 是子任务行还是落点区）。
+ * - hand 容器：**仅当拖拽来源也是 hand 时** root = overId；否则 null。
  * 无法归属（非法/缺失容器、upcoming 等）返回 null。
+ *
+ * 第三参既是容器解析失败时的兜底，也是「拖拽来源」判据。收纳只在手头区内成立——
+ * 外区任务要归到手头某件活底下，正确路径是先入手头再在区内收敛。这道守卫必须落在本函数，
+ * 因为收纳高亮（handleDragOver）与落库判定共用它；只拦落库会留下「亮了高亮却无事发生」。
  */
 export function hoveredRootIdFromOver(
   overContainerId: string,
   overId: string,
-  fallbackContainerId?: string,
+  activeContainerId?: string,
 ): string | null {
-  // 投递坞不是缩进落点:dock id 解析不进 TodoContainer,会 fall 到 fallbackContainerId(通常是池)
+  // 投递坞不是缩进落点:dock id 解析不进 TodoContainer,会 fall 到 activeContainerId(通常是池)
   // 把 dock id 字符串当「根行 id」返回,下游拿它拼 parent:<dock:…> 落成垃圾 move-to-parent。
   if (parseTodoDockId(overContainerId) !== null || parseTodoDockId(overId) !== null) return null;
-  const container = parseTodoContainerId(overContainerId) ?? parseTodoContainerId(fallbackContainerId);
+  const container = parseTodoContainerId(overContainerId) ?? parseTodoContainerId(activeContainerId);
   if (!container) return null;
-  // 项目区 / 手头区没有可作缩进父的根行，恒返回 null 让缩进系统对它们让位。
-  if (container.kind === "project" || container.kind === "hand") return null;
+  // 项目区没有可作缩进父的根行，恒返回 null 让缩进系统对它让位。
+  if (container.kind === "project") return null;
+  if (container.kind === "hand") {
+    return parseTodoContainerId(activeContainerId)?.kind === "hand" ? overId : null;
+  }
   if (container.kind === "pool") return overId;
   return container.parentId;
 }
