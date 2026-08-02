@@ -3,7 +3,7 @@ import { db, resetDb } from "../test/dbReset.js";
 import { addGoal, addGoalMember } from "./goals.js";
 import { grabTaskToHand } from "./sessions.js";
 import { addTask, createChildTask } from "./tasks.js";
-import { nestTaskUnderParent } from "./taskNesting.js";
+import { nestTaskUnderParent, promoteTaskToHand } from "./taskNesting.js";
 
 beforeEach(resetDb);
 
@@ -63,5 +63,31 @@ describe("nestTaskUnderParent", () => {
 
     expect((await db.tasks.get(child.id))?.parentId ?? null).toBeNull();
     expect((await db.goals.get(p1.id))?.members ?? []).toHaveLength(1);
+  });
+});
+
+describe("promoteTaskToHand", () => {
+  it("升为根任务并站到手头，且不顺手排今天", async () => {
+    const parent = await addTask({ title: "爹" });
+    await grabTaskToHand(parent.id);
+    const child = await createChildTask(parent.id, "将被拽出的子任务");
+
+    await promoteTaskToHand(child.id, 99);
+
+    const after = await db.tasks.get(child.id);
+    expect(after?.parentId ?? null).toBeNull();
+    expect(after?.sessionId).toBe((await db.sessions.toArray())[0]?.id);
+    expect(after?.scheduledAt ?? null).toBeNull();
+  });
+
+  it("无活跃场时零仪式开场", async () => {
+    const parent = await addTask({ title: "爹" });
+    const child = await createChildTask(parent.id, "子任务");
+    expect(await db.sessions.count()).toBe(0);
+
+    await promoteTaskToHand(child.id, 0);
+
+    expect(await db.sessions.count()).toBe(1);
+    expect((await db.tasks.get(child.id))?.sessionId).toBe((await db.sessions.toArray())[0]?.id);
   });
 });
