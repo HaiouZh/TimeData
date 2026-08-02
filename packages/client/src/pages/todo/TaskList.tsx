@@ -142,7 +142,9 @@ export function TaskList(props: TaskListProps) {
         maxSwipe={0.5}
       >
         {canSort && containerId ? (
-          <SortableTaskRow id={task.id} containerId={containerId}>
+          // 缩进态（indentTargetId 非空）下冻结全行避让，只留高亮环——理由见 SortableTaskRow 的
+          // freezeShift 注释。indentTargetId 本身已经是"是否处于缩进态"的现成信号，不必另开一个。
+          <SortableTaskRow id={task.id} containerId={containerId} freezeShift={props.indentTargetId != null}>
             {(handle) => renderTaskRow(task, handle)}
           </SortableTaskRow>
         ) : (

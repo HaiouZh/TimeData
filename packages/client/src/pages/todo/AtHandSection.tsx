@@ -201,7 +201,8 @@ export function AtHandSection({
         <AtHandRowsSurface>
           <SortableContext items={pending.map((t) => t.id)} strategy={verticalListSortingStrategy}>
             {pending.map((task) => (
-              <SortableTaskRow key={task.id} id={task.id} containerId="hand">
+              // 同 TaskList：缩进态下冻结避让，只留高亮环（见 SortableTaskRow.freezeShift 注释）。
+              <SortableTaskRow key={task.id} id={task.id} containerId="hand" freezeShift={indentTargetId != null}>
                 {(handle) => (
                   <TaskRow
                     task={task}
