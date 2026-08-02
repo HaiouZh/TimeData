@@ -10,6 +10,7 @@ const sharedPackages = [
   "@capacitor/browser",
   "@capacitor/core",
   "@capacitor/filesystem",
+  "@capacitor/keyboard",
   "@capacitor/share",
 ];
 for (const name of sharedPackages) {
