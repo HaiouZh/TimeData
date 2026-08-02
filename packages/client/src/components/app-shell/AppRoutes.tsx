@@ -1,5 +1,5 @@
 import { lazy } from "react";
-import { Route, Routes } from "react-router";
+import { type Location, Route, Routes } from "react-router";
 import TimelinePage from "../../pages/TimelinePage.tsx";
 
 // 除首屏时间轴外全部路由懒加载：recharts/@xyflow/markdown 等重依赖只在进入对应页面时才加载。
@@ -37,9 +37,14 @@ const TrackDetailPage = lazy(() => import("../../pages/tracks/TrackDetailPage.ts
 const TracksListPage = lazy(() => import("../../pages/tracks/TracksListPage.tsx"));
 const TracksShell = lazy(() => import("../../pages/tracks/TracksShell.tsx"));
 
-export function AppRoutes() {
+/**
+ * 可选 `location`：不传时 `<Routes>` 读当前 location（改前行为，一字不差）；
+ * 传入时该棵路由树按给定 location 匹配——iOS 保留栈（KeptRouteStack）靠它让隐藏的上一层
+ * 继续渲染自己那条历史对应的页面。
+ */
+export function AppRoutes({ location }: { location?: Location } = {}) {
   return (
-    <Routes>
+    <Routes location={location}>
       <Route path="/" element={<TimelinePage />} />
       <Route path="/quick-notes" element={<QuickNotesPage />} />
       <Route path="/diary" element={<DiaryPage />} />

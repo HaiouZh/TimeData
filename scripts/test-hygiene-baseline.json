@@ -20,6 +20,7 @@
   "dirty-in-clean-bucket:components/Timeline.test.tsx",
   "dirty-in-clean-bucket:components/app-shell/AppShellNav.test.tsx",
   "dirty-in-clean-bucket:components/app-shell/DesktopSidebar.test.tsx",
+  "dirty-in-clean-bucket:components/app-shell/KeptRouteStack.test.tsx",
   "dirty-in-clean-bucket:components/app-shell/MobileBottomNav.test.tsx",
   "dirty-in-clean-bucket:components/app-shell/MobileNavigationPlacement.test.tsx",
   "dirty-in-clean-bucket:components/ui/Checkbox.test.tsx",

@@ -6,6 +6,7 @@ import AndroidBackButtonHandler from "./components/AndroidBackButtonHandler.tsx"
 import AppUpdatePrompt from "./components/AppUpdatePrompt.tsx";
 import { AppRoutes } from "./components/app-shell/AppRoutes.tsx";
 import { DesktopSidebar } from "./components/app-shell/DesktopSidebar.tsx";
+import { KeptRouteStack } from "./components/app-shell/KeptRouteStack.tsx";
 import { MobileBottomNav } from "./components/app-shell/MobileBottomNav.tsx";
 import { ErrorBoundary, RouteErrorFallback } from "./components/ErrorBoundary.tsx";
 import { TotpPromptDialog } from "./components/TotpPromptDialog.tsx";
@@ -34,6 +35,8 @@ export function AppShell() {
     location.pathname.startsWith("/settings/") ||
     location.pathname.startsWith("/goals/") ||
     location.pathname.startsWith("/tracks/");
+  // iOS 才用保留上一页的路由栈（边缘返回要露出活的上一页）。其余平台渲染路径一字不改。
+  const useKeptStack = Capacitor.getPlatform() === "ios";
 
   useDocumentTitle(location.pathname);
   useFavicon(location.pathname);
@@ -42,14 +45,18 @@ export function AppShell() {
     <div className="td-safe-top td-safe-x flex h-dvh bg-page text-ink">
       <AndroidBackButtonHandler />
       {isWideScreen && <DesktopSidebar />}
-      <div className="flex min-w-0 flex-1 flex-col">
-        <main className="min-h-0 flex-1 overflow-y-auto overscroll-y-none" onScroll={isWideScreen ? undefined : onMainScroll}>
-          <Suspense fallback={null}>
-            <AppRoutes />
-          </Suspense>
-        </main>
-        {!isWideScreen && !hidesBottomNav && <MobileBottomNav />}
-      </div>
+      {useKeptStack ? (
+        <KeptRouteStack isWideScreen={isWideScreen} onMainScroll={onMainScroll} />
+      ) : (
+        <div className="flex min-w-0 flex-1 flex-col">
+          <main className="min-h-0 flex-1 overflow-y-auto overscroll-y-none" onScroll={isWideScreen ? undefined : onMainScroll}>
+            <Suspense fallback={null}>
+              <AppRoutes />
+            </Suspense>
+          </main>
+          {!isWideScreen && !hidesBottomNav && <MobileBottomNav />}
+        </div>
+      )}
       <AppUpdatePrompt />
       <TotpPromptDialog />
     </div>
