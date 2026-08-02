@@ -11,6 +11,7 @@ import {
   resumeSession,
   updateSessionNote,
 } from "./sessions.js";
+import { moveTaskToParent } from "./tasks.js";
 
 beforeEach(resetDb);
 
@@ -281,5 +282,20 @@ describe("updateSessionNote", () => {
 
   it("场不存在时 throw", async () => {
     await expect(updateSessionNote("missing", "x")).rejects.toThrow("会话不存在");
+  });
+});
+
+describe("收纳后不重复计入续场统计", () => {
+  it("被收纳成子任务的活不再算作本场未完", async () => {
+    await db.tasks.add(makeTask({ id: "parent" }));
+    await db.tasks.add(makeTask({ id: "child" }));
+    await grabTaskToHand("parent");
+    await grabTaskToHand("child");
+    await endActiveSession();
+    expect((await listResumableSessions())[0]?.pendingCount).toBe(2);
+
+    await moveTaskToParent("child", "parent");
+
+    expect((await listResumableSessions())[0]?.pendingCount).toBe(1);
   });
 });

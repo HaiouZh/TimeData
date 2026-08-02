@@ -1756,3 +1756,18 @@ describe("listTasks projects 桶", () => {
     });
   });
 });
+
+describe("moveTaskToParent 清手头场指针", () => {
+  it("降级为子任务时 sessionId 置空", async () => {
+    const parent = await addTask({ title: "爹" });
+    const child = await addTask({ title: "被收纳的活" });
+    await grabTaskToHand(child.id);
+    expect((await db.tasks.get(child.id))?.sessionId).not.toBeNull();
+
+    await moveTaskToParent(child.id, parent.id);
+
+    const after = await db.tasks.get(child.id);
+    expect(after?.parentId).toBe(parent.id);
+    expect(after?.sessionId ?? null).toBeNull();
+  });
+});

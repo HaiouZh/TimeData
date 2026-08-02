@@ -665,41 +665,57 @@ export async function promoteToRoot(
 }
 
 /**
+ * 降级为子任务的事务内原语。**必须在已开启的 rw 事务内调用**（事务表须含 tasks / syncLog）。
+ *
+ * 写回时 `sessionId` 恒置空：子任务不持有任何归属指针。不清的话，一条已变成子步骤的活
+ * 会继续被 listResumableSessions 算进「这个场还有 N 条未完」（它按 sessionId 直查、不排除
+ * 子任务），散场后还会被 resumeSession 批量迁到新场。
+ */
+export async function moveTaskToParentInCurrentTransaction(
+  taskId: string,
+  newParentId: string,
+  now: Date = new Date(),
+): Promise<Task> {
+  const updatedAt = now.toISOString();
+  const [task, parent] = await Promise.all([db.tasks.get(taskId), db.tasks.get(newParentId)]);
+  if (!task) throw new Error("任务不存在");
+  if (!parent || taskId === newParentId || (parent.parentId ?? null) !== null) {
+    throw new Error("CANNOT_NEST_BEYOND_ONE_LEVEL");
+  }
+
+  if ((task.parentId ?? null) === null) {
+    const childCount = await db.tasks.where("parentId").equals(taskId).count();
+    if (childCount > 0) throw new Error("CANNOT_DEMOTE_ROOT_WITH_CHILDREN");
+  }
+
+  const next = TaskSchema.parse({
+    ...task,
+    parentId: newParentId,
+    sessionId: null,
+    completedCount: task.completedCount ?? 0,
+    completedAt: task.completedAt ?? null,
+    tags: task.tags ?? [],
+    sortOrder: await nextChildSortOrder(newParentId),
+    updatedAt,
+  });
+
+  await db.tasks.put(next);
+  await recordSyncLog("tasks", next.id, "update", next.updatedAt);
+  return next;
+}
+
+/**
  * 把任务移动成 `newParentId` 的子任务，**追加到目标父现有 children 末尾**（`nextChildSortOrder`
  * 取 max+1，得到一个目标作用域内不撞值的 sortOrder）。不接收外部 sortOrder——历史上调用方一律塞
  * 0，致同父多个 child 撞同值、连累重排失效（见 `reorderChildren`），由函数自管落位根除此源。
+ *
+ * 只改父子与手头场指针，**不碰项目归属**。用户视角的「收纳」要走 taskNesting.nestTaskUnderParent。
  */
 export async function moveTaskToParent(taskId: string, newParentId: string, now: Date = new Date()): Promise<Task> {
-  const updatedAt = now.toISOString();
   let moved: Task | null = null;
-
   await db.transaction("rw", db.tasks, db.syncLog, async () => {
-    const [task, parent] = await Promise.all([db.tasks.get(taskId), db.tasks.get(newParentId)]);
-    if (!task) throw new Error("任务不存在");
-    if (!parent || taskId === newParentId || (parent.parentId ?? null) !== null) {
-      throw new Error("CANNOT_NEST_BEYOND_ONE_LEVEL");
-    }
-
-    if ((task.parentId ?? null) === null) {
-      const childCount = await db.tasks.where("parentId").equals(taskId).count();
-      if (childCount > 0) throw new Error("CANNOT_DEMOTE_ROOT_WITH_CHILDREN");
-    }
-
-    const next = TaskSchema.parse({
-      ...task,
-      parentId: newParentId,
-      completedCount: task.completedCount ?? 0,
-      completedAt: task.completedAt ?? null,
-      tags: task.tags ?? [],
-      sortOrder: await nextChildSortOrder(newParentId),
-      updatedAt,
-    });
-
-    await db.tasks.put(next);
-    await recordSyncLog("tasks", next.id, "update", next.updatedAt);
-    moved = next;
+    moved = await moveTaskToParentInCurrentTransaction(taskId, newParentId, now);
   });
-
   if (!moved) throw new Error("任务不存在");
   return moved;
 }
