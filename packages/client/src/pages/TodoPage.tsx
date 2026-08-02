@@ -186,7 +186,7 @@ export function TodoPage() {
   }, [buckets]);
   const composerRef = useRef<HTMLFormElement>(null);
   const [composerHeightPx, setComposerHeightPx] = useState(0);
-  const { hidden: navHidden } = useBottomNav();
+  const { hidden: navHidden, setHidden: setNavHidden } = useBottomNav();
   const wide = useIsWideScreen();
   // 此前 Todo 页无键盘避让，本任务补上：并入 composerAvoidancePx 的合成（见下方），收起为 0。
   const keyboardHeightPx = useKeyboardHeight();
@@ -195,8 +195,10 @@ export function TodoPage() {
       const children = await db.tasks.filter((task) => task.parentId !== null).toArray();
       return new Set(children.map((child) => child.parentId).filter((id): id is string => Boolean(id)));
     }, []) ?? new Set<string>();
-  // 键盘弹起时 nav 藏在键盘后面、不该再占避让空间，故加 keyboardHeightPx===0 守卫；键盘收起
+  // 键盘弹起时 nav 不该再占避让空间，故加 keyboardHeightPx===0 守卫；键盘收起
   // （桌面浏览器恒如此）时 = 原公式，逐值不变，安全不变量守住（fix round 1，见 task-3-report.md）。
+  // 与下方「收起 nav 实体」的 effect 是两回事：本条只管避让量，effect 才动 nav 本身；
+  // effect 结算前的那一帧也靠本守卫兜住，避免输入条闪跳。
   const navOffsetPx = !wide && !navHidden && keyboardHeightPx === 0 ? BOTTOM_NAV_HEIGHT_PX : 0;
   const composerHiddenByScroll = !wide && navHidden;
   /**
@@ -245,6 +247,27 @@ export function TodoPage() {
     if (deepLinkedTask === undefined) return;
     setDetailId(deepLinkedTask?.id ?? null);
   }, [deepLinkedTask, taskIdParam]);
+
+  // 键盘弹起时收起底栏**实体**。只把 navOffsetPx 守卫成 0 不够——那改的是避让量，nav 那 49px 仍在
+  // 流里占位；Keyboard resize:none 下 webview 不 reflow，它就实打实杵在输入条与键盘之间
+  //（用户报「待办页输入框和输入法之间隔着一条 tab 行」）。速记页早有同款（QuickNotesPage 的
+  // inputInteractionActive effect），本页此前漏了。
+  //
+  // 用 ref 记「这次隐藏是键盘引起的」，而不是无条件 setNavHidden(keyboardHeightPx > 0)：挂载时键盘
+  // 恒为 0，无条件写会把进场时已有的隐藏态冲掉——App 层滚动驱动（useHideBottomNavOnScroll）刚藏起来
+  // 的底栏会瞬间弹回。TodoPage.test.tsx 的 hideBottomNav 用例正是钉这条。
+  const navHiddenByKeyboardRef = useRef(false);
+  useEffect(() => {
+    if (keyboardHeightPx > 0) {
+      navHiddenByKeyboardRef.current = true;
+      setNavHidden(true);
+      return;
+    }
+    // 键盘收起：只有当初是自己藏的才恢复，否则不碰——底栏归滚动驱动管。
+    if (!navHiddenByKeyboardRef.current) return;
+    navHiddenByKeyboardRef.current = false;
+    setNavHidden(false);
+  }, [keyboardHeightPx, setNavHidden]);
 
   const measureComposer = useCallback(() => {
     const composer = composerRef.current;
@@ -1209,7 +1232,9 @@ export function TodoPage() {
     >
       <div className={`min-h-full bg-page text-ink${dragging ? " todo-dnd-dragging" : ""}`}>
         <div
-          className="mx-auto w-full max-w-2xl px-4 py-4 lg:max-w-none [padding-bottom:var(--pad-bottom)]"
+          // 顶部间距走 --page-top-gap-lg（原 py-4 的上半，下半从来就被 pad-bottom 覆盖）：有系统安全区
+          // 时归零，避免与安全区自带的呼吸位叠成刘海下方那条空带；桌面 / 无刘海设备上仍是 16px。
+          className="mx-auto w-full max-w-2xl px-4 [padding-top:var(--page-top-gap-lg)] lg:max-w-none [padding-bottom:var(--pad-bottom)]"
           // 兜底类 [padding-bottom:var(--pad-bottom)]：env() 未定义环境（Firefox 桌面 / 旧 WebView）里
           // calc 整条失效、内联 padding 被丢弃，由它还原批次前的纯数值 contentBottomPaddingPx。
           style={

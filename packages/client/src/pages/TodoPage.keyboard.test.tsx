@@ -4,10 +4,10 @@
 // unit-clean-jsdom allowlist (vi.mock below is a dirty marker), so it doesn't get that setup file's
 // global fake-indexeddb registration for free and must order its own imports to get it.
 import { resetDb } from "../test/dbReset.js";
-import { act, createElement } from "react";
+import { act, createElement, useEffect } from "react";
 import { MemoryRouter } from "react-router";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { BOTTOM_NAV_HEIGHT_PX, BottomNavProvider } from "../contexts/BottomNavContext.js";
+import { BOTTOM_NAV_HEIGHT_PX, BottomNavProvider, useBottomNav } from "../contexts/BottomNavContext.js";
 import { SyncProvider } from "../contexts/SyncContext.tsx";
 import { addTask } from "../lib/tasks.js";
 import { renderDom, unmount } from "../test/domHarness.js";
@@ -74,6 +74,80 @@ async function enterSelection(host: HTMLElement): Promise<void> {
 function selectionBar(host: HTMLElement): HTMLElement | null {
   return host.querySelector('[data-testid="todo-selection-bar"]');
 }
+
+/**
+ * 直接读 BottomNavContext 的 hidden，比渲染整条 MobileBottomNav 轻（后者还要 TrackAttentionProvider）。
+ * 钉的是「TodoPage 有没有把底栏实体收起来」这个副作用本身，而非避让量 navOffsetPx。
+ */
+function NavHiddenProbe() {
+  const { hidden } = useBottomNav();
+  return createElement("span", { "data-testid": "nav-hidden" }, String(hidden));
+}
+
+/** 模拟进场前底栏已被滚动驱动藏起（照 TodoPage.test.tsx 的 HideBottomNavOnMount 同款写法）。 */
+function HideNavOnMount() {
+  const { setHidden } = useBottomNav();
+  useEffect(() => {
+    setHidden(true);
+  }, [setHidden]);
+  return null;
+}
+
+async function renderPageWithNavProbe({ hideNavOnMount = false } = {}) {
+  return renderDom(
+    createElement(
+      MemoryRouter,
+      { initialEntries: ["/todo"] },
+      createElement(
+        BottomNavProvider,
+        null,
+        createElement(NavHiddenProbe),
+        hideNavOnMount ? createElement(HideNavOnMount) : null,
+        createElement(SyncProvider, null, createElement(TodoPage)),
+      ),
+    ),
+  );
+}
+
+function navHidden(host: HTMLElement): string | undefined {
+  return host.querySelector('[data-testid="nav-hidden"]')?.textContent ?? undefined;
+}
+
+describe("TodoPage 键盘弹起时收起底部导航栏", () => {
+  // 此前只把 navOffsetPx 守卫成 0（避让量不再计入 nav），但 nav 实体从未被收起——resize:none 下
+  // webview 不 reflow，那 49px 就实打实杵在输入条与键盘之间，用户看到的就是「隔着一条 tab 行」。
+  // 速记页早有这条（QuickNotesPage 的 inputInteractionActive effect），待办页漏了。
+  it("键盘弹起时底栏被收起，不再杵在输入条与键盘之间", async () => {
+    keyboardHeightMock.mockReturnValue(300);
+    const { host, root } = await renderPageWithNavProbe();
+
+    expect(navHidden(host)).toBe("true");
+
+    await unmount(root);
+  });
+
+  // 反向守卫：别把 effect 写成无条件收起——键盘收起后底栏必须交还给滚动驱动（App 层
+  // useHideBottomNavOnScroll），否则待办页的底栏会一直消失。
+  it("键盘收起时不主动收起底栏，维持滚动驱动的原行为", async () => {
+    keyboardHeightMock.mockReturnValue(0);
+    const { host, root } = await renderPageWithNavProbe();
+
+    expect(navHidden(host)).toBe("false");
+
+    await unmount(root);
+  });
+
+  // 钉 navHiddenByKeyboardRef：写成无条件 setNavHidden(keyboardHeightPx > 0) 时，挂载那帧键盘恒为 0，
+  // 会把滚动驱动刚藏好的底栏瞬间弹回来（TodoPage.test.tsx 的 hideBottomNav 用例会一起变红）。
+  it("进场时底栏已被滚动藏起、键盘未弹过，不被本页 effect 冲回显示", async () => {
+    keyboardHeightMock.mockReturnValue(0);
+    const { host, root } = await renderPageWithNavProbe({ hideNavOnMount: true });
+
+    expect(navHidden(host)).toBe("true");
+
+    await unmount(root);
+  });
+});
 
 describe("TodoPage 底部输入条键盘避让（fix round 1）", () => {
   it("键盘弹起时，composer 输入条 bottom 稳贴键盘上沿——nav 让位，不与 navOffsetPx 叠加", async () => {
