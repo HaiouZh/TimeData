@@ -375,69 +375,6 @@ describe("QuickNotesPage", () => {
     await unmount(root);
   });
 
-  it("浮动日期气泡使用自绘日期选择器", async () => {
-    await db.quickNotes.bulkAdd([
-      {
-        id: "first-day",
-        text: "第一天",
-        occurredAt: "2026-06-01T04:00:00.000Z",
-        createdAt: "2026-06-01T04:00:00.000Z",
-        updatedAt: "2026-06-01T04:00:00.000Z",
-      },
-      {
-        id: "second-day",
-        text: "第二天",
-        occurredAt: "2026-06-02T04:00:00.000Z",
-        createdAt: "2026-06-02T04:00:00.000Z",
-        updatedAt: "2026-06-02T04:00:00.000Z",
-      },
-    ]);
-    const { host, root } = await renderPage();
-    const list = host.querySelector('[aria-label="速记列表"]');
-    if (!(list instanceof HTMLElement)) throw new Error("missing quick notes list");
-    const dividers = Array.from(host.querySelectorAll<HTMLElement>("[data-date-label]"));
-    const firstDivider = dividers[0];
-    const secondDivider = dividers[1];
-    if (!firstDivider || !secondDivider) throw new Error("missing date dividers");
-    Object.defineProperty(firstDivider, "offsetTop", { value: 0, configurable: true });
-    Object.defineProperty(secondDivider, "offsetTop", { value: 120, configurable: true });
-
-    // 日期气泡扫描经 rAF 节流；用例内把 rAF 同步化，保证断言可确定地观察到结果。
-    vi.stubGlobal("requestAnimationFrame", (callback: FrameRequestCallback) => {
-      callback(0);
-      return 0;
-    });
-
-    await act(async () => {
-      Object.defineProperty(list, "scrollTop", { value: 130, configurable: true });
-      Object.defineProperty(list, "scrollHeight", { value: 1000, configurable: true });
-      Object.defineProperty(list, "clientHeight", { value: 400, configurable: true });
-      list.dispatchEvent(new Event("scroll", { bubbles: true }));
-    });
-    await flush();
-    const floatingDateButton = Array.from(host.querySelectorAll<HTMLButtonElement>("button")).find((button) =>
-      button.getAttribute("aria-label")?.includes("点击选择日期"),
-    );
-    expect(floatingDateButton).toBeInstanceOf(HTMLButtonElement);
-    expect(host.querySelector('input[type="date"]')).toBeNull();
-
-    await act(async () => {
-      floatingDateButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-    });
-
-    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
-    await act(async () => {
-      list.dispatchEvent(new Event("scroll", { bubbles: true }));
-    });
-    await act(async () => {
-      vi.advanceTimersByTime(1_500);
-    });
-    expect(document.body.querySelector('button[aria-label="2026-06-02"]')?.getAttribute("aria-pressed")).toBe("true");
-
-    vi.unstubAllGlobals();
-    await unmount(root);
-  });
-
   it("近底部的滚动驱动重渲染不把滚动位置弹回底部（安卓抖动回归）", async () => {
     await db.quickNotes.bulkAdd([
       {
@@ -2218,6 +2155,129 @@ describe("搜索态日期条", () => {
     expect(divider?.classList.contains("quick-note-date-divider")).toBe(true);
     // 纯展示：日期条内没有任何按钮，点它不会离开搜索。
     expect(divider?.querySelector("button")).toBeNull();
+
+    vi.useRealTimers();
+    await unmount(root);
+  });
+}, PAGE_TEST_TIMEOUT_MS);
+
+describe("停手隐身", () => {
+  it("停手后粘住的日期条隐身，一开始滚动立刻现身", async () => {
+    await db.quickNotes.bulkAdd([
+      {
+        id: "k1",
+        text: "第一天",
+        occurredAt: "2026-06-01T04:00:00.000Z",
+        createdAt: "2026-06-01T04:00:00.000Z",
+        updatedAt: "2026-06-01T04:00:00.000Z",
+      },
+      {
+        id: "k2",
+        text: "第二天",
+        occurredAt: "2026-06-02T04:00:00.000Z",
+        createdAt: "2026-06-02T04:00:00.000Z",
+        updatedAt: "2026-06-02T04:00:00.000Z",
+      },
+    ]);
+    const { host, root } = await renderPage();
+    const list = host.querySelector<HTMLElement>('[aria-label="速记列表"]');
+    if (!list) throw new Error("missing quick notes list");
+    const dividers = Array.from(host.querySelectorAll<HTMLElement>("[data-date-label]"));
+
+    // jsdom 量不出真实布局，按「第一条已粘住、第二条还在下方」伪造几何。
+    list.getBoundingClientRect = () => ({ top: 0, height: 400 }) as DOMRect;
+    dividers[0].getBoundingClientRect = () => ({ top: -10, height: 28 }) as DOMRect;
+    dividers[1].getBoundingClientRect = () => ({ top: 300, height: 28 }) as DOMRect;
+
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    await act(async () => {
+      list.dispatchEvent(new Event("scroll", { bubbles: true }));
+    });
+    // 滚动中：谁都不隐身，粘住效果全靠 CSS sticky。
+    expect(dividers[0].classList.contains("stuck")).toBe(false);
+
+    await act(async () => {
+      vi.advanceTimersByTime(1_500);
+    });
+    // 停手 1.2s 后：粘住那条隐身，没粘住的照常可见。
+    expect(dividers[0].classList.contains("stuck")).toBe(true);
+    expect(dividers[1].classList.contains("stuck")).toBe(false);
+
+    // 再次滚动：立刻摘掉隐身类，日期随 transition 淡入。这一条不测就等于没测——
+    // 忘了摘类的实现会表现为「滚动时日期永远不出现」，而上面两条断言全绿。
+    await act(async () => {
+      list.dispatchEvent(new Event("scroll", { bubbles: true }));
+    });
+    expect(dividers[0].classList.contains("stuck")).toBe(false);
+
+    vi.useRealTimers();
+    await unmount(root);
+  });
+
+  it("多选态下粘住的日期条不隐身——「选中这天」必须点得到", async () => {
+    await db.quickNotes.add({
+      id: "m1",
+      text: "多选态样本",
+      occurredAt: "2026-06-01T04:00:00.000Z",
+      createdAt: "2026-06-01T04:00:00.000Z",
+      updatedAt: "2026-06-01T04:00:00.000Z",
+    });
+    const { host, root } = await renderPage();
+    const list = host.querySelector<HTMLElement>('[aria-label="速记列表"]');
+    if (!list) throw new Error("missing quick notes list");
+
+    // 多选只能从气泡长按/右键菜单进（没有独立入口按钮）。文件里已有的 openMenu/menuItem/click
+    // 辅助函数就是干这个的，照抄同款写法。
+    await openMenu(host, "多选态样本");
+    await click(menuItem(host, "选择"));
+
+    const divider = host.querySelector<HTMLElement>("[data-date-label]");
+    if (!divider) throw new Error("missing date divider");
+    list.getBoundingClientRect = () => ({ top: 0, height: 400 }) as DOMRect;
+    divider.getBoundingClientRect = () => ({ top: -10, height: 28 }) as DOMRect;
+
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    await act(async () => {
+      list.dispatchEvent(new Event("scroll", { bubbles: true }));
+    });
+    await act(async () => {
+      vi.advanceTimersByTime(1_500);
+    });
+    expect(divider.classList.contains("stuck")).toBe(false);
+
+    vi.useRealTimers();
+    await unmount(root);
+  });
+
+  it("停手倒计时途中进多选，定时器 fire 时也不隐身（守闭包冻结）", async () => {
+    await db.quickNotes.add({
+      id: "g1",
+      text: "闭包守卫样本",
+      occurredAt: "2026-06-01T04:00:00.000Z",
+      createdAt: "2026-06-01T04:00:00.000Z",
+      updatedAt: "2026-06-01T04:00:00.000Z",
+    });
+    const { host, root } = await renderPage();
+    const list = host.querySelector<HTMLElement>('[aria-label="速记列表"]');
+    if (!list) throw new Error("missing quick notes list");
+    const divider = host.querySelector<HTMLElement>("[data-date-label]");
+    if (!divider) throw new Error("missing date divider");
+    list.getBoundingClientRect = () => ({ top: 0, height: 400 }) as DOMRect;
+    divider.getBoundingClientRect = () => ({ top: -10, height: 28 }) as DOMRect;
+
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    // 先滚动种下定时器，此刻 selectionMode 还是 false —— 回调闭包冻结的就是这个值。
+    await act(async () => {
+      list.dispatchEvent(new Event("scroll", { bubbles: true }));
+    });
+    // 倒计时途中进多选（不再滚动，所以定时器不会被重设）。
+    await openMenu(host, "闭包守卫样本");
+    await click(menuItem(host, "选择"));
+    await act(async () => {
+      vi.advanceTimersByTime(1_500);
+    });
+    // 直接读 state 而非 ref 的实现会在这里打上 stuck，把「选中这天」藏掉。
+    expect(host.querySelector<HTMLElement>("[data-date-label]")?.classList.contains("stuck")).toBe(false);
 
     vi.useRealTimers();
     await unmount(root);

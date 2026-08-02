@@ -55,7 +55,7 @@ import { addTask, deleteTask } from "../lib/tasks.js";
 import { formatTime, getDateString, isValidDateString } from "../lib/time.ts";
 import { copyText } from "../quick-notes/clipboard.ts";
 import { clearComposerDraft, isEditDraftDirty, readComposerDraft, writeComposerDraft } from "../quick-notes/composerDraft.ts";
-import { pickCurrentDateDivider } from "../quick-notes/currentDate.ts";
+import { findStuckDivider } from "../quick-notes/currentDate.ts";
 import { deleteQuickNotesByIds } from "../quick-notes/deleteQuickNotesByIds.ts";
 import { deleteQuickNotesByRange } from "../quick-notes/deleteQuickNotesRange.ts";
 import {
@@ -79,7 +79,9 @@ const INPUT_MAX_HEIGHT_PX = 160;
 const DEFAULT_COMPOSER_INSET_PX = 128;
 const COMPOSER_BOTTOM_GAP_PX = 16;
 const STATUS_AUTO_DISMISS_MS = 2400;
-const BUBBLE_HIDE_DELAY_MS = 1200;
+const STUCK_HIDE_DELAY_MS = 1200;
+// 与 JSX 上的 top-2（0.5rem）是同一个值：日期条粘住时距滚动容器可视区顶部的像素。
+const STICKY_TOP_PX = 8;
 const SEARCH_RESULT_PAGE_SIZE = 100;
 const SEARCH_FOCUS_HIGHLIGHT_MS = 1500;
 // 草稿落盘的防抖窗口：停顿超过这个时长才落盘，连续不停打字（键间隔 < 400ms）期间一次都不落盘，
@@ -126,9 +128,6 @@ export default function QuickNotesPage() {
   const [focusNoteId, setFocusNoteId] = useState<string | null>(null);
   const [highlightNoteId, setHighlightNoteId] = useState<string | null>(null);
   const [atBottom, setAtBottom] = useState(true);
-  const [bubbleDate, setBubbleDate] = useState<{ label: string; localDate: string } | null>(null);
-  const [bubbleVisible, setBubbleVisible] = useState(false);
-  const [bubbleDatePickerOpen, setBubbleDatePickerOpen] = useState(false);
   // 日历开着时不能让日期条隐身，否则月历悬在半空、它的锚点已经不见了。
   const [datePickerOpen, setDatePickerOpen] = useState(false);
   // 日期跳转的落点定位请求：jumpToDate 只换数据窗口、不动 scrollTop，由专门的 effect 消费。
@@ -167,10 +166,17 @@ export default function QuickNotesPage() {
   const saveTodoPendingRef = useRef(false);
   const punchPendingRef = useRef(false);
   const statusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const bubbleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const stuckTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const highlightTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const bubbleRafRef = useRef<number | null>(null);
-  const bubbleKeyRef = useRef<string | null>(null);
+  // 当前被打上隐身类的日期条。滚动一开始就要摘掉它，粘住那条才会随 transition 淡入。
+  const stuckElRef = useRef<HTMLElement | null>(null);
+  // 停手定时器的回调捕获的是「创建定时器那一次渲染」的闭包：用户在那 1.2 秒内打开日历、
+  // 进多选或开搜索，回调里读到的仍是旧值，照样会打上隐身类——日历失去锚点、「选中这天」
+  // 被藏掉。同 draftTextRef / editingIdRef 的老问题，经这个随渲染同步的 ref 读最新值。
+  const scanGuardRef = useRef({ datePickerOpen, selectionMode, searchOpen });
+  useEffect(() => {
+    scanGuardRef.current = { datePickerOpen, selectionMode, searchOpen };
+  }, [datePickerOpen, selectionMode, searchOpen]);
   const pressedNoteRef = useRef<QuickNote | null>(null);
   const stickBottomRef = useRef(true);
   const prevScrollHeightRef = useRef(0);
@@ -295,11 +301,8 @@ export default function QuickNotesPage() {
   useEffect(
     () => () => {
       if (statusTimerRef.current) clearTimeout(statusTimerRef.current);
-      if (bubbleTimerRef.current) clearTimeout(bubbleTimerRef.current);
+      if (stuckTimerRef.current) clearTimeout(stuckTimerRef.current);
       if (highlightTimerRef.current) clearTimeout(highlightTimerRef.current);
-      if (bubbleRafRef.current !== null && typeof cancelAnimationFrame === "function") {
-        cancelAnimationFrame(bubbleRafRef.current);
-      }
     },
     [],
   );
@@ -321,6 +324,12 @@ export default function QuickNotesPage() {
       setSearchOpen(false);
     }
   }, [selectionMode]);
+
+  // 进多选 / 开搜索 / 开置顶浮层时列表 DOM 会整块换掉，隐身 ref 会指向孤儿节点：不清则下次
+  // remove 打空，真正粘住那条永远摘不掉 .stuck 类，表现为滚动时日期条再也不出现。
+  useEffect(() => {
+    clearStuckDivider();
+  }, [selectionMode, searchOpen, pinnedOpen]);
 
   // header 更多操作 / 导出菜单开着时 Escape 可关（QN-16）。气泡操作菜单的 Escape
   // 在 QuickNoteActionMenu 内部处理，这里只管这两个内联菜单。
@@ -460,48 +469,48 @@ export default function QuickNotesPage() {
     }
     lastScrollTopRef.current = top;
 
-    scheduleDateBubble();
+    clearStuckDivider();
+    if (stuckTimerRef.current) clearTimeout(stuckTimerRef.current);
+    stuckTimerRef.current = setTimeout(() => {
+      stuckTimerRef.current = null;
+      scanStuckDivider();
+    }, STUCK_HIDE_DELAY_MS);
   }
 
-  // 日期气泡的「当前分隔」扫描需要 querySelectorAll + 读 offsetTop（强制重排），原本每个
-  // scroll 事件都跑且每次新建对象 setState，滚动期间反复重渲染。这里用 rAF 把扫描合并到每帧
-  // 一次，并对相同日期去抖（key 不变就不 setState），尽量减少滚动时的重排与重渲染。
-  function updateDateBubble() {
+  // 停止滚动后跑一次：给粘在顶上那条打隐身类，避免它与列表里同一条日期重影。
+  // 只在这一刻扫描（而不是每帧），滚动全程零 JS —— 粘住效果由 CSS sticky 独自承担。
+  function scanStuckDivider() {
     const el = scrollRef.current;
     if (!el) return;
+    // 一律经 ref 读，别直接读 state——见 scanGuardRef 的注释。
+    const { datePickerOpen: pickerOpen, selectionMode: selecting, searchOpen: searching } = scanGuardRef.current;
+    // 日历开着时隐身会让月历失去锚点；多选态隐身会让「选中这天」点不到。
+    if (pickerOpen || selecting) return;
 
-    const top = el.scrollTop;
-    const dividers = Array.from(el.querySelectorAll<HTMLElement>("[data-date-label]")).map((node) => ({
-      label: node.dataset.dateLabel ?? "",
-      localDate: node.dataset.localDate ?? today,
-      offsetTop: node.offsetTop,
-    }));
-    const divider = pickCurrentDateDivider(dividers, top);
-    if (!divider) return;
+    const containerTop = el.getBoundingClientRect().top;
+    const nodes = Array.from(
+      el.querySelectorAll<HTMLElement>(searching ? "[data-search-date]" : "[data-date-label]"),
+    );
+    const candidates = nodes.map((node) => {
+      const rect = node.getBoundingClientRect();
+      return {
+        node,
+        localDate: node.dataset.localDate ?? node.dataset.searchDate ?? today,
+        top: rect.top - containerTop,
+        height: rect.height,
+      };
+    });
 
-    const key = `${divider.localDate}|${divider.label}`;
-    if (bubbleKeyRef.current !== key) {
-      bubbleKeyRef.current = key;
-      setBubbleDate({ label: divider.label, localDate: divider.localDate });
-    }
-    setBubbleVisible(true);
-    if (bubbleTimerRef.current) clearTimeout(bubbleTimerRef.current);
-    bubbleTimerRef.current = setTimeout(() => {
-      bubbleTimerRef.current = null;
-      setBubbleVisible(false);
-    }, BUBBLE_HIDE_DELAY_MS);
+    const stuck = findStuckDivider(candidates, STICKY_TOP_PX);
+    if (!stuck) return;
+    stuck.node.classList.add("stuck");
+    stuckElRef.current = stuck.node;
   }
 
-  function scheduleDateBubble() {
-    if (typeof requestAnimationFrame !== "function") {
-      updateDateBubble();
-      return;
-    }
-    if (bubbleRafRef.current !== null) return;
-    bubbleRafRef.current = requestAnimationFrame(() => {
-      bubbleRafRef.current = null;
-      updateDateBubble();
-    });
+  function clearStuckDivider() {
+    if (!stuckElRef.current) return;
+    stuckElRef.current.classList.remove("stuck");
+    stuckElRef.current = null;
   }
 
   function focusInput() {
@@ -1479,29 +1488,6 @@ export default function QuickNotesPage() {
           )}
         </div>
       </section>
-
-      {bubbleDate && !pinnedOpen && !searchOpen && (
-        <div
-          // 反色小胶囊（bg-ink/75 + text-page，同 GoalGraphUndoToast 的组合）：两主题下都与
-          // 页面反色，飘在花底内容上也可读；无边框无阴影无图标，字比原 caption 大一号。
-          className={`quick-note-date-bubble fixed left-1/2 z-[var(--z-dropdown)] -translate-x-1/2 rounded-pill bg-ink/75 px-3.5 py-1.5 text-page backdrop-blur transition-opacity duration-300 sm:top-20 ${
-            bubbleVisible || bubbleDatePickerOpen ? "pointer-events-auto opacity-100" : "pointer-events-none opacity-0"
-          }`}
-        >
-          <DateField
-            value={bubbleDate.localDate}
-            ariaLabel={`当前日期 ${bubbleDate.label}，点击选择日期`}
-            onChange={(next) => {
-              if (next) handleJumpDateChange(next);
-            }}
-            onOpenChange={setBubbleDatePickerOpen}
-            portal
-            hideIcon
-            className="min-h-0 rounded-pill border-0 bg-transparent p-0 td-text-label font-medium shadow-none hover:bg-transparent"
-            formatValue={() => <span className="text-page">{bubbleDate.label}</span>}
-          />
-        </div>
-      )}
 
       {!searchOpen && shouldShowJumpToLatest({ atBottom, atLatest: timeline.atLatest }) && (
         <button
