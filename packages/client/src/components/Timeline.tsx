@@ -3,6 +3,7 @@ import { useCategories } from "../hooks/useCategories.ts";
 import type { TimeSlot } from "../lib/time.ts";
 import type { RingSelectionTarget } from "./CircularTimeline.tsx";
 import TimeSlotComponent from "./TimeSlot.tsx";
+import { EmptyState } from "./ui/EmptyState.js";
 
 interface TimelineProps {
   slots: TimeSlot[];
@@ -34,7 +35,7 @@ export default function Timeline({ slots, onGapClick, onEntryClick, highlight }:
     .reverse();
 
   if (displaySlots.length === 0) {
-    return <div className="px-4 py-10 text-center td-text-body text-ink-2">今天还没有记录</div>;
+    return <EmptyState variant="inline" title="今天还没有记录" />;
   }
 
   return (

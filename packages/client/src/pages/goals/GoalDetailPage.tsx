@@ -3,6 +3,7 @@ import { useNavigate, useParams } from "react-router";
 import { listGoalLayoutPins } from "../../lib/goalLayoutPins.js";
 import { getGoal } from "../../lib/goals.js";
 import { listAllTrackSteps, listTracks } from "../../lib/tracks.js";
+import { LoadingState } from "../../components/ui/LoadingState.js";
 import { GoalGraphEditor } from "./GoalGraphEditor.js";
 import { listAllTasksForGoals } from "./goalPageData.js";
 
@@ -24,7 +25,7 @@ export default function GoalDetailPage() {
     steps === undefined ||
     layoutPins === undefined
   ) {
-    return <div className="min-h-full bg-page px-4 py-6 td-text-body text-ink-3">正在加载...</div>;
+    return <LoadingState label="正在加载..." className="min-h-full bg-page px-4 py-6" />;
   }
 
   if (goal === null) {

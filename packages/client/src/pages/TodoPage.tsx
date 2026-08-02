@@ -904,7 +904,7 @@ export function TodoPage() {
       title="今天"
       pool="today"
       tasks={displayToday}
-      emptyText="今天没有任务 🎉"
+      emptyText="今天没有任务"
       hero
       isOverdue={isOverdue}
       sortable

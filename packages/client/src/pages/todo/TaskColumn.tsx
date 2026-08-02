@@ -1,3 +1,4 @@
+import { EmptyState } from "../../components/ui/EmptyState.js";
 import { TaskList, type TaskListProps } from "./TaskList.js";
 
 export interface TaskColumnProps extends TaskListProps {
@@ -16,7 +17,7 @@ export function TaskColumn(props: TaskColumnProps) {
         <span className="td-text-caption text-ink-3">{tasks.length}</span>
       </div>
       {tasks.length === 0 ? (
-        <p className="rounded-card bg-surface px-3 py-6 text-center td-text-body text-ink-3">{emptyText}</p>
+        <EmptyState variant="card" title={emptyText} />
       ) : (
         <div className="rounded-card p-1.5">
           <TaskList pool={pool} tasks={tasks} {...listProps} />

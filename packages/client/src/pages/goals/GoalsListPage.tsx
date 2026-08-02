@@ -2,6 +2,7 @@ import { useLiveQuery } from "dexie-react-hooks";
 import { addGoal, listGoals } from "../../lib/goals.js";
 import { buildGoalOverview } from "../../lib/goalsView.js";
 import { listAllTrackSteps, listTracks } from "../../lib/tracks.js";
+import { EmptyState } from "../../components/ui/EmptyState.js";
 import { CollapsibleSection } from "../todo/CollapsibleSection.js";
 import { listAllTasksForGoals } from "./goalPageData.js";
 import { GoalListItem } from "./GoalListItem.js";
@@ -26,7 +27,7 @@ export default function GoalsListPage() {
       <div className="mx-auto w-full max-w-2xl px-4 py-4 pb-24">
         <NewGoalComposer onCreate={(input) => void create(input)} />
         {active.length === 0 ? (
-          <p className="rounded-card bg-surface px-3 py-6 text-center td-text-body text-ink-3">还没有进行中的目标</p>
+          <EmptyState variant="card" title="还没有进行中的目标" />
         ) : (
           <ul className="flex flex-col gap-2">
             {active.map((overview) => (

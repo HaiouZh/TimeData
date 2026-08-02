@@ -6,6 +6,7 @@ import { useAgentExecTags } from "../../lib/settings/trackAgentExecTagsSetting.j
 import { addTrack, appendUserStep, listAllTrackSteps, listTracks } from "../../lib/tracks.js";
 import { type DispatchGroupKey, dispatchItems, dispatchStats, groupDispatchItems } from "../../lib/tracksDispatch.js";
 import { groupStepsByTrack, partitionTracks } from "../../lib/tracksView.js";
+import { EmptyState } from "../../components/ui/EmptyState.js";
 import { CollapsibleSection } from "../todo/CollapsibleSection.js";
 import { NewTrackComposer } from "./NewTrackComposer.js";
 import type { StepDraft } from "./StepComposer.js";
@@ -63,7 +64,7 @@ export function TracksBoard() {
           等我接 {stats.awaiting} · agent 在跑 {stats.agentRunning} · 停滞 {stats.stalled}
         </p>
         {items.length === 0 ? (
-          <p className="rounded-card bg-surface px-3 py-6 td-text-body text-center text-ink-3">还没有进行中的轨道</p>
+          <EmptyState variant="card" title="还没有进行中的轨道" />
         ) : (
           groups.map((group) => (
             <section key={group.key} data-testid={`dispatch-group-${group.key}`} className="mb-4">

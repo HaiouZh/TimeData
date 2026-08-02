@@ -26,6 +26,8 @@ import { Link, useNavigate, useSearchParams } from "react-router";
 import { Icon } from "../components/Icon.js";
 import { ActionToastBar } from "../components/ui/ActionToastBar.tsx";
 import { DateField } from "../components/ui/DateField.js";
+import { EmptyState } from "../components/ui/EmptyState.js";
+import { LoadingState } from "../components/ui/LoadingState.js";
 import { BOTTOM_NAV_HEIGHT_PX, useBottomNav } from "../contexts/BottomNavContext.tsx";
 import { useConfirm } from "../hooks/useConfirm.tsx";
 import { useDebouncedValue } from "../hooks/useDebouncedValue.ts";
@@ -1352,16 +1354,15 @@ export default function QuickNotesPage() {
               )}
 
               {timeline.loading && (
-                <div className="rounded-card border border-border bg-surface/60 px-4 py-8 text-center td-text-body text-ink-3">
-                  正在读取速记...
-                </div>
+                <LoadingState label="正在读取速记..." className="rounded-card border border-border bg-surface/60 px-4 py-8" />
               )}
 
               {!timeline.loading && displayItems.length === 0 && pinnedNotes.length === 0 && (
-                <div className="rounded-card border border-dashed border-border bg-surface/45 px-5 py-10 text-center">
-                  <p className="td-text-body font-medium text-ink-2">还没有速记</p>
-                  <p className="mt-1 td-text-caption text-ink-3">写下一个想法、线索或待办，稍后再回来看。</p>
-                </div>
+                <EmptyState
+                  variant="card"
+                  title="还没有速记"
+                  description="写下一个想法、线索或待办，稍后再回来看。"
+                />
               )}
 
               {displayItems.map((item) => {
