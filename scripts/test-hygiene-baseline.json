@@ -134,6 +134,7 @@
   "dirty-in-clean-bucket:pages/todo/InlineChildren.test.tsx",
   "dirty-in-clean-bucket:pages/todo/RecurrencePresetSheet.test.tsx",
   "dirty-in-clean-bucket:pages/todo/ResizableSplit.test.tsx",
+  "dirty-in-clean-bucket:pages/todo/SortableTaskRow.test.tsx",
   "dirty-in-clean-bucket:pages/todo/SunkenInboxTail.test.tsx",
   "dirty-in-clean-bucket:pages/todo/TagFilterPanel.test.tsx",
   "dirty-in-clean-bucket:pages/todo/TaskColumn.test.tsx",
