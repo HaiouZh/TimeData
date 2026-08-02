@@ -24,23 +24,21 @@ export function useKeyboardHeight(): number {
 
   useEffect(() => {
     if (Capacitor.getPlatform() !== "web") {
-      let disposed = false;
-      const showListener = Keyboard.addListener("keyboardWillShow", (info: KeyboardInfo) => {
-        setHeight(info.keyboardHeight);
-      });
-      const hideListener = Keyboard.addListener("keyboardWillHide", () => {
-        setHeight(0);
-      });
+      try {
+        const showListener = Keyboard.addListener("keyboardWillShow", (info: KeyboardInfo) => {
+          setHeight(Number.isFinite(info.keyboardHeight) ? info.keyboardHeight : 0);
+        });
+        const hideListener = Keyboard.addListener("keyboardWillHide", () => {
+          setHeight(0);
+        });
 
-      return () => {
-        disposed = true;
-        void showListener.then((handle) => {
-          if (disposed) handle.remove();
-        });
-        void hideListener.then((handle) => {
-          if (disposed) handle.remove();
-        });
-      };
+        return () => {
+          void showListener.then((handle) => handle.remove()).catch(() => {});
+          void hideListener.then((handle) => handle.remove()).catch(() => {});
+        };
+      } catch {
+        return undefined;
+      }
     }
 
     const viewport = typeof window === "undefined" ? undefined : window.visualViewport;

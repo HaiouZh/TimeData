@@ -84,6 +84,29 @@ describe("useKeyboardHeight — native", () => {
     await unmount(root);
   });
 
+  it("keyboardHeight 非有限值（NaN/undefined）时归零而非透传 NaN", async () => {
+    getPlatformMock.mockReturnValue("ios");
+    const callbacks: Record<string, (arg?: unknown) => void> = {};
+    addListenerMock.mockImplementation((eventName: string, cb: (arg?: unknown) => void) => {
+      callbacks[eventName] = cb;
+      return Promise.resolve({ remove: vi.fn() });
+    });
+
+    const { host, root } = await renderDom(createElement(Probe));
+
+    await act(async () => {
+      callbacks.keyboardWillShow?.({ keyboardHeight: Number.NaN });
+    });
+    expect(readHeight(host)).toBe("0");
+
+    await act(async () => {
+      callbacks.keyboardWillShow?.({ keyboardHeight: undefined });
+    });
+    expect(readHeight(host)).toBe("0");
+
+    await unmount(root);
+  });
+
   it("非 web 平台不订阅 visualViewport", async () => {
     getPlatformMock.mockReturnValue("android");
     addListenerMock.mockReturnValue(Promise.resolve({ remove: vi.fn() }));
