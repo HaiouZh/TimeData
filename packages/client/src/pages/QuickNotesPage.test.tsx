@@ -2378,6 +2378,15 @@ describe("viewingDate 接管导出/清理", () => {
     expect(labels.some((text) => text.includes("6月1日"))).toBe(true);
     expect(labels.some((text) => text.includes("导出今天"))).toBe(false);
 
+    // 文案对了不等于目标对了——真按下去删的必须也是 6月1日。既有的清理用例走的是
+    // ?date= 初值那条路，停手扫描这条新链路的真实删除目标只有这里守得住。
+    await click(menuItem(host, "清理 6月1日"));
+    expect(host.querySelector('[role="dialog"]')?.textContent).toContain("删除 6月1日 的速记");
+    await click(lastButtonByText(host, "删除"));
+
+    await expect(db.quickNotes.get("v1")).resolves.toBeUndefined();
+    await expect(db.quickNotes.get("v2")).resolves.toMatchObject({ text: "六月二日" });
+
     await unmount(root);
   });
 

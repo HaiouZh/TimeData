@@ -112,12 +112,9 @@ export default function QuickNotesPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const today = getDateString(new Date());
   const queryDate = normalizeDateParam(searchParams.get("date"));
-  // 值本身已不再被读取（header 跳转框已收掉，Task 5），只留 setJumpDate 驱动
-  // ?date= 深链同步与 timeline.jumpToDate；保留状态但用 _ 前缀避免 biome 误报未使用。
-  const [_jumpDate, setJumpDate] = useState(queryDate ?? today);
   // 「你眼前正在看的那天」——由停手扫描更新，导出/清理的唯一目标。
-  // 与 jumpDate（最后一次显式跳转的意图，负责 URL ?date= 同步）刻意分开：
-  // 让它跟随滚动写 URL 会把浏览历史刷爆。
+  // 刻意不让它写 URL：跟着滚动写 ?date= 会把浏览历史刷爆。
+  // URL 同步由各跳转点直接调 setSearchParams 承担，深链初始跳转由 queryDate + didInitJumpRef 承担。
   const [viewingDate, setViewingDate] = useState(queryDate ?? today);
   const [draftText, setDraftText] = useState(() => readComposerDraft());
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -298,11 +295,6 @@ export default function QuickNotesPage() {
     didInitJumpRef.current = true;
     if (queryDate) void timeline.jumpToDate(queryDate);
   }, [queryDate, timeline.jumpToDate]);
-
-  useEffect(() => {
-    if (!queryDate) return;
-    setJumpDate(queryDate);
-  }, [queryDate]);
 
   useEffect(
     () => () => {
@@ -549,7 +541,6 @@ export default function QuickNotesPage() {
     if (options.resetTimeline ?? true) {
       stickBottomRef.current = true;
       pendingJumpRef.current = null;
-      setJumpDate(today);
       setViewingDate(today);
       setSearchParams({});
       void timeline.resetToLatest();
@@ -558,7 +549,6 @@ export default function QuickNotesPage() {
 
   // 「回到最新」的唯一实现：浮标按钮与历史视图保存后的 toast 共用，避免两处各写一遍。
   function jumpToLatest() {
-    setJumpDate(today);
     setViewingDate(today);
     setSearchParams({});
     stickBottomRef.current = true;
@@ -580,7 +570,7 @@ export default function QuickNotesPage() {
       handleJumpDateChange(localDate);
       return;
     }
-    setJumpDate(localDate);
+    setViewingDate(localDate);
     setSearchParams(localDate === today ? {} : { date: localDate });
     stickBottomRef.current = false;
     // 定位交给 focusNoteId 的 scrollIntoView，别让残留的日期定位请求抢滚动。
@@ -909,7 +899,6 @@ export default function QuickNotesPage() {
 
   function handleJumpDateChange(nextDate: string) {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(nextDate)) return;
-    setJumpDate(nextDate);
     setViewingDate(nextDate);
     setSearchParams(nextDate === today ? {} : { date: nextDate });
     stickBottomRef.current = false;
