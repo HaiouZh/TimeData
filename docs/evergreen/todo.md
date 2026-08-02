@@ -12,6 +12,7 @@ covers:
   - packages/client/src/pages/TodoPage.tsx
   - packages/client/src/pages/todo/**
   - packages/client/src/lib/tasks.ts
+  - packages/client/src/lib/taskNesting.ts
   - packages/client/src/lib/tasks/placement.ts
   - packages/client/src/lib/tasks/taskSort.ts
   - packages/client/src/lib/tasks/taskRowZone.ts
@@ -36,7 +37,7 @@ contracts:
   - packages/shared/src/taskDates.ts
   - packages/shared/src/syncDomains.ts
   - packages/server/src/db/schema.ts
-last-reviewed: 2026-08-01
+last-reviewed: 2026-08-02
 ---
 
 # 待办任务
@@ -136,7 +137,8 @@ agent / CLI (task-done/task-tag)
 子任务**就是普通 `Task` 行**，靠 `parentId` 指向 root，没有独立表、没有内嵌数组。
 
 - **只允许一层**：`child.parentId` 指向 `parentId===null` 的 root；child 自身不能再做父。写入侧三道防线：客户端 `createChildTask`/`moveTaskToParent` helper 校验，force-push 全量兜底校验（见 [sync](sync.md)），普通增量 push 不挡——单用户威胁模型下的有意选择（尺度见 [AGENTS.md](../../AGENTS.md)「边界 · 审查尺度」）。
-- **能力共享 + 行为收敛**：child 与 root 同 schema，所有字段保留。child 的 `recurrence`/`scheduledAt` 等高级字段**保留为休眠状态**，升回 root 自然恢复——**降级不清字段**。
+- **能力共享 + 行为收敛**：child 与 root 同 schema，所有字段保留。child 的 `recurrence`/`scheduledAt` 等高级字段**保留为休眠状态**，升回 root 自然恢复——**降级不清能力字段**。
+- **子任务不持有归属指针**：归属由父接管，脱离父即归属为空。降级为 child 时**同事务清空两种归属**——`sessionId` 置 `null`（手头场），并从**所有**含它的 `goal.members` 里移除（项目名单）；升回 root 不恢复任何归属，落回收件箱等待重新安排。两者必须同一次 `db.transaction()`：分开提交会留下「既是 child、又占着项目名单」的状态，而投影层按 `parentId` 早退看不见它（`listTasks`），名单里它还在。复合动作落在 `lib/taskNesting.ts`（`goals.ts` 已单向 import `tasks.ts`，反向引用成环，故复合动作只能置于两者上层）。
   - child 的 `toggleTaskDone` 强制走非重复路径（无视休眠 `recurrence`，只翻 `done`/`completedAt`，不衍生 occurrence）；唯一例外是父任务为重复模板时，规则行子任务复选框代理到该 rule 最新非 skipped occurrence child，不写模板 child 本体。
   - child **不进 `placement`/`listTasks` 任何桶**（含 `recurring`），过滤写在 `listTasks` 循环最顶部 `if (t.parentId !== null) continue`；children 由 `useTaskChildren(parentId)` 按需单独 query。
   - UI 不渲染 child 的高级控件入口（`recurrence`/`tags`/`scheduledAt`）。
@@ -181,7 +183,7 @@ agent / CLI (task-done/task-tag)
      | child（从 `parent:*` 起拖） | 恒 child；左移越过 -28px 才升 root | 回 -12px 内回落 child | child |
 
      基线区分是关键红线：子任务竖直重排（delta.x≈0）必须保持 child，否则会被误判成 root 而 `promoteToRoot` 拽出父任务。`clampTodoIndentPreview` 按基线把横向预览夹到根 `0..28px` / 子 `-28..0px`；拖拽期 `.todo-dnd-dragging .swipeable-list-item` 只放开纵向 overflow、横向继续 clip，防右拖把 `<main>` 撑出横向可滚面。
-       - **落点派发**（`handleDragEnd` → `todoDnd.resolveTodoDragWithIndent`，内层 `resolveTodoDragOperation`）：结合 active/over container、候选 root、目标池、root 是否已有 children 派发——同容器重排（池 `persistTaskOrder`、child `reorderChildren`、手头区 `hand` `persistTaskOrder`，见 §12）；child→pool→`promoteToRoot`；root/child→合法候选 root→`moveTaskToParent`（追加到目标父 children 末尾、`nextChildSortOrder` 取 max+1 不撞值；带 children 的 root 即使右移也不能降级）；root 在今天↔收件箱互拖→`scheduleTask`/`unscheduleTask`；root（仅池容器、`activeParentId === null`）→ `project:<goalId>` → `assign-to-project`（**不动 `scheduledAt`**，归属轴与时间轴正交），子任务落在项目组一律判 `null`（不做「先升根再入组」的复合动作）。项目组容器的落点契约、碰撞策略与准入判定见 [todo/project-zone](todo/project-zone.md) §6。
+       - **落点派发**（`handleDragEnd` → `todoDnd.resolveTodoDragWithIndent`，内层 `resolveTodoDragOperation`）：结合 active/over container、候选 root、目标池、root 是否已有 children 派发——同容器重排（池 `persistTaskOrder`、child `reorderChildren`、手头区 `hand` `persistTaskOrder`，见 §12）；child→pool→`promoteToRoot`；child→`hand`→`promoteTaskToHand`（升根落 `"inbox"` 再 `grabTaskToHand`，两步串行不合事务——中途失败是「升了根落在收件箱」，可见可重试）；root/child→合法候选 root→`nestTaskUnderParent`（追加到目标父 children 末尾、`nextChildSortOrder` 取 max+1 不撞值；带 children 的 root 即使右移也不能降级）；root 在今天↔收件箱互拖→`scheduleTask`/`unscheduleTask`；root（仅池容器、`activeParentId === null`）→ `project:<goalId>` → `assign-to-project`（**不动 `scheduledAt`**，归属轴与时间轴正交），子任务落在项目组一律判 `null`（不做「先升根再入组」的复合动作）。项目组容器的落点契约、碰撞策略与准入判定见 [todo/project-zone](todo/project-zone.md) §6。
    - **重排写入**：`persistTaskOrder` 在 Dexie transaction 内回填现有 `sortOrder` 槽位、更新 `updatedAt`、为每个变化项写 `syncLog`，只对同作用域 ids 使用。**重排是乐观的**：放手瞬间先以新序渲染（`applyOptimisticOrder` 按 containerId 覆盖显示序，手头区只重排未完成段），落库在后台，下一次 liveQuery 回流时乐观态收敛清除，落库失败回滚并 toast——避免「先弹回原位再硬跳」的两段视觉。**child 重排必须走 `reorderChildren`**（非 `persistTaskOrder`）：child `sortOrder` per-parent 独立，回填连续 `0..n-1`（只写变化行）以自愈撞值脏数据——撞值时槽位回填式算不出变化会静默不写、"拖了不动"。**池同容器重排只有今天**：收件箱显示序 = 按 `createdAt` 分天 + 段内 `createdAt` 倒序（`inboxGrouping.ts`），不读 `sortOrder`，落库既弹回又把 `updatedAt` 推到当下、重置该行的重力下沉时钟（`isTaskSunken` 读 `updatedAt`），故 `resolveTodoDragOperation` 对 `pool:inbox` 同容器直接返回 `null`；收件箱行仍注册 sortable——拖去今天（`schedule-root`）与缩进成子任务（`move-to-parent`）依赖它。
    - 拖拽中只高亮候选父、不提前展开真实 children；落定为 child 后目标父展开一次。
 6. **`tags` 自由标签不驱动自动逻辑**（[ADR 0014](../adr/0014-task-tags-vs-fields.md)）：只供人/agent 语义标记 + 展示/检索层消费——`filterTasks` 三轴 AND 过滤（含 AND/OR、排除 NOT、标题关键词），同一筛选投影覆盖普通任务池与项目区，手头区保持焦点隔离不受影响；标签色走 `lib/contentTint.ts` 的 `contentTint(标签名)`（确定性、不存储，见 [design-language](design-language.md) §1），`TagFilterPanel` 底部召唤式三态填色带计数筛选面，`TaskRow` 行内最多 3 chip、着色的 `#` 标类型（圆点归项目）。项目区筛选的展开与空态契约见 [todo/project-zone](todo/project-zone.md) §5；需要代码可靠动作的维度应毕业为结构化字段。
@@ -190,9 +192,9 @@ agent / CLI (task-done/task-tag)
 9. **`tasks` 不引用分类/时间/速记/目标等业务域**：SQL 无外键，不参与分类校验/时间段重叠/时长统计/速记导入导出；目标组织关系属于 [goals](goals.md)，不回流到 Task schema。
 10. **轨道不是子任务系统**：`tracks` / `track_steps` 是独立监控域（见 [tracks](tracks.md)），task 只会作为 `Ref{kind:"task"}` 被指向；轨道不镜像 `Task.done`、不回写父子进度，也不改变 `tasks` 的 force-push 契约。
 11. **想法重力只作用于 root inbox 展示层**：`Task.weight` 同步字段 + `updatedAt` 时间衰减，`TodoPage` 出桶后把 inbox 拆浮起/水下；`listTasks()`、排期分桶、tag/search、DnD 域登记都不感知。水位线 / 翻牌复查 / 已过目记忆 / 水下找回尾部 / 设置见 [todo/gravity](todo/gravity.md)。
-12. **手头投影**：`Task.sessionId` 指向活跃 session 的 root（非重复模板）不进 `today`/`inbox`/`scheduled`，只出现在手头卡；散场零迁移自然回桶——`sessionId` 不清空，只是排他条件（等于*当前*活跃场 id）不再成立。`sessionId` 是历史归属指针，不是"当前状态"标记。手头区未完成行支持区内拖拽重排（容器 `hand`，只交换这些行的全局 `sortOrder` 槽位；散场后 today 按新序保留、inbox 不保留——收件箱不读 sortOrder）；手头行不参与缩进（`clampTodoIndentPreview` 夹 0、`handleDragMove` 早退）、不开放拖出手头（`todoDockTargets` 对手头源不显示坞，`resolveTodoDockDrop` 拦 invalid）。详见 [todo/at-hand](todo/at-hand.md)。
+12. **手头投影**：`Task.sessionId` 指向活跃 session 的 root（非重复模板）不进 `today`/`inbox`/`scheduled`，只出现在手头卡；散场零迁移自然回桶——`sessionId` 不清空，只是排他条件（等于*当前*活跃场 id）不再成立。`sessionId` 是历史归属指针，不是"当前状态"标记。手头区未完成行支持区内拖拽重排（容器 `hand`，只交换这些行的全局 `sortOrder` 槽位；散场后 today 按新序保留、inbox 不保留——收件箱不读 sortOrder）；手头行参与缩进，可被收纳为候选 root 的 child（`clampTodoIndentPreview` 对 `hand` 按 root 基线夹 `[0, 28]`），子任务可拖回 `hand` 容器升根站到手头；手头行整行不开放拖出手头（`todoDockTargets` 对手头源不显示坞，`resolveTodoDockDrop` 拦 invalid）。**手头作为收纳落点只认手头来源**：`hoveredRootIdFromOver` 仅当拖拽来源也是 `hand` 时才把手头行当候选 root，外区来源返回 `null`——该守卫必须落在这一层，因为收纳高亮（`handleDragOver`）与落点派发共用它，只拦落点会留下「亮了高亮却无反馈」。详见 [todo/at-hand](todo/at-hand.md)。
 13. **项目区与归属轴**：`Goal(kind="project", status="active")` 的成员任务在待办页聚成「项目区」，并对收件箱**排他**——成员不进 `inbox`，收件箱因此回归「真·未归类托盘」；焦点轴（手头）与时间轴（今天/已排期）与它正交，成员同时出现在对应桶与项目区。两份 goal→task 索引口径不同且**不得互相派生**，归属变更必须同事务刷新成员 `updatedAt`（重力可见性所需）。完整契约（投影规则、排他红线、写入不变量、呈现约定）见 [todo/project-zone](todo/project-zone.md)。
-14. **投递坞不发明语义**：宽屏拖拽中贴着**来源区块左缘**浮现的瞬态落点按钮（`TodoDragDock`，拖起时量 `[data-section]` 左缘定位，量不到退回视口右缘;锚左缘是为了让奔向坞的行程向左——向右正是缩进变子任务的手势方向），`dock:pool:*`/`dock:project:*` 折算成既有容器走 `resolveTodoDragOperation`，`dock:hand` = `grabTaskToHand`；坞永不产生 reorder（`resolveTodoDockDrop` 拦截）。坞常驻挂载只切透明度、`pointer-events` 仅拖拽中放开（坞内滚动需要接滚轮，平时 none 不拦点击），仅宽屏渲染；被拖行所在池的药丸不显示，**拖子任务时「手头」药丸也不显示**（`grabTaskToHand` 拒收子任务，不给必失败落点，解析层同拦成 invalid）；子任务投项目药丸的拒绝口径与项目卡一致。`preferProjectCollisions` 中坞命中优先于项目组与行；`hoveredRootIdFromOver` 对 dock id 恒返回 `null`（坞不是缩进落点）。
+14. **投递坞不发明语义**：宽屏拖拽中贴着**来源区块左缘**浮现的瞬态落点按钮（`TodoDragDock`，拖起时量 `[data-section]` 左缘定位，量不到退回视口右缘;锚左缘是为了让奔向坞的行程向左——向右正是缩进变子任务的手势方向），`dock:pool:*`/`dock:project:*` 折算成既有容器走 `resolveTodoDragOperation`，`dock:hand` 对 root 源 = `grabTaskToHand`、对 child 源 = `promote-to-hand`（升根后再抓，`grabTaskToHand` 对子任务的硬拒因此不被这条路径触发）；坞永不产生 reorder（`resolveTodoDockDrop` 拦截）。坞常驻挂载只切透明度、`pointer-events` 仅拖拽中放开（坞内滚动需要接滚轮，平时 none 不拦点击），仅宽屏渲染；被拖行所在池的药丸不显示，**拖子任务时「手头」药丸照常显示**（投上去走升根到手头）；子任务投项目药丸的拒绝口径与项目卡一致。`preferProjectCollisions` 中坞命中优先于项目组与行；`hoveredRootIdFromOver` 对 dock id 恒返回 `null`（坞不是缩进落点）。
 
 ## 4. 模块速查
 
