@@ -551,3 +551,67 @@ test("validates allowlist schema", () => {
     /removeBy/,
   );
 });
+
+test("flags handwritten segmented controls and allows SegmentedControl/tablist", () => {
+  assert.equal(
+    classifyLine("x.tsx", '<button aria-pressed={active} className="rounded-pill px-3 py-1">日</button>').some(
+      (v) => v.rule === "handwritten-segmented-control",
+    ),
+    true,
+  );
+  assert.equal(
+    classifyLine("x.tsx", '<button className="min-h-11 rounded-ctl" aria-pressed={active}>周</button>').some(
+      (v) => v.rule === "handwritten-segmented-control",
+    ),
+    false,
+  );
+  // SegmentedControl 自身与 tablist 语义页豁免
+  assert.equal(
+    classifyLine("x.tsx", '<SegmentedControl aria-pressed={active} className="rounded-pill" />').some(
+      (v) => v.rule === "handwritten-segmented-control",
+    ),
+    false,
+  );
+  assert.equal(
+    classifyLine("x.tsx", '<button role="tab" aria-pressed={active} className="rounded-pill">标签</button>').some(
+      (v) => v.rule === "handwritten-segmented-control",
+    ),
+    false,
+  );
+});
+
+test("flags bare text empty states and allows EmptyState", () => {
+  assert.equal(
+    classifyLine("x.tsx", '<div className="px-4 py-10 text-center td-text-body">还没有记录</div>').some(
+      (v) => v.rule === "bare-text-empty-state",
+    ),
+    true,
+  );
+  assert.equal(
+    classifyLine("x.tsx", '<EmptyState variant="card" title="还没有记录" />').some(
+      (v) => v.rule === "bare-text-empty-state",
+    ),
+    false,
+  );
+});
+
+test("flags h1 without title size and allows title/display sized h1", () => {
+  assert.equal(
+    classifyLine("x.tsx", '<h1 className="td-text-body font-medium text-ink">日记</h1>').some(
+      (v) => v.rule === "h1-without-title-size",
+    ),
+    true,
+  );
+  assert.equal(
+    classifyLine("x.tsx", '<h1 className="td-text-title text-ink">日记</h1>').some(
+      (v) => v.rule === "h1-without-title-size",
+    ),
+    false,
+  );
+  assert.equal(
+    classifyLine("x.tsx", '<h1 className="td-text-display text-ink">设计语言预览</h1>').some(
+      (v) => v.rule === "h1-without-title-size",
+    ),
+    false,
+  );
+});

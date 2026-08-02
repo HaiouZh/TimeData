@@ -127,6 +127,26 @@ const RULES = [
     msg: "裸任意尺寸/间距值收进 --radius/--shadow token 或标准 Tailwind 阶；功能专有几何在 index.css @layer components 加功能语义类（calc/var 例外）",
     skip: (file) => isTestFile(file),
   },
+  {
+    id: "handwritten-segmented-control",
+    re: /aria-pressed=\{[^>]*rounded-pill|rounded-pill[^>]*aria-pressed=\{/,
+    msg: "单选筛选分段必须使用 SegmentedControl（role=radiogroup）；手写 rounded-pill + aria-pressed 是历史遗留形态，新代码不得复制",
+    skip: (file, line) =>
+      isTestFile(file) || /role="tablist"|role="tab"/.test(line) || /SegmentedControl/.test(line),
+  },
+  {
+    id: "bare-text-empty-state",
+    re: /py-10[^>]*text-center/,
+    msg: "空态必须使用 EmptyState 组件（card/inline 档）；裸 py-10 text-center 文本是历史遗留形态，新代码不得复制",
+    skip: (file, line) =>
+      isTestFile(file) || /EmptyState/.test(line) || normalizePath(file).endsWith("/components/ui/EmptyState.tsx"),
+  },
+  {
+    id: "h1-without-title-size",
+    re: /<h1\b/,
+    msg: "页面 h1 必须使用 td-text-title 或 td-text-display（td-text-body font-medium 当标题是历史遗留层级分裂，新代码不得复制）",
+    skip: (file, line) => isTestFile(file) || /td-text-title/.test(line) || /td-text-display/.test(line),
+  },
 ];
 
 for (const rule of RULES) {

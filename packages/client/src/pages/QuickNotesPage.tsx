@@ -1281,13 +1281,9 @@ export default function QuickNotesPage() {
         <div className="mx-auto flex w-full max-w-3xl flex-col gap-4">
           {searchOpen ? (
             !hasQuery ? (
-              <div className="rounded-card border border-dashed border-border bg-surface/45 px-5 py-10 text-center td-text-body text-ink-3">
-                输入关键词搜索速记，空格分隔多个词表示同时包含。
-              </div>
+              <EmptyState variant="card" title="输入关键词搜索速记，空格分隔多个词表示同时包含" />
             ) : searchResults.length === 0 ? (
-              <div className="rounded-card border border-dashed border-border bg-surface/45 px-5 py-10 text-center td-text-body text-ink-3">
-                没有匹配的速记
-              </div>
+              <EmptyState variant="card" title="没有匹配的速记" />
             ) : (
               <>
                 {searchDisplayItems.map((item) => {

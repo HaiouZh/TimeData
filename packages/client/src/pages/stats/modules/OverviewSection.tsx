@@ -1,4 +1,5 @@
 import { useMemo } from "react";
+import { EmptyState } from "../../../components/ui/EmptyState.js";
 import { memoOverview } from "../../../lib/insights/cache.ts";
 import { CategoryCompositionBars, CategoryDonut, type CompositionParent } from "../InsightCharts.tsx";
 import type { StatsModuleProps } from "./types.ts";
@@ -78,8 +79,8 @@ export default function OverviewSection(props: StatsModuleProps) {
           />
         </div>
       ) : (
-        <div className="mt-4 rounded-card border border-dashed border-border bg-surface-elevated py-10 text-center td-text-body text-ink-3">
-          暂无统计数据
+        <div className="mt-4">
+          <EmptyState variant="card" title="暂无统计数据" />
         </div>
       )}
     </SectionPanel>
