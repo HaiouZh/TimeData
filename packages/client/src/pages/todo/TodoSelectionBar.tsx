@@ -5,7 +5,7 @@ export interface TodoSelectionBarProps {
   selectedCount: number;
   /** 可选的已有项目组；空数组时不渲染「放进…」。 */
   projects: readonly { goalId: string; goalTitle: string }[];
-  /** 与 TodoComposer 同源的底部避让（导航条高度）。 */
+  /** 底部固定条的 bottom 偏移：导航条高 + 键盘高的合成（见 TodoPage composeBottomInset）。 */
   bottomOffsetPx: number;
   onCreate: (title: string) => void;
   onAssign: (goalId: string) => void;

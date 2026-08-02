@@ -14,7 +14,7 @@ import { renderDom, unmount } from "../test/domHarness.js";
 // Task 3 fix round 1：TodoComposer/TodoSelectionBar 的 bottomOffsetPx 此前只喂 navOffsetPx，
 // 键盘弹起时（resize:none 下 webview 不 reflow）输入条会被键盘盖住。mock useKeyboardHeight
 // 而不是真的模拟 @capacitor/keyboard 事件——这条钉的是 TodoPage 内 navOffsetPx 守卫 +
-// composerBarBottomPx 合成的接线是否正确，keyboard hook 自身的行为已由 useKeyboardHeight.test.tsx 钉过。
+// fixedBarBottomPx 合成的接线是否正确，keyboard hook 自身的行为已由 useKeyboardHeight.test.tsx 钉过。
 const keyboardHeightMock = vi.hoisted(() => vi.fn(() => 0));
 vi.mock("../hooks/useKeyboardHeight.ts", () => ({
   useKeyboardHeight: keyboardHeightMock,
@@ -52,7 +52,7 @@ describe("TodoPage 底部输入条键盘避让（fix round 1）", () => {
 
     const form = composerForm(host);
     expect(form).not.toBeNull();
-    // navOffsetPx 被键盘高守卫归零，composerBarBottomPx = 0 + 0 + 300 = 300。
+    // navOffsetPx 被键盘高守卫归零，fixedBarBottomPx = 0 + 0 + 300 = 300。
     expect(form?.style.bottom).toBe("calc(300px + var(--safe-bottom))");
 
     await unmount(root);

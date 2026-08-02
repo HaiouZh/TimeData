@@ -224,11 +224,13 @@ export function TodoPage() {
   // navOffsetPx)，与合成前的批 1 值逐值相等，见 bottomInset.test.ts 回归护栏。
   const composerAvoidancePx = composeBottomInset({ barHeightPx: bottomBarHeightPx, navOffsetPx, keyboardHeightPx });
   const contentBottomPaddingPx = Math.max(192, composerAvoidancePx + TODO_COMPOSER_CONTENT_GAP_PX);
-  // TodoComposer/TodoSelectionBar 自身的 bottom 定位（fix round 1）：这两个元素就是底栏本身，不需要
-  // 再叠一层 barHeightPx，故传 0；navOffsetPx 已被上方守卫（键盘弹起时归 0），键盘弹起时
-  // composerBarBottomPx = keyboardHeightPx，输入条稳贴键盘上沿；keyboard=0 时 = navOffsetPx，与本轮前
-  // 完全一致（TodoSelectionBar 只在多选态出现，那时不会有文字输入、keyboardHeightPx 恒 0，故它实际不变）。
-  const composerBarBottomPx = composeBottomInset({ barHeightPx: 0, navOffsetPx, keyboardHeightPx });
+  // TodoComposer/TodoSelectionBar 自身的 bottom 定位（fix round 1）：这两个元素就是底部固定条本身，
+  // 不需要再叠一层 barHeightPx，故传 0；navOffsetPx 已被上方守卫（键盘弹起时归 0），键盘弹起时
+  // fixedBarBottomPx = keyboardHeightPx，输入条稳贴键盘上沿；keyboard=0 时 = navOffsetPx，与本轮前
+  // 完全一致。TodoSelectionBar 内有「项目名」输入框，多选态点它同样会弹键盘（见
+  // todo/TodoSelectionBar.tsx 的 `<input aria-label="项目名">`），故这里走同一合成、计入
+  // keyboardHeightPx 是必要的——不是「反正不会有文字输入所以不变」。
+  const fixedBarBottomPx = composeBottomInset({ barHeightPx: 0, navOffsetPx, keyboardHeightPx });
   const deepLinkedTask = useLiveQuery(
     async () => {
       if (!taskIdParam) return null;
@@ -1285,7 +1287,7 @@ export function TodoPage() {
           <TodoSelectionBar
             selectedCount={selectedIds.size}
             projects={selectableProjects}
-            bottomOffsetPx={composerBarBottomPx}
+            bottomOffsetPx={fixedBarBottomPx}
             onCreate={(title) => void submitCreateProject(title)}
             onAssign={(goalId) => void submitAssignToProject(goalId)}
             onCancel={exitSelection}
@@ -1305,7 +1307,7 @@ export function TodoPage() {
             onToggleMode={toggleMode}
             onToggleNotMode={toggleNotMode}
             onClear={clearTags}
-            bottomOffsetPx={composerBarBottomPx}
+            bottomOffsetPx={fixedBarBottomPx}
             hiddenByScroll={composerHiddenByScroll}
             formRef={composerRef}
           />
