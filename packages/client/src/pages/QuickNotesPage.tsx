@@ -13,6 +13,7 @@ import {
 import type { QuickNote } from "@timedata/shared";
 import { useLiveQuery } from "dexie-react-hooks";
 import {
+  type CSSProperties,
   type KeyboardEvent,
   type MouseEvent,
   type PointerEvent,
@@ -1271,11 +1272,17 @@ export default function QuickNotesPage() {
       <section
         ref={scrollRef}
         onScroll={handleScroll}
-        className="min-h-0 flex-1 overflow-y-auto px-4 py-5"
-        style={{
-          paddingBottom: `calc(${bottomInsetPx}px + env(safe-area-inset-bottom))`,
-          scrollPaddingBottom: `calc(${bottomInsetPx}px + env(safe-area-inset-bottom))`,
-        }}
+        className="min-h-0 flex-1 overflow-y-auto px-4 py-5 [padding-bottom:var(--pad-bottom)] [scroll-padding-bottom:var(--pad-bottom)]"
+        // 兜底类 [padding-bottom/scroll-padding-bottom:var(--pad-bottom)]：env() 未定义环境
+        //（Firefox 桌面 / 旧 WebView）里 calc 整条失效、内联 padding 被丢弃，由它还原批次前的纯数值
+        // bottomInsetPx（桌面浏览器 env()=0，calc 有效时内联样式优先，兜底类不生效）。
+        style={
+          {
+            "--pad-bottom": `${bottomInsetPx}px`,
+            paddingBottom: `calc(${bottomInsetPx}px + env(safe-area-inset-bottom))`,
+            scrollPaddingBottom: `calc(${bottomInsetPx}px + env(safe-area-inset-bottom))`,
+          } as CSSProperties
+        }
         aria-label="速记列表"
       >
         <div className="mx-auto flex w-full max-w-3xl flex-col gap-4">
@@ -1455,8 +1462,15 @@ export default function QuickNotesPage() {
         <button
           type="button"
           onClick={jumpToLatest}
-          className="fixed right-4 rounded-pill border border-border-strong bg-surface px-3 py-2 td-text-caption font-medium text-ink-2 shadow-elev1 transition hover:border-accent hover:text-ink"
-          style={{ bottom: `calc(${navOffsetPx + bottomInsetPx}px + env(safe-area-inset-bottom))` }}
+          className="fixed right-4 rounded-pill border border-border-strong bg-surface px-3 py-2 td-text-caption font-medium text-ink-2 shadow-elev1 transition hover:border-accent hover:text-ink [bottom:var(--bottom-offset)]"
+          // 兜底类 [bottom:var(--bottom-offset)]：env() 未定义环境（Firefox 桌面 / 旧 WebView）里 calc
+          // 整条失效、内联 bottom 被丢弃，由它还原批次前的纯数值位置（navOffsetPx + bottomInsetPx）。
+          style={
+            {
+              "--bottom-offset": `${navOffsetPx + bottomInsetPx}px`,
+              bottom: `calc(${navOffsetPx + bottomInsetPx}px + env(safe-area-inset-bottom))`,
+            } as CSSProperties
+          }
         >
           <span className="inline-flex items-center gap-1">
             <Icon icon={ArrowDown} size={14} />
@@ -1467,16 +1481,27 @@ export default function QuickNotesPage() {
 
       {error && (
         <p
-          className="fixed left-4 right-4 mx-auto max-w-3xl rounded-card border border-danger/40 bg-danger/10 px-3 py-2 td-text-body text-danger shadow-elev1"
-          style={{ bottom: `calc(${navOffsetPx + bottomInsetPx}px + env(safe-area-inset-bottom))` }}
+          className="fixed left-4 right-4 mx-auto max-w-3xl rounded-card border border-danger/40 bg-danger/10 px-3 py-2 td-text-body text-danger shadow-elev1 [bottom:var(--bottom-offset)]"
+          // 兜底类 [bottom:var(--bottom-offset)]：见「最新」按钮同款注释。
+          style={
+            {
+              "--bottom-offset": `${navOffsetPx + bottomInsetPx}px`,
+              bottom: `calc(${navOffsetPx + bottomInsetPx}px + env(safe-area-inset-bottom))`,
+            } as CSSProperties
+          }
         >
           {error}
         </p>
       )}
       {status && (
         <p
-          className="fixed left-4 right-4 mx-auto max-w-3xl rounded-card border border-border bg-surface/95 px-3 py-2 td-text-body text-ink-2 shadow-elev1"
-          style={{ bottom: `calc(${navOffsetPx + bottomInsetPx}px + env(safe-area-inset-bottom))` }}
+          className="fixed left-4 right-4 mx-auto max-w-3xl rounded-card border border-border bg-surface/95 px-3 py-2 td-text-body text-ink-2 shadow-elev1 [bottom:var(--bottom-offset)]"
+          style={
+            {
+              "--bottom-offset": `${navOffsetPx + bottomInsetPx}px`,
+              bottom: `calc(${navOffsetPx + bottomInsetPx}px + env(safe-area-inset-bottom))`,
+            } as CSSProperties
+          }
         >
           {status}
         </p>
@@ -1485,8 +1510,15 @@ export default function QuickNotesPage() {
         <form
           ref={composerRef}
           aria-label="速记输入区"
-          className="fixed left-0 right-0 border-t border-border bg-page/95 p-2 shadow-elev2 backdrop-blur transition-[bottom] duration-200 sm:p-3"
-          style={{ bottom: `calc(${navOffsetPx}px + env(safe-area-inset-bottom))` }}
+          className="fixed left-0 right-0 border-t border-border bg-page/95 p-2 shadow-elev2 backdrop-blur transition-[bottom] duration-200 [bottom:var(--bottom-offset)] sm:p-3"
+          // 兜底类 [bottom:var(--bottom-offset)]：env() 未定义环境（Firefox 桌面 / 旧 WebView）里 calc
+          // 整条失效、内联 bottom 被丢弃，由它还原批次前的纯数值位置（navOffsetPx）。
+          style={
+            {
+              "--bottom-offset": `${navOffsetPx}px`,
+              bottom: `calc(${navOffsetPx}px + env(safe-area-inset-bottom))`,
+            } as CSSProperties
+          }
           onSubmit={(event) => {
             event.preventDefault();
             void handleSubmit();

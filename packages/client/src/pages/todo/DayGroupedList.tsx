@@ -1,5 +1,5 @@
 import type { Task } from "@timedata/shared";
-import { type ReactNode, useState } from "react";
+import { type CSSProperties, type ReactNode, useState } from "react";
 import type { InboxDaySegment } from "../../lib/tasks/inboxGrouping.js";
 
 export interface DayGroupedListProps {
@@ -59,8 +59,15 @@ export function DayGroupedList({
           type="button"
           aria-label="收起"
           onClick={() => setExpanded(false)}
-          className="sticky z-10 mt-1 w-full rounded-ctl bg-surface px-2 py-1.5 td-text-caption text-ink-3 shadow-sm hover:bg-surface-hover"
-          style={{ bottom: `calc(${stickyBottomOffsetPx + 4}px + env(safe-area-inset-bottom))` }}
+          className="sticky z-10 mt-1 w-full rounded-ctl bg-surface px-2 py-1.5 td-text-caption text-ink-3 shadow-sm hover:bg-surface-hover [bottom:var(--bottom-offset)]"
+          // 兜底类 [bottom:var(--bottom-offset)]：env() 未定义环境（Firefox 桌面 / 旧 WebView）里 calc
+          // 整条失效、内联 bottom 被丢弃，由它还原批次前的纯数值位置（stickyBottomOffsetPx + 4）。
+          style={
+            {
+              "--bottom-offset": `${stickyBottomOffsetPx + 4}px`,
+              bottom: `calc(${stickyBottomOffsetPx + 4}px + env(safe-area-inset-bottom))`,
+            } as CSSProperties
+          }
         >
           收起
         </button>

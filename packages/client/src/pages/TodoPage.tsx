@@ -15,7 +15,7 @@ import {
 import { arrayMove, sortableKeyboardCoordinates } from "@dnd-kit/sortable";
 import type { Task } from "@timedata/shared";
 import { useLiveQuery } from "dexie-react-hooks";
-import { type ReactNode, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { type CSSProperties, type ReactNode, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router";
 import { ActionToastBar } from "../components/ui/ActionToastBar.js";
 import { BOTTOM_NAV_HEIGHT_PX, useBottomNav } from "../contexts/BottomNavContext.tsx";
@@ -1192,8 +1192,15 @@ export function TodoPage() {
     >
       <div className={`min-h-full bg-page text-ink${dragging ? " todo-dnd-dragging" : ""}`}>
         <div
-          className="mx-auto w-full max-w-2xl px-4 py-4 lg:max-w-none"
-          style={{ paddingBottom: `calc(${contentBottomPaddingPx}px + env(safe-area-inset-bottom))` }}
+          className="mx-auto w-full max-w-2xl px-4 py-4 lg:max-w-none [padding-bottom:var(--pad-bottom)]"
+          // 兜底类 [padding-bottom:var(--pad-bottom)]：env() 未定义环境（Firefox 桌面 / 旧 WebView）里
+          // calc 整条失效、内联 padding 被丢弃，由它还原批次前的纯数值 contentBottomPaddingPx。
+          style={
+            {
+              "--pad-bottom": `${contentBottomPaddingPx}px`,
+              paddingBottom: `calc(${contentBottomPaddingPx}px + env(safe-area-inset-bottom))`,
+            } as CSSProperties
+          }
         >
           {wide ? (
             <ResizableSplit
@@ -1231,8 +1238,15 @@ export function TodoPage() {
             与 DayGroupedList 的 sticky 头同源，保证 toast 不被输入框压住。 */}
         <div
           data-testid="todo-toast-dock"
-          className="pointer-events-none fixed inset-x-0 z-[var(--z-backdrop)] px-4"
-          style={{ bottom: `calc(${composerAvoidancePx + 8}px + env(safe-area-inset-bottom))` }}
+          className="pointer-events-none fixed inset-x-0 z-[var(--z-backdrop)] px-4 [bottom:var(--bottom-offset)]"
+          // 兜底类 [bottom:var(--bottom-offset)]：env() 未定义环境（Firefox 桌面 / 旧 WebView）里 calc
+          // 整条失效、内联 bottom 被丢弃，由它还原批次前的纯数值位置（composerAvoidancePx + 8）。
+          style={
+            {
+              "--bottom-offset": `${composerAvoidancePx + 8}px`,
+              bottom: `calc(${composerAvoidancePx + 8}px + env(safe-area-inset-bottom))`,
+            } as CSSProperties
+          }
         >
           <div className="pointer-events-auto mx-auto w-full max-w-2xl">
             <ActionToastBar toast={actionToast} onDismiss={clearActionToast} ariaLabel="待办操作反馈" />

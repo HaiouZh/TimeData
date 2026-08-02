@@ -1,6 +1,10 @@
 import { createContext, type ReactNode, useContext, useMemo, useState } from "react";
 
-/** 底部导航高度，与 AppShell 底部 nav 的固定高度保持同源。 */
+/**
+ * 底部导航**内容区**高度（不含底部安全区 inset），与 MobileBottomNav 的内容高同源。
+ * nav 实际渲染总高 = 本值 + env(safe-area-inset-bottom)（iPhone 可达 83px）；
+ * 要与 nav 对齐的消费方需自行追加 env(safe-area-inset-bottom)。
+ */
 export const BOTTOM_NAV_HEIGHT_PX = 49;
 
 interface BottomNavContextValue {

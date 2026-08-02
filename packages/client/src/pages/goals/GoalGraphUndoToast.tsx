@@ -42,7 +42,8 @@ export function GoalGraphUndoToast({
     <div
       role="status"
       aria-live="polite"
-      className="fixed inset-x-4 z-[var(--z-backdrop)] mx-auto flex max-w-md items-center gap-3 rounded-card border border-border bg-ink px-4 py-3 td-text-body text-page shadow-lg"
+      className="fixed inset-x-4 z-[var(--z-backdrop)] mx-auto flex max-w-md items-center gap-3 rounded-card border border-border bg-ink px-4 py-3 td-text-body text-page shadow-lg bottom-4"
+      // bottom-4 是 env() 未定义环境（Firefox 桌面 / 旧 WebView）下 calc 失效时的兜底，与 calc 同值。
       style={{ bottom: "calc(1rem + env(safe-area-inset-bottom))" }}
     >
       <span className="min-w-0 flex-1 break-words">{message}</span>

@@ -27,7 +27,7 @@ contracts:
   - packages/server/Dockerfile
   - packages/server/docker-entrypoint.sh
   - .env.example
-last-reviewed: 2026-08-01
+last-reviewed: 2026-08-02
 ---
 
 # 部署与自更新
@@ -381,4 +381,4 @@ $env:AUTH_TOKEN='devtoken'; $env:DIARY_VAULT_DIR='D:\OneDrive\Obsidian\Time'; pn
 | 子文档 | 拥有什么 |
 |---|---|
 | [deployment/android-apk](deployment/android-apk.md) | Android 签名 release APK workflow、release keystore、Capacitor / Gradle 版本、安全配置、APK 更新入口与移动端排错 |
-| [deployment/ios-ipa](deployment/ios-ipa.md) | iOS 未签名 IPA workflow、CI 现场生成原生工程、键盘工具条补丁、不标 latest 的 Release 契约、SideStore 装机与数据边界 |
+| [deployment/ios-ipa](deployment/ios-ipa.md) | iOS 未签名 IPA workflow、CI 现场生成原生工程、键盘工具条与状态栏补丁、不标 latest 的 Release 契约、SideStore 装机与数据边界 |

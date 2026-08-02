@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { type CSSProperties, useState } from "react";
 import { Z } from "../../lib/zLayers.js";
 
 export interface TodoSelectionBarProps {
@@ -40,7 +40,7 @@ export function TodoSelectionBar({
   return (
     <div
       data-testid="todo-selection-bar"
-      className="fixed inset-x-0 px-4"
+      className="fixed inset-x-0 px-4 [bottom:var(--bottom-offset)]"
       // 与被顶替的 TodoComposer 同一个常量：同一个位置、同一个角色，就该在同一层。
       //
       // **本栏与待办页的 toast 容器同层（都是 z-backdrop=40）、且在 DOM 里排它之后 → 后绘制的本栏赢。**
@@ -49,7 +49,15 @@ export function TodoSelectionBar({
       // 两处各自让路，别改这个数字：页面用 composerAvoidancePx 把 toast 顶到操作栏上沿之外
       //（TodoPage 的 bottomBarHeightPx），列表则「选完即收起」（见下面 onClick）。
       // 调 z 层级只会把这两个各自自洽的决定改成互相打架的两个数字，下一个人还会撞。
-      style={{ bottom: `calc(${bottomOffsetPx}px + env(safe-area-inset-bottom))`, zIndex: Z.backdrop }}
+      // 兜底类 [bottom:var(--bottom-offset)]：env() 未定义环境（Firefox 桌面 / 旧 WebView）里 calc
+      // 整条失效、内联 bottom 被丢弃，由它还原批次前的纯数值位置（见 TodoComposer 同款注释）。
+      style={
+        {
+          "--bottom-offset": `${bottomOffsetPx}px`,
+          bottom: `calc(${bottomOffsetPx}px + env(safe-area-inset-bottom))`,
+          zIndex: Z.backdrop,
+        } as CSSProperties
+      }
     >
       <div className="mx-auto w-full max-w-2xl">
         {pickerOpen && projects.length > 0 && (

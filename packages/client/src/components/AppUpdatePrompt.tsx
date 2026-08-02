@@ -7,7 +7,9 @@ export default function AppUpdatePrompt() {
 
   return (
     <div
-      className="fixed inset-x-3 z-[var(--z-modal)] mx-auto max-w-lg rounded-card border border-accent/40 bg-surface-elevated p-4 shadow-elev2"
+      className="fixed inset-x-3 z-[var(--z-modal)] mx-auto max-w-lg rounded-card border border-accent/40 bg-surface-elevated p-4 shadow-elev2 bottom-20"
+      // bottom-20 是 env() 未定义环境（Firefox 桌面 / 旧 WebView）下 calc 失效时的兜底，与 calc 同值；
+      // env() 有效时内联样式优先。
       style={{ bottom: "calc(5rem + env(safe-area-inset-bottom))" }}
     >
       <div className="flex items-center justify-between gap-3">
