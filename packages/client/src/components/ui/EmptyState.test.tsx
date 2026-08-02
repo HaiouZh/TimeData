@@ -73,4 +73,12 @@ describe("EmptyState", () => {
     expect(host.textContent).not.toMatch(/\p{Extended_Pictographic}/u);
     await unmount(root);
   });
+
+  it("className 透传到容器", async () => {
+    const { host, root } = await renderDom(
+      createElement(EmptyState, { title: "今天还没有记录", variant: "inline", className: "px-4 py-10 text-center" }),
+    );
+    expect(host.querySelector("div")?.className).toContain("px-4 py-10 text-center");
+    await unmount(root);
+  });
 });

@@ -35,11 +35,7 @@ export default function Timeline({ slots, onGapClick, onEntryClick, highlight }:
     .reverse();
 
   if (displaySlots.length === 0) {
-    return (
-      <div className="px-4 py-10 text-center">
-        <EmptyState variant="inline" title="今天还没有记录" />
-      </div>
-    );
+    return <EmptyState variant="inline" title="今天还没有记录" className="px-4 py-10 text-center" />;
   }
 
   return (

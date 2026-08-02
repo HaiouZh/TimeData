@@ -6,12 +6,13 @@ export interface EmptyStateProps {
   description?: string;
   action?: ReactNode;
   variant?: "card" | "inline";
+  className?: string;
 }
 
-export function EmptyState({ icon, title, description, action, variant = "card" }: EmptyStateProps) {
+export function EmptyState({ icon, title, description, action, variant = "card", className }: EmptyStateProps) {
   if (variant === "inline") {
     return (
-      <div className="td-text-body text-ink-2">
+      <div className={`td-text-body text-ink-2 ${className ?? ""}`}>
         {icon && <span className="mr-1.5 inline-flex align-middle">{icon}</span>}
         {title}
         {description && <div className="mt-1 td-text-caption text-ink-3">{description}</div>}
@@ -21,7 +22,7 @@ export function EmptyState({ icon, title, description, action, variant = "card" 
   }
 
   return (
-    <div className="rounded-card bg-surface px-5 py-10 text-center">
+    <div className={`rounded-card bg-surface px-5 py-10 text-center ${className ?? ""}`}>
       {icon && <div className="mb-2 flex justify-center">{icon}</div>}
       <p className="td-text-body font-medium text-ink-2">{title}</p>
       {description && <p className="mt-1 td-text-caption text-ink-3">{description}</p>}
