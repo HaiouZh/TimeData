@@ -10,7 +10,7 @@ use tauri::{Manager, WindowEvent};
 use tauri_plugin_autostart::{ManagerExt, MacosLauncher};
 
 use shell::{
-    resolve_close_behavior, resolve_tray_action, should_apply_default_autostart, should_show_on_startup,
+    resolve_autostart_action, resolve_close_behavior, resolve_tray_action, should_show_on_startup, AutostartAction,
     CloseBehavior, TrayAction,
 };
 
@@ -62,15 +62,24 @@ fn main() {
                 })
                 .build(app)?;
 
-            // 开机自启默认开，但只做一次：写个标记文件记住做过了。
-            // 不按 is_enabled() 判断——那样用户手动关掉后下次启动会被重新开上，永远关不掉。
+            // 开机自启：标记文件里记的是「上次注册时的 exe 路径」，不是一个布尔。
+            // 判定见 shell::resolve_autostart_action——它同时保证「默认开」「换路径能自愈」
+            // 和「用户关掉后不回弹」三条。
             let marker = app.path().app_config_dir()?.join("autostart-initialized");
-            if should_apply_default_autostart(marker.exists()) {
-                let _ = app.autolaunch().enable();
-                if let Some(dir) = marker.parent() {
-                    let _ = std::fs::create_dir_all(dir);
+            let recorded = std::fs::read_to_string(&marker).ok().map(|s| s.trim().to_owned());
+            let current_exe = std::env::current_exe()
+                .map(|p| p.to_string_lossy().into_owned())
+                .unwrap_or_default();
+            let enabled = app.autolaunch().is_enabled().unwrap_or(false);
+            match resolve_autostart_action(recorded.as_deref(), &current_exe, enabled) {
+                AutostartAction::EnableAndRecord | AutostartAction::RefreshPath => {
+                    let _ = app.autolaunch().enable();
+                    if let Some(dir) = marker.parent() {
+                        let _ = std::fs::create_dir_all(dir);
+                    }
+                    let _ = std::fs::write(&marker, &current_exe);
                 }
-                let _ = std::fs::write(&marker, "1");
+                AutostartAction::LeaveAlone => {}
             }
 
             // 被开机自启拉起时不弹窗口，直接躲托盘。

@@ -35,11 +35,34 @@ pub fn should_show_on_startup(args: &[String]) -> bool {
     !args.iter().any(|arg| arg == "--hidden")
 }
 
-/// 「默认开自启」只做一次，靠一个标记文件记住做过了。
-/// 不能改成按当前是否已启用来判断——那样用户手动关掉后，下次启动会被重新开上，
-/// 表现为「自启关不掉」。
-pub fn should_apply_default_autostart(marker_exists: bool) -> bool {
-    !marker_exists
+#[derive(Debug, PartialEq, Eq)]
+pub enum AutostartAction {
+    /// 首次运行：注册自启并记下当前可执行文件路径。
+    EnableAndRecord,
+    /// 自启还开着但可执行文件搬家了（dev→release→安装版、重装到别处）：把注册更新到新路径。
+    RefreshPath,
+    /// 用户手动关掉了，或路径没变——都不要碰。
+    LeaveAlone,
+}
+
+/// 决定启动时怎么处理开机自启。
+///
+/// 标记文件里存的是「上次注册时的可执行文件路径」，不是一个布尔。
+/// 只记「做没做过」会留下一个无声的坑：构建产物先注册过，装了正式版后启动项
+/// 仍指向构建目录，那个目录一清理，开机自启就失效且不报错（2026-08-03 实测踩到）。
+///
+/// 但路径变化**不能**成为把用户关掉的自启重新打开的理由，故 `currently_enabled`
+/// 为 false 时一律 LeaveAlone。
+pub fn resolve_autostart_action(
+    recorded_path: Option<&str>,
+    current_path: &str,
+    currently_enabled: bool,
+) -> AutostartAction {
+    match recorded_path {
+        None => AutostartAction::EnableAndRecord,
+        Some(recorded) if currently_enabled && recorded != current_path => AutostartAction::RefreshPath,
+        Some(_) => AutostartAction::LeaveAlone,
+    }
 }
 
 #[cfg(test)]
@@ -91,14 +114,47 @@ mod tests {
     }
 
     #[test]
-    fn 首次启动才默认开自启() {
-        assert!(should_apply_default_autostart(false));
+    fn 首次运行注册自启并记下路径() {
+        assert_eq!(
+            resolve_autostart_action(None, "C:/app/TimeData.exe", false),
+            AutostartAction::EnableAndRecord
+        );
     }
 
     #[test]
-    fn 标记已在就不再碰自启开关() {
-        // 这条守的是「用户手动关掉后不许回弹」：若改回按 is_enabled() 判断，
-        // 关掉的下一次启动就会重新开上，用户永远关不掉。
-        assert!(!should_apply_default_autostart(true));
+    fn 路径没变就什么都不做() {
+        assert_eq!(
+            resolve_autostart_action(Some("C:/app/TimeData.exe"), "C:/app/TimeData.exe", true),
+            AutostartAction::LeaveAlone
+        );
+    }
+
+    #[test]
+    fn 换了安装路径且自启还开着时更新注册() {
+        // 实测踩过：dev/release 构建先注册过，装了正式版后启动项仍指向构建产物，
+        // 构建目录一清理，开机自启就无声失效。
+        assert_eq!(
+            resolve_autostart_action(Some("D:/build/timedata-desktop.exe"), "C:/app/TimeData.exe", true),
+            AutostartAction::RefreshPath
+        );
+    }
+
+    #[test]
+    fn 用户关掉自启后换路径也不许回弹() {
+        // 这条守「关得掉」：不能借「路径变了」把用户明确关掉的自启偷偷开回来。
+        assert_eq!(
+            resolve_autostart_action(Some("D:/build/timedata-desktop.exe"), "C:/app/TimeData.exe", false),
+            AutostartAction::LeaveAlone
+        );
+    }
+
+    #[test]
+    fn 旧版只写1的标记会被当成路径不符而自愈() {
+        // 早期实现往标记里写的是 "1"。它与任何真实路径都不相等，
+        // 因此自启还开着时会走 RefreshPath 把路径纠正过来，不需要迁移代码。
+        assert_eq!(
+            resolve_autostart_action(Some("1"), "C:/app/TimeData.exe", true),
+            AutostartAction::RefreshPath
+        );
     }
 }
