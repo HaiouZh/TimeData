@@ -23,7 +23,7 @@ contracts:
   - packages/shared/src/entitySchemas.ts
   - packages/shared/src/syncDomains.ts
   - packages/server/src/sync/domains.ts
-last-reviewed: 2026-08-02
+last-reviewed: 2026-08-03
 ---
 
 # 速记
@@ -123,7 +123,7 @@ TrackStep 也有 `source: "user" | "agent"` 与 `sourceLabel?`，但那只是复
 7. **单条上传状态从 syncLog 推导，不是 QuickNote 字段**：`useUnsyncedQuickNoteIds` 读 `syncLog(tableName="quick_notes", synced=0)`，待上传显示时钟、已同步显示单勾。agent 速记本地无 pending，恒显单勾。
 8. **本地 mutation 必须与 syncLog 同事务**；窗口查询/搜索/置顶列表查询只读、不写 syncLog。
 9. **`updateQuickNote` 保留 source/sourceLabel/pinned**：编辑只改 text/occurredAt/updatedAt。
-10. **速记页 UI 要点**：聊天式连续时间线，最新窗口（`QUICK_NOTE_PAGE_SIZE=50`）向上懒加载；搜索 200ms debounce、空格分词 AND、只读扫描 Dexie，入口在 composer 空草稿左按钮；搜索结果按本地日倒序分组，初始最多渲染 100 条并用「加载更多」继续展开；结果卡片本体不可点（避免误触被拽离搜索流），跳时间线走卡片角上的「定位到时间线」小按钮：非置顶结果保留搜索词、锚定目标所在时间线窗口、滚动到主线卡片并 1.5 秒内侧高亮，置顶结果展开置顶区并跳到日期；顶栏/气泡选日期后等窗口就位再把目标日分隔条滚到视口顶（当天无速记则回列表顶，那里就是目标日之后最近的内容）；退出搜索/点「最新」会把 `jumpDate` 与 URL `?date=` 归位到今天；置顶区从 header 钉子展开，主线过滤 pinned；composer 空草稿右按钮打点、有草稿左右分别存待办/记录、编辑中左右分别取消/保存；agent 气泡用动作蓝 soft 形态 + sourceLabel 标题；长按/右键开复制/编辑/置顶/选择/删除菜单（气泡菜单与 header 更多操作/导出菜单均可 Escape 关闭），选择态支持批量复制/导出/删除；多选态置顶区保持可见可勾选（header 有钉子开关，计数在含置顶时显示「含置顶 M」，保证批量删除目标集不含不可见项）；工具栏「全选」只吃已加载的非置顶速记（与「清理跳过置顶」同一保护口径，反选保留置顶勾选），日期分隔条提供「选中这天」toggle；更多操作菜单的导出/清理文案带目标日期（今天写「今天」，历史日写 `M月D日`），清理前预取可删条数，非今天显示警示，置顶只说明保留且不删除，空日不弹确认。长文本按渲染高度折叠（`COLLAPSED_MAX_PX=168` + ResizeObserver）。页面壳、气泡、菜单、Markdown chrome 和搜索高亮全部消费 [design-language](design-language.md) 的 `page/surface/border/ink/accent` token；业务时间、日期和数量使用 `td-time` / `td-num`，当前是 Times New Roman / Tinos + tabular nums；交互图标统一经 Phosphor `Icon`，不使用散装字符图标。
+10. **速记页 UI 要点**：聊天式连续时间线，最新窗口（`QUICK_NOTE_PAGE_SIZE=50`）向上懒加载；搜索 200ms debounce、空格分词 AND、只读扫描 Dexie，入口在 composer 空草稿左按钮；搜索结果按本地日倒序分组，初始最多渲染 100 条并用「加载更多」继续展开；结果卡片本体不可点（避免误触被拽离搜索流），跳时间线走卡片角上的「定位到时间线」小按钮：非置顶结果保留搜索词、锚定目标所在时间线窗口、滚动到主线卡片并 1.5 秒内侧高亮，置顶结果展开置顶区并跳到日期；点日期分隔条选日期后等窗口就位再把目标日分隔条滚到视口顶（当天无速记则回列表顶，那里就是目标日之后最近的内容）；退出搜索/点「最新」会把 `viewingDate` 与 URL `?date=` 归位到今天；置顶区从 header 钉子展开，主线过滤 pinned；composer 空草稿右按钮打点、有草稿左右分别存待办/记录、编辑中左右分别取消/保存；agent 气泡用动作蓝 soft 形态 + sourceLabel 标题；长按/右键开复制/编辑/置顶/选择/删除菜单（气泡菜单与 header 更多操作/导出菜单均可 Escape 关闭），选择态支持批量复制/导出/删除；多选态置顶区保持可见可勾选（header 有钉子开关，计数在含置顶时显示「含置顶 M」，保证批量删除目标集不含不可见项）；工具栏「全选」只吃已加载的非置顶速记（与「清理跳过置顶」同一保护口径，反选保留置顶勾选），日期分隔条 `position: sticky` 粘顶跟随，停止滚动 1.2 秒后粘住那条淡出隐身（多选态与日历打开期间不隐身，否则「选中这天」点不到、月历失去锚点）；每条日期条自身即跳转入口（`DateField` + `hideIcon`），header 不再有常驻跳转框，多选态下日期条旁另有「选中这天」toggle；导出/清理的目标日期跟随「当前粘住那天」（`viewingDate`）而非最后一次显式跳转；更多操作菜单的导出/清理文案带目标日期（今天写「今天」，历史日写 `M月D日`），清理前预取可删条数，非今天显示警示，置顶只说明保留且不删除，空日不弹确认。长文本按渲染高度折叠（`COLLAPSED_MAX_PX=168` + ResizeObserver）。页面壳、气泡、菜单、Markdown chrome 和搜索高亮全部消费 [design-language](design-language.md) 的 `page/surface/border/ink/accent` token；业务时间、日期和数量使用 `td-time` / `td-num`，当前是 Times New Roman / Tinos + tabular nums；交互图标统一经 Phosphor `Icon`，不使用散装字符图标。
 11. **composer 可靠性四条语义**：① 未发出的 compose 草稿经 `quick-notes/composerDraft.ts` 落 localStorage `timedata_quicknote_composer_draft`（纯本地、不进同步域与备份），挂载时恢复并给一次「已恢复未发出的草稿」提示；防抖的输入恒为 compose 草稿而非 `draftText`，否则退出编辑那一刻防抖值滞后会把被编辑速记的正文写成草稿。② 编辑态不持久化：编辑中重载退回 compose 草稿，避免用陈旧原文覆盖别的设备已改过的正文。③ 编辑未保存时切去编辑另一条要先确认，脏判定按 `trim()` 比进入编辑时的原文快照。④ 非 `atLatest` 时保存速记必须出「已记录 · 回到最新」toast——新速记落在 timeline 窗口外、气泡不出现，页面零变化会让用户以为没存上而重发；「存为待办」toast 与打点对称提供「撤销」，撤销走 `deleteTask`（`deleteReason` 仍是 `user`，删除样本分析按「创建到删除不足 30 秒」剔除）。
 
 ## 4. 模块速查（代码入口 + 路由 + 测试）
@@ -132,13 +132,13 @@ TrackStep 也有 `source: "user" | "agent"` 与 `sourceLabel?`，但那只是复
 
 | 入口 | 职责 |
 |---|---|
-| `pages/QuickNotesPage.tsx` | 速记页主体：时间线、搜索、置顶区、composer（记录/待办/打点）、多选批量、日期跳转/浮层、底部 Tab 隐藏、actionToast。composer 回车按屏宽分流（`useIsWideScreen`）：宽屏(≥1024px)发送、窄屏（手机）换行交给 textarea 默认行为、靠「记录」按钮发送；宽屏不套移动底栏 bottom offset，窄屏只在底栏可见时避让 |
+| `pages/QuickNotesPage.tsx` | 速记页主体：时间线、搜索、置顶区、composer（记录/待办/打点）、多选批量、sticky 日期分隔条跳转、底部 Tab 隐藏、actionToast。composer 回车按屏宽分流（`useIsWideScreen`）：宽屏(≥1024px)发送、窄屏（手机）换行交给 textarea 默认行为、靠「记录」按钮发送；宽屏不套移动底栏 bottom offset，窄屏只在底栏可见时避让 |
 | `lib/quickNotes.ts` | 域 CRUD + 按日期/范围/窗口/置顶列表查询，全部同事务 syncLog |
 | `lib/quickNoteDisplay.ts` | 展示分组 `groupQuickNotesForDisplay`（主线升序、搜索倒序）+ `formatLocalClock` |
 | `quick-notes/useQuickNoteTimeline.ts` | 时间线 hook：最新窗口 + 向上懒加载 + 向下补差 + 日期跳转 + 按目标速记锚定窗口 |
 | `quick-notes/{searchQuickNotes,searchTerms,highlightMatches,HighlightedText}.*` | 搜索：分词 AND 子串、只读扫描、倒序 + `<mark>` 高亮；页面层负责按天分组、100 条截断与定位 |
 | `quick-notes/{NoteBubble,QuickNoteContent,QuickNoteActionMenu,NoteMeta,looksLikeMarkdown}.*` | 气泡 + 保守 Markdown 正文 + 长按菜单 + 时间/上传状态 |
-| `quick-notes/{useUnsyncedQuickNoteIds,jumpToLatest,jumpDateLabel,currentDate,clipboard}.*` | 上传状态 hook / 回到最新 / 菜单日期短标签 / 滚动日期胶囊 / 复制 |
+| `quick-notes/{useUnsyncedQuickNoteIds,jumpToLatest,jumpDateLabel,currentDate,clipboard}.*` | 上传状态 hook / 回到最新 / 菜单日期短标签 / 粘住日期条判定 / 复制 |
 | `quick-notes/{importQuickNotes,exportQuickNotes,schema,fileDownload,deleteQuickNotesRange,deleteQuickNotesByIds}.*` | JSON 合并导入 / JSON·Markdown 导出 / `QuickNotesFileSchema` / 下载 / 范围删 / 多选批量删 |
 
 ### 4.2 服务端 / CLI
