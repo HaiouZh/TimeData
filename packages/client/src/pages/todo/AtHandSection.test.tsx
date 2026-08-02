@@ -418,7 +418,10 @@ describe("手头区父子收纳", () => {
     const { host, root } = await renderSection(
       <AtHandSection atHand={[task({ id: "a", title: "A" })]} session={session({})} resumable={[]} {...handlers} />,
     );
-    expect(host.querySelector('button[aria-label="添加子任务"]')).toBeNull();
+    // 断言必须与正例同一个元素：`button[aria-label="添加子任务"]` 在展开与未展开两态下都是 null
+    // ——未展开固然是 null，但误展开时 `autoDraft`（childTotal===0 恒真）会把它顶替成草稿行，
+    // 也是 null，这条闸就形同虚设。改用正例用的 `child-create-draft-row` 才是真闸。
+    expect(host.querySelector('[data-testid="child-create-draft-row"]')).toBeNull();
     await unmount(root);
   });
 });
