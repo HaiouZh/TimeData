@@ -17,6 +17,8 @@ export interface DateFieldProps {
   formatValue?: (value: string) => ReactNode;
   onOpenChange?: (open: boolean) => void;
   portal?: boolean;
+  /** 紧凑场景（如速记日期气泡）不渲染日历图标，只留文字。 */
+  hideIcon?: boolean;
 }
 
 export function DateField({
@@ -32,6 +34,7 @@ export function DateField({
   formatValue,
   onOpenChange,
   portal = false,
+  hideIcon = false,
 }: DateFieldProps) {
   const [open, setOpen] = useState(false);
   const valueDescriptionId = useId();
@@ -70,7 +73,7 @@ export function DateField({
         className={`flex min-h-11 w-full items-center justify-between gap-2 rounded-row border border-border bg-surface-elevated px-3 td-text-body transition-colors hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-50 ${className ?? ""}`}
       >
         <span className={`flex min-w-0 items-center gap-2 ${value ? "text-ink" : "text-ink-3"}`}>
-          <Icon icon={CalendarBlank} size={18} className="shrink-0" />
+          {!hideIcon && <Icon icon={CalendarBlank} size={18} className="shrink-0" />}
           <span className={`truncate ${value ? "td-time" : ""}`}>{displayValue}</span>
         </span>
         <span id={valueDescriptionId} className="sr-only">

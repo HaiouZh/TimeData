@@ -170,8 +170,12 @@ function markByText(host: HTMLElement, text: string): HTMLElement | null {
   );
 }
 
-function searchResultButtons(host: HTMLElement): HTMLButtonElement[] {
-  return Array.from(host.querySelectorAll("button[data-note-id]"));
+function searchResultCards(host: HTMLElement): HTMLElement[] {
+  return Array.from(host.querySelectorAll("[data-note-id]"));
+}
+
+function locateButtonIn(card: Element | null): HTMLButtonElement | null {
+  return card?.querySelector('button[aria-label="定位到时间线"]') ?? null;
 }
 
 function expectNoRetiredQuickNoteChrome(host: HTMLElement) {
@@ -977,6 +981,81 @@ describe("QuickNotesPage", () => {
     await unmount(root);
   });
 
+  it("日期跳转后把目标日期分隔条滚到视口顶部", async () => {
+    const originalScrollIntoView = Element.prototype.scrollIntoView;
+    const scrolled: Element[] = [];
+    Element.prototype.scrollIntoView = vi.fn(function (this: Element) {
+      scrolled.push(this);
+    });
+    await db.quickNotes.bulkAdd([
+      {
+        id: "early",
+        text: "六月一日那条",
+        occurredAt: "2026-06-01T04:00:00.000Z",
+        createdAt: "2026-06-01T04:00:00.000Z",
+        updatedAt: "2026-06-01T04:00:00.000Z",
+      },
+      {
+        id: "late",
+        text: "六月二十日那条",
+        occurredAt: "2026-06-20T04:00:00.000Z",
+        createdAt: "2026-06-20T04:00:00.000Z",
+        updatedAt: "2026-06-20T04:00:00.000Z",
+      },
+    ]);
+    const { host, root } = await renderPage("/quick-notes?date=2026-06-01");
+
+    try {
+      await click(host.querySelector('button[aria-label="跳转日期"]'));
+      await click(document.body.querySelector('button[aria-label="2026-06-20"]'));
+      await flush();
+
+      expect(scrolled.some((el) => el.getAttribute("data-local-date") === "2026-06-20")).toBe(true);
+    } finally {
+      Element.prototype.scrollIntoView = originalScrollIntoView;
+      await unmount(root);
+    }
+  });
+
+  it("跳到没有速记的日期时回到列表顶（顶部即该日之后最近的内容）", async () => {
+    const originalScrollIntoView = Element.prototype.scrollIntoView;
+    Element.prototype.scrollIntoView = vi.fn();
+    await db.quickNotes.bulkAdd([
+      {
+        id: "early",
+        text: "六月一日那条",
+        occurredAt: "2026-06-01T04:00:00.000Z",
+        createdAt: "2026-06-01T04:00:00.000Z",
+        updatedAt: "2026-06-01T04:00:00.000Z",
+      },
+      {
+        id: "late",
+        text: "六月二十日那条",
+        occurredAt: "2026-06-20T04:00:00.000Z",
+        createdAt: "2026-06-20T04:00:00.000Z",
+        updatedAt: "2026-06-20T04:00:00.000Z",
+      },
+    ]);
+    const { host, root } = await renderPage("/quick-notes?date=2026-06-01");
+
+    try {
+      const list = host.querySelector('[aria-label="速记列表"]');
+      if (!(list instanceof HTMLElement)) throw new Error("missing list");
+      list.scrollTop = 480;
+      // 防假绿：确认 jsdom 保存了赋值，后面的归零断言才有意义
+      expect(list.scrollTop).toBe(480);
+
+      await click(host.querySelector('button[aria-label="跳转日期"]'));
+      await click(document.body.querySelector('button[aria-label="2026-06-10"]'));
+      await flush();
+
+      expect(list.scrollTop).toBe(0);
+    } finally {
+      Element.prototype.scrollIntoView = originalScrollIntoView;
+      await unmount(root);
+    }
+  });
+
   it("退出搜索后 jumpDate 与 URL 归位到今天", async () => {
     const { host, root } = await renderPage("/quick-notes?date=2026-06-01");
     try {
@@ -1204,11 +1283,11 @@ describe("QuickNotesPage", () => {
       await typeIntoSearch(searchInput(host), "香蕉");
       await waitForSearchDebounce();
 
-      expect(searchResultButtons(host)).toHaveLength(100);
+      expect(searchResultCards(host)).toHaveLength(100);
       const more = host.querySelector('button[aria-label="加载更多搜索结果"]');
       expect(more?.textContent).toContain("20");
       await click(more);
-      expect(searchResultButtons(host)).toHaveLength(120);
+      expect(searchResultCards(host)).toHaveLength(120);
       expect(host.querySelector('button[aria-label="加载更多搜索结果"]')).toBeNull();
     } finally {
       vi.useRealTimers();
@@ -1233,7 +1312,7 @@ describe("QuickNotesPage", () => {
 
       await typeIntoSearch(searchInput(host), "梨");
       await waitForSearchDebounce();
-      expect(searchResultButtons(host)).toHaveLength(100);
+      expect(searchResultCards(host)).toHaveLength(100);
     } finally {
       vi.useRealTimers();
       await unmount(root);
@@ -1256,14 +1335,39 @@ describe("QuickNotesPage", () => {
       await typeIntoSearch(searchInput(host), "葡萄");
       await waitForSearchDebounce();
       await click(host.querySelector('button[aria-label="加载更多搜索结果"]'));
-      expect(searchResultButtons(host)).toHaveLength(120);
+      expect(searchResultCards(host)).toHaveLength(120);
 
-      await click(searchResultButtons(host)[0]);
+      await click(locateButtonIn(searchResultCards(host)[0]));
       await click(composerButton(host, "搜索速记"));
 
       expect(searchInput(host).value).toBe("葡萄");
-      expect(searchResultButtons(host)).toHaveLength(100);
+      expect(searchResultCards(host)).toHaveLength(100);
       expect(host.querySelector('button[aria-label="加载更多搜索结果"]')).not.toBeNull();
+    } finally {
+      Element.prototype.scrollIntoView = originalScrollIntoView;
+      vi.useRealTimers();
+      await unmount(root);
+    }
+  });
+
+  it("点搜索结果正文不跳转，搜索面板保持打开", async () => {
+    const originalScrollIntoView = Element.prototype.scrollIntoView;
+    const scrollSpy = vi.fn();
+    Element.prototype.scrollIntoView = scrollSpy;
+    const target = await addQuickNote("蓝莓 目标", { occurredAt: "2026-05-20T04:00:00.000Z" });
+    await addQuickNote("今天无关", {});
+    const { host, root } = await renderPage();
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+
+    try {
+      await click(composerButton(host, "搜索速记"));
+      await typeIntoSearch(searchInput(host), "蓝莓");
+      await waitForSearchDebounce();
+      await click(host.querySelector(`[data-note-id="${target.id}"]`));
+
+      // 还在搜索态：输入框在、词没丢、没有发生定位滚动
+      expect(searchInput(host).value).toBe("蓝莓");
+      expect(scrollSpy).not.toHaveBeenCalled();
     } finally {
       Element.prototype.scrollIntoView = originalScrollIntoView;
       vi.useRealTimers();
@@ -1284,7 +1388,7 @@ describe("QuickNotesPage", () => {
       await click(composerButton(host, "搜索速记"));
       await typeIntoSearch(searchInput(host), "西瓜");
       await waitForSearchDebounce();
-      await click(host.querySelector(`button[data-note-id="${target.id}"]`));
+      await click(locateButtonIn(host.querySelector(`[data-note-id="${target.id}"]`)));
 
       const card = host.querySelector(`[data-note-id="${target.id}"][role="button"]`);
       expect(card).not.toBeNull();
@@ -1315,7 +1419,7 @@ describe("QuickNotesPage", () => {
       await click(composerButton(host, "搜索速记"));
       await typeIntoSearch(searchInput(host), "哈密瓜");
       await waitForSearchDebounce();
-      await click(host.querySelector(`button[data-note-id="${target.id}"]`));
+      await click(locateButtonIn(host.querySelector(`[data-note-id="${target.id}"]`)));
 
       const card = host.querySelector(`[data-note-id="${target.id}"][role="button"]`);
       expect(card).not.toBeNull();
@@ -1339,7 +1443,7 @@ describe("QuickNotesPage", () => {
       await click(composerButton(host, "搜索速记"));
       await typeIntoSearch(searchInput(host), "柚子");
       await waitForSearchDebounce();
-      await click(host.querySelector(`button[data-note-id="${target.id}"]`));
+      await click(locateButtonIn(host.querySelector(`[data-note-id="${target.id}"]`)));
 
       await act(async () => {
         vi.advanceTimersByTime(1600);

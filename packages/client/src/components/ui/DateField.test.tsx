@@ -88,6 +88,24 @@ describe("DateField", () => {
     await unmount(root);
   });
 
+  it("hideIcon 时不渲染日历图标", async () => {
+    const { host, root } = await renderDom(
+      createElement(DateField, { value: "2026-03-15", onChange: () => {}, ariaLabel: "选择日期", hideIcon: true }),
+    );
+
+    expect(buttonByLabel(host, "选择日期")?.querySelector("svg")).toBeNull();
+    await unmount(root);
+  });
+
+  it("默认渲染日历图标（反向闸：确认 svg 断言方式有效）", async () => {
+    const { host, root } = await renderDom(
+      createElement(DateField, { value: "2026-03-15", onChange: () => {}, ariaLabel: "选择日期" }),
+    );
+
+    expect(buttonByLabel(host, "选择日期")?.querySelector("svg")).not.toBeNull();
+    await unmount(root);
+  });
+
   it("打开和关闭时通知外层 open 状态", async () => {
     const onOpenChange = vi.fn();
     const { host, root } = await renderDom(

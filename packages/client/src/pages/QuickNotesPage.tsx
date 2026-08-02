@@ -2,6 +2,7 @@ import {
   ArrowDown,
   BookOpen,
   Check,
+  Crosshair,
   DotsThree,
   MagnifyingGlass,
   NotePencil,
@@ -10,7 +11,7 @@ import {
   Timer,
   X,
 } from "@phosphor-icons/react";
-import type { QuickNote } from "@timedata/shared";
+import { localDateTimeToUtc, type QuickNote } from "@timedata/shared";
 import { useLiveQuery } from "dexie-react-hooks";
 import {
   type CSSProperties,
@@ -136,6 +137,9 @@ export default function QuickNotesPage() {
   const [bubbleDate, setBubbleDate] = useState<{ label: string; localDate: string } | null>(null);
   const [bubbleVisible, setBubbleVisible] = useState(false);
   const [bubbleDatePickerOpen, setBubbleDatePickerOpen] = useState(false);
+  // 日期跳转的落点定位请求：jumpToDate 只换数据窗口、不动 scrollTop，由专门的 effect 消费。
+  const [pendingJumpSeq, setPendingJumpSeq] = useState(0);
+  const pendingJumpRef = useRef<{ localDate: string; utcStart: string } | null>(null);
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [exportMenuOpen, setExportMenuOpen] = useState(false);
@@ -359,6 +363,23 @@ export default function QuickNotesPage() {
     }, SEARCH_FOCUS_HIGHLIGHT_MS);
   }, [focusNoteId, timeline.notes]);
 
+  // 日期跳转的落点定位：jumpToDate 只换数据窗口，浏览器会把 scrollTop 留在旧像素高度上，
+  // 视口就停在新列表的随机位置（用户反馈「不知道跳哪去了」）。等窗口起点抵达目标日
+  // （notes[0] >= 目标日 00:00，「跳更早」时旧数据即满足、先落顶等新数据顶替，结果一致）后：
+  // 目标日分隔条存在就滚它贴顶；当天没有速记则回列表顶——顶部就是目标日之后最近的内容。
+  // biome-ignore lint/correctness/useExhaustiveDependencies: pendingJumpSeq 是触发器——「跳更早」时 notes 引用不变，靠它让 effect 立即跑一次
+  useEffect(() => {
+    const pending = pendingJumpRef.current;
+    if (!pending) return;
+    if (timeline.notes.length > 0 && timeline.notes[0].occurredAt < pending.utcStart) return;
+    pendingJumpRef.current = null;
+    const el = scrollRef.current;
+    if (!el) return;
+    const divider = el.querySelector(`[data-local-date="${pending.localDate}"]`);
+    if (divider instanceof HTMLElement) divider.scrollIntoView({ block: "start" });
+    else el.scrollTop = 0;
+  }, [pendingJumpSeq, timeline.notes]);
+
   // 只在列表内容（新增 / 加载更多 / 删除）或搜索、最新窗口状态变化时校正滚动位置。
   // 不能每次 render 都跑：否则滚动驱动的 setState（日期气泡、导航显隐、atBottom）会反复
   // 把 scrollTop 弹回底部，在安卓 WebView 上表现为缓慢下滑时整体抖动、页面却不动。
@@ -519,6 +540,7 @@ export default function QuickNotesPage() {
     if (!options.preserveQuery) setSearchQuery("");
     if (options.resetTimeline ?? true) {
       stickBottomRef.current = true;
+      pendingJumpRef.current = null;
       setJumpDate(today);
       setSearchParams({});
       void timeline.resetToLatest();
@@ -530,6 +552,7 @@ export default function QuickNotesPage() {
     setJumpDate(today);
     setSearchParams({});
     stickBottomRef.current = true;
+    pendingJumpRef.current = null;
     setAtBottom(true);
     if (!timeline.atLatest) {
       void timeline.resetToLatest();
@@ -550,6 +573,8 @@ export default function QuickNotesPage() {
     setJumpDate(localDate);
     setSearchParams(localDate === today ? {} : { date: localDate });
     stickBottomRef.current = false;
+    // 定位交给 focusNoteId 的 scrollIntoView，别让残留的日期定位请求抢滚动。
+    pendingJumpRef.current = null;
     await timeline.jumpToNote(note);
     setFocusNoteId(note.id);
   }
@@ -877,6 +902,8 @@ export default function QuickNotesPage() {
     setJumpDate(nextDate);
     setSearchParams(nextDate === today ? {} : { date: nextDate });
     stickBottomRef.current = false;
+    pendingJumpRef.current = { localDate: nextDate, utcStart: localDateTimeToUtc(`${nextDate}T00:00:00`) };
+    setPendingJumpSeq((seq) => seq + 1);
     void timeline.jumpToDate(nextDate);
   }
 
@@ -1308,24 +1335,34 @@ export default function QuickNotesPage() {
 
                   const note = item.note;
                   const isAgentNote = note.source === "agent";
+                  // 卡片本体不再可点（误触就被拽离搜索流）；跳时间线走角上的定位小按钮。
                   return (
-                    <button
+                    <div
                       key={item.key}
-                      type="button"
                       data-note-id={note.id}
-                      onClick={() => void handleResultClick(note)}
-                      className={`w-full text-left ${NOTE_CARD_BASE} rounded-card ${isAgentNote ? NOTE_CARD_AGENT : NOTE_CARD_DEFAULT}`}
+                      className={`${NOTE_CARD_BASE} rounded-card ${isAgentNote ? NOTE_CARD_AGENT : NOTE_CARD_DEFAULT}`}
                     >
-                      <time className="td-time float-right ml-2 td-text-caption text-ink-3">
-                        {formatLocalClock(note.occurredAt)}
-                      </time>
+                      <span className="float-right ml-2 flex items-center gap-1.5">
+                        <time className="td-time td-text-caption text-ink-3">
+                          {formatLocalClock(note.occurredAt)}
+                        </time>
+                        <button
+                          type="button"
+                          aria-label="定位到时间线"
+                          title="定位到时间线"
+                          onClick={() => void handleResultClick(note)}
+                          className="flex size-8 shrink-0 items-center justify-center rounded-pill border border-border bg-surface text-ink-3 transition hover:border-accent hover:text-ink"
+                        >
+                          <Icon icon={Crosshair} size={14} />
+                        </button>
+                      </span>
                       {isAgentNote && (
                         <div className="mb-1 td-text-caption font-semibold text-accent-ink">
                           {note.sourceLabel ?? "助手"}
                         </div>
                       )}
                       <HighlightedText text={note.text} terms={searchTerms} />
-                    </button>
+                    </div>
                   );
                 })}
                 {searchHiddenCount > 0 && (
@@ -1440,7 +1477,9 @@ export default function QuickNotesPage() {
 
       {bubbleDate && !pinnedOpen && !searchOpen && (
         <div
-          className={`quick-note-date-bubble fixed left-1/2 z-[var(--z-dropdown)] -translate-x-1/2 rounded-pill border border-border-strong bg-surface/90 px-3 py-1 td-text-caption font-medium text-ink-2 shadow-elev1 backdrop-blur transition-opacity duration-300 sm:top-20 ${
+          // 反色小胶囊（bg-ink/75 + text-page，同 GoalGraphUndoToast 的组合）：两主题下都与
+          // 页面反色，飘在花底内容上也可读；无边框无阴影无图标，字比原 caption 大一号。
+          className={`quick-note-date-bubble fixed left-1/2 z-[var(--z-dropdown)] -translate-x-1/2 rounded-pill bg-ink/75 px-3.5 py-1.5 text-page backdrop-blur transition-opacity duration-300 sm:top-20 ${
             bubbleVisible || bubbleDatePickerOpen ? "pointer-events-auto opacity-100" : "pointer-events-none opacity-0"
           }`}
         >
@@ -1452,8 +1491,9 @@ export default function QuickNotesPage() {
             }}
             onOpenChange={setBubbleDatePickerOpen}
             portal
-            className="min-h-0 rounded-pill border-0 bg-transparent p-0 td-text-caption font-medium text-ink-2 shadow-none hover:bg-transparent"
-            formatValue={() => <span>{bubbleDate.label}</span>}
+            hideIcon
+            className="min-h-0 rounded-pill border-0 bg-transparent p-0 td-text-label font-medium shadow-none hover:bg-transparent"
+            formatValue={() => <span className="text-page">{bubbleDate.label}</span>}
           />
         </div>
       )}

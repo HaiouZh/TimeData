@@ -44,7 +44,7 @@ last-reviewed: 2026-08-02
 
 控件本身在棘轮豁免目录内（它们是对原生元素的合法封装），可以内部使用原生元素。
 
-`Sheet` 的 `portal?: boolean` 决定弹层挂在原地还是 `document.body`，默认 `false`（就地渲染）。`DateField` / `TimeField` 同样透传 `portal`。
+`Sheet` 的 `portal?: boolean` 决定弹层挂在原地还是 `document.body`，默认 `false`（就地渲染）。`DateField` / `TimeField` 同样透传 `portal`。`DateField` 另有 `hideIcon?: boolean`（默认 `false`），供紧凑场景（速记滚动日期气泡）去掉日历图标只留文字。
 
 面板的入场动画与 88vh 限高一并由 `index.css` 的 `.sheet-panel` 承载（顶层规则，优先级高于 utilities）：调用方传进来的 `className` 改不动限高，要调只能改那条 CSS。
 
