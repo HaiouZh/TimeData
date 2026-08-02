@@ -37,6 +37,7 @@ import { useActionToast } from "../hooks/useActionToast.ts";
 import { useEntryMutations } from "../hooks/useEntries.js";
 import { useKeyboardHeight } from "../hooks/useKeyboardHeight.ts";
 import { useLongPress } from "../hooks/useLongPress.ts";
+import { composeBottomInset } from "../lib/bottomInset.ts";
 import { punchNow } from "../lib/punch.js";
 import { formatLocalClock, groupQuickNotesForDisplay, quickNoteAriaLabel } from "../lib/quickNoteDisplay.ts";
 import { useIsWideScreen } from "../lib/useIsWideScreen.js";
@@ -186,6 +187,16 @@ export default function QuickNotesPage() {
   const inputInteractionActive = composerFocused || searchOpen || keyboardHeight > 0;
   const navOffsetPx = !isWideScreen && !navHidden ? BOTTOM_NAV_HEIGHT_PX : 0;
   const bottomInsetPx = selectionMode || searchOpen ? COMPOSER_BOTTOM_GAP_PX : composerInsetPx;
+  // 底部避让量单一合成来源（composeBottomInset，见 lib/bottomInset.ts）：bottomInsetPx/navOffsetPx
+  // 仍是本页私有的「此刻底部站着谁」判断，这里只把它们的结果连同键盘高一起喂进合成，
+  // keyboardHeightPx=0（桌面浏览器 / 键盘收起）时逐值等于合成前的批 1 值，见该文件回归护栏测试。
+  // 内容留白：原口径只有 bottomInsetPx（不含 navOffsetPx），故 navOffsetPx 传 0，只加键盘高。
+  const contentBottomInsetPx = composeBottomInset({ barHeightPx: bottomInsetPx, navOffsetPx: 0, keyboardHeightPx: keyboardHeight });
+  // 贴 composer 上沿的浮层（跳到最新按钮 / 错误 / 状态提示）：原口径 navOffsetPx + bottomInsetPx。
+  const floatBottomInsetPx = composeBottomInset({ barHeightPx: bottomInsetPx, navOffsetPx, keyboardHeightPx: keyboardHeight });
+  // composer 输入条自身：原口径只有 navOffsetPx（自身高度已在 bottomInsetPx 里量过，不重复计入）。
+  // 它就是用户敲字的那条框，键盘弹起时必须浮到键盘之上才可用，故加键盘高。
+  const composerBarBottomPx = composeBottomInset({ barHeightPx: 0, navOffsetPx, keyboardHeightPx: keyboardHeight });
   const displayItems = useMemo(
     () => groupQuickNotesForDisplay(timeline.notes.filter((note) => !note.pinned), { today }),
     [timeline.notes, today],
@@ -1278,12 +1289,12 @@ export default function QuickNotesPage() {
         className="min-h-0 flex-1 overflow-y-auto px-4 py-5 [padding-bottom:var(--pad-bottom)] [scroll-padding-bottom:var(--pad-bottom)]"
         // 兜底类 [padding-bottom/scroll-padding-bottom:var(--pad-bottom)]：env() 未定义环境
         //（Firefox 桌面 / 旧 WebView）里 calc 整条失效、内联 padding 被丢弃，由它还原批次前的纯数值
-        // bottomInsetPx（桌面浏览器 env()=0，calc 有效时内联样式优先，兜底类不生效）。
+        // contentBottomInsetPx（桌面浏览器 env()=0，calc 有效时内联样式优先，兜底类不生效）。
         style={
           {
-            "--pad-bottom": `${bottomInsetPx}px`,
-            paddingBottom: `calc(${bottomInsetPx}px + var(--safe-bottom))`,
-            scrollPaddingBottom: `calc(${bottomInsetPx}px + var(--safe-bottom))`,
+            "--pad-bottom": `${contentBottomInsetPx}px`,
+            paddingBottom: `calc(${contentBottomInsetPx}px + var(--safe-bottom))`,
+            scrollPaddingBottom: `calc(${contentBottomInsetPx}px + var(--safe-bottom))`,
           } as CSSProperties
         }
         aria-label="速记列表"
@@ -1480,11 +1491,12 @@ export default function QuickNotesPage() {
           onClick={jumpToLatest}
           className="fixed right-4 rounded-pill border border-border-strong bg-surface px-3 py-2 td-text-caption font-medium text-ink-2 shadow-elev1 transition hover:border-accent hover:text-ink [bottom:var(--bottom-offset)]"
           // 兜底类 [bottom:var(--bottom-offset)]：env() 未定义环境（Firefox 桌面 / 旧 WebView）里 calc
-          // 整条失效、内联 bottom 被丢弃，由它还原批次前的纯数值位置（navOffsetPx + bottomInsetPx）。
+          // 整条失效、内联 bottom 被丢弃，由它还原批次前的纯数值位置（floatBottomInsetPx，原口径
+          // navOffsetPx + bottomInsetPx，现走合成并计入键盘高）。
           style={
             {
-              "--bottom-offset": `${navOffsetPx + bottomInsetPx}px`,
-              bottom: `calc(${navOffsetPx + bottomInsetPx}px + var(--safe-bottom))`,
+              "--bottom-offset": `${floatBottomInsetPx}px`,
+              bottom: `calc(${floatBottomInsetPx}px + var(--safe-bottom))`,
             } as CSSProperties
           }
         >
@@ -1501,8 +1513,8 @@ export default function QuickNotesPage() {
           // 兜底类 [bottom:var(--bottom-offset)]：见「最新」按钮同款注释。
           style={
             {
-              "--bottom-offset": `${navOffsetPx + bottomInsetPx}px`,
-              bottom: `calc(${navOffsetPx + bottomInsetPx}px + var(--safe-bottom))`,
+              "--bottom-offset": `${floatBottomInsetPx}px`,
+              bottom: `calc(${floatBottomInsetPx}px + var(--safe-bottom))`,
             } as CSSProperties
           }
         >
@@ -1514,8 +1526,8 @@ export default function QuickNotesPage() {
           className="fixed left-4 right-4 mx-auto max-w-3xl rounded-card border border-border bg-surface/95 px-3 py-2 td-text-body text-ink-2 shadow-elev1 [bottom:var(--bottom-offset)]"
           style={
             {
-              "--bottom-offset": `${navOffsetPx + bottomInsetPx}px`,
-              bottom: `calc(${navOffsetPx + bottomInsetPx}px + var(--safe-bottom))`,
+              "--bottom-offset": `${floatBottomInsetPx}px`,
+              bottom: `calc(${floatBottomInsetPx}px + var(--safe-bottom))`,
             } as CSSProperties
           }
         >
@@ -1528,11 +1540,12 @@ export default function QuickNotesPage() {
           aria-label="速记输入区"
           className="fixed left-0 right-0 border-t border-border bg-page/95 p-2 shadow-elev2 backdrop-blur transition-[bottom] duration-200 [bottom:var(--bottom-offset)] sm:p-3"
           // 兜底类 [bottom:var(--bottom-offset)]：env() 未定义环境（Firefox 桌面 / 旧 WebView）里 calc
-          // 整条失效、内联 bottom 被丢弃，由它还原批次前的纯数值位置（navOffsetPx）。
+          // 整条失效、内联 bottom 被丢弃，由它还原批次前的纯数值位置（composerBarBottomPx，原口径
+          // navOffsetPx，现加键盘高——这是用户敲字的输入条本身，键盘弹起须浮到其上方，见文件头注释）。
           style={
             {
-              "--bottom-offset": `${navOffsetPx}px`,
-              bottom: `calc(${navOffsetPx}px + var(--safe-bottom))`,
+              "--bottom-offset": `${composerBarBottomPx}px`,
+              bottom: `calc(${composerBarBottomPx}px + var(--safe-bottom))`,
             } as CSSProperties
           }
           onSubmit={(event) => {

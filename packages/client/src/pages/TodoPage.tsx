@@ -22,6 +22,8 @@ import { BOTTOM_NAV_HEIGHT_PX, useBottomNav } from "../contexts/BottomNavContext
 import { db } from "../db/index.js";
 import { useActionToast } from "../hooks/useActionToast.js";
 import { useConfirm } from "../hooks/useConfirm.tsx";
+import { useKeyboardHeight } from "../hooks/useKeyboardHeight.ts";
+import { composeBottomInset } from "../lib/bottomInset.ts";
 import { projectAssignBlock, projectAssignBlockMessage } from "../lib/tasks/goalMembership.js";
 import { groupCompletedByDay, groupInboxByDay } from "../lib/tasks/inboxGrouping.js";
 import { localDateString, placementForTask } from "../lib/tasks/placement.js";
@@ -186,6 +188,8 @@ export function TodoPage() {
   const [composerHeightPx, setComposerHeightPx] = useState(0);
   const { hidden: navHidden } = useBottomNav();
   const wide = useIsWideScreen();
+  // 此前 Todo 页无键盘避让，本任务补上：并入 composerAvoidancePx 的合成（见下方），收起为 0。
+  const keyboardHeightPx = useKeyboardHeight();
   const rootIdsWithChildren =
     useLiveQuery(async () => {
       const children = await db.tasks.filter((task) => task.parentId !== null).toArray();
@@ -212,7 +216,11 @@ export function TodoPage() {
     : composerHiddenByScroll
       ? 0
       : composerHeightPx;
-  const composerAvoidancePx = Math.ceil(bottomBarHeightPx + navOffsetPx);
+  // 底部避让量单一合成来源（composeBottomInset，见 lib/bottomInset.ts，与 QuickNotesPage 共用）：
+  // bottomBarHeightPx/navOffsetPx 仍是本页私有的「此刻底部站着谁」判断，这里只把结果连同键盘高
+  // 一起喂进合成。keyboardHeightPx=0（桌面浏览器 / 键盘收起）时 = Math.ceil(bottomBarHeightPx +
+  // navOffsetPx)，与合成前的批 1 值逐值相等，见 bottomInset.test.ts 回归护栏。
+  const composerAvoidancePx = composeBottomInset({ barHeightPx: bottomBarHeightPx, navOffsetPx, keyboardHeightPx });
   const contentBottomPaddingPx = Math.max(192, composerAvoidancePx + TODO_COMPOSER_CONTENT_GAP_PX);
   const deepLinkedTask = useLiveQuery(
     async () => {

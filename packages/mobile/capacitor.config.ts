@@ -1,4 +1,5 @@
 import type { CapacitorConfig } from "@capacitor/cli";
+import { KeyboardResize } from "@capacitor/keyboard";
 
 const config: CapacitorConfig = {
   appId: "app.timedata.mobile",
@@ -14,6 +15,13 @@ const config: CapacitorConfig = {
   server: {
     androidScheme: "https",
     cleartext: false,
+  },
+  plugins: {
+    // webview 不因键盘弹起 reflow：fixed 输入条/内容留白改由 JS 读 useKeyboardHeight() 手动避让
+    // （composeBottomInset 已并入键盘高，见 lib/bottomInset.ts）。
+    Keyboard: {
+      resize: KeyboardResize.None,
+    },
   },
 };
 
