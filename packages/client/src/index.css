@@ -386,9 +386,15 @@ details[open] > summary .ts-collapse-caret {
     height: 3px;
   }
 
-  /* 速记：日期气泡吸顶位（sm 断点由 utility 覆盖）、行内时间戳占位、右键菜单最小宽。 */
-  .quick-note-date-bubble {
-    top: 4.75rem;
+  /* 速记：日期条粘顶后在停手时隐身，避免与列表里同一条日期重影（Telegram 同款）。
+     .stuck 由页面层在停止滚动后打上；多选态靠页面层跳过扫描来保持常显，CSS 不参与判断。
+     行内时间戳占位、右键菜单最小宽见下。 */
+  .quick-note-date-divider {
+    transition: opacity 300ms ease;
+  }
+  .quick-note-date-divider.stuck {
+    opacity: 0;
+    pointer-events: none;
   }
   .quick-note-time-spacer {
     height: 1em;

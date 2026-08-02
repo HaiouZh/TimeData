@@ -129,6 +129,8 @@ export default function QuickNotesPage() {
   const [bubbleDate, setBubbleDate] = useState<{ label: string; localDate: string } | null>(null);
   const [bubbleVisible, setBubbleVisible] = useState(false);
   const [bubbleDatePickerOpen, setBubbleDatePickerOpen] = useState(false);
+  // 日历开着时不能让日期条隐身，否则月历悬在半空、它的锚点已经不见了。
+  const [datePickerOpen, setDatePickerOpen] = useState(false);
   // 日期跳转的落点定位请求：jumpToDate 只换数据窗口、不动 scrollTop，由专门的 effect 消费。
   const [pendingJumpSeq, setPendingJumpSeq] = useState(0);
   const pendingJumpRef = useRef<{ localDate: string; utcStart: string } | null>(null);
@@ -1397,12 +1399,24 @@ export default function QuickNotesPage() {
                   const dayIds = noteIdsByLocalDate.get(item.localDate) ?? [];
                   const daySelected = dayIds.length > 0 && dayIds.every((id) => selectedIds.has(id));
                   return (
-                    <div key={item.key} data-date-label={item.label} data-local-date={item.localDate} className="flex items-center gap-3 pt-1">
-                      <div className="h-px flex-1 bg-border" />
-                      <div className="rounded-pill border border-border bg-surface px-2.5 td-text-body font-medium text-ink-3">
-                        {item.label}
-                      </div>
-                      <div className="h-px flex-1 bg-border" />
+                    <div
+                      key={item.key}
+                      data-date-label={item.label}
+                      data-local-date={item.localDate}
+                      className="quick-note-date-divider sticky top-2 z-10 flex items-center justify-center gap-2"
+                    >
+                      <DateField
+                        value={item.localDate}
+                        ariaLabel={`${item.label}，点击跳转到其他日期`}
+                        onChange={(next) => {
+                          if (next) handleJumpDateChange(next);
+                        }}
+                        onOpenChange={setDatePickerOpen}
+                        portal
+                        hideIcon
+                        className="min-h-0 rounded-pill border border-border bg-surface px-2.5 td-text-body font-medium text-ink-3 shadow-none"
+                        formatValue={() => <span>{item.label}</span>}
+                      />
                       {selectionMode && (
                         <button
                           type="button"

@@ -2142,4 +2142,44 @@ describe("多选 × 置顶（QN-09/11）", () => {
 
     await unmount(root);
   });
+
+  it("列表里每条日期条都是跳转入口，且带 sticky 判定所需的 data 属性", async () => {
+    await db.quickNotes.bulkAdd([
+      {
+        id: "d1",
+        text: "第一天",
+        occurredAt: "2026-06-01T04:00:00.000Z",
+        createdAt: "2026-06-01T04:00:00.000Z",
+        updatedAt: "2026-06-01T04:00:00.000Z",
+      },
+      {
+        id: "d2",
+        text: "第二天",
+        occurredAt: "2026-06-02T04:00:00.000Z",
+        createdAt: "2026-06-02T04:00:00.000Z",
+        updatedAt: "2026-06-02T04:00:00.000Z",
+      },
+    ]);
+    const { host, root } = await renderPage();
+
+    const dividers = Array.from(host.querySelectorAll<HTMLElement>("[data-date-label]"));
+    expect(dividers.length).toBe(2);
+    for (const divider of dividers) {
+      expect(divider.classList.contains("quick-note-date-divider")).toBe(true);
+      expect(divider.dataset.localDate).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+      // 每条日期条自己就是入口——不再依赖那个只在滑动后短暂可见的浮胶囊。
+      const trigger = divider.querySelector<HTMLButtonElement>('button[aria-label*="点击跳转到其他日期"]');
+      expect(trigger).toBeInstanceOf(HTMLButtonElement);
+    }
+
+    // 点第一条日期条能开出自绘月历（不是原生 input[type=date]）。
+    const firstTrigger = dividers[0].querySelector<HTMLButtonElement>('button[aria-label*="点击跳转到其他日期"]');
+    await act(async () => {
+      firstTrigger?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    expect(document.body.querySelector('button[aria-label="2026-06-01"]')).toBeInstanceOf(HTMLButtonElement);
+    expect(host.querySelector('input[type="date"]')).toBeNull();
+
+    await unmount(root);
+  });
 }, PAGE_TEST_TIMEOUT_MS);
