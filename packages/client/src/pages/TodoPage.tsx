@@ -23,6 +23,7 @@ import { useActionToast } from "../hooks/useActionToast.js";
 import { useConfirm } from "../hooks/useConfirm.tsx";
 import { useKeyboardHeight } from "../hooks/useKeyboardHeight.ts";
 import { composeBottomInset } from "../lib/bottomInset.ts";
+import { hapticDestructive, hapticDrop, hapticGrab, hapticToggle } from "../lib/haptics.ts";
 import { projectAssignBlock, projectAssignBlockMessage } from "../lib/tasks/goalMembership.js";
 import { groupCompletedByDay, groupInboxByDay } from "../lib/tasks/inboxGrouping.js";
 import { localDateString, placementForTask } from "../lib/tasks/placement.js";
@@ -308,12 +309,14 @@ export function TodoPage() {
   }, [measureComposer]);
 
   const toggle = async (t: Task) => {
+    hapticToggle();
     // 传写入后的行：勾选重复模板时 toggleTaskDone 返回的是被完成的那一发（另一条任务），
     // 落点要按它判，不能按动作前的 t 判。
     const next = await toggleTaskDone(t.id);
     await revealProjectHome(next);
   };
   const remove = async (t: Task) => {
+    hapticDestructive();
     // recurrence===null 是 markOccurrenceSkipped 的前置条件：混合体行（ruleId/recurrence 都非空）
     // 撞它必抛，而这里是 fire-and-forget，用户只会看到"点了没反应"。故混合体走 cascade 兜底。
     if (t.ruleId !== null && t.recurrence === null) {
@@ -674,6 +677,7 @@ export function TodoPage() {
   );
 
   function handleDragStart(event: DragStartEvent): void {
+    hapticGrab();
     const activeContainerId = (event.active.data.current as { containerId?: string } | undefined)?.containerId ?? "";
     const base: TodoIndentLevel = parseTodoContainerId(activeContainerId)?.kind === "parent" ? "child" : "root";
     indentBaseRef.current = base;
@@ -864,6 +868,12 @@ export function TodoPage() {
       }
       return;
     }
+
+    // 吸附落位的触感。上面两处 return 已滤掉「拖到空白处松手」(!over) 与「落点无效 / 被拒」(!op)，
+    // 剩下唯一没真移动的情形是把行丢回自己那一格：同容器内 id 唯一，故下面 reorder 分支的
+    // oldIndex===newIndex 与这里的 activeId===overId 是同一件事（原地放下不震）。
+    // 放在 await 之前：震感要跟着手指落下的那一刻，不是跟着落库回来的那一刻。
+    if (activeId !== overId) hapticDrop();
 
     try {
       switch (op.kind) {

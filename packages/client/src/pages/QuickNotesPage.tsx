@@ -38,6 +38,7 @@ import { useEntryMutations } from "../hooks/useEntries.js";
 import { useKeyboardHeight } from "../hooks/useKeyboardHeight.ts";
 import { useLongPress } from "../hooks/useLongPress.ts";
 import { composeBottomInset } from "../lib/bottomInset.ts";
+import { hapticDestructive } from "../lib/haptics.ts";
 import { punchNow } from "../lib/punch.js";
 import { formatLocalClock, groupQuickNotesForDisplay, quickNoteAriaLabel } from "../lib/quickNoteDisplay.ts";
 import { useIsWideScreen } from "../lib/useIsWideScreen.js";
@@ -835,6 +836,7 @@ export default function QuickNotesPage() {
     });
     if (!confirmed) return;
 
+    hapticDestructive();
     await deleteQuickNote(note.id);
     if (editingId === note.id) cancelEditing();
   }
@@ -1030,6 +1032,9 @@ export default function QuickNotesPage() {
     });
     if (!confirmed) return;
 
+    // 整批只震一次：deletableCount === 0 的早退与用户取消确认都在上面 return 掉了，
+    // 到这里才是「真的开始删」。不逐条震——一天几十条会连成一串马达声。
+    hapticDestructive();
     const result = await deleteQuickNotesByRange(viewingDate, viewingDate);
     showStatus(`已删除 ${result.deleted} 条速记。`);
   }
