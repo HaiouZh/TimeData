@@ -12,6 +12,8 @@ covers:
   - packages/client/src/pages/dev/StyleguidePage.tsx
   - packages/client/src/pages/stats/chartColors.ts
   - packages/client/src/lib/contentTint.ts
+  - packages/client/src/hooks/useKeyboardHeight.ts
+  - packages/client/src/lib/bottomInset.ts
   - scripts/check-design-language.mjs
   - scripts/design-language-allowlist.json
 contracts:
@@ -116,6 +118,7 @@ last-reviewed: 2026-08-02
 9. **z-index 走层级 token**：跨局部内容的下拉 / 日期气泡、遮罩、弹层与全屏接管用 `z-[var(--z-*)]`，内联 `style.zIndex` 用 `lib/zLayers.ts` 的 `Z`；普通粘顶头、画布 HUD/notice 等局部 stacking 使用 `z-10`/`z-20`，不升全局 token。新全局浮层选层级按语义对号入座，不另造数值。
 10. **单一暗色主题 + 单一动作色**：不搭换肤机制、不引 `[data-theme]`、不出亮色主题；动作色只有品牌蓝一支。motion 走标准 utility/局部 keyframe 值，z-index 与任意值按各自语义治理并由棘轮守。视觉一致性靠单测 + `/dev/styleguide` 预览页人工验收，**不做像素快照**。
 11. **安全区让位分工**：顶部与左右在 AppShell 根容器一处解决（根 div 挂 `td-safe-top td-safe-x`，类语义见 §1）；底部由**实际占位者自己让**，统一走 `calc(<px> + var(--safe-bottom))` 组成式——px 项是常规偏移，安全区值经 `:root` 的 `--safe-*` 变量流入（默认 `env()`，Android 壳按 `<html data-platform="android">` 清零、退化为纯 px，机制见 §1）：底栏可见态总高与内边距（隐藏态两者一起归零，只归零高度会留下 inset 高空带）、贴底浮层（TodoComposer / TodoSelectionBar / 速记页 / 更新提示 / GoalGraphUndoToast）的 `bottom`、滚动内容与 sticky 收起位的 `paddingBottom` / `scrollPaddingBottom` / `bottom`。**组件里新写底部让位一律走 calc 组成式，不散写裸 `env()`**；Sheet 系内衬（`components/ui/Sheet.tsx`、`pages/todo/TaskDetailSheet.tsx` 的 `paddingBottom: var(--safe-bottom)`）本就直接贴屏幕底边、没有 px 偏移项，直接消费变量。
+12. **底部避让量单一来源**：速记页（QuickNotesPage）与待办页（TodoPage）喂进上一条 `calc()` 组成式的 px 项，由 `lib/bottomInset.ts` 的 `composeBottomInset({ barHeightPx, navOffsetPx, keyboardHeightPx })` = `Math.ceil(三者之和)` 单一合成，是两页共用的唯一入口。各页私有的“此刻底部站着谁”（QuickNotes 的 selectionMode/searchOpen 分支、Todo 的多选/滚动收起分支）仍留在各页自己算，只把结果当 `barHeightPx` 喂给合成函数——合成函数本身不判断“底部站着谁”。键盘高度经 `hooks/useKeyboardHeight.ts` 的 `useKeyboardHeight()` 并入 `keyboardHeightPx`：Capacitor native 壳走 `@capacitor/keyboard` 的 `keyboardWillShow`/`keyboardWillHide` 事件（前者取事件里的真实高度，后者归 0），web/PWA 没有该插件桥接，降级用 `visualViewport` 与 `innerHeight` 的差值估算，差值 > 80px 才判定键盘弹起（避免地址栏收合等抖动误报）。这条 JS 路径是键盘避让的唯一实现——capacitor 侧 `Keyboard.resize` 设为 `none`，webview 不因键盘弹起自动 reflow，见 [deployment/ios-ipa](deployment/ios-ipa.md) §3.3。回归护栏：`keyboardHeightPx = 0`（桌面浏览器 / 键盘收起）时合成结果与合成前逐值相等，见 `bottomInset.test.ts`。安全区值不参与本次合成，仍按上一条经 CSS 变量单独叠加。
 
 ## 5. 模块速查
 
@@ -129,6 +132,7 @@ last-reviewed: 2026-08-02
 | 自绘控件 / 无原生控件棘轮 / 图标 | → [design-language/controls](design-language/controls.md) |
 | 图表 chrome 取色（token→JS 常量镜像） | `packages/client/src/pages/stats/chartColors.ts`（只有 `CHART_CHROME`；数据序列走用户分类色，见 §4 第 5 条；守序测试 `chartColors.test.ts`） |
 | z-index 层级 JS 镜像 | `packages/client/src/lib/zLayers.ts`（`Z`，与 `--z-*` 同步，`zLayers.test.ts` 守一致） |
+| 键盘高度单一来源 / 底部避让量单一合成 | `packages/client/src/hooks/useKeyboardHeight.ts`、`packages/client/src/lib/bottomInset.ts`（见 §4 第 12 条；守序测试 `useKeyboardHeight.test.tsx`、`bottomInset.test.ts`） |
 | 设计语言预览 / 验收台 | `packages/client/src/pages/dev/StyleguidePage.tsx`（路由 `/dev/styleguide`，渲染全部 token + `.td-*` + 自绘控件） |
 
 ## 子文档索引
