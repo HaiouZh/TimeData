@@ -14,6 +14,8 @@ const SRC_ICO = resolve(ROOT, "icon.ico");
 const PWA_DIR = resolve(ROOT, "packages/client/public/icons");
 const PUBLIC_DIR = resolve(ROOT, "packages/client/public");
 const ANDROID_RES = resolve(ROOT, "packages/mobile/android/app/src/main/res");
+const IOS_ASSETS = resolve(ROOT, "packages/mobile/ios-assets");
+export const IOS_ICON_SIZE = 1024;
 
 // Android 自适应图标背景色，与 values/ic_launcher_background.xml 保持一致。
 // 黑色：源图本身就是黑底圆角设计，背景层做兜底，启动器加自己的遮罩后无可见缝隙。
@@ -110,13 +112,34 @@ async function generateAndroid() {
   console.log("[android] icons written to", ANDROID_RES);
 }
 
+// iOS App 图标：单尺寸 1024，且必须无 alpha 通道（iOS 硬要求）。
+// 和 Android adaptive foreground 一样占满画布不留内边距：源图自带黑底圆角，
+// iOS 再叠系统圆角遮罩时切掉的角也是黑的，无缝。
+export async function writeIosAppIcon(outPath) {
+  await sharp(SRC_PNG)
+    .resize(IOS_ICON_SIZE, IOS_ICON_SIZE, { fit: "contain" })
+    .flatten({ background: ADAPTIVE_BG })
+    .png()
+    .toFile(outPath);
+}
+
+// outDir 可注入：入口级测试传临时目录，避免测试写仓库文件。
+export async function generateIos(outDir = IOS_ASSETS) {
+  await ensureDir(outDir);
+  await writeIosAppIcon(resolve(outDir, "AppIcon-1024.png"));
+  console.log("[ios] icon written to", outDir);
+}
+
 async function main() {
   await generatePwa();
   await generateFavicon();
   await generateAndroid();
+  await generateIos();
 }
 
-main().catch((err) => {
-  console.error(err);
-  process.exit(1);
-});
+if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
+  main().catch((err) => {
+    console.error(err);
+    process.exit(1);
+  });
+}
