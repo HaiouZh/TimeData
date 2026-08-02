@@ -6,7 +6,7 @@ on:
       platform:
         description: "构建哪个平台"
         type: choice
-        options: [both, android, ios]
+        options: [both, android, ios, windows]
         default: both
       tag:
         description: "补包到已有 Release（形如 v26080101）；留空则算新版本号"
@@ -17,12 +17,14 @@ on:
     paths:
       - "packages/client/**"
       - "packages/mobile/**"
+      - "packages/desktop/**"
       - "packages/shared/**"
       - "package.json"
       - "pnpm-lock.yaml"
       - "pnpm-workspace.yaml"
       - "tsconfig.base.json"
       - "scripts/mobile-version.mjs"
+      - "scripts/desktop-version.mjs"
       - "scripts/ios-app-icon.mjs"
       - "scripts/generate-icons.mjs"
       - "icon.png"
@@ -48,6 +50,7 @@ jobs:
       source_ref: ${{ steps.release.outputs.source_ref }}
       run_android: ${{ steps.platform.outputs.android }}
       run_ios: ${{ steps.platform.outputs.ios }}
+      run_windows: ${{ steps.platform.outputs.windows }}
     steps:
       - name: Checkout
         uses: actions/checkout@v5
@@ -73,17 +76,25 @@ jobs:
             both)
               echo "android=true" >> "$GITHUB_OUTPUT"
               echo "ios=true" >> "$GITHUB_OUTPUT"
+              echo "windows=true" >> "$GITHUB_OUTPUT"
               ;;
             android)
               echo "android=true" >> "$GITHUB_OUTPUT"
               echo "ios=false" >> "$GITHUB_OUTPUT"
+              echo "windows=false" >> "$GITHUB_OUTPUT"
               ;;
             ios)
               echo "android=false" >> "$GITHUB_OUTPUT"
               echo "ios=true" >> "$GITHUB_OUTPUT"
+              echo "windows=false" >> "$GITHUB_OUTPUT"
+              ;;
+            windows)
+              echo "android=false" >> "$GITHUB_OUTPUT"
+              echo "ios=false" >> "$GITHUB_OUTPUT"
+              echo "windows=true" >> "$GITHUB_OUTPUT"
               ;;
             *)
-              echo "platform 必须是 both / android / ios 之一，收到：$SEL"
+              echo "platform 必须是 both / android / ios / windows 之一，收到：$SEL"
               exit 1
               ;;
           esac
@@ -136,6 +147,8 @@ jobs:
           **Android**：下载 \`app-release.apk\`，安装时需手动确认。使用固定的 TimeData release 签名，可覆盖更新既有版本。
 
           **iOS**：下载 \`TimeData-unsigned.ipa\`。该 IPA 未签名，不能直接安装——用 SideStore 或 AltStore 导入，安装时会用你的 Apple ID 自动签名（免费账号签名 7 天有效，SideStore 可在手机上自行续签）。
+
+          **Windows**：下载 \`TimeData-Setup.exe\` 安装。安装包未做代码签名，SmartScreen 会提示"已保护你的电脑"，点"更多信息 → 仍要运行"即可。装好后常驻托盘，关窗口不退出，开机自启默认开。
 
           iOS 构建比 Android 慢十几分钟，IPA 可能稍后才出现在本页。
           EOF
@@ -364,4 +377,89 @@ jobs:
             sleep $((attempt * 10))
           done
           echo "IPA 上传三次均失败。"
+          exit 1
+
+  windows:
+    needs: prepare
+    if: needs.prepare.outputs.run_windows == 'true'
+    runs-on: windows-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ needs.prepare.outputs.source_ref }}
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          run_install: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: 22
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo registry and target
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: packages/desktop/src-tauri
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # Tauri 的 version 必须是 semver，而发布链路的版本码是 8 位数字，
+      # 转换口径只有 scripts/desktop-version.mjs 一处（见其单测）。
+      - name: Compute Tauri semver
+        id: semver
+        shell: bash
+        run: node scripts/desktop-version.mjs --code "${{ needs.prepare.outputs.code }}" >> "$GITHUB_OUTPUT"
+
+      - name: Build NSIS installer
+        shell: bash
+        run: |
+          pnpm --filter @timedata/desktop exec tauri build \
+            --config "{\"version\":\"${{ steps.semver.outputs.semver }}\"}"
+
+      # bundler 的输出文件名带版本号，改成固定名字方便 Release 页面上认。
+      - name: Rename installer
+        shell: bash
+        run: |
+          SRC=$(find packages/desktop/src-tauri/target/release/bundle/nsis -name "*-setup.exe" | head -1)
+          if [ -z "$SRC" ]; then
+            echo "没找到 NSIS 安装包，bundler 可能没产出。"
+            ls -R packages/desktop/src-tauri/target/release/bundle || true
+            exit 1
+          fi
+          mv "$SRC" "$RUNNER_TEMP/TimeData-Setup.exe"
+          ls -la "$RUNNER_TEMP/TimeData-Setup.exe"
+
+      - name: Upload installer artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: timedata-windows-setup
+          path: ${{ runner.temp }}/TimeData-Setup.exe
+          if-no-files-found: error
+
+      # 刻意不碰 latest 标记：那是带 APK 的 Release 的专属（prepare 已 --latest=false，
+      # 这里再碰 latest 会把 Android 应用内更新打挂）。与 ios job 同规矩。
+      - name: Publish installer to release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG_NAME: ${{ needs.prepare.outputs.tag }}
+          EXE_PATH: ${{ runner.temp }}/TimeData-Setup.exe
+        run: |
+          for attempt in 1 2 3; do
+            if gh release upload "$TAG_NAME" "$EXE_PATH" --clobber; then
+              exit 0
+            fi
+            echo "安装包上传第 $attempt 次失败，重试中..."
+            sleep $((attempt * 10))
+          done
+          echo "安装包上传三次均失败。"
           exit 1
