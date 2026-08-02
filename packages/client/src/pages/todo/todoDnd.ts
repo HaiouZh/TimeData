@@ -236,7 +236,7 @@ export function resolveTodoDragOperation({
   }
 
   // 项目区的行不注册 draggable（design §动作二 dnd 身份规则），active 不可能是项目容器；防御闸。
-  // 注意：此刻它对返回值零影响——下面四个分支都要求 active 是 pool/parent，落到末尾同样 return null。
+  // 注意：此刻它对返回值零影响——下面六个分支都要求 active 是 pool/parent/hand，落到末尾同样 return null。
   // 留着是为了让「项目容器不作 active」这条规则在代码里有据可依，且将来新增分支时不至于漏掉它。
   if (active.kind === "project") return null;
 

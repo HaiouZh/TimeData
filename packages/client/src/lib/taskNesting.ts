@@ -43,7 +43,9 @@ export async function nestTaskUnderParent(
  * 写 scheduledAt，给 "today" 等于顺手替用户排了期。手头区的行不进 today/inbox 桶，所以这个
  * 选择在手头区不可见，但它决定散场后这条活落回哪儿——落收件箱是对的。
  *
- * 串行两步而非单事务：中途失败是「升了根落在收件箱」，可见可重试，不是收纳那种幽灵态。
+ * 串行两步而非单事务：中途失败是「升了根、落回它自身字段决定的分区（通常是收件箱；
+ * 若子任务带休眠 recurrence，升根后规则复活，会落重复管理区而非收件箱——降级不清能力字段，
+ * 见母文 todo.md §2.2）」，可见可重试，不是收纳那种幽灵态。
  * grabTaskToHand 的既有硬拒（子任务/重复规则/已跳过）一条不改——进它时任务已经是根任务。
  */
 export async function promoteTaskToHand(

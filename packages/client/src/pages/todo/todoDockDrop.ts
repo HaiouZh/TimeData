@@ -54,7 +54,9 @@ export async function applyTodoDockDrop(
   }
   if (resolution.kind === "op") return resolution.op;
   // invalid:用户可达的只有子任务投项目药丸(拒绝口径与项目卡逐字相同);
-  // 其余组合(hand+子任务、同池)药丸本就不渲染,是防御层命中,静默即可。
+  // 其余组合(手头源投任意坞、同池重排)药丸本就不渲染,是防御层命中,静默即可。
+  // 注意:"hand+子任务"(子任务投手头坞)不在此列——resolveTodoDockDrop 已把它截成
+  // promote-to-hand 的 op,走上面 "op" 分支,不会落到这里。
   if (resolution.target.kind === "project" && parseTodoContainerId(input.activeContainerId)?.kind === "parent") {
     const title = deps.findGoalTitle(resolution.target.goalId);
     if (title !== null) deps.showToast(deps.subtaskBlockMessage(title));
