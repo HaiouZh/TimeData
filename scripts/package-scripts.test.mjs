@@ -47,12 +47,12 @@ test("local fast paths are explicit and do not replace release gates", () => {
 test("tooling resolves pnpm version from the root packageManager", () => {
   const pkg = readRootPackage();
   const ciWorkflow = fs.readFileSync(path.join(REPO_ROOT, ".github/workflows/ci.yml"), "utf8");
-  const androidWorkflow = fs.readFileSync(path.join(REPO_ROOT, ".github/workflows/android-apk.yml"), "utf8");
+  const mobileWorkflow = fs.readFileSync(path.join(REPO_ROOT, ".github/workflows/mobile-release.yml"), "utf8");
   const serverDockerfile = fs.readFileSync(path.join(REPO_ROOT, "packages/server/Dockerfile"), "utf8");
 
   assert.match(pkg.packageManager, /^pnpm@\d+\.\d+\.\d+$/);
   assert.equal(pnpmSetupStep(ciWorkflow).includes("version:"), false);
-  assert.equal(pnpmSetupStep(androidWorkflow).includes("version:"), false);
+  assert.equal(pnpmSetupStep(mobileWorkflow).includes("version:"), false);
   assert.match(serverDockerfile, /packageManager\.split\('@'\)\[1\]/);
   assert.doesNotMatch(serverDockerfile, /npm install -g pnpm@\d/);
 });
@@ -97,4 +97,62 @@ test("gate 清单覆盖 CI 跑的每条 pnpm 步骤（CI 加新棘轮，gate 不
 
 test("root gate script 指向 scripts/gate.mjs", () => {
   assert.equal(readRootScripts().gate, "node scripts/gate.mjs");
+});
+
+function readMobileWorkflow() {
+  return fs.readFileSync(path.join(REPO_ROOT, ".github/workflows/mobile-release.yml"), "utf8");
+}
+
+function isCommand(line) {
+  const t = line.trim();
+  return t !== "" && !t.startsWith("#") && !t.startsWith("//");
+}
+
+// prepare 创建 Release 时必须显式 --latest=false：gh 的 --latest 默认是 automatic，
+// 对 v<8位> 这类非 semver tag 按创建时间自动成为 latest——不显式关掉，prepare 一创建
+// 就把 latest 从上一个带 APK 的 Release 抢走，Android 构建失败时更会永久停在
+// 没有 APK 的 Release 上，正好重现「iOS 顶掉 latest」事故。
+// 只统计可执行命令行：workflow 注释里也会出现 gh release create / --latest 字样。
+test("prepare 创建 Release 显式 --latest=false", () => {
+  const workflow = readMobileWorkflow();
+  const createLines = workflow.split("\n").filter((line) => isCommand(line) && line.includes("gh release create"));
+
+  assert.equal(createLines.length, 1, `gh release create 出现 ${createLines.length} 次，应恰好 1 次`);
+  assert.match(createLines[0], /--latest=false/);
+});
+
+// latest 一旦落到只有 .ipa 的 Release 上，安卓的应用内更新就会指向一个装不了的包
+// （更早那批走 /releases/latest 的客户端首当其冲）。因此裸 --latest（不带 =false）
+// 只允许出现在可执行命令行里一次，且必须与 APK 上传在同一条命令里；iOS 侧与补包
+// 路径不许碰。workflow 注释里的 --latest 字样不算数（按 isCommand 过滤）。
+test("裸 --latest 只由 APK 发布步骤打，iOS 侧不许碰", () => {
+  const workflow = readMobileWorkflow();
+  const bareLatestLines = workflow
+    .split("\n")
+    .filter((line) => isCommand(line) && line.includes("--latest") && !line.includes("--latest=false"));
+
+  assert.equal(bareLatestLines.length, 1, `裸 --latest 出现 ${bareLatestLines.length} 次，应恰好 1 次`);
+  assert.match(bareLatestLines[0], /gh release upload .*&& gh release edit .*--latest/);
+});
+
+// 少一条 path 就是「改了这里不发版」，而且要过很久才会被发现。
+test("mobile-release 触发路径覆盖全部构建输入", () => {
+  const workflow = readMobileWorkflow();
+
+  for (const p of [
+    "packages/client/**",
+    "packages/mobile/**",
+    "packages/shared/**",
+    "package.json",
+    "pnpm-lock.yaml",
+    "pnpm-workspace.yaml",
+    "tsconfig.base.json",
+    "scripts/mobile-version.mjs",
+    "scripts/ios-app-icon.mjs",
+    "scripts/generate-icons.mjs",
+    "icon.png",
+    ".github/workflows/mobile-release.yml",
+  ]) {
+    assert.ok(workflow.includes(`- "${p}"`), `触发路径缺少 ${p}`);
+  }
 });
