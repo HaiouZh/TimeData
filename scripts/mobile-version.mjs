@@ -49,6 +49,10 @@ function readGitTags() {
 function main() {
   const tagArgIndex = process.argv.indexOf("--tag");
   const rawTag = tagArgIndex === -1 ? "" : (process.argv[tagArgIndex + 1] ?? "");
+  if (tagArgIndex !== -1 && !rawTag) {
+    console.error("用法: node scripts/mobile-version.mjs [--tag v<8 位数字>]（--tag 后必须跟值，缺值会静默算新版本号）");
+    process.exit(1);
+  }
 
   const code = rawTag
     ? parseTagInput(rawTag)

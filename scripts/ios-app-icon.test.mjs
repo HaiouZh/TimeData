@@ -62,5 +62,11 @@ test("installAppIcon 覆盖模板图标并返回被写路径", () => {
 
 test("appiconset 目录不存在时报错", () => {
   const missing = path.join(os.tmpdir(), "td-appicon-does-not-exist");
-  assert.throws(() => installAppIcon({ appiconsetDir: missing, sourcePng: missing }), /不存在/);
+  assert.throws(() => installAppIcon({ appiconsetDir: missing, sourcePng: missing }), /目录不存在/);
+});
+
+test("源图标不存在时报错", () => {
+  const dir = makeAppiconset(TEMPLATE_CONTENTS);
+  const missing = path.join(dir, "missing-source.png");
+  assert.throws(() => installAppIcon({ appiconsetDir: dir, sourcePng: missing }), /源图标不存在/);
 });

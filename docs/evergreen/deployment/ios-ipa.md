@@ -25,7 +25,7 @@ last-reviewed: 2026-08-02
 
 ## 1. 为什么原生工程不进仓库
 
-`packages/mobile/ios/` 在 `.gitignore` 里，每次构建由 workflow 现场 `cap add ios` 生成。理由：iOS 工程只有 macOS 能改，仓库里放一份没人维护的 `.xcodeproj` 只会烂掉；`@capacitor/ios` 也只在 CI 现装（版本从 `packages/mobile/package.json` 的 `@capacitor/core` 读出，保证两者同版），本地 `package.json` 与 lockfile 因此不含它。
+`packages/mobile/ios/` 在 `.gitignore` 里，每次构建由 workflow 现场 `cap add ios` 生成。理由：iOS 工程只有 macOS 能改，仓库里放一份没人维护的 `.xcodeproj` 只会烂掉；`@capacitor/ios` 也只在 CI 现装（版本从 `packages/mobile/node_modules/@capacitor/core/package.json` 读**已安装的 exact resolved version**，不用 `package.json` 里的 `^` 范围——范围解析会随 patch 漂移，模板结构也随之漂移），本地 `package.json` 与 lockfile 因此不含它。
 
 代价：iOS 侧的原生定制不能靠"改工程文件后提交"，只能表达成 `packages/mobile/scripts/ios/patch-ios.rb` 里的补丁步骤——这是本目录存在的唯一原因。
 
@@ -61,7 +61,7 @@ last-reviewed: 2026-08-02
 
 发布合流后，iOS 与 Android 共用一个 `v<code>` tag 与同一个 Release（`mobile-release.yml`：`prepare` 建 Release → `android` / `ios` 两个 job 各自上传附件）。latest 规则是硬约束：设置页的「APK 更新」入口读的是仓库的 latest Release，latest 一旦落到只有 `.ipa` 的 Release 上，Android 用户的应用内更新就会指向一个装不了的包（更早那批走 `/releases/latest` 的客户端首当其冲，合并前它们就被 iOS 顶掉的 latest 打坏过）。
 
-因此：**latest 只由含 APK 的发布步骤打**——`prepare` 创建 Release 时显式 `--latest=false`（`gh` 的 `--latest` 默认是 `automatic`，非 semver tag 按创建时间自动成为 latest，不显式关掉的话 prepare 一创建就把 latest 从上一个带 APK 的 Release 抢走，Android 构建失败时更会永久停在没 APK 的 Release 上）；`android` job 上传 APK 成功后 `gh release edit --latest` 落位；iOS 侧与补包路径绝不碰这个标记。合并后早期走 `/releases/latest` 的客户端一并被修复——从此 latest 指向的 Release 必然带 apk。
+因此：**latest 只由含 APK 的发布步骤打**——`prepare` 创建 Release 时显式 `--latest=false`（`gh` 的 `--latest` 默认是 `automatic`，非 semver tag 按创建时间自动成为 latest，不显式关掉的话 prepare 一创建就把 latest 从上一个带 APK 的 Release 抢走，Android 构建失败时更会永久停在没 APK 的 Release 上）；`android` job 上传 APK 成功后，由单独的 `Mark release as latest` 步骤 `gh release edit --latest` 落位——该步骤带 `if: ${{ inputs.tag == '' }}` 条件，补包（`inputs.tag` 非空，即 workflow_dispatch 填了 `tag` 输入）时整个跳过，iOS 侧绝不碰这个标记。合并后早期走 `/releases/latest` 的客户端一并被修复——从此 latest 指向的 Release 必然带 apk。
 
 产物同时上传为 workflow artifact（`timedata-unsigned-ipa`），Release 发布失败时仍可从 run 页面取包；发布步骤对 GitHub API 临时超时做最多 3 次重试，与 Android 侧同构。
 

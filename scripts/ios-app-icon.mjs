@@ -35,6 +35,9 @@ export function installAppIcon({ appiconsetDir, sourcePng }) {
   if (!fs.existsSync(contentsPath)) {
     throw new Error(`Contents.json 不存在：${contentsPath}`);
   }
+  if (!fs.existsSync(sourcePng)) {
+    throw new Error(`源图标不存在：${sourcePng}`);
+  }
 
   const target = path.join(appiconsetDir, resolveIconFilename(fs.readFileSync(contentsPath, "utf8")));
   fs.copyFileSync(sourcePng, target);

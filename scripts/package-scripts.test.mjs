@@ -123,16 +123,27 @@ test("prepare 创建 Release 显式 --latest=false", () => {
 
 // latest 一旦落到只有 .ipa 的 Release 上，安卓的应用内更新就会指向一个装不了的包
 // （更早那批走 /releases/latest 的客户端首当其冲）。因此裸 --latest（不带 =false）
-// 只允许出现在可执行命令行里一次，且必须与 APK 上传在同一条命令里；iOS 侧与补包
-// 路径不许碰。workflow 注释里的 --latest 字样不算数（按 isCommand 过滤）。
-test("裸 --latest 只由 APK 发布步骤打，iOS 侧不许碰", () => {
+// 只允许出现在可执行命令行里一次：必须是一个独立的 `gh release edit ... --latest`，
+// 且所在步骤带 `if: ${{ inputs.tag == '' }}`——补包（inputs.tag 非空）不碰 latest，
+// 否则会把 latest 从最新版回拨到旧版，走 /releases/latest 的客户端误判「没有新版本」
+// 而停更。iOS 侧不许碰。workflow 注释里的 --latest 字样不算数（按 isCommand 过滤）。
+test("裸 --latest 只由新发版的 APK 发布步骤打，补包与 iOS 侧不许碰", () => {
   const workflow = readMobileWorkflow();
-  const bareLatestLines = workflow
-    .split("\n")
-    .filter((line) => isCommand(line) && line.includes("--latest") && !line.includes("--latest=false"));
+  const lines = workflow.split("\n");
+  const bareLatestLines = lines.filter(
+    (line) => isCommand(line) && line.includes("--latest") && !line.includes("--latest=false"),
+  );
 
   assert.equal(bareLatestLines.length, 1, `裸 --latest 出现 ${bareLatestLines.length} 次，应恰好 1 次`);
-  assert.match(bareLatestLines[0], /gh release upload .*&& gh release edit .*--latest/);
+  assert.match(bareLatestLines[0], /^\s*run: gh release edit .* --latest$/);
+
+  // 裸 --latest 所在步骤（向上找最近的 `- name:`）必须带补包守卫条件。
+  const lineIndex = lines.findIndex(
+    (line) => isCommand(line) && line.includes("--latest") && !line.includes("--latest=false"),
+  );
+  const stepNameIndex = lineIndex - 1 - lines.slice(0, lineIndex).reverse().findIndex((l) => l.includes("- name:"));
+  const stepBlock = lines.slice(stepNameIndex, lineIndex + 1).join("\n");
+  assert.match(stepBlock, /if: \$\{\{ inputs\.tag == '' \}\}/);
 });
 
 // 少一条 path 就是「改了这里不发版」，而且要过很久才会被发现。

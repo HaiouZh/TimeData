@@ -115,8 +115,8 @@ async function generateAndroid() {
 // iOS App 图标：单尺寸 1024，且必须无 alpha 通道（iOS 硬要求）。
 // 和 Android adaptive foreground 一样占满画布不留内边距：源图自带黑底圆角，
 // iOS 再叠系统圆角遮罩时切掉的角也是黑的，无缝。
-export async function writeIosAppIcon(outPath) {
-  await sharp(SRC_PNG)
+export async function writeIosAppIcon(outPath, srcPng = SRC_PNG) {
+  await sharp(srcPng)
     .resize(IOS_ICON_SIZE, IOS_ICON_SIZE, { fit: "contain" })
     .flatten({ background: ADAPTIVE_BG })
     .png()

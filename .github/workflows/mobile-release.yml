@@ -69,16 +69,24 @@ jobs:
           PLATFORM: ${{ inputs.platform }}
         run: |
           SEL="${PLATFORM:-both}"
-          if [ "$SEL" = "both" ] || [ "$SEL" = "android" ]; then
-            echo "android=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "android=false" >> "$GITHUB_OUTPUT"
-          fi
-          if [ "$SEL" = "both" ] || [ "$SEL" = "ios" ]; then
-            echo "ios=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "ios=false" >> "$GITHUB_OUTPUT"
-          fi
+          case "$SEL" in
+            both)
+              echo "android=true" >> "$GITHUB_OUTPUT"
+              echo "ios=true" >> "$GITHUB_OUTPUT"
+              ;;
+            android)
+              echo "android=true" >> "$GITHUB_OUTPUT"
+              echo "ios=false" >> "$GITHUB_OUTPUT"
+              ;;
+            ios)
+              echo "android=false" >> "$GITHUB_OUTPUT"
+              echo "ios=true" >> "$GITHUB_OUTPUT"
+              ;;
+            *)
+              echo "platform 必须是 both / android / ios 之一，收到：$SEL"
+              exit 1
+              ;;
+          esac
 
       - name: Set up Node.js
         uses: actions/setup-node@v5
@@ -222,7 +230,7 @@ jobs:
 
       # latest 只由带 APK 的 Release 承担：设置页「APK 更新」与更早那批
       # 走 /releases/latest 的客户端都依赖 latest 里存在 .apk 资产。
-      # prepare 已显式 --latest=false，这里是 latest 唯一的落位点。
+      # prepare 已显式 --latest=false，latest 落位见下方 Mark release as latest 步骤。
       - name: Publish APK to release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -230,7 +238,7 @@ jobs:
           APK_PATH: packages/mobile/android/app/build/outputs/apk/release/app-release.apk
         run: |
           for attempt in 1 2 3; do
-            if gh release upload "$TAG_NAME" "$APK_PATH" --clobber && gh release edit "$TAG_NAME" --latest; then
+            if gh release upload "$TAG_NAME" "$APK_PATH" --clobber; then
               exit 0
             fi
             echo "APK 上传第 $attempt 次失败，重试中..."
@@ -238,6 +246,17 @@ jobs:
           done
           echo "APK 上传三次均失败。"
           exit 1
+
+      # latest 只由带 APK 且为新发版的 Release 承担：设置页「APK 更新」与更早那批
+      # 走 /releases/latest 的客户端都依赖 latest 里存在 .apk 资产。
+      # 补包（inputs.tag 非空）不碰 latest——把 latest 从最新版回拨到旧版会让
+      # 走 /releases/latest 的客户端误判「没有新版本」而停更。
+      - name: Mark release as latest
+        if: ${{ inputs.tag == '' }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG_NAME: ${{ needs.prepare.outputs.tag }}
+        run: gh release edit "$TAG_NAME" --latest
 
   ios:
     needs: prepare

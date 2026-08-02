@@ -16,7 +16,7 @@ App 图标由 `pnpm icons:generate` 从根目录 `icon.png` 生成 `ios-assets/A
 pnpm add @capacitor/ios@<与 @capacitor/core 同版本>
 pnpm build:web && pnpm exec cap add ios
 ruby scripts/ios/patch-ios.rb
-node ../../scripts/ios-app-icon.mjs ios/App/App/Assets.xcassets/AppIcon.appiconset ../ios-assets/AppIcon-1024.png
+node ../../scripts/ios-app-icon.mjs ios/App/App/Assets.xcassets/AppIcon.appiconset ios-assets/AppIcon-1024.png
 pnpm exec cap sync ios && pnpm exec cap open ios
 ```
 

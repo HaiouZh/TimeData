@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
 import test from "node:test";
 
 import { computeVersionCode, parseTagInput, todayInShanghai } from "./mobile-version.mjs";
@@ -50,4 +51,17 @@ test("parseTagInput 拒绝 9 位、缺 v 前缀和 android- 前缀", () => {
   assert.throws(() => parseTagInput("v260801011"), /8 位/);
   assert.throws(() => parseTagInput("26080101"), /8 位/);
   assert.throws(() => parseTagInput("android-26080101"), /8 位/);
+});
+
+// --tag 出现但后面没值（如 workflow_dispatch 留空、shell 把空串传进来）时
+// 必须报错退出，不能静默落到「算新版本号」分支——补包误发成新发版。
+test("--tag 缺值时报错退出而不是静默算新号", () => {
+  assert.throws(
+    () =>
+      execFileSync(process.execPath, ["scripts/mobile-version.mjs", "--tag"], {
+        encoding: "utf8",
+        stdio: ["ignore", "pipe", "pipe"],
+      }),
+    { status: 1 },
+  );
 });
