@@ -19,7 +19,7 @@ covers:
 contracts:
   - .github/workflows/android-apk.yml
   - packages/mobile/capacitor.config.ts
-last-reviewed: 2026-07-31
+last-reviewed: 2026-08-02
 ---
 
 # 部署 · Android APK 发布
@@ -67,7 +67,7 @@ Android 生产 Manifest 显式设置 `android:usesCleartextTraffic="false"`，�
 
 同步客户端不启用 `CapacitorHttp` 的全局 fetch/XHR patch。仅 Android 回前台时，`/api/sync/status` 与增量 `/api/sync/pull` 可由 client 显式调用 Capacitor 7 内置 `CapacitorHttp`；它使用系统 `HttpURLConnection`，不经过浏览器 CORS 预检，但仍受设备 DNS、VPN、代理、TLS 与服务器 HTTPS 链路影响，也没有逐请求取消能力。push、SSE、force-push、健康诊断、管理/日记/备份继续走 WebView `fetch`，所以部署仍需把 `https://localhost` 放入 `ALLOWED_ORIGINS`；原生路径不是放宽 CORS 或 cleartext 的理由。该内置能力无需新增 npm 依赖、Manifest 权限或原生插件注册。
 
-`packages/mobile/capacitor.config.ts` 是两个平台共用的：`android` 段与 `server` 段归本文档，`ios` 段（背景色）与 iOS 构建链路归 [deployment/ios-ipa](ios-ipa.md)。`server.androidScheme` 只作用于 Android；iOS 走 Capacitor 默认的 `capacitor://localhost`，两个壳的本地库不同源。
+`packages/mobile/capacitor.config.ts` 是两个平台共用的：`android` 段与 `server` 段归本文档，`ios` 段（背景色）与 iOS 构建链路归 [deployment/ios-ipa](ios-ipa.md)。`server.androidScheme` 只作用于 Android；iOS 走 Capacitor 默认的 `capacitor://localhost`，两个壳的本地库不同源。`android.backgroundColor` 与 `ios.backgroundColor` 均为 `#0e1320`（= client `--color-page`），原生背景露出时（启动瞬间、旋转过渡、滚动越界回弹）与网页底色一致。
 
 Android 壳入口是 `packages/mobile/android/app/src/main/java/app/timedata/mobile/MainActivity.java`。Activity 启动时关闭 decor 自动适配，并在根内容视图上显式应用 `systemBars` + `displayCutout` 的 inset padding，让 Capacitor WebView 避开状态栏、导航栏和刘海区域，避免 APK 在全面屏设备上把页面顶部绘制到通知栏下面。
 
