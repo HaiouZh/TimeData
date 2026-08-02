@@ -37,31 +37,33 @@ pub fn should_show_on_startup(args: &[String]) -> bool {
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum AutostartAction {
-    /// 首次运行：注册自启并记下当前可执行文件路径。
-    EnableAndRecord,
-    /// 自启还开着但可执行文件搬家了（dev→release→安装版、重装到别处）：把注册更新到新路径。
-    RefreshPath,
-    /// 用户手动关掉了，或路径没变——都不要碰。
+    /// （重新）注册自启到当前可执行文件，并记下这个路径。
+    Enable,
+    /// 已经注册到当前可执行文件，不动。
     LeaveAlone,
 }
 
-/// 决定启动时怎么处理开机自启。
+/// 决定启动时怎么处理开机自启。策略：**启动项只要不是"已注册到当前这个 exe"，就重新注册**。
 ///
-/// 标记文件里存的是「上次注册时的可执行文件路径」，不是一个布尔。
-/// 只记「做没做过」会留下一个无声的坑：构建产物先注册过，装了正式版后启动项
-/// 仍指向构建目录，那个目录一清理，开机自启就失效且不报错（2026-08-03 实测踩到）。
+/// 两个实测踩到的场景逼出这条策略（2026-08-03）：
+/// ① 构建产物先注册过，装了正式版后启动项仍指向构建目录，那目录一清理自启就无声失效；
+/// ② NSIS 装新版时会先卸载旧版，把启动项一并清掉——升级后自启就没了。
 ///
-/// 但路径变化**不能**成为把用户关掉的自启重新打开的理由，故 `currently_enabled`
-/// 为 false 时一律 LeaveAlone。
+/// 场景②与"用户自己在系统设置里关掉"在系统层面**完全无法区分**，二者只能取一。
+/// 已拍板取"升级后自动恢复"：无声失效比偶尔回弹更糟，且升级是常态操作。
+/// 代价是此刻在 Windows 任务管理器里关掉会被下次启动改回来——批 2 的设置界面落地后，
+/// 关闭意图会记在应用自己的配置里，那时才谈得上真正「关得掉」。
 pub fn resolve_autostart_action(
     recorded_path: Option<&str>,
     current_path: &str,
     currently_enabled: bool,
 ) -> AutostartAction {
+    if !currently_enabled {
+        return AutostartAction::Enable;
+    }
     match recorded_path {
-        None => AutostartAction::EnableAndRecord,
-        Some(recorded) if currently_enabled && recorded != current_path => AutostartAction::RefreshPath,
-        Some(_) => AutostartAction::LeaveAlone,
+        Some(recorded) if recorded == current_path => AutostartAction::LeaveAlone,
+        _ => AutostartAction::Enable,
     }
 }
 
@@ -114,15 +116,15 @@ mod tests {
     }
 
     #[test]
-    fn 首次运行注册自启并记下路径() {
+    fn 首次运行注册自启() {
         assert_eq!(
             resolve_autostart_action(None, "C:/app/TimeData.exe", false),
-            AutostartAction::EnableAndRecord
+            AutostartAction::Enable
         );
     }
 
     #[test]
-    fn 路径没变就什么都不做() {
+    fn 已注册到当前exe就不动() {
         assert_eq!(
             resolve_autostart_action(Some("C:/app/TimeData.exe"), "C:/app/TimeData.exe", true),
             AutostartAction::LeaveAlone
@@ -130,31 +132,32 @@ mod tests {
     }
 
     #[test]
-    fn 换了安装路径且自启还开着时更新注册() {
+    fn 启动项被外部清掉时恢复() {
+        // 实测踩过：NSIS 装新版会先卸载旧版，把启动项一并带走，升级后自启静默消失。
+        // 记录路径与当前一致、但系统里已经没有启动项——必须恢复。
+        assert_eq!(
+            resolve_autostart_action(Some("C:/app/TimeData.exe"), "C:/app/TimeData.exe", false),
+            AutostartAction::Enable
+        );
+    }
+
+    #[test]
+    fn 换了安装路径时重新注册到新路径() {
         // 实测踩过：dev/release 构建先注册过，装了正式版后启动项仍指向构建产物，
-        // 构建目录一清理，开机自启就无声失效。
+        // 那个目录一清理，开机自启就无声失效。
         assert_eq!(
             resolve_autostart_action(Some("D:/build/timedata-desktop.exe"), "C:/app/TimeData.exe", true),
-            AutostartAction::RefreshPath
+            AutostartAction::Enable
         );
     }
 
     #[test]
-    fn 用户关掉自启后换路径也不许回弹() {
-        // 这条守「关得掉」：不能借「路径变了」把用户明确关掉的自启偷偷开回来。
-        assert_eq!(
-            resolve_autostart_action(Some("D:/build/timedata-desktop.exe"), "C:/app/TimeData.exe", false),
-            AutostartAction::LeaveAlone
-        );
-    }
-
-    #[test]
-    fn 旧版只写1的标记会被当成路径不符而自愈() {
-        // 早期实现往标记里写的是 "1"。它与任何真实路径都不相等，
-        // 因此自启还开着时会走 RefreshPath 把路径纠正过来，不需要迁移代码。
+    fn 旧版只写1的标记会被当成路径不符而重注册() {
+        // 早期实现往标记里写的是 "1"，与任何真实路径都不相等，因此会被重新注册并改写成路径，
+        // 不需要单独的迁移代码。
         assert_eq!(
             resolve_autostart_action(Some("1"), "C:/app/TimeData.exe", true),
-            AutostartAction::RefreshPath
+            AutostartAction::Enable
         );
     }
 }

@@ -72,7 +72,7 @@ fn main() {
                 .unwrap_or_default();
             let enabled = app.autolaunch().is_enabled().unwrap_or(false);
             match resolve_autostart_action(recorded.as_deref(), &current_exe, enabled) {
-                AutostartAction::EnableAndRecord | AutostartAction::RefreshPath => {
+                AutostartAction::Enable => {
                     let _ = app.autolaunch().enable();
                     if let Some(dir) = marker.parent() {
                         let _ = std::fs::create_dir_all(dir);
