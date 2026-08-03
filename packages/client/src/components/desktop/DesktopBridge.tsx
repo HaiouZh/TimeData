@@ -137,6 +137,9 @@ export function DesktopBridge() {
   const [state, setState] = useState<BridgeState>(IDLE_BRIDGE_STATE);
   const { deleteEntry } = useEntryMutations();
   const deleteEntryRef = useRef(deleteEntry);
+  // 队列里跑的那一步要看到「上一步跑完之后」的状态，而不是渲染时捕获的那份。
+  const stateRef = useRef(state);
+  const queueRef = useRef<Promise<void>>(Promise.resolve());
 
   const io = useMemo<DesktopBridgeIo>(
     () => ({
@@ -147,22 +150,29 @@ export function DesktopBridge() {
     [],
   );
 
+  /**
+   * 全部状态转移排成一条串行队列。热键连按两下会并发跑两次打点，各自 ~8 个 await 必然交错：
+   * 两次都在对方写库前读到同一条「上一条记录」，算出同一区间，各写一条完全重叠的假记录
+   * （punchNow 的 overlapPlan 为 null，不裁剪）。串行化顺带治好状态陈旧——第二次打点看得见
+   * 第一次写下的记录，于是正确地报「距上次记录还没有时间」。
+   */
   const run = useCallback(
-    async (step: () => Promise<BridgeState>) => {
-      try {
-        setState(await step());
-      } catch (err) {
-        await notify(io, err instanceof Error ? err.message : "打点失败");
-      }
+    (step: (prev: BridgeState) => Promise<BridgeState>) => {
+      queueRef.current = queueRef.current.then(async () => {
+        try {
+          const next = await step(stateRef.current);
+          stateRef.current = next;
+          setState(next);
+        } catch (err) {
+          await notify(io, err instanceof Error ? err.message : "打点失败");
+        }
+      });
     },
     [io],
   );
 
-  // 监听只挂一次，但它要用到每次渲染后的最新 state / deleteEntry，故走 ref 转手。
-  const punchRef = useRef<(pressedAtMs: number) => void>(() => {});
   useEffect(() => {
     deleteEntryRef.current = deleteEntry;
-    punchRef.current = (pressedAtMs) => void run(() => punchFromHotkey(pressedAtMs, io, state));
   });
 
   useEffect(() => {
@@ -170,7 +180,7 @@ export function DesktopBridge() {
     let unlisten: (() => void) | null = null;
     void (async () => {
       try {
-        const un = await startDesktopBridge(io, (pressedAtMs) => punchRef.current(pressedAtMs));
+        const un = await startDesktopBridge(io, (pressedAtMs) => run((prev) => punchFromHotkey(pressedAtMs, io, prev)));
         if (cancelled) {
           un();
           return;
@@ -184,16 +194,16 @@ export function DesktopBridge() {
       cancelled = true;
       unlisten?.();
     };
-  }, [io]);
+  }, [io, run]);
 
   return (
     <DesktopPunchLayer
       undo={state.undo}
       confirm={state.confirm}
-      onUndo={() => void run(() => undoPunch(state, io))}
-      onDismissUndo={() => setState((prev) => ({ ...prev, undo: null }))}
-      onConfirm={() => void run(() => confirmPunch(state, io))}
-      onCancelConfirm={() => setState((prev) => ({ ...prev, confirm: null }))}
+      onUndo={() => run((prev) => undoPunch(prev, io))}
+      onDismissUndo={() => run(async (prev) => ({ ...prev, undo: null }))}
+      onConfirm={() => run((prev) => confirmPunch(prev, io))}
+      onCancelConfirm={() => run(async (prev) => ({ ...prev, confirm: null }))}
     />
   );
 }
