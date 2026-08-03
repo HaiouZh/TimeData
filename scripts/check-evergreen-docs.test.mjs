@@ -6,6 +6,8 @@ import { fileURLToPath } from "node:url";
 import {
   CliUsageError,
   EVERGREEN_RULES_SUMMARY,
+  SIZE_CAPS,
+  buildSizeHints,
   classifySizeWarning,
   countSubDocs,
   diffSizeBaseline,
@@ -16,6 +18,7 @@ import {
   getChangedFiles,
   parseArgs,
   selectChangedEvergreenDocs,
+  selectCrossCutExhausted,
   selectUncovered,
 } from "./check-evergreen-docs.mjs";
 
@@ -355,11 +358,11 @@ test("diffSizeBaseline 在无变化时四个清单都是空的", () => {
 
 test("countSubDocs counts sibling docs under the topic's own subdirectory", () => {
   const docs = [
-    { filePath: "docs/evergreen/todo.md" },
-    { filePath: "docs/evergreen/todo/at-hand.md" },
-    { filePath: "docs/evergreen/todo/gravity.md" },
-    { filePath: "docs/evergreen/sync.md" },
-    { filePath: "docs/evergreen/sync/domain-registry.md" },
+    { filePath: "docs/evergreen/todo.md", covers: ["a"] },
+    { filePath: "docs/evergreen/todo/at-hand.md", covers: ["b"] },
+    { filePath: "docs/evergreen/todo/gravity.md", covers: ["c"] },
+    { filePath: "docs/evergreen/sync.md", covers: ["d"] },
+    { filePath: "docs/evergreen/sync/domain-registry.md", covers: ["e"] },
   ];
   assert.equal(countSubDocs("docs/evergreen/todo.md", docs), 2);
   assert.equal(countSubDocs("docs/evergreen/sync.md", docs), 1);
@@ -367,29 +370,94 @@ test("countSubDocs counts sibling docs under the topic's own subdirectory", () =
 
 test("countSubDocs returns 0 for a doc that has no subdirectory", () => {
   const docs = [
-    { filePath: "docs/evergreen/cli.md" },
-    { filePath: "docs/evergreen/todo/at-hand.md" },
+    { filePath: "docs/evergreen/cli.md", covers: ["a"] },
+    { filePath: "docs/evergreen/todo/at-hand.md", covers: ["b"] },
   ];
   assert.equal(countSubDocs("docs/evergreen/cli.md", docs), 0);
 });
 
 test("countSubDocs does not count a sub-doc as its own child", () => {
   const docs = [
-    { filePath: "docs/evergreen/todo/at-hand.md" },
-    { filePath: "docs/evergreen/todo/gravity.md" },
+    { filePath: "docs/evergreen/todo/at-hand.md", covers: ["a"] },
+    { filePath: "docs/evergreen/todo/gravity.md", covers: ["b"] },
   ];
   assert.equal(countSubDocs("docs/evergreen/todo/at-hand.md", docs), 0);
 });
 
 // 上面那条「does not count a sub-doc as its own child」其实测不到 `d.filePath !== docPath` 这道守卫：
 // docPath 以 .md 结尾时，dir 的末位是 `/`、自身末位是 `d`，本来就不可能自匹配。
-// 只有路径不带 .md 后缀（replace 不生效、dir === docPath）时守卫才真正承压。
+// 只有路径不带 .md 后缀（replace 不生效、dir === docPath）时守卫才真正承压——
+// 故自身这条也必须带 covers，否则它会先被「只数横切」那道过滤剔掉，守卫又落不到压力上。
 test("countSubDocs never counts the doc itself, even when the path has no .md suffix", () => {
   const docs = [
-    { filePath: "docs/evergreen/todo" },
-    { filePath: "docs/evergreen/todo/at-hand.md" },
+    { filePath: "docs/evergreen/todo", covers: ["a"] },
+    { filePath: "docs/evergreen/todo/at-hand.md", covers: ["b"] },
   ];
   assert.equal(countSubDocs("docs/evergreen/todo", docs), 1);
+});
+
+// `dir` 末尾那个 `/` 是唯一阻止同前缀兄弟被误数的机制，`startsWith` 则挡路径中段命中。
+test("countSubDocs 只认目录前缀，不认撞名兄弟、不认路径中段命中", () => {
+  const docs = [
+    { filePath: "docs/evergreen/todo.md", covers: ["a"] },
+    { filePath: "docs/evergreen/todo/at-hand.md", covers: ["b"] },
+    { filePath: "docs/evergreen/todos.md", covers: ["c"] },
+    { filePath: "docs/evergreen/todo-archive.md", covers: ["d"] },
+    { filePath: "docs/adr/docs/evergreen/todo/nested.md", covers: ["e"] },
+  ];
+  assert.equal(countSubDocs("docs/evergreen/todo.md", docs), 1);
+});
+
+// 判别数据：横切子文档从母文档迁走 covers（≥1），纵切子文档 covers 按设计恒空。
+// 若把纵切也算进来，一个只走过纵切的主题会被断言「横切已用尽」，把执行者从真正可走的轴上推开。
+test("countSubDocs 只数横切子文档，纵切（零 covers）不占横切轴", () => {
+  const docs = [
+    { filePath: "docs/evergreen/todo.md", covers: ["a"] },
+    { filePath: "docs/evergreen/todo/at-hand.md", covers: ["b"] },
+    { filePath: "docs/evergreen/todo/invariants.md", covers: [] },
+    { filePath: "docs/evergreen/todo/modules.md", covers: [] },
+  ];
+  assert.equal(countSubDocs("docs/evergreen/todo.md", docs), 1);
+});
+
+test("selectCrossCutExhausted 只点名横切子文档已有 2 份及以上的文档", () => {
+  // 1 份不入列（挡 `>= 1`）。
+  assert.deepEqual(
+    selectCrossCutExhausted(
+      [{ filePath: "a.md" }],
+      [
+        { filePath: "a.md", covers: ["x"] },
+        { filePath: "a/x.md", covers: ["y"] },
+      ],
+    ),
+    [],
+  );
+  // 2 份要入列（挡 `> 2`）。
+  assert.deepEqual(
+    selectCrossCutExhausted(
+      [{ filePath: "a.md" }],
+      [
+        { filePath: "a.md", covers: ["x"] },
+        { filePath: "a/x.md", covers: ["y"] },
+        { filePath: "a/y.md", covers: ["z"] },
+      ],
+    ),
+    [{ filePath: "a.md", subs: 2 }],
+  );
+});
+
+test("selectCrossCutExhausted 不把纵切子文档算成横切已用尽", () => {
+  assert.deepEqual(
+    selectCrossCutExhausted(
+      [{ filePath: "a.md" }],
+      [
+        { filePath: "a.md", covers: ["x"] },
+        { filePath: "a/p.md", covers: [] },
+        { filePath: "a/q.md", covers: [] },
+      ],
+    ),
+    [],
+  );
 });
 
 const CAPS = { softChars: 15000, warnChars: 20000, criticalChars: 23000, hardChars: 25000 };
@@ -410,4 +478,58 @@ test("classifySizeWarning escalates across the three bands", () => {
 
 test("classifySizeWarning returns null past hard cap (too-long violation handles it)", () => {
   assert.equal(classifySizeWarning(25001, CAPS), null);
+});
+
+// caps 缺 warnChars/criticalChars（本文件里就有大量两键 caps 的既有写法）时，裸读会让
+// `chars > undefined` 恒假，把 🔴 静默降成 🟡；caps 整个缺失则直接 TypeError。
+test("classifySizeWarning 对缺字段 / 缺参数的 caps 回落到 SIZE_CAPS", () => {
+  assert.equal(classifySizeWarning(24000, { softChars: 15000, hardChars: 25000 }), "critical");
+  assert.equal(classifySizeWarning(24000, undefined), "critical");
+  assert.equal(classifySizeWarning(100, undefined), null);
+});
+
+test("SIZE_CAPS 四档阈值逐值锁死，且严格递增（不许把某一档挤成不可达的死档）", () => {
+  assert.deepEqual(SIZE_CAPS, {
+    softChars: 15000,
+    warnChars: 20000,
+    criticalChars: 23000,
+    hardChars: 25000,
+  });
+  assert.ok(
+    SIZE_CAPS.softChars < SIZE_CAPS.warnChars &&
+      SIZE_CAPS.warnChars < SIZE_CAPS.criticalChars &&
+      SIZE_CAPS.criticalChars < SIZE_CAPS.hardChars,
+  );
+});
+
+test("buildSizeHints 不给未过 soft cap 的文档出提示", () => {
+  assert.deepEqual(buildSizeHints([{ filePath: "s.md", chars: 100 }], CAPS), []);
+});
+
+test("buildSizeHints 按档位给图标、按 hard cap 算余量", () => {
+  const [hint] = buildSizeHints([{ filePath: "s.md", chars: 24000 }], CAPS);
+  assert.equal(hint.band, "critical");
+  assert.equal(hint.mark, "🔴");
+  assert.equal(hint.remaining, 1000);
+  assert.equal(buildSizeHints([{ filePath: "s.md", chars: 21000 }], CAPS)[0].mark, "🟠");
+  assert.equal(buildSizeHints([{ filePath: "s.md", chars: 16000 }], CAPS)[0].mark, "🟡");
+});
+
+test("buildSizeHints 按字符数倒序——最逼近上限的排最前", () => {
+  assert.deepEqual(
+    buildSizeHints(
+      [
+        { filePath: "a.md", chars: 16000 },
+        { filePath: "b.md", chars: 24000 },
+      ],
+      CAPS,
+    ).map((x) => x.filePath),
+    ["b.md", "a.md"],
+  );
+});
+
+test("buildSizeHints 给每档配上对应提示语，且超 hard cap 的不进软提示", () => {
+  const [hint] = buildSizeHints([{ filePath: "s.md", chars: 16000 }], CAPS);
+  assert.match(hint.hint, /soft cap/);
+  assert.deepEqual(buildSizeHints([{ filePath: "s.md", chars: 25001 }], CAPS), []);
 });

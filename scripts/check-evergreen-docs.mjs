@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 // Check that long-lived (evergreen / ADR) docs stay in sync with the code they cover.
-// covers = 纯归属声明（coverage / 查代码去哪篇）；contracts = covers 里「改它文档必错」的契约子集，只有它触发 strict。
+// covers = 纯归属声明（coverage / 查代码去哪篇）；contracts = 「改它文档必错」的契约点集合，只有它触发 strict。
+// 两者各自独立，contracts 不必是 covers 的子集——纵切子文档零 covers 却持 contracts 是正常形态（见 _docs-guide §1.3）。
 // Usage: node scripts/check-evergreen-docs.mjs [--mode=warn|strict|stale|size|coverage|links] [--since=<rev>] [--write-size-baseline]
 // Zero external deps. Glob syntax: **/, **, *, ?, optional ":Symbol" suffix is stripped.
 
@@ -14,7 +15,7 @@ const EVERGREEN_DIRS = ["docs/evergreen", "docs/adr"];
 const STALE_DAYS = 180;
 // 四档阈值：softChars 起软提示，warnChars / criticalChars 逐级加重措辞，hardChars 硬报错。
 // 分级是为了破提示疲劳——长期驻留区间的文档若每次都印同一句，警告等于不存在。
-const SIZE_CAPS = { softChars: 15000, warnChars: 20000, criticalChars: 23000, hardChars: 25000 };
+export const SIZE_CAPS = { softChars: 15000, warnChars: 20000, criticalChars: 23000, hardChars: 25000 };
 const SIZE_BASELINE_PATH = "scripts/evergreen-size-baseline.json";
 // 覆盖率检查：这些源根下的新增文件必须被某份 evergreen 文档的 covers 认领。
 const COVERAGE_ROOTS = [
@@ -168,7 +169,8 @@ function readDoc(rel) {
     type: fm.type ?? "",
     title: fm.title ?? path.basename(rel, ".md"),
     covers: Array.isArray(fm.covers) ? fm.covers : [],
-    // contracts：covers 里「改这个文件、不改文档，文档一定错」的契约级子集（schema / 登记簿 / API 面）。
+    // contracts：「改这个文件、不改文档，文档一定错」的契约点集合（schema / 登记簿 / API 面）。
+    // 与 covers 各自独立解析，不校验包含关系——零 covers + 独立 contracts 的纵切子文档是合法形态。
     // strict 只认它；covers 是纯归属声明，不触发 strict。
     contracts: Array.isArray(fm.contracts) ? fm.contracts : [],
     lastReviewed: fm["last-reviewed"] ?? null,
@@ -503,23 +505,64 @@ function writeSizeBaseline(docs) {
 }
 
 /**
- * 数某份主题文档名下有几个子文档（`docs/evergreen/todo.md` → `docs/evergreen/todo/*.md`）。
- * ≥2 时说明横切轴多半已用尽，撞 hard cap 的出路要往纵切找（见 _docs-guide §3.2）。
+ * 数某份主题文档名下有几份**横切**子文档（`docs/evergreen/todo.md` → `docs/evergreen/todo/*.md` 里带 covers 的）。
+ * 只数横切：纵切子文档 covers 恒空、不占横切轴，把它们算进来会在「横切一次没切过」的主题上误判横切已用尽，
+ * 把执行者从真正可走的那条轴上推开。`dir` 末尾那个 `/` 是唯一阻止同前缀兄弟（`todos.md`）被误数的机制。
+ * ≥2 时说明横切轴多半已用尽，撞 hard cap 的出路要往纵切找（见 _docs-guide §3.1）。
  */
 export function countSubDocs(docPath, allDocs) {
   const dir = docPath.replace(/\.md$/, "/");
-  return allDocs.filter((d) => d.filePath !== docPath && d.filePath.startsWith(dir)).length;
+  return allDocs.filter(
+    (d) => d.filePath !== docPath && d.filePath.startsWith(dir) && (d.covers?.length ?? 0) > 0,
+  ).length;
+}
+
+/**
+ * 撞 hard cap 且横切轴多半已用尽（≥2 份横切子文档）的文档——报错时点名，把出路指向纵切。
+ */
+export function selectCrossCutExhausted(tooLong, evergreenDocs) {
+  return tooLong
+    .map((v) => ({ filePath: v.filePath, subs: countSubDocs(v.filePath, evergreenDocs) }))
+    .filter((x) => x.subs >= 2);
 }
 
 /**
  * 软提示分级。超 hard cap 的返回 null——那由 too-long 违规硬报错处理，不再叠加软提示。
+ * caps 缺字段就回落到 SIZE_CAPS（与 evaluateSizes 同姿态）：裸读会让 `chars > undefined` 恒假，
+ * 把 🔴 静默降成 🟡。
  */
 export function classifySizeWarning(chars, caps) {
-  if (chars > caps.hardChars) return null;
-  if (chars > caps.criticalChars) return "critical";
-  if (chars > caps.warnChars) return "warning";
-  if (chars > caps.softChars) return "notice";
+  const { softChars, warnChars, criticalChars, hardChars } = { ...SIZE_CAPS, ...caps };
+  if (chars > hardChars) return null;
+  if (chars > criticalChars) return "critical";
+  if (chars > warnChars) return "warning";
+  if (chars > softChars) return "notice";
   return null;
+}
+
+const BAND_HINT = {
+  notice: "过 soft cap，留意是否该拆子文档",
+  warning: "余量不足 5k，规划下一份子文档的切法",
+  critical: "余量不足 2k，下次实质补充就会撞线——现在拆比撞线时拆从容",
+};
+
+/**
+ * 体量软提示的渲染数据：过 soft cap 未过 hard cap 的文档，按字符数倒序，各带档位图标、余量与提示语。
+ */
+export function buildSizeHints(docs, caps) {
+  const hardChars = caps?.hardChars ?? SIZE_CAPS.hardChars;
+  return docs
+    .map((d) => ({ doc: d, band: classifySizeWarning(d.chars, caps) }))
+    .filter((x) => x.band !== null)
+    .sort((a, b) => b.doc.chars - a.doc.chars)
+    .map(({ doc, band }) => ({
+      filePath: doc.filePath,
+      band,
+      mark: band === "critical" ? "🔴" : band === "warning" ? "🟠" : "🟡",
+      chars: doc.chars,
+      remaining: hardChars - doc.chars,
+      hint: BAND_HINT[band],
+    }));
 }
 
 function formatSizeViolationKind(kind) {
@@ -544,23 +587,15 @@ function modeSize(docs) {
     console.error("  请运行 node scripts/check-evergreen-docs.mjs --write-size-baseline 后提交基线。");
     return 1;
   }
+  const evergreenDocs = docs.filter(isEvergreenDoc);
   const res = evaluateSizes(docs, baseline, SIZE_CAPS);
-  // soft cap 软提示：接近上限先预警，不失败——给「快到该拆了」一个提前量。
-  const BAND_HINT = {
-    notice: "过 soft cap，留意是否该拆子文档",
-    warning: "余量不足 5k，规划下一份子文档的切法",
-    critical: "余量不足 2k，下次实质补充就会撞线——现在拆比撞线时拆从容",
-  };
-  const banded = docs
-    .filter(isEvergreenDoc)
-    .map((d) => ({ doc: d, band: classifySizeWarning(d.chars, SIZE_CAPS) }))
-    .filter((x) => x.band !== null)
-    .sort((a, b) => b.doc.chars - a.doc.chars);
-  if (banded.length > 0) {
+  // soft cap 软提示：不失败，只给「快到该拆了」一个提前量。分三档不是为了更精确，
+  // 而是破提示疲劳——同一句警告长期不变会退化成背景噪音，措辞随余量加重才还能被看见。
+  const hints = buildSizeHints(evergreenDocs, SIZE_CAPS);
+  if (hints.length > 0) {
     console.log(`ℹ️ 体量提示（hard cap ${SIZE_CAPS.hardChars} 字符，判据见 docs/evergreen/_docs-guide.md §3）：`);
-    for (const { doc, band } of banded) {
-      const mark = band === "critical" ? "🔴" : band === "warning" ? "🟠" : "🟡";
-      console.log(`   ${mark} ${doc.filePath}（${doc.chars} 字符，余量 ${SIZE_CAPS.hardChars - doc.chars}）——${BAND_HINT[band]}`);
+    for (const h of hints) {
+      console.log(`   ${h.mark} ${h.filePath}（${h.chars} 字符，余量 ${h.remaining}）——${h.hint}`);
     }
     console.log("");
   }
@@ -577,14 +612,12 @@ function modeSize(docs) {
   const tooLong = res.violations.filter((v) => v.kind === "too-long");
   if (tooLong.length > 0) {
     console.error(`\n✗ 有文档超过 hard cap（${SIZE_CAPS.hardChars} 字符）。字符数本身不做棘轮，正文可自由增长——过长说明该拆了。`);
-    console.error("  合法动作三条：删过时内容 / 横切外提（功能子域）/ 纵切外提（读者路径）。");
+    console.error("  合法动作三条：① 删过时 / 越界内容（越界的先补落点、再 trim 成「一句现状 + 指针」，不许就地删）");
+    console.error("               ② 横切外提（功能子域） ③ 纵切外提（读者路径）。");
     console.error("  ⚠️ 压缩措辞、删例子、把句子改短不是合法动作——那是拿可读性换体量，且不可逆。");
     console.error("  三条都走不通就停下来问人，不要让门禁绿变成目标。");
-    for (const v of tooLong) {
-      const subs = countSubDocs(v.filePath, docs.filter(isEvergreenDoc));
-      if (subs >= 2) {
-        console.error(`  · ${v.filePath} 已有 ${subs} 份子文档，横切多半已用尽——优先看纵切判据。`);
-      }
+    for (const x of selectCrossCutExhausted(tooLong, evergreenDocs)) {
+      console.error(`  · ${x.filePath} 已有 ${x.subs} 份横切子文档，横切多半已用尽——优先看纵切判据。`);
     }
     console.error("  判据：docs/evergreen/_docs-guide.md §3.1（横切三条）/ §3.2（纵切四条）。");
   }
