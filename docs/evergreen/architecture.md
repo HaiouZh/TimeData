@@ -24,7 +24,7 @@ covers:
   - packages/mobile/android/app/src/main/AndroidManifest.xml
 contracts:
   - packages/client/src/components/app-shell/AppRoutes.tsx
-last-reviewed: 2026-07-28
+last-reviewed: 2026-08-03
 ---
 
 # 架构总览
@@ -131,12 +131,13 @@ CLI 不直接读写 SQLite。命令面见 [cli](cli.md)。
 
 iOS 原生工程不入库，构建链路与原生补丁见 [deployment/ios-ipa](deployment/ios-ipa.md)。渲染路径上 iOS 与其余平台只有一处分叉：`AppShell` 按 `Capacitor.getPlatform() === "ios"` 二选一，iOS 渲染 `components/app-shell/KeptRouteStack.tsx`，其余平台仍是单份 `<main>` + `<Routes>`，分叉之外零差异。
 
-`KeptRouteStack` 让钻进子页时**上一页不卸载**：栈最多 2 层，每层一份 `<AppRoutes location={...}>`，非栈尾那层留在 DOM 里供边缘返回手势露出，返回后滚动位置与组件 state 因此原样还在。四条不变式违反后都不报错、不红测，只在真机上表现为「返回后位置偶尔丢」：
+`KeptRouteStack` 让钻进子页时**上一页不卸载**：栈最多 2 层，每层一份 `<AppRoutes location={...}>`，非栈尾那层留在 DOM 里供边缘返回手势露出，返回后滚动位置与组件 state 因此原样还在。五条不变式违反后都不报错、不红测，只在真机上表现为「返回后位置偶尔丢」或「起手瞬间整屏闪暗」：
 
 1. **隐藏只用 `visibility: hidden`**，不用 `display:none` / `hidden` 属性 / 摘除节点——无 layout box 会让滚动容器 `scrollTop` 清零。
 2. **栈只 append、只从头部移除，永不 reorder**——让 React 移动已挂载层会搬 DOM 节点，同样清 `scrollTop`。
 3. **两层恒 `absolute inset-0`**，含栈尾那层；布局方式不对保留层单独特殊化。
 4. **每层各自一个 `<Suspense fallback={null}>`**——共用边界会让子页懒加载时整个栈一起挂起，保留层跟着消失。
+5. **暗化遮罩 `[data-kept-overlay]` 渲染在保留层子树内**，不提到栈容器下：提出去就按 DOM 顺序盖在栈尾那层之上，把正在跟手滑出的当前页也一起压暗。刻意不用 z-index 修——给栈尾层加 z-index 会让它成为层叠上下文，把页面内 `position: fixed` 的整屏浮层封在里面；调 DOM 顺序则会触发不变式 2。
 
 栈的推进是纯函数 `nextStack(prev, location, navigationType)`。导航类型必须与 location 一起读（`useNavigationType()` 与 `useLocation()` 同出一个 context，同帧一致），三种导航对栈的影响完全不同：
 
@@ -147,7 +148,15 @@ iOS 原生工程不入库，构建链路与原生补丁见 [deployment/ios-ipa](
 
 底栏渲染在层内而非栈外，返回手势中上一页的底栏跟着一起滑回来；代价是保留层的 `NavLink` 高亮读真实当前 location，手势期间短暂不准。
 
-边缘返回由 `components/EdgeSwipeBack.tsx` 承担，只在 iOS 挂 touch 监听，按 `data-kept-layer="active"` / `"kept"` 与 `data-kept-overlay` 三个选择器取层。跟手位移**直接写 DOM `style.transform`**，不走 React state——每帧 setState 会重渲染整棵页面树。起手判据：触点起点在左边缘 `EDGE_WIDTH_PX` 内、`lib/backNavigation.ts` 的 `hasParentRoute` 为真（tab 主页与首页之间从不用手势切）、栈里有保留层、当前不是目标详情（整页是可自由拖动的关系图，与右滑同向）、没有模态对话框、触点链路上没有横向可滚容器也没有带 `data-edge-swipe-block` 的元素。该标记加在与起手区重叠的拖柄之类的元素**本身**，不加到整行——加宽一层就是整行都吃不到手势。起手与松手的算术在 `lib/edgeSwipe.ts`。**返回一律 `navigate(-1)`**——换成 `navigate(父页, { replace: true })` 会生成新 `location.key`，保留层被当新页重挂，整套机制静默失效。
+边缘返回由 `components/EdgeSwipeBack.tsx` 承担，只在 iOS 挂 touch 监听，按 `data-kept-layer="active"` / `"kept"` 与 `data-kept-overlay` 三个选择器取层。跟手位移**直接写 DOM `style.transform`**，不走 React state——每帧 setState 会重渲染整棵页面树。
+
+**手势是一台四态状态机**：`idle` → `tracking`（边缘落点已过全部生效条件，但位移还没到 `EDGE_SLOP_PX`，此时不碰 DOM、不 `preventDefault`）→ `engaged`（判为横向，接管这一笔）→ `settling`（rAF 逐帧插值收尾，期间不接新手势）。**方向只在过 slop 那一刻判一次**：判成纵向即整笔作废，之后拐成横向也不接——否则拇指贴左边缘往下滚列表时，第一条 `dx=2, dy=1` 的 touchmove 就会锁死整笔手势，整页滚不动。
+
+起手判据：触点起点在左边缘 `EDGE_WIDTH_PX` 内、`lib/backNavigation.ts` 的 `hasParentRoute` 为真（tab 主页与首页之间从不用手势切）、栈里有保留层、当前不是目标详情（整页是可自由拖动的关系图，与右滑同向）、没有模态对话框、单指、触点链路上没有 `data-edge-swipe-block`。**让路只认这个显式标记，不看 `overflow-x` 的计算值**——`overflow-y` 非 visible 时 `overflow-x: visible` 的计算值会被改写成 `auto`，而每层的 `<main>` 正是 `overflow-y-auto`，真横滚容器与普通竖滚祖先根本分不开。故 dnd-kit 拖柄与真正的横滚容器都要自己标上；标在元素**本身**，不加到整行——加宽一层就是整行都吃不到手势。起手与松手的算术在 `lib/edgeSwipe.ts`。
+
+**收尾靠 rAF 逐帧插值，不靠 CSS transition + `transitionend`**：后者首末值相同时根本不产生过渡（拉回起点再松手就永不收尾）、事件会冒泡且分不清是页面内哪个元素的过渡、被打断时发的是 `transitioncancel`。rAF 自己把进度数到 1，每条路径都是确定性的。清理一律用**起手时捕获的元素引用**，不回头查 DOM——返回成功后栈已截断成一层、`[data-kept-layer="kept"]` 当场消失，任何重查都会漏掉幸存层上的 `transform` / `will-change`，而这两者都会让该层成为 `position: fixed` 后代的包含块，整屏浮层从此盖不住状态栏。位移基准取**层自身宽度**而非 `window.innerWidth`（iPad 上层是侧栏旁的 flex 子项）。
+
+**返回一律 `navigate(-1)`**——换成 `navigate(父页, { replace: true })` 会生成新 `location.key`，保留层被当新页重挂，整套机制静默失效。发出后按帧比对 `location.key` 是否变化：变了就清理收工；短暂窗口内没变即视为被「未保存就别走」守卫拦下，当场弹回原位——不能让当前页停在屏外干等，那时屏上铺的是带 `inert` 的上一页，点哪都没反应。
 
 ## 5. 关键约定
 
