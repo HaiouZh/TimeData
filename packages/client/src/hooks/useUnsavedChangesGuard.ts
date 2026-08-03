@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef } from "react";
 import { type BlockerFunction, useBlocker } from "react-router";
+import { useIsLayerActive } from "../components/app-shell/keptLayerActive.ts";
 import type { ConfirmRequest } from "./useConfirm.js";
 
 interface UnsavedChangesGuardOptions {
@@ -27,6 +28,11 @@ interface UnsavedChangesGuardOptions {
  *   `reset()` 反而是幂等的。
  * - `when` 由 true 翻回 false **不会**自动解除已经 blocked 的状态。
  * - 组件卸载**不需要**手动 reset：useBlocker 内部 cleanup 已 deleteBlocker。
+ *   ——但 iOS 的 KeptRouteStack 让上一页**不卸载**，这条前提在保留层上不成立：一个用户已经
+ *   离开、屏幕上完全看不见的页面，它注册的 blocker 还在册，会用自己的脏态拦住**别的页**的导航
+ *   （典型：日记页脏着切到速记页，在速记页点底栏就凭空弹「放弃未保存的修改？」，选「继续编辑」
+ *   还会被钉在速记页且找不到任何在编辑的内容）。故 shouldBlock 额外读「本层是否活跃」，
+ *   非活跃层一律不拦。缺省活跃，见 keptLayerActive.ts。
  * - 将来若出现「保存成功后在同一个 handler 里主动跳转」的流程，会被误拦
  *   （shouldBlock 读到的是上一帧的 when），届时需要加一个一次性 bypass ref。
  * - 传入的 `confirm` 若来自 `useConfirm`：确认弹层被新请求顶替时会把旧请求 resolve(false)
@@ -48,8 +54,14 @@ export function useUnsavedChangesGuard({
   const whenRef = useRef(when);
   whenRef.current = when;
 
+  // 同上，用 ref 读，保住 shouldBlock 的恒等引用。非 iOS 无 Provider 时恒为 true（守卫行为一字不改）。
+  const layerActiveRef = useRef(true);
+  layerActiveRef.current = useIsLayerActive();
+
   const shouldBlock = useCallback<BlockerFunction>(
-    ({ currentLocation, nextLocation }) => whenRef.current && currentLocation.pathname !== nextLocation.pathname,
+    ({ currentLocation, nextLocation }) =>
+      // 屏幕上看不见的保留层不替当前页做主：它的脏态只在自己重新变成当前层时才有资格拦。
+      layerActiveRef.current && whenRef.current && currentLocation.pathname !== nextLocation.pathname,
     [],
   );
 
@@ -81,6 +93,8 @@ export function useUnsavedChangesGuard({
     // 组件卸载后这个 promise 不会 resolve（dialog 一并卸载、没人点按钮），故无需取消。
   }, [blockerState]);
 
+  // beforeunload 刻意**不**看 layerActive：关标签页 / 刷新会把保留层那份没保存的字一起弄丢，
+  // 该拦就得拦。只有站内换页才需要区分「谁是当前页」。
   useEffect(() => {
     if (!when) return;
     function handleBeforeUnload(event: BeforeUnloadEvent) {

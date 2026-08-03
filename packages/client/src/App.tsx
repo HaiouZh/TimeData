@@ -17,6 +17,7 @@ import { TrackAttentionProvider } from "./contexts/TrackAttentionContext.tsx";
 import { useDocumentTitle } from "./hooks/useDocumentTitle.ts";
 import { useFavicon } from "./hooks/useFavicon.ts";
 import { useHideBottomNavOnScroll } from "./hooks/useHideBottomNavOnScroll.ts";
+import { layoutHidesBottomNav } from "./lib/navigation/navRegistry.ts";
 import { useIsWideScreen } from "./lib/useIsWideScreen.ts";
 
 // Android 壳由 MainActivity 在原生层做唯一安全区让位（systemBars+displayCutout 的 inset padding），
@@ -31,11 +32,8 @@ export function AppShell() {
   const location = useLocation();
   const isWideScreen = useIsWideScreen();
   const onMainScroll = useHideBottomNavOnScroll();
-  const hidesBottomNav =
-    location.pathname.startsWith("/entries/") ||
-    location.pathname.startsWith("/settings/") ||
-    location.pathname.startsWith("/goals/") ||
-    location.pathname.startsWith("/tracks/");
+  // 与 KeptRouteStack 共用同一份判据（导出在 navRegistry.ts）：手抄两份会让 iOS 与非 iOS 静默分叉。
+  const hidesBottomNav = layoutHidesBottomNav(location.pathname);
   // iOS 才用保留上一页的路由栈（边缘返回要露出活的上一页）。其余平台渲染路径一字不改。
   const useKeptStack = Capacitor.getPlatform() === "ios";
 

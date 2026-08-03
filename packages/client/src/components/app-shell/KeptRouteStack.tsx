@@ -1,18 +1,11 @@
 import { Suspense, useState } from "react";
 import { type Location, NavigationType, useLocation, useNavigationType } from "react-router";
+import { layoutHidesBottomNav } from "../../lib/navigation/navRegistry.ts";
 import { AppRoutes } from "./AppRoutes.tsx";
+import { KeptLayerActiveContext } from "./keptLayerActive.ts";
 import { MobileBottomNav } from "./MobileBottomNav.tsx";
 
 const MAX_LAYERS = 2;
-
-function layoutHidesBottomNav(pathname: string): boolean {
-  return (
-    pathname.startsWith("/entries/") ||
-    pathname.startsWith("/settings/") ||
-    pathname.startsWith("/goals/") ||
-    pathname.startsWith("/tracks/")
-  );
-}
 
 /**
  * 栈的一层。**React 身份**与**渲染用的 location** 是两件事，必须分开存：
@@ -56,7 +49,7 @@ function withTailLocation(stack: KeptLayer[], location: Location): KeptLayer[] {
 export function nextStack(prev: KeptLayer[], location: Location, navigationType: NavigationType): KeptLayer[] {
   // REPLACE：历史条目被就地换掉，栈长度不变，只换栈尾的渲染内容。
   // 日记切日期、搜索改筛选、日记回顾切日期都走这条（setSearchParams(..., { replace: true })），是高频日常操作。
-  if (navigationType === NavigationType.Replace && prev.length > 0) return withTailLocation(prev, location);
+  if (navigationType === NavigationType.Replace) return withTailLocation(prev, location);
 
   // 注意查的是 `l.location.key`（历史条目身份）而不是 `l.key`（React 身份）：
   // 被 replace 过的那层两者已经不同，按 React key 查会找不到、把回退当成新页 append——
@@ -127,19 +120,23 @@ export function KeptRouteStack({ isWideScreen, onMainScroll }: KeptRouteStackPro
             aria-hidden={active ? undefined : "true"}
             inert={active ? undefined : true}
           >
-            <main
-              className="min-h-0 flex-1 overflow-y-auto overscroll-y-none"
-              onScroll={active && !isWideScreen ? onMainScroll : undefined}
-            >
-              <Suspense fallback={null}>
-                <AppRoutes location={loc} />
-              </Suspense>
-            </main>
-            {/* 底栏在**层内**：返回手势中上一页的底栏跟着一起滑回来，才像 iOS 原生。
+            {/* visibility:hidden + inert 只挡住「看得见 / 摸得着」，挡不住往**全局**注册的东西：
+                保留层的组件树还活着，它注册的 useBlocker 照样能拦住当前层的导航。故把「本层是否活跃」
+                显式告诉子树，让这类钩子自己闭嘴（见 keptLayerActive.ts 与 useUnsavedChangesGuard）。 */}
+            <KeptLayerActiveContext.Provider value={active}>
+              <main
+                className="min-h-0 flex-1 overflow-y-auto overscroll-y-none"
+                onScroll={active && !isWideScreen ? onMainScroll : undefined}
+              >
+                <Suspense fallback={null}>
+                  <AppRoutes location={loc} />
+                </Suspense>
+              </main>
+              {/* 底栏在**层内**：返回手势中上一页的底栏跟着一起滑回来，才像 iOS 原生。
                 代价是它的 NavLink 高亮读真实当前 location（在 <Routes location> 之外），
                 手势期间保留层的高亮会短暂不准——已知取舍，见 design。 */}
-            {!isWideScreen && !layoutHidesBottomNav(loc.pathname) && <MobileBottomNav />}
-            {/* 暗化遮罩渲染在**保留层内部**，故天然夹在两层之间——iOS 原生只压暗下层。
+              {!isWideScreen && !layoutHidesBottomNav(loc.pathname) && <MobileBottomNav />}
+              {/* 暗化遮罩渲染在**保留层内部**，故天然夹在两层之间——iOS 原生只压暗下层。
                 放在栈容器末尾（曾经的写法）会按 DOM 顺序盖在当前层**之上**：起手瞬间正在跟手滑出的
                 当前页也被一起压暗，观感是整屏闪暗 25% 再变亮。
                 也刻意不用 z-index 修：给当前层加 z-index 会让它成为层叠上下文，把页面内
@@ -147,14 +144,15 @@ export function KeptRouteStack({ isWideScreen, onMainScroll }: KeptRouteStackPro
                 而调 DOM 顺序会让 React 在栈推进时移动已挂载的层，可能清掉滚动容器的 scrollTop。
                 放进保留层子树则一个 z-index 都不用加，且导航后随该层升为当前层自动移除。
                 手势期间由 EdgeSwipeBack 直接改 opacity；静止时完全透明且不吃事件。 */}
-            {!active && (
-              <div
-                data-kept-overlay
-                className="pointer-events-none absolute inset-0 bg-backdrop"
-                style={{ opacity: 0 }}
-                aria-hidden="true"
-              />
-            )}
+              {!active && (
+                <div
+                  data-kept-overlay
+                  className="pointer-events-none absolute inset-0 bg-backdrop"
+                  style={{ opacity: 0 }}
+                  aria-hidden="true"
+                />
+              )}
+            </KeptLayerActiveContext.Provider>
           </div>
         );
       })}

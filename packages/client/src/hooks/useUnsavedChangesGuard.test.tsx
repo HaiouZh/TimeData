@@ -1,9 +1,10 @@
 // @vitest-environment jsdom
 import { createElement, act as reactAct, useState } from "react";
 import { flushSync } from "react-dom";
-import { createMemoryRouter, Link } from "react-router";
+import { createMemoryRouter, Link, Outlet } from "react-router";
 import { RouterProvider } from "react-router/dom";
 import { describe, expect, it } from "vitest";
+import { KeptLayerActiveContext } from "../components/app-shell/keptLayerActive.js";
 import { click, renderDom, unmount } from "../test/domHarness.js";
 import { useConfirm } from "./useConfirm.js";
 import { useUnsavedChangesGuard } from "./useUnsavedChangesGuard.js";
@@ -183,5 +184,87 @@ describe("useUnsavedChangesGuard", () => {
     expect(findButton(host, "继续编辑")).toBeTruthy();
 
     await expect(unmount(root)).resolves.toBeUndefined();
+  });
+});
+
+/**
+ * iOS 的 KeptRouteStack 让上一页**不卸载**，于是「卸载即注销 blocker」这条前提在保留层上失效：
+ * 一个屏幕上完全看不见的页面，仍在全局注册 useBlocker，会用自己的脏态拦住**当前页**的导航。
+ * 下面用「脏编辑页常驻在布局里、路由内容另在 Outlet 里换」来复刻这个形状——
+ * 脏页始终挂着，导航发生在它之外，正是保留层的真实处境。
+ */
+function KeptEditor() {
+  const { confirm, dialog } = useConfirm();
+  useUnsavedChangesGuard({ when: true, confirm });
+  return createElement("div", null, dialog, createElement("span", null, "常驻的脏编辑页"));
+}
+
+/** layerActive 传 undefined = 不套 Provider，复刻非 iOS 渲染路径（子树只能吃 createContext 的缺省值）。 */
+function LayerShell({ layerActive }: { layerActive?: boolean }) {
+  const editor =
+    layerActive === undefined
+      ? createElement(KeptEditor)
+      : createElement(KeptLayerActiveContext.Provider, { value: layerActive }, createElement(KeptEditor));
+  return createElement("div", null, editor, createElement(Link, { to: "/third" }, "去第三处"), createElement(Outlet));
+}
+
+function renderLayerCase(layerActive?: boolean) {
+  const router = createMemoryRouter(
+    [
+      {
+        path: "/",
+        element: createElement(LayerShell, { layerActive }),
+        children: [
+          { path: "other", element: createElement("span", null, "别处") },
+          { path: "third", element: createElement("span", null, "第三处") },
+        ],
+      },
+    ],
+    { initialEntries: ["/other"] },
+  );
+  return { router, node: createElement(RouterProvider, { router }) };
+}
+
+describe("useUnsavedChangesGuard 与 iOS 保留层", () => {
+  it("隐藏的保留层脏着，也不拦当前层的导航（不弹凭空的「放弃未保存的修改？」）", async () => {
+    const { router, node } = renderLayerCase(false);
+    const { host, root } = await renderDom(node);
+    await flush();
+
+    await act(async () => click(findLink(host, "去第三处")));
+    await flush();
+
+    // 修复前：blocker 用隐藏页的脏态拦下，用户在当前页凭空看到确认框，选「继续编辑」还会被钉住。
+    expect(hasButton(host, "继续编辑")).toBe(false);
+    expect(router.state.location.pathname).toBe("/third");
+    await unmount(root);
+  });
+
+  it("当前活跃层脏着，照常拦下并弹确认", async () => {
+    const { router, node } = renderLayerCase(true);
+    const { host, root } = await renderDom(node);
+    await flush();
+
+    await act(async () => click(findLink(host, "去第三处")));
+    await flush();
+
+    expect(findButton(host, "继续编辑")).toBeTruthy();
+    expect(router.state.location.pathname).toBe("/other");
+    await unmount(root);
+  });
+
+  it("非 iOS 渲染路径（压根没有 Provider）缺省视为活跃，守卫行为一字不改", async () => {
+    // 这条钉的是 keptLayerActive.ts 的缺省值：写成 false 就会把桌面 / 安卓 / Web 的守卫一起
+    // 静默关掉——那比原缺陷更严重（真的会丢用户没保存的字）。
+    const { router, node } = renderLayerCase(undefined);
+    const { host, root } = await renderDom(node);
+    await flush();
+
+    await act(async () => click(findLink(host, "去第三处")));
+    await flush();
+
+    expect(findButton(host, "继续编辑")).toBeTruthy();
+    expect(router.state.location.pathname).toBe("/other");
+    await unmount(root);
   });
 });

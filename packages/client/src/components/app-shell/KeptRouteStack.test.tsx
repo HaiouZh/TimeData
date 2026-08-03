@@ -3,15 +3,23 @@ import { createElement, useState } from "react";
 import { type Location, MemoryRouter, NavigationType, useNavigate } from "react-router";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { click, renderDom, unmount } from "../../test/domHarness.js";
+import { useIsLayerActive } from "./keptLayerActive.js";
 
-const getPlatformMock = vi.hoisted(() => vi.fn(() => "ios"));
-vi.mock("@capacitor/core", () => ({ Capacitor: { getPlatform: getPlatformMock, isNativePlatform: () => true } }));
+// 本文件刻意**不** mock @capacitor/core：平台闸的唯一实现点在 App.tsx（`getPlatform() === "ios"`），
+// 组件通篇没有 Capacitor 引用。这里曾有一条「非 iOS 平台不渲染栈」的用例，mock 的 getPlatform
+// 没有被任何代码读过，断言与「初始只有一层」逐字相同——名字骗人的绿用例。已移到 App.keptStack.test.tsx，
+// 在真正做判断的那一层建闸（把 App.tsx 判据写反，那边 4 条全红）。
 
 // 用极简路由表替掉真实 AppRoutes：本用例要验的是栈行为，不是页面内容。
 const mountCounts: Record<string, number> = {};
+// 受控挂起：路径进了这个集合，该层就 throw 一个**永不 resolve** 的 promise——等价于真实 AppRoutes
+// 里 lazy() 的 chunk 还没到。刻意永不 resolve：本仓禁真实定时等待，用例只看「挂起那一刻」的 DOM。
+const suspendPaths = new Set<string>();
+const neverSettles = new Promise<void>(() => {});
 vi.mock("./AppRoutes.tsx", () => ({
   AppRoutes: ({ location }: { location?: { pathname: string } }) => {
     const path = location?.pathname ?? "/";
+    if (suspendPaths.has(path)) throw neverSettles;
     // 计数写在 useState 初始化器里：它只在**挂载**那一次跑。写在函数体里数的是渲染次数——
     // 栈每次推进都会让保留层重渲染一次（元素对象是新的，React 不会 bail out），
     // 那样连正确实现都恒红，闸就成了噪声。
@@ -21,7 +29,13 @@ vi.mock("./AppRoutes.tsx", () => ({
       mountCounts[path] = (mountCounts[path] ?? 0) + 1;
       return path;
     });
-    return createElement("div", { "data-page": path, "data-mounted-path": mountedPath });
+    // data-layer-active：页面子树读到的「本层是否活跃」。保留层必须读到 false——
+    // 它是 useUnsavedChangesGuard 之类「注册到全局」的钩子唯一能知道自己已经不可见的途径。
+    return createElement("div", {
+      "data-page": path,
+      "data-mounted-path": mountedPath,
+      "data-layer-active": String(useIsLayerActive()),
+    });
   },
 }));
 
@@ -100,8 +114,7 @@ function layer(pathname: string, key: string, search = ""): KeptLayer {
 
 beforeEach(() => {
   for (const k of Object.keys(mountCounts)) delete mountCounts[k];
-  getPlatformMock.mockReset();
-  getPlatformMock.mockReturnValue("ios");
+  suspendPaths.clear();
 });
 
 describe("nextStack", () => {
@@ -193,6 +206,21 @@ describe("nextStack REPLACE", () => {
     expect(afterBack).toHaveLength(1);
     expect(afterBack[0].key).toBe("k2");
     expect(afterBack[0].location).toBe(replaced);
+  });
+
+  it("同 key 但 search / hash 不同，仍算换了地址（否则日记切日期会停在旧那天）", () => {
+    // isSameEntry 里比 search 与 hash 的那两个子句正是为这种逃逸场景存在的：只比 key + pathname 的话，
+    // `/diary?date=A` 与 `?date=B` 会被判成同一条而原样返回，栈尾还渲染着旧日期。
+    // 常规 replace 会连带换 key、比 key 就够；这里压的是 key 没换的那一支（history.state 丢 key 时 key 恒为 "default"）。
+    const dateA = layer("/diary", "default", "?date=2026-01-01");
+    const dateB = loc("/diary", "default", "?date=2026-01-02");
+    expect(nextStack([dateA], dateB, NavigationType.Replace)[0].location).toBe(dateB);
+
+    const noHash = { ...loc("/diary", "default"), hash: "" };
+    const withHash = { ...loc("/diary", "default"), hash: "#note-3" };
+    expect(nextStack([{ key: "default", location: noHash }], withHash, NavigationType.Replace)[0].location).toBe(
+      withHash,
+    );
   });
 
   it("同一个 key 撞上不同地址时，栈尾仍是当前 location（不变式 1 兜底）", () => {
@@ -329,6 +357,51 @@ describe("KeptRouteStack", () => {
     await unmount(root);
   });
 
+  it("保留层的子树读到「本层不活跃」，当前层读到活跃", async () => {
+    // 这条钉的是「未保存就别走」那类**全局注册型**钩子的关门开关：visibility:hidden + inert
+    // 只挡看得见摸得着的东西，挡不住已注册的 useBlocker。少了这个 Provider，脏着的日记页切走后
+    // 会在速记页凭空弹「放弃未保存的修改？」，选「继续编辑」还把用户钉在那儿。
+    const { host, root } = await renderDom(
+      createElement(
+        MemoryRouter,
+        { initialEntries: ["/todo"] },
+        createElement(KeptRouteStack, {}),
+        createElement(Nav, null),
+      ),
+    );
+    expect(host.querySelector('[data-page="/todo"]')?.getAttribute("data-layer-active")).toBe("true");
+
+    await click(host.querySelector('[data-testid="to-data"]'));
+
+    expect(host.querySelector('[data-page="/todo"]')?.getAttribute("data-layer-active")).toBe("false");
+    expect(host.querySelector('[data-page="/settings/data"]')?.getAttribute("data-layer-active")).toBe("true");
+    await unmount(root);
+  });
+
+  it("每层各自一个 Suspense：子页懒加载还没到时，保留层仍留在 DOM 里", async () => {
+    // 纪律条 3。共用一个边界的话，子页 lazy chunk 未到就会让**整个栈**一起挂起：
+    // 保留层跟着从 DOM 消失，手势没有活底层可露，还闪一帧白。
+    // useTransitions={false} 让导航走同步 setState：默认的 startTransition 语义下 React 会
+    // 「先按住旧界面不动」，共用边界与分层边界在 DOM 上一时看不出差别，闸就测不出东西了。
+    const { host, root } = await renderDom(
+      createElement(
+        MemoryRouter,
+        { initialEntries: ["/todo"], useTransitions: false },
+        createElement(KeptRouteStack, {}),
+        createElement(Nav, null),
+      ),
+    );
+    suspendPaths.add("/settings/data");
+
+    await click(host.querySelector('[data-testid="to-data"]'));
+
+    expect(host.querySelector('[data-kept-layer="kept"]')).not.toBeNull();
+    expect(host.querySelector('[data-page="/todo"]')).not.toBeNull();
+    // 挂起的是**当前层自己**：它的 fallback 是 null，故这一层没有内容。
+    expect(host.querySelector('[data-page="/settings/data"]')).toBeNull();
+    await unmount(root);
+  });
+
   it("最多留两层，超出从头部丢且剩余层不重新挂载", async () => {
     const { host, root } = await renderDom(
       createElement(
@@ -437,15 +510,6 @@ describe("KeptRouteStack", () => {
     expect(host.querySelector('[data-kept-layer="kept"]')).toBeNull();
     const active = host.querySelector('[data-kept-layer="active"]') as HTMLElement;
     expect(active.querySelector('[data-page="/todo"]')).not.toBeNull();
-    await unmount(root);
-  });
-
-  it("非 iOS 平台不渲染栈，只渲染单层", async () => {
-    getPlatformMock.mockReturnValue("web");
-    const { host, root } = await renderDom(
-      createElement(MemoryRouter, { initialEntries: ["/todo"] }, createElement(KeptRouteStack, {})),
-    );
-    expect(host.querySelectorAll("[data-kept-layer]")).toHaveLength(1);
     await unmount(root);
   });
 });

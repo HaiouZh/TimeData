@@ -1,5 +1,6 @@
 [
   "dirty-in-clean-bucket:App.goalsNav.test.tsx",
+  "dirty-in-clean-bucket:App.keptStack.test.tsx",
   "dirty-in-clean-bucket:App.navHide.test.tsx",
   "dirty-in-clean-bucket:App.router.test.tsx",
   "dirty-in-clean-bucket:App.test.tsx",

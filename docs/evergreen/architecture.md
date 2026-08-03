@@ -11,6 +11,7 @@ covers:
   - packages/client/src/components/app-shell/DesktopSidebar.tsx
   - packages/client/src/components/app-shell/MobileBottomNav.tsx
   - packages/client/src/components/app-shell/KeptRouteStack.tsx
+  - packages/client/src/components/app-shell/keptLayerActive.ts
   - packages/client/src/components/ErrorBoundary.tsx
   - packages/client/src/components/EdgeSwipeBack.tsx
   - packages/client/src/contexts/BottomNavContext.tsx
@@ -134,7 +135,7 @@ iOS 原生工程不入库，构建链路与原生补丁见 [deployment/ios-ipa](
 `KeptRouteStack` 让钻进子页时**上一页不卸载**：栈最多 2 层，每层一份 `<AppRoutes location={...}>`，非栈尾那层留在 DOM 里供边缘返回手势露出，返回后滚动位置与组件 state 因此原样还在。五条不变式违反后都不报错、不红测，只在真机上表现为「返回后位置偶尔丢」或「起手瞬间整屏闪暗」：
 
 1. **隐藏只用 `visibility: hidden`**，不用 `display:none` / `hidden` 属性 / 摘除节点——无 layout box 会让滚动容器 `scrollTop` 清零。
-2. **栈只 append、只从头部移除，永不 reorder**——让 React 移动已挂载层会搬 DOM 节点，同样清 `scrollTop`。
+2. **幸存层永不被 React 移动**——只从头部丢（超限）或从尾部截断（回退命中栈内条目），剩下的层相对顺序不变，React 只做 removeChild。让它移动已挂载层会搬 DOM 节点，同样清 `scrollTop`。
 3. **两层恒 `absolute inset-0`**，含栈尾那层；布局方式不对保留层单独特殊化。
 4. **每层各自一个 `<Suspense fallback={null}>`**——共用边界会让子页懒加载时整个栈一起挂起，保留层跟着消失。
 5. **暗化遮罩 `[data-kept-overlay]` 渲染在保留层子树内**，不提到栈容器下：提出去就按 DOM 顺序盖在栈尾那层之上，把正在跟手滑出的当前页也一起压暗。刻意不用 z-index 修——给栈尾层加 z-index 会让它成为层叠上下文，把页面内 `position: fixed` 的整屏浮层封在里面；调 DOM 顺序则会触发不变式 2。
@@ -146,7 +147,9 @@ iOS 原生工程不入库，构建链路与原生补丁见 [deployment/ios-ipa](
 - **POP 到栈外**（回退超出 2 层窗口，或前进）栈重置为只剩当前一层：来处未知时唯一诚实的状态是没有保留层，手势随之不启动，宁可少一次可用也不露出方向相反的页。
 - 兜底不变式：**当前 location 恒为栈尾**。
 
-底栏渲染在层内而非栈外，返回手势中上一页的底栏跟着一起滑回来；代价是保留层的 `NavLink` 高亮读真实当前 location，手势期间短暂不准。
+底栏渲染在层内而非栈外，返回手势中上一页的底栏跟着一起滑回来；代价是保留层的 `NavLink` 高亮读真实当前 location，手势期间短暂不准。两条渲染路径共用 `lib/navigation/navRegistry.ts` 的 `layoutHidesBottomNav` 判据，不各抄一份——分头演化会让 iOS 与非 iOS 静默分叉。
+
+**保留层要主动闭嘴**：`visibility: hidden` + `inert` 只挡得住「看得见 / 摸得着」，挡不住已经注册到全局的东西。每层通过 `app-shell/keptLayerActive.ts` 的 `KeptLayerActiveContext` 向子树声明自己是否活跃，**缺省 `true`**（非 iOS 不渲染本组件，子树只能吃缺省值；写成 `false` 会把桌面/安卓的守卫一起关掉）。首个消费方是 `hooks/useUnsavedChangesGuard.ts`：它的 `useBlocker` 原本靠「卸载即注销」保证只管自己那一页，而保留层不卸载——不读这面旗子的话，脏着的日记页切走后会在别的页凭空弹出「放弃未保存的修改？」，选「继续编辑」还把用户钉在那儿。凡是「注册到全局、注册后不再自查可见性」的钩子都应照办。`beforeunload` 那条腿不看这面旗子：关标签页确实会把保留层没保存的字一起弄丢。
 
 边缘返回由 `components/EdgeSwipeBack.tsx` 承担，只在 iOS 挂 touch 监听，按 `data-kept-layer="active"` / `"kept"` 与 `data-kept-overlay` 三个选择器取层。跟手位移**直接写 DOM `style.transform`**，不走 React state——每帧 setState 会重渲染整棵页面树。
 
