@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { db, resetDb } from "../test/dbReset.js";
-import { addTask } from "./tasks.js";
+import { addTask, updateTask } from "./tasks.js";
 import { addTrack, listTrackSteps, setTrackStatus } from "./tracks.js";
 import { promoteTaskToTrack, toggleTaskDoneWithTrackConclude } from "./taskTrackPromote.js";
 
@@ -83,11 +83,23 @@ describe("toggleTaskDoneWithTrackConclude", () => {
   it("轨道非 active（手动已归档）不再联动", async () => {
     const task = await addTask({ title: "活" });
     const track = await promoteTaskToTrack(task);
-    await setTrackStatus(track.id, "concluded");
+    const { track: concluded } = await setTrackStatus(track.id, "concluded");
     await toggleTaskDoneWithTrackConclude(task.id);
-    // 若误联动会再写一条「归档」步；确认只有首次归档那一条
-    const steps = await listTrackSteps(track.id);
-    expect(steps.filter((s) => s.content === "归档")).toHaveLength(1);
+    // 原探针（数「归档」步条数）是假闸：setTrackStatus 对状态未变的轨道不写系统步，误联动
+    // 也不会产生第二条步。改 pin updatedAt：误联动会再走一次 setTrackStatus 写库 bump 它。
+    expect((await db.tracks.get(track.id))?.updatedAt).toBe(concluded.updatedAt);
+  });
+
+  it("任务升格后补加重复规则：勾规则根代理完成一发，不归档轨道（next.id 承重钉，回归成入参 id 会在此红）", async () => {
+    const task = await addTask({ title: "养成活" });
+    const track = await promoteTaskToTrack(task);
+    await updateTask(task.id, { recurrence: { freq: "daily", interval: 1, basis: "due" } });
+    const next = await toggleTaskDoneWithTrackConclude(task.id);
+    // 完成被代理到 occurrence（next.id ≠ 入参 id），轨道 refs 指的是规则本体——查不到即不归档。
+    // design §四明文：勾一发就归档轨道、下一发又光板，是坑。
+    expect(next.id).not.toBe(task.id);
+    expect(next.done).toBe(true);
+    expect((await db.tracks.get(track.id))?.status).toBe("active");
   });
 
   it("别的轨道（refs 不指向本任务）不受影响", async () => {
