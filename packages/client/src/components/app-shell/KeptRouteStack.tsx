@@ -98,6 +98,8 @@ interface KeptRouteStackProps {
  *    保留层跟着消失、手势没有底层可露，还闪一帧白。
  * 4. React key 用层的身份（KeptLayer.key），不是 index、不是 pathname、也不是 location.key——
  *    replace 时 location.key 会变而身份不变，跟着变就等于每次切日期都重挂整页。
+ * 5. 暗化遮罩渲染在**保留层内部**，别提到栈容器下（详见渲染处注释）：提出去就会盖在当前层之上，
+ *    起手瞬间整屏一起变暗。
  */
 export function KeptRouteStack({ isWideScreen, onMainScroll }: KeptRouteStackProps) {
   const location = useLocation();
@@ -137,16 +139,25 @@ export function KeptRouteStack({ isWideScreen, onMainScroll }: KeptRouteStackPro
                 代价是它的 NavLink 高亮读真实当前 location（在 <Routes location> 之外），
                 手势期间保留层的高亮会短暂不准——已知取舍，见 design。 */}
             {!isWideScreen && !layoutHidesBottomNav(loc.pathname) && <MobileBottomNav />}
+            {/* 暗化遮罩渲染在**保留层内部**，故天然夹在两层之间——iOS 原生只压暗下层。
+                放在栈容器末尾（曾经的写法）会按 DOM 顺序盖在当前层**之上**：起手瞬间正在跟手滑出的
+                当前页也被一起压暗，观感是整屏闪暗 25% 再变亮。
+                也刻意不用 z-index 修：给当前层加 z-index 会让它成为层叠上下文，把页面内
+                position:fixed 的整屏浮层封在里面（本仓大量浮层没走 portal），代价比问题本身大；
+                而调 DOM 顺序会让 React 在栈推进时移动已挂载的层，可能清掉滚动容器的 scrollTop。
+                放进保留层子树则一个 z-index 都不用加，且导航后随该层升为当前层自动移除。
+                手势期间由 EdgeSwipeBack 直接改 opacity；静止时完全透明且不吃事件。 */}
+            {!active && (
+              <div
+                data-kept-overlay
+                className="pointer-events-none absolute inset-0 bg-backdrop"
+                style={{ opacity: 0 }}
+                aria-hidden="true"
+              />
+            )}
           </div>
         );
       })}
-      {/* 手势期间由 EdgeSwipeBack 直接改 opacity；静止时完全透明且不吃事件。 */}
-      <div
-        data-kept-overlay
-        className="pointer-events-none absolute inset-0 bg-backdrop"
-        style={{ opacity: 0 }}
-        aria-hidden="true"
-      />
     </div>
   );
 }
