@@ -130,7 +130,9 @@ CLI 不直接读写 SQLite。命令面见 [cli](cli.md)。
 
 ### 4.5 iOS 壳：页面栈与边缘返回
 
-iOS 原生工程不入库，构建链路与原生补丁见 [deployment/ios-ipa](deployment/ios-ipa.md)。渲染路径上 iOS 与其余平台只有一处分叉：`AppShell` 按 `Capacitor.getPlatform() === "ios"` 二选一，iOS 渲染 `components/app-shell/KeptRouteStack.tsx`，其余平台仍是单份 `<main>` + `<Routes>`，分叉之外零差异。
+iOS 原生工程不入库，构建链路与原生补丁见 [deployment/ios-ipa](deployment/ios-ipa.md)。**主内容区**的渲染路径上 iOS 与其余平台只有一处分叉：`AppShell` 按 `Capacitor.getPlatform() === "ios"` 二选一，iOS 渲染 `components/app-shell/KeptRouteStack.tsx`，其余平台仍是单份 `<main>` + `<Routes>`，分叉之外零差异。
+
+`AppShell` 里另有一处与主内容区无关的平台条件：`lib/desktop/shell.ts` 的 `isDesktopShell()` 决定挂不挂 `components/desktop/DesktopBridge.tsx`（桌面壳的全局热键桥与打点反馈层，Tauri API 只在其内部动态 import，三端 bundle 不加载）。该 gate 与设置页「桌面设置」入口是桌面专属代码在 client 里的全部落点，见 [deployment/windows-desktop](deployment/windows-desktop.md)。
 
 `KeptRouteStack` 让钻进子页时**上一页不卸载**：栈最多 2 层，每层一份 `<AppRoutes location={...}>`，非栈尾那层留在 DOM 里供边缘返回手势露出，返回后滚动位置与组件 state 因此原样还在。五条不变式违反后都不报错、不红测，只在真机上表现为「返回后位置偶尔丢」或「起手瞬间整屏闪暗」：
 
