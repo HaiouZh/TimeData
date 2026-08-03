@@ -177,3 +177,31 @@ describe("hasParentRoute", () => {
     }
   });
 });
+
+// react-router 的路由匹配大小写不敏感、且容忍尾斜杠：`/settings/data/` 与 `/Settings/Data` 都能
+// 正常渲染出设置数据页。这张表若不跟着容忍，就会出现「页面在，返回却认不出它是子页」——
+// iOS 手势整页失效，安卓返回键从设置二级页直接跳回时间轴。
+describe("地址归一化（与 react-router 的匹配口径对齐）", () => {
+  it("尾斜杠不影响落点", () => {
+    expect(resolveAndroidBackAction("/settings/data/")).toEqual({ type: "navigate", to: "/settings", replace: true });
+    expect(resolveAndroidBackAction("/stats/time/")).toEqual({ type: "navigate", to: "/stats", replace: true });
+    expect(resolveAndroidBackAction("/diary/")).toEqual({ type: "back", fallbackTo: "/quick-notes" });
+    expect(hasParentRoute("/settings/categories/c1/")).toBe(true);
+    expect(hasParentRoute("/tracks/t1/")).toBe(true);
+  });
+
+  it("大小写不影响落点", () => {
+    expect(resolveAndroidBackAction("/Settings/Data")).toEqual({ type: "navigate", to: "/settings", replace: true });
+    expect(resolveAndroidBackAction("/DIARY/REVIEW")).toEqual({ type: "navigate", to: "/diary", replace: true });
+    expect(hasParentRoute("/Entries/New")).toBe(true);
+    expect(hasParentRoute("/Goals/g1")).toBe(true);
+  });
+
+  it("归一化只用于匹配：tab 主页与首页照旧不是子页", () => {
+    // 归一化写过头（例如把 /settings/ 也削成 /settings 后仍当子页）就会让设置主页被手势带走。
+    expect(hasParentRoute("/settings/")).toBe(false);
+    expect(hasParentRoute("/Stats/")).toBe(false);
+    expect(resolveAndroidBackAction("/")).toEqual({ type: "exit" });
+    expect(resolveAndroidBackAction("/", "?date=2026-01-01")).toEqual({ type: "back", fallbackTo: "/" });
+  });
+});
