@@ -89,6 +89,12 @@
   "docs/evergreen/todo/gravity.md": {
     "covers": 5
   },
+  "docs/evergreen/todo/invariants.md": {
+    "covers": 0
+  },
+  "docs/evergreen/todo/modules.md": {
+    "covers": 0
+  },
   "docs/evergreen/todo/project-zone.md": {
     "covers": 3
   },
