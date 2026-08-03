@@ -357,6 +357,34 @@ describe("KeptRouteStack", () => {
     await unmount(root);
   });
 
+  it("暗化层在保留层子树内，不压暗正在跟手的当前页", async () => {
+    // 遮罩必须夹在两层之间（iOS 原生只压暗下层）。它一旦落在当前层之上——无论是提到栈容器末尾
+    // （两层同为 absolute inset-0 且 z-index 均为 auto，按 DOM 顺序就盖在当前层上），还是写成
+    // 跟着 active 层渲染——起手瞬间正在跟手滑出的当前页会被一起压暗，观感是整屏闪暗 25% 再变亮。
+    // 且当初刻意**没有**用 z-index 修：给当前层加 z-index 会让它成为层叠上下文，把页面内
+    // 未走 portal 的 position:fixed 整屏浮层封死在这一层里，代价比问题本身大。
+    // 故唯一的正确形态就是「在保留层子树内、不在当前层子树内」，由本条钉死。
+    const { host, root } = await renderDom(
+      createElement(
+        MemoryRouter,
+        { initialEntries: ["/todo"] },
+        createElement(KeptRouteStack, {}),
+        createElement(Nav, null),
+      ),
+    );
+    await click(host.querySelector('[data-testid="to-data"]'));
+
+    const kept = host.querySelector('[data-kept-layer="kept"]') as HTMLElement;
+    const active = host.querySelector('[data-kept-layer="active"]') as HTMLElement;
+    expect(kept).not.toBeNull();
+    expect(active).not.toBeNull();
+    expect(kept.querySelector("[data-kept-overlay]")).not.toBeNull();
+    expect(active.querySelector("[data-kept-overlay]")).toBeNull();
+    // 全树只此一份：多出来的那份必然落在两层之外（栈容器层级），照样会盖住当前页。
+    expect(host.querySelectorAll("[data-kept-overlay]")).toHaveLength(1);
+    await unmount(root);
+  });
+
   it("保留层的子树读到「本层不活跃」，当前层读到活跃", async () => {
     // 这条钉的是「未保存就别走」那类**全局注册型**钩子的关门开关：visibility:hidden + inert
     // 只挡看得见摸得着的东西，挡不住已注册的 useBlocker。少了这个 Provider，脏着的日记页切走后
