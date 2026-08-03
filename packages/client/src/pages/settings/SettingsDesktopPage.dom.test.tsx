@@ -42,6 +42,14 @@ async function waitFor(check: () => boolean, label: string): Promise<void> {
   throw new Error(`等不到：${label}`);
 }
 
+function deferred<T = void>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((r) => {
+    resolve = r;
+  });
+  return { promise, resolve: () => resolve(undefined as T) };
+}
+
 async function mount() {
   const rendered = await renderDom(createElement(MemoryRouter, null, createElement(SettingsDesktopPage)));
   mountedRoot = rendered.root;
@@ -173,10 +181,13 @@ describe("SettingsDesktopPage 接线", () => {
     const after = calls.length;
     const button = shortcutButton(host);
 
-    // 让 resume 比 suspend 慢得多：不串行化的话完成顺序会翻过来。
+    // 把 resume 卡在一道闸后面（不用真实定时器）：resume 要读文件 + 逐条注册，
+    // suspend 只 unregister_all，真机上后者必然先完成。不串行化的话第二个 suspend
+    // 会抢在 resume 之前落地，得到 [suspend, suspend, resume]——那正是要防的那个中间态。
+    const resumeGate = deferred<void>();
     ipc.invoke.mockImplementation(async (cmd: string) => {
       if (cmd === "resume_hotkeys") {
-        await new Promise((resolve) => setTimeout(resolve, 5));
+        await resumeGate.promise;
         calls.push(cmd);
         return RESUMED;
       }
@@ -186,11 +197,12 @@ describe("SettingsDesktopPage 接线", () => {
       return undefined;
     });
 
-    await focusInput(button);
+    await focusInput(button); // suspend
     await act(async () => {
-      button.blur();
-      button.focus();
+      button.blur(); // resume——被闸卡住
+      button.focus(); // suspend——串行化时必须排在 resume 后面
     });
+    resumeGate.resolve();
     await waitFor(() => calls.slice(after).length >= 3, "三条命令都跑完");
 
     expect(calls.slice(after)).toEqual(["suspend_hotkeys", "resume_hotkeys", "suspend_hotkeys"]);
