@@ -65,14 +65,20 @@ fn main() {
 
             // 开机自启：标记文件里记的是「上次注册时的 exe 路径」，不是一个布尔。
             // 判定见 shell::resolve_autostart_action——它同时保证「默认开」「换路径能自愈」
-            // 和「用户关掉后不回弹」三条。
+            // 和「用户关掉后不回弹」三条。关闭意图来自 desktop-config.json（设置页写入）。
+            let desktop_config = config::load_config(app.handle());
             let marker = app.path().app_config_dir()?.join("autostart-initialized");
             let recorded = std::fs::read_to_string(&marker).ok().map(|s| s.trim().to_owned());
             let current_exe = std::env::current_exe()
                 .map(|p| p.to_string_lossy().into_owned())
                 .unwrap_or_default();
             let enabled = app.autolaunch().is_enabled().unwrap_or(false);
-            match resolve_autostart_action(recorded.as_deref(), &current_exe, enabled) {
+            match resolve_autostart_action(
+                recorded.as_deref(),
+                &current_exe,
+                enabled,
+                desktop_config.autostart_disabled,
+            ) {
                 AutostartAction::Enable => {
                     let _ = app.autolaunch().enable();
                     if let Some(dir) = marker.parent() {
