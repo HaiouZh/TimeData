@@ -131,7 +131,7 @@ SettingsDiaryPage 保存模板
 
 ### 3.6 不用改的东西
 
-- `lib/androidBackNavigation.ts` 的 `/diary` 分支恒返回 `{type:"back", fallbackTo:"/quick-notes"}`，不用改。它不需要像 `/` 分支那样显式判 `has("date")`——`/` 无 date 时的动作是 `exit`（退出 app），必须先把日期历史退完；而 `/diary` 的动作恒为 `back`，且切日期一律走 `replace`（§2.13），压根不产生日期历史。
+- `lib/backNavigation.ts` 的 `/diary` 分支恒返回 `{type:"back", fallbackTo:"/quick-notes"}`，不用改。它不需要像 `/` 分支那样显式判 `has("date")`——`/` 无 date 时的动作是 `exit`（退出 app），必须先把日期历史退完；而 `/diary` 的动作恒为 `back`，且切日期一律走 `replace`（§2.13），压根不产生日期历史。
 
 **但 `location.key === "default"` 这个哨兵会被 `replace` 打破**：`handleBack` 拿它判断「书签 / PWA 快捷方式 / 硬刷新直接落地，没有 app 内历史」，而本页的 `setSearchParams(..., { replace: true })`（切日期两处 + `?date=` 归一一处）会把 `location.key` 从 `"default"` 换成随机 key。所以必须在**挂载那一刻**把这个判断定下来存进 ref，不能每次渲染现读——否则直接落地后切一次日期，返回按钮就从「兜底回速记页」退化成 `navigate(-1)` 空转。
 

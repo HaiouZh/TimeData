@@ -3,7 +3,7 @@
     "covers": 2
   },
   "docs/evergreen/architecture.md": {
-    "covers": 17
+    "covers": 20
   },
   "docs/evergreen/backup.md": {
     "covers": 15
@@ -33,7 +33,7 @@
     "covers": 2
   },
   "docs/evergreen/design-language.md": {
-    "covers": 14
+    "covers": 15
   },
   "docs/evergreen/design-language/controls.md": {
     "covers": 5

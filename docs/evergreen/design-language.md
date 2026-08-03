@@ -14,6 +14,7 @@ covers:
   - packages/client/src/lib/contentTint.ts
   - packages/client/src/hooks/useKeyboardHeight.ts
   - packages/client/src/lib/bottomInset.ts
+  - packages/client/src/lib/haptics.ts
   - scripts/check-design-language.mjs
   - scripts/design-language-allowlist.json
 contracts:
@@ -123,6 +124,8 @@ last-reviewed: 2026-08-02
 
     两页的 `navOffsetPx` 归零时机不同，如实记差异，不假装一致：Todo 页的 `navOffsetPx` 在计算式里带 `keyboardHeightPx === 0` 同步守卫（`!wide && !navHidden && keyboardHeightPx === 0 ? BOTTOM_NAV_HEIGHT_PX : 0`），键盘一弹起就在同一次渲染里归零，不依赖任何 effect。QuickNotes 页的 `navOffsetPx` 只看 `navHidden`（`!isWideScreen && !navHidden ? BOTTOM_NAV_HEIGHT_PX : 0`），而 `navHidden` 由 `inputInteractionActive`（`composerFocused || searchOpen || keyboardHeight > 0`）驱动的 `useEffect` 异步 `setNavHidden` 得来——键盘收起（`keyboardHeight` 归 0）与 `navHidden` 变回 `false` 隔了一次 effect，即隔一帧。这意味着键盘收起的瞬间可能有一帧 `keyboardHeightPx=0` 且 `navOffsetPx` 还未回填（nav 让位比键盘高晚一帧），composer 输入条会先冲到更低位置再弹回原位（"收起抖"/下冲）。这一帧级别的抖动 jsdom 测不出，是**真机验收项**（见 Task5）。
 
+13. **触感只经语义层**：页面调的是 `lib/haptics.ts` 的四个语义函数——`hapticToggle`（勾选 / 取消勾选）、`hapticDestructive`（删除 / 清空）、`hapticGrab`（拖拽拿起）、`hapticDrop`（拖拽吸附落位，取消或原地放下不调）。**「什么动作配什么强度」的映射只写在这一个文件**（`@capacitor/haptics` 的 `ImpactStyle`：destructive 一档重，其余三个最轻档），调用点不出现强度常量，整体调轻重或加全局开关只改这一处。调用接在页面的事件处理处，不下沉进 `lib/` 数据函数——否则跑数据层单测也会震。批量动作**整批只震一次**，不逐条震。iOS 与 Android 原生壳都接；Web / PWA / 桌面经 `Capacitor.isNativePlatform()` 判否后**整层空转**，且不回退 `navigator.vibrate`（浏览器那种整机震与原生轻触感不是同一种反馈）。插件缺失 / 系统关闭 / 硬件不支持只吞掉 promise 的 reject，业务动作照常完成。
+
 ## 5. 模块速查
 
 | 关注点 | 入口 |
@@ -136,6 +139,7 @@ last-reviewed: 2026-08-02
 | 图表 chrome 取色（token→JS 常量镜像） | `packages/client/src/pages/stats/chartColors.ts`（只有 `CHART_CHROME`；数据序列走用户分类色，见 §4 第 5 条；守序测试 `chartColors.test.ts`） |
 | z-index 层级 JS 镜像 | `packages/client/src/lib/zLayers.ts`（`Z`，与 `--z-*` 同步，`zLayers.test.ts` 守一致） |
 | 键盘高度单一来源 / 底部避让量单一合成 | `packages/client/src/hooks/useKeyboardHeight.ts`、`packages/client/src/lib/bottomInset.ts`（见 §4 第 12 条；守序测试 `useKeyboardHeight.test.tsx`、`bottomInset.test.ts`） |
+| 触感语义函数 + 强度映射 | `packages/client/src/lib/haptics.ts`（见 §4 第 13 条；守序测试 `haptics.test.ts`） |
 | 设计语言预览 / 验收台 | `packages/client/src/pages/dev/StyleguidePage.tsx`（路由 `/dev/styleguide`，渲染全部 token + `.td-*` + 自绘控件） |
 
 ## 子文档索引

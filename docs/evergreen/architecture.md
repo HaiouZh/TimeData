@@ -10,10 +10,13 @@ covers:
   - packages/client/src/components/app-shell/AppRoutes.tsx
   - packages/client/src/components/app-shell/DesktopSidebar.tsx
   - packages/client/src/components/app-shell/MobileBottomNav.tsx
+  - packages/client/src/components/app-shell/KeptRouteStack.tsx
   - packages/client/src/components/ErrorBoundary.tsx
+  - packages/client/src/components/EdgeSwipeBack.tsx
   - packages/client/src/contexts/BottomNavContext.tsx
   - packages/client/src/contexts/SyncContext.tsx
-  - packages/client/src/lib/androidBackNavigation.ts
+  - packages/client/src/lib/backNavigation.ts
+  - packages/client/src/lib/edgeSwipe.ts
   - packages/client/src/hooks/useUnsavedChangesGuard.ts
   - packages/server/src/index.ts
   - packages/cli/src/index.ts
@@ -123,6 +126,28 @@ CLI 不直接读写 SQLite。命令面见 [cli](cli.md)。
 ### 4.4 Android 壳
 
 `packages/mobile/capacitor.config.ts` 指向 `../client/dist`。Android 原生工程只承载壳、权限、图标和 Capacitor 插件配置；业务逻辑仍在 client。
+
+### 4.5 iOS 壳：页面栈与边缘返回
+
+iOS 原生工程不入库，构建链路与原生补丁见 [deployment/ios-ipa](deployment/ios-ipa.md)。渲染路径上 iOS 与其余平台只有一处分叉：`AppShell` 按 `Capacitor.getPlatform() === "ios"` 二选一，iOS 渲染 `components/app-shell/KeptRouteStack.tsx`，其余平台仍是单份 `<main>` + `<Routes>`，分叉之外零差异。
+
+`KeptRouteStack` 让钻进子页时**上一页不卸载**：栈最多 2 层，每层一份 `<AppRoutes location={...}>`，非栈尾那层留在 DOM 里供边缘返回手势露出，返回后滚动位置与组件 state 因此原样还在。四条不变式违反后都不报错、不红测，只在真机上表现为「返回后位置偶尔丢」：
+
+1. **隐藏只用 `visibility: hidden`**，不用 `display:none` / `hidden` 属性 / 摘除节点——无 layout box 会让滚动容器 `scrollTop` 清零。
+2. **栈只 append、只从头部移除，永不 reorder**——让 React 移动已挂载层会搬 DOM 节点，同样清 `scrollTop`。
+3. **两层恒 `absolute inset-0`**，含栈尾那层；布局方式不对保留层单独特殊化。
+4. **每层各自一个 `<Suspense fallback={null}>`**——共用边界会让子页懒加载时整个栈一起挂起，保留层跟着消失。
+
+栈的推进是纯函数 `nextStack(prev, location, navigationType)`。导航类型必须与 location 一起读（`useNavigationType()` 与 `useLocation()` 同出一个 context，同帧一致），三种导航对栈的影响完全不同：
+
+- **REPLACE** 只换栈尾渲染用的 location，**沿用该层原有的 React key**。replace 换 `location.key` 却不新增历史条目，跟着换 key 等于告诉 React「这是新页面」而整页重挂；切日期、改筛选这类 `setSearchParams(..., { replace: true })` 是高频路径。
+- **查栈按 `location.key`（历史条目身份），不按 React key**。被 replace 过的那层两者已不同，按 React key 查会找不到、把回退当新页 append。
+- **POP 到栈外**（回退超出 2 层窗口，或前进）栈重置为只剩当前一层：来处未知时唯一诚实的状态是没有保留层，手势随之不启动，宁可少一次可用也不露出方向相反的页。
+- 兜底不变式：**当前 location 恒为栈尾**。
+
+底栏渲染在层内而非栈外，返回手势中上一页的底栏跟着一起滑回来；代价是保留层的 `NavLink` 高亮读真实当前 location，手势期间短暂不准。
+
+边缘返回由 `components/EdgeSwipeBack.tsx` 承担，只在 iOS 挂 touch 监听，按 `data-kept-layer="active"` / `"kept"` 与 `data-kept-overlay` 三个选择器取层。跟手位移**直接写 DOM `style.transform`**，不走 React state——每帧 setState 会重渲染整棵页面树。起手判据：触点起点在左边缘 `EDGE_WIDTH_PX` 内、`lib/backNavigation.ts` 的 `hasParentRoute` 为真（tab 主页与首页之间从不用手势切）、栈里有保留层、当前不是目标详情（整页是可自由拖动的关系图，与右滑同向）、没有模态对话框、触点链路上没有横向可滚容器也没有带 `data-edge-swipe-block` 的元素。该标记加在与起手区重叠的拖柄之类的元素**本身**，不加到整行——加宽一层就是整行都吃不到手势。起手与松手的算术在 `lib/edgeSwipe.ts`。**返回一律 `navigate(-1)`**——换成 `navigate(父页, { replace: true })` 会生成新 `location.key`，保留层被当新页重挂，整套机制静默失效。
 
 ## 5. 关键约定
 
