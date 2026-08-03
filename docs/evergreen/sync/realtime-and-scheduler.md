@@ -3,11 +3,15 @@ type: evergreen
 title: 同步 · 实时通道与调度器
 covers:
   - packages/server/src/sync/notifier.ts
+  - packages/server/src/routes/sync.ts
   - packages/client/src/lib/syncStream.ts
   - packages/client/src/sync/scheduler.ts
   - packages/client/src/hooks/useSync.ts
   - packages/client/src/hooks/useAppHideFlush.ts
   - packages/client/src/contexts/SyncContext.tsx
+contracts:
+  - packages/server/src/routes/sync.ts
+  - packages/shared/src/schemas.ts
 last-reviewed: 2026-08-03
 ---
 

@@ -2,7 +2,7 @@
 type: evergreen
 title: 日记 · 参考栏（只读）
 covers:
-  - packages/client/src/pages/diary/**
+  - packages/client/src/pages/diary/DiaryRef*.tsx
   - packages/client/src/lib/diary/diaryRefEntries.ts
   - packages/client/src/lib/diary/diaryRefEntriesQuery.ts
   - packages/client/src/lib/diary/diaryRefTasks.ts

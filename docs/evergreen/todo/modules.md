@@ -2,6 +2,13 @@
 type: evergreen
 title: 待办任务 · 模块速查
 covers:
+  - packages/client/src/pages/todo/**
+  - packages/client/src/lib/tasks.ts
+  - packages/client/src/lib/taskNesting.ts
+  - packages/client/src/lib/tasks/**
+  - packages/server/src/routes/tasks.ts
+  - packages/server/src/routes/agent.ts
+  - packages/cli/src/commands/tasks.ts
 last-reviewed: 2026-08-03
 ---
 

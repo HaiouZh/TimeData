@@ -4,10 +4,13 @@ title: 统计与洞察
 covers:
   - packages/client/src/pages/StatsPage.tsx
   - packages/client/src/pages/TimeStatsPage.tsx
+  - packages/client/src/pages/TodoStatsPage.tsx
   - packages/client/src/pages/stats/InsightCharts.tsx
   - packages/client/src/pages/stats/modules/**
+  - packages/client/src/pages/stats/todo/**
   - packages/client/src/lib/stats.ts
   - packages/client/src/lib/insights/**
+  - packages/client/src/lib/todoStats/**
   - packages/client/src/lib/statsLayoutSetting.ts
   - packages/client/src/lib/statsModuleTrendSetting.ts
   - packages/client/src/pages/settings/SettingsInsightsPage.tsx

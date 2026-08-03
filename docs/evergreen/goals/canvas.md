@@ -7,6 +7,8 @@ covers:
   - packages/client/src/lib/goalGraphLayout.ts
   - packages/client/src/lib/goalGraphViewport.ts
   - packages/client/src/lib/goalGraphLod.ts
+  - packages/client/src/lib/goalEdgeRouting.ts
+  - packages/client/src/lib/goalLayoutCoords.ts
   - packages/client/src/lib/goalGalaxyRollup.ts
   - packages/client/src/lib/goalGalaxyLod.ts
   - packages/client/src/lib/goalGalaxyModel.ts

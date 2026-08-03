@@ -5,12 +5,15 @@ covers:
   - packages/server/src/lib/track-rows.ts
   - packages/server/src/routes/agent-tracks.ts
   - packages/shared/src/trackBoardSignals.ts
+  - packages/shared/src/trackStepOrder.ts
   - packages/client/src/lib/tracks.ts
+  - packages/client/src/lib/tracksDispatch.ts
   - packages/client/src/lib/tracksView.ts
   - packages/client/src/lib/trackBadgeTone.ts
   - packages/client/src/lib/taskTrackIndex.ts
   - packages/client/src/lib/taskTrackPromote.ts
   - packages/client/src/lib/settings/trackActionTagsSetting.ts
+  - packages/client/src/lib/settings/trackAgentExecTagsSetting.ts
   - packages/client/src/pages/settings/SettingsTracksPage.tsx
   - packages/client/src/pages/tracks/**
   - packages/client/src/hooks/useTrackAttentionCount.ts

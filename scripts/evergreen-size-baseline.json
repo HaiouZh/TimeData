@@ -6,7 +6,7 @@
     "covers": 21
   },
   "docs/evergreen/backup.md": {
-    "covers": 15
+    "covers": 16
   },
   "docs/evergreen/categories-settings.md": {
     "covers": 12
@@ -54,7 +54,7 @@
     "covers": 9
   },
   "docs/evergreen/goals/canvas.md": {
-    "covers": 13
+    "covers": 15
   },
   "docs/evergreen/quick-notes.md": {
     "covers": 16
@@ -63,7 +63,7 @@
     "covers": 27
   },
   "docs/evergreen/stats-insights.md": {
-    "covers": 11
+    "covers": 14
   },
   "docs/evergreen/sync.md": {
     "covers": 32
@@ -72,7 +72,7 @@
     "covers": 14
   },
   "docs/evergreen/sync/realtime-and-scheduler.md": {
-    "covers": 6
+    "covers": 7
   },
   "docs/evergreen/timeline.md": {
     "covers": 19
@@ -84,7 +84,7 @@
     "covers": 3
   },
   "docs/evergreen/todo/drag-dock.md": {
-    "covers": 1
+    "covers": 3
   },
   "docs/evergreen/todo/gravity.md": {
     "covers": 5
@@ -93,15 +93,15 @@
     "covers": 0
   },
   "docs/evergreen/todo/modules.md": {
-    "covers": 0
+    "covers": 7
   },
   "docs/evergreen/todo/project-zone.md": {
     "covers": 3
   },
   "docs/evergreen/todo/recurrence.md": {
-    "covers": 6
+    "covers": 7
   },
   "docs/evergreen/tracks.md": {
-    "covers": 14
+    "covers": 17
   }
 }

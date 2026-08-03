@@ -2,6 +2,7 @@
 type: evergreen
 title: 待办 · 重复规则引擎
 covers:
+  - packages/shared/src/entitySchemas.ts
   - packages/shared/src/recurrence.ts
   - packages/shared/src/occurrence.ts
   - packages/client/src/lib/tasks/recurrence.ts

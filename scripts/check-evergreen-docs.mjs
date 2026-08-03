@@ -36,6 +36,13 @@ const COVERAGE_EXEMPTS = [
   /\.stories\.[jt]sx?$/,
 ];
 const REGEXP_SPECIAL_CHARS = new Set([".", "+", "^", "$", "{", "}", "(", ")", "|", "[", "]", "\\"]);
+export const FRONTMATTER_KEYS = {
+  type: { required: true, valueType: "scalar" },
+  title: { required: true, valueType: "scalar" },
+  "last-reviewed": { required: true, valueType: "scalar" },
+  covers: { required: false, valueType: "list" },
+  contracts: { required: false, valueType: "list" },
+};
 
 export class CliUsageError extends Error {
   constructor(message) {
@@ -142,6 +149,54 @@ function parseFrontmatter(content) {
   return data;
 }
 
+function formatFrontmatterListTypeDetail(key) {
+  return `\`${key}:\` 冒号后不能有任何字符（包括 \`[]\` 和行尾 \`#\` 注释）；下一行直接写 \`  - item\`。`;
+}
+
+export function validateFrontmatter(fm, filePath) {
+  const issues = [];
+  for (const key of Object.keys(fm)) {
+    if (!FRONTMATTER_KEYS[key]) {
+      issues.push({
+        filePath,
+        kind: "unknown-key",
+        key,
+        detail: `unknown frontmatter key "${key}"`,
+      });
+    }
+  }
+  for (const [key, spec] of Object.entries(FRONTMATTER_KEYS)) {
+    if (!(key in fm)) {
+      if (spec.required) {
+        issues.push({
+          filePath,
+          kind: "missing-key",
+          key,
+          detail: `missing required frontmatter key "${key}"`,
+        });
+      }
+      continue;
+    }
+    const value = fm[key];
+    if (spec.valueType === "list" && !Array.isArray(value)) {
+      issues.push({
+        filePath,
+        kind: "bad-type",
+        key,
+        detail: formatFrontmatterListTypeDetail(key),
+      });
+    } else if (spec.valueType === "scalar" && (Array.isArray(value) || typeof value !== "string")) {
+      issues.push({
+        filePath,
+        kind: "bad-type",
+        key,
+        detail: `"${key}" must be a scalar string`,
+      });
+    }
+  }
+  return issues;
+}
+
 function stripInlineCode(line) {
   let output = "";
   let cursor = 0;
@@ -238,6 +293,7 @@ function readDoc(rel) {
   const content = fs.readFileSync(path.join(REPO_ROOT, rel), "utf8");
   const fm = parseFrontmatter(content);
   const strippedContent = stripCode(content);
+  const frontmatterIssues = rel.startsWith("docs/evergreen/") ? validateFrontmatter(fm, rel) : [];
   return {
     filePath: rel,
     type: fm.type ?? "",
@@ -252,6 +308,7 @@ function readDoc(rel) {
     links: parseMarkdownLinks(strippedContent),
     anchors: parseAnchors(strippedContent),
     malformedAnchors: findMalformedAnchors(strippedContent),
+    frontmatterIssues,
   };
 }
 
@@ -538,6 +595,9 @@ export function evaluateSizes(docs, baseline, caps) {
     if (d.chars > hardChars) {
       violations.push({ filePath: d.filePath, kind: "too-long", current: d.chars, limit: hardChars });
     }
+    if ((d.covers ?? []).length === 0 && (d.contracts ?? []).length === 0) {
+      violations.push({ filePath: d.filePath, kind: "no-gate", current: 0, limit: 1 });
+    }
   }
   for (const [filePath, base] of Object.entries(baseline)) {
     if (!currentEvergreenPaths.has(filePath)) {
@@ -674,7 +734,7 @@ export function buildSizeHints(docs, caps) {
     }));
 }
 
-function formatSizeViolationKind(kind) {
+export function formatSizeViolationKind(kind) {
   switch (kind) {
     case "too-long":
       return "文档过长（超 hard cap，建议拆子文档）";
@@ -684,6 +744,8 @@ function formatSizeViolationKind(kind) {
       return "文档缺少体量基线";
     case "stale-baseline":
       return "基线包含已移除文档";
+    case "no-gate":
+      return "covers/contracts 双空（请补 covers 或 contracts）";
     default:
       return kind;
   }
@@ -694,6 +756,15 @@ function modeSize(docs) {
   if (!baseline) {
     console.error(`✗ 缺少 evergreen 文档体量基线：${SIZE_BASELINE_PATH}`);
     console.error("  请运行 node scripts/check-evergreen-docs.mjs --write-size-baseline 后提交基线。");
+    return 1;
+  }
+  const frontmatterIssues = docs.flatMap((d) => d.frontmatterIssues ?? []);
+  if (frontmatterIssues.length > 0) {
+    console.error("✗ evergreen frontmatter 形状检查失败：\n");
+    for (const issue of frontmatterIssues) console.error(`  ${issue.filePath}: ${issue.detail}`);
+    console.error(
+      "\n  covers/contracts 列表写法：冒号后绝对留空无字符（含行尾 # 注释），下一行直接写 `  - item`；不要写 `covers: []`。",
+    );
     return 1;
   }
   const evergreenDocs = docs.filter(isEvergreenDoc);
@@ -724,6 +795,9 @@ function modeSize(docs) {
   }
   if (res.violations.some((v) => v.kind !== "too-long")) {
     console.error("\n✗ covers 管辖范围越基线 / 基线缺项或含已删文档：重写基线 `--write-size-baseline` 并在提交信息说明。");
+  }
+  if (res.violations.some((v) => v.kind === "no-gate")) {
+    console.error("\n✗ 有 evergreen 文档 covers/contracts 双空：请补 covers 或 contracts；纵切文档可 covers 留空，但 contracts 必须列出守门文件。");
   }
   return 1;
 }

@@ -6,7 +6,7 @@ covers:
   - scripts/check-evergreen-docs.test.mjs
 contracts:
   - scripts/check-evergreen-docs.mjs
-last-reviewed: 2026-08-03
+last-reviewed: 2026-08-04
 ---
 
 # 文档组织规则
@@ -194,7 +194,7 @@ last-reviewed: YYYY-MM-DD
 ## 深水细节
 ```
 
-`contracts:` 是可选块——「改它文档必错」的契约点集合（schema / 登记簿 / API 面），与 `covers` 无包含关系，触发 strict，见 §1.3。**`covers:` / `contracts:` 的冒号后必须什么都不写**，换行直接跟 `- item`：冒号后但凡有字符——**包括行尾 `#` 注释**——`parseFrontmatter` 就把它当成标量值收下，底下那串 `- item` 一条都不再收集，`readDoc` 再把标量归一成 `[]`，于是整个列表**静默变空且不报任何错**。所以上面两份模板的说明都写在代码块外，别贴回行尾；`covers: []` 本身无害，行尾注释才是坑。
+`contracts:` 是可选块——「改它文档必错」的契约点集合（schema / 登记簿 / API 面），与 `covers` 无包含关系，触发 strict，见 §1.3。**`covers:` / `contracts:` 的冒号后必须什么都不写**，换行直接跟 `- item`：冒号后但凡有字符——**包括 `[]` 与行尾 `#` 注释**——`parseFrontmatter` 就把它当成标量值收下，底下那串 `- item` 一条都不再收集。`check:docs:size` 会把这种标量判成 `bad-type`；空列表写空块（`covers:` 后换行、不跟条目）或省略该块，别写 `covers: []`。所以上面两份模板的说明都写在代码块外，别贴回行尾。
 
 “承上启下”是必填块。它负责把独立文档重新缝回系统：上游是谁、下游是谁、契约在哪里、相邻主题有哪些。
 
@@ -261,16 +261,18 @@ last-reviewed: YYYY-MM-DD
 ---
 ```
 
-`covers` 留空或省略都行（写成 `covers: []` 也无害），它不拥有代码；**但冒号后绝不能跟行尾 `#` 注释**——那会把整个列表静默吞空（机理见 §2）。这条对纵切最要命：纵切子文档 `covers` 按设计恒空，`contracts` 是它**唯一的机检闸**，一丢就 warn / coverage / strict 三个闸全成 no-op，此后再没有任何东西提醒你回来更新它。
+`covers` 留空或省略都行，它不拥有代码；**但冒号后绝不能跟任何字符**，`covers: []` 和行尾 `#` 注释都会把它解析成标量并被 `check:docs:size` 拦下（机理见 §2）。这条对纵切最要命：纵切子文档 `covers` 按设计恒空，`contracts` 是它**唯一的机检闸**，一丢就 warn / coverage / strict 三个闸全成 no-op，此后再没有任何东西提醒你回来更新它。
 
-`contracts` 挂不挂看内容：陈述契约与不变量的（改 schema 会让它变假）该挂；纯代码入口地图的（改实现不会让「文件在哪」变假）不挂，它的过时风险由母文档的 warn 与大修兜。
+`contracts` 挂不挂看内容：陈述契约与不变量的（改 schema 会让它变假）该挂；纯代码入口地图的（改实现不会让「文件在哪」变假）不挂，但它必须自己拥有 `covers`。`check:docs:size` 会拦 `covers` 与 `contracts` 双空的 evergreen 文档。
 
 **判完准入回 §3 前言动手**：搬迁步骤（外提动作）与 `§x.y` 四类处置表两条轴共用，只写在那里，本节不重复——入向那一类尤其别漏，它是唯一要全仓搜的。
 
 ## 4. 体量闸：字符走绝对上限，covers 走棘轮
 
-`pnpm check:docs:size` 守两件事，**字符数不做棘轮**——正文想写多长写多长，只在单个文档真的膨胀到上限时才拦：
+`pnpm check:docs:size` 先守 frontmatter 形状，再守体量与管辖；**字符数不做棘轮**——正文想写多长写多长，只在单个文档真的膨胀到上限时才拦：
 
+- **frontmatter 形状 = 硬闸**。evergreen 文档只接受 `type` / `title` / `last-reviewed` 三个必填标量，以及 `covers` / `contracts` 两个可选列表；未知键、缺必填键、列表被写成标量都会失败。ADR 不参与这条形状校验。
+- **机检闸存在 = no-gate**。evergreen 文档不能 `covers` 与 `contracts` 双空：横切文档至少有 `covers`，纵切文档若零 `covers` 就必须有 `contracts`。
 - **字符数 = 绝对上限（cap），不是基线棘轮**。写作、补充、加例子随便加，不会因为「比上次长」而失败。只有单文档超过 **hard cap（约 25000 字符）** 才报错，含义是「这篇太长了，该拆」。**撞线时合法动作只有三条**：① 删过时 / 越界内容——越界内容不过时、只是放错层，按 §0.4 先补落点再 trim 成「一句现状 + 指针」，不许就地删；② **横切**外提一个功能子域；③ **纵切**外提一条读者路径（判据见 §3）。压缩措辞、删例子、把句子改短**不是**合法动作，三条都走不通就停下来问人。过 **soft cap（约 15000 字符）** 只软提示、不失败。软提示按余量分三档（超 15000 起 🟡 / 超 20000 起 🟠 / 超 23000 起 🔴，边界是严格大于），措辞随逼近程度加重——同一句警告长期不变会退化成背景噪音，分档是为了让「快撞线了」这件事仍然可感。
 - **`covers` 数 = 棘轮（只增要过基线）**。`scripts/evergreen-size-baseline.json` 只记每篇文档的 `covers` 数与存在性；某文档 `covers` 数比基线大会报错——防止一篇文档悄悄把越来越多代码划进自己管辖。基线**不再记字符数**。
 - 基线必须覆盖当前全部 evergreen 文档；新增 / 删除 / 重命名 evergreen 文档后不更新基线会失败（缺项 / 含已删文档都报）。
@@ -288,7 +290,7 @@ last-reviewed: YYYY-MM-DD
 |---|---|---|
 | `check:docs:strict --since=<base>` | **改了契约点 → 同步对应文档** | 改动命中某文档 `contracts`（非 `covers`）但该文档没一起改；见 §1.3 |
 | `check:docs:coverage --since=<base>` | **加了源码 → 必须有文档认领** | 新增 `packages/*/src/**` 文件不匹配任何 covers，且非豁免（测试/`.d.ts`/mock/夹具/story） |
-| `check:docs:size` | **单文档别膨胀到该拆** | 字符数超 hard cap（≈25k，报错会指出三条合法动作：删过时 / 越界内容、横切、纵切，见 §4；字符不做棘轮），或 `covers` 数超基线，或基线漏项/含已删文档 |
+| `check:docs:size` | **frontmatter 有效、单文档别膨胀到该拆** | frontmatter 形状错误、`covers`/`contracts` 双空、字符数超 hard cap（≈25k，报错会指出三条合法动作：删过时 / 越界内容、横切、纵切，见 §4；字符不做棘轮），或 `covers` 数超基线，或基线漏项/含已删文档 |
 | `check:docs:links` | **互链/指针别指向消失的文档** | evergreen 内、以及 `AGENTS.md` / `README.md` 指向 evergreen·ADR 的 `[..](x.md)` 指向不存在的 .md |
 | `check:docs:stale` | **last-reviewed 别过期** | 超 180 天或缺字段 |
 

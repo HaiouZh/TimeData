@@ -201,6 +201,61 @@ test("evaluateDocSync treats a doc with no contracts as a strict no-op", () => {
   assert.equal(res.unmatched, 0);
 });
 
+function validateFrontmatter(fm, filePath = "docs/evergreen/demo.md") {
+  assert.equal(typeof docsCheck.validateFrontmatter, "function");
+  return docsCheck.validateFrontmatter(fm, filePath);
+}
+
+test("validateFrontmatter reports unknown frontmatter keys", () => {
+  assert.deepEqual(validateFrontmatter({ type: "evergreen", title: "Demo", cover: [], "last-reviewed": "2026-08-04" }), [
+    {
+      filePath: "docs/evergreen/demo.md",
+      kind: "unknown-key",
+      key: "cover",
+      detail: 'unknown frontmatter key "cover"',
+    },
+  ]);
+});
+
+test("validateFrontmatter reports covers parsed as a scalar as bad-type", () => {
+  const issues = validateFrontmatter({
+    type: "evergreen",
+    title: "Demo",
+    covers: "[]",
+    "last-reviewed": "2026-08-04",
+  });
+
+  assert.equal(issues.length, 1);
+  assert.equal(issues[0].kind, "bad-type");
+  assert.equal(issues[0].key, "covers");
+  assert.match(issues[0].detail, /`covers:` 冒号后不能有任何字符/);
+  assert.match(issues[0].detail, /行尾 `#` 注释/);
+  assert.match(issues[0].detail, /下一行直接写 `  - item`/);
+});
+
+test("validateFrontmatter reports missing required fields", () => {
+  assert.deepEqual(
+    validateFrontmatter({ type: "evergreen" }).map((issue) => [issue.kind, issue.key]),
+    [
+      ["missing-key", "title"],
+      ["missing-key", "last-reviewed"],
+    ],
+  );
+});
+
+test("validateFrontmatter accepts a vertical doc with contracts and empty covers", () => {
+  assert.deepEqual(
+    validateFrontmatter({
+      type: "evergreen",
+      title: "Vertical",
+      covers: [],
+      contracts: ["packages/shared/src/schemas.ts"],
+      "last-reviewed": "2026-08-04",
+    }),
+    [],
+  );
+});
+
 test("evaluateSizes does NOT ratchet char growth under the hard cap", () => {
   // 正文可自由增长：远超旧「基线」字符数，只要不过 hard cap 就放行。
   const docs = [{ filePath: "docs/evergreen/a.md", covers: ["x"], chars: 24000 }];
@@ -220,6 +275,41 @@ test("evaluateSizes flags a doc that exceeds the hard cap (too-long)", () => {
   assert.equal(res.ok, false);
   assert.equal(res.violations[0].kind, "too-long");
   assert.equal(res.violations[0].limit, 25000);
+});
+
+test("evaluateSizes flags an evergreen doc with both covers and contracts empty", () => {
+  const docs = [{ filePath: "docs/evergreen/a.md", covers: [], contracts: [], chars: 9000 }];
+  const baseline = { "docs/evergreen/a.md": { covers: 0 } };
+
+  const res = evaluateSizes(docs, baseline, { softChars: 15000, hardChars: 25000 });
+
+  assert.equal(res.ok, false);
+  assert.equal(res.violations[0].kind, "no-gate");
+});
+
+test("evaluateSizes accepts an evergreen doc with empty covers but non-empty contracts", () => {
+  const docs = [{ filePath: "docs/evergreen/a.md", covers: [], contracts: ["packages/shared/src/schemas.ts"], chars: 9000 }];
+  const baseline = { "docs/evergreen/a.md": { covers: 0 } };
+
+  const res = evaluateSizes(docs, baseline, { softChars: 15000, hardChars: 25000 });
+
+  assert.equal(res.ok, true);
+});
+
+test("evaluateSizes accepts older fixtures without a contracts property", () => {
+  const docs = [{ filePath: "docs/evergreen/a.md", covers: ["x"], chars: 9000 }];
+  const baseline = { "docs/evergreen/a.md": { covers: 1 } };
+
+  const res = evaluateSizes(docs, baseline, { softChars: 15000, hardChars: 25000 });
+
+  assert.equal(res.ok, true);
+});
+
+test("formatSizeViolationKind describes the no-gate remediation", () => {
+  assert.equal(typeof docsCheck.formatSizeViolationKind, "function");
+  assert.match(docsCheck.formatSizeViolationKind("no-gate"), /covers/);
+  assert.match(docsCheck.formatSizeViolationKind("no-gate"), /contracts/);
+  assert.match(docsCheck.formatSizeViolationKind("no-gate"), /补/);
 });
 
 test("evaluateSizes flags a doc whose covers grew past baseline", () => {

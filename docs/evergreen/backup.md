@@ -3,6 +3,7 @@ type: evergreen
 title: 备份与恢复
 covers:
   - packages/client/src/backup/**
+  - packages/client/src/sync/clientDomains.ts
   - packages/client/src/quick-notes/**
   - packages/client/src/lib/adminApi.ts
   - packages/client/src/lib/serverBackup.ts
