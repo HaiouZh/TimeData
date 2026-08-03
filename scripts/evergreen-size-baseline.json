@@ -2,6 +2,12 @@
   "docs/evergreen/_docs-guide.md": {
     "covers": 2
   },
+  "docs/evergreen/_docs-guide/checks.md": {
+    "covers": 0
+  },
+  "docs/evergreen/_docs-guide/splitting.md": {
+    "covers": 0
+  },
   "docs/evergreen/architecture.md": {
     "covers": 21
   },

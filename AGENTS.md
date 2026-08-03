@@ -75,7 +75,7 @@
     - 起服务给人试**一律带 `--host`**：`pnpm --filter @timedata/client exec vite --host 127.0.0.1`（纯本机）；手机/局域网验收用 `--host`（暴露给同网段所有设备，**先问过人再开**）。
     - 30 秒确诊：`Get-NetTCPConnection -LocalPort 5174 -State Listen | Select LocalAddress,OwningProcess`。`LocalAddress` 是 `::1` 就是本坑，是 `127.0.0.1` / `0.0.0.0` 就不是，去查别处。换端口同理。
     - **别只看 vite 打印的 URL 就报"起好了"**——它打印的是 `localhost`，不告诉你绑的是哪个地址族。
-- 文档检查：`pnpm check:docs`（warn）/ `:strict`（CI）/ `:stale` / `:size`（单文档过长上限 + covers 棘轮）/ `:coverage --since=<base>` / `:links`。各 mode 守什么、棘轮 / 基线 / 豁免机制见 [`_docs-guide`](docs/evergreen/_docs-guide.md) §4–§5。**无参 = `--since=HEAD`**：提交干净后比对为空会**假通过**，自测一律带 `--since=main`。
+- 文档检查：`pnpm check:docs`（本地 warn）/ `:strict`（CI）/ `:stale` / `:size`（单文档过长上限 + covers 棘轮）/ `:coverage --since=<base>` / `:links`。各 mode 守什么、棘轮 / 基线 / 豁免机制见 [`_docs-guide/checks`](docs/evergreen/_docs-guide/checks.md)；体量闸与拆分判据见 [`_docs-guide/splitting`](docs/evergreen/_docs-guide/splitting.md)。**无参 = `--since=HEAD`**：提交干净后比对为空会**假通过**，自测一律带 `--since=main`。
 - ROADMAP 程序门：`pnpm check:roadmap`——docs_local/ROADMAP.md 的 size ≤8k、格式、全 [完成] 主题报归档；每次收工/合并前跑（docs_local 不入 Git，CI 够不着，本地是唯一执行点）。
 - **收工 / 合并前一律 `pnpm gate`**——全量门禁唯一入口，串行跑 CI 同集棘轮（lint / 四道静态闸 / typecheck / test / e2e / 四道 docs / roadmap / build）。本机全局互斥：同一时刻只允许一份，撞上别人在跑会自动排队（`--no-wait` 则立即退出）。**日常提交走聚焦验证，不必 gate。** 锁在主仓 `.git/timedata-gate.lock/`，进程被强杀留下的残锁 60 秒后自动接管，不用手删。
 - 部署、环境变量、自更新见 [`README.md`](README.md)。
@@ -116,7 +116,7 @@
 
 | 类型 | 位置 | 改了代码该怎么做 |
 |---|---|---|
-| 长期文档（evergreen） | `docs/evergreen/**`、`README.md`、本文件 | 必须同步修改 |
+| 长期说明 / 入口文档 | `docs/evergreen/**`、`README.md`、本文件 | 必须同步修改 |
 | 架构决策（ADR） | `docs/adr/**` | 仅追加，不改既有条目；新决策写新 ADR，并在 [`adr/README`](docs/adr/README.md) 索引表追加一行（含与旧 ADR 的修订关系） |
 | 本地过程文档 | `docs_local/**`（不进 Git） | 沉淀后才同步到 evergreen 或 ADR |
 
@@ -124,14 +124,14 @@
 - **三分法**：要做的（需 brainstorm/design）进 `docs_local/ROADMAP.md` 立主题；拿起来就能改的小事进 `docs_local/backlog.md`（修完删行）；冒出过、暂不考虑做的进 `docs_local/ideas.md` 台账（两态：待评估 / 已处置；允许堆积不设体量线）。`notes/` 原件写完须被 ROADMAP / backlog / ideas 之一实链索引，否则 `pnpm check:roadmap` 报孤儿 warn。
 - **多 worktree 并发协议**：「谁在飞哪条线」唯一真相 = ROADMAP 阶段行的 `[进行中@分支]` 标记（线≠主题，同主题可多线并飞）。ROADMAP 只在**领取**（`[排队]`→`[进行中@分支]` + 挂 plan 链接，随后跑门禁验语法）与**收工**（翻 `[完成]`+SHA、更新刚完成/下一步）两个时刻被写，飞行中对它只读；飞行中进度写**自己 plan 尾部「落地记录」**（时间戳行，单写者=本线）或该主题看板。对 ROADMAP 禁整文件 Write、只准锚定 Edit 自己的行。`pnpm check:roadmap` 链首自动快照 `docs_local` 嵌套 git 仓（无 remote，纯本地安全网，被覆盖内容用 `git -C docs_local log -p` 捞），OK 行打印在飞清单。
 - **superpowers 等技能默认把 spec / plan 写到 `docs/superpowers/**`，本项目一律改投 `docs_local/{specs,plans}/`**（统一不进 Git）；技能运行产生的本地状态目录（如 `.superpowers/`）是临时产物，不提交。
-- 长期文档头部 `covers:` 声明管辖代码路径（纯归属，管 coverage / 查代码去哪篇，**不触发 strict**）；`contracts:` 是「改它文档必错」的契约点集合（与 `covers` 各自独立，不必是其子集——纵切子文档零 `covers` 却有 `contracts`），**只有它触发 strict**。改代码后回头看命中的段落，命中即改并更新 `last-reviewed`。covers/contracts 分工见 [`_docs-guide`](docs/evergreen/_docs-guide.md) §1.3。
+- 长期文档头部 `covers:` 声明管辖代码路径（纯归属，管 coverage / 查代码去哪篇，**不触发 strict**）；`contracts:` 是「改它文档必错」的契约点集合，二者独立、至少一个非空，双空触发 no-gate，**只有它触发 strict**。改代码后回头看命中的段落，命中即改并更新 `last-reviewed`。covers/contracts 分工见 [`_docs-guide`](docs/evergreen/_docs-guide.md) §1.3。
 - 复查文档别只信脚本：脚本没报不等于没漂，结合语义判断段落是否真过时。
 - **本文件只装「怎么操作这个仓库」+「对 agent 动作的授权边界」**；产品 / 领域 / 代码机制（怎么运作、默认值、env、算法）一律归 evergreen，哪怕是硬不变量。发现机制泄漏进本文件别就地删：先确认 evergreen 有没有清楚承载（没有先补，必要时补 `covers`），再 trim 成「一句规则 + 指针」。
 - **反向同理：evergreen 只写「现在是什么样」**——机制 / 契约 / 不变量 / 边界。决策论证与取舍归 ADR，祈使式指令与授权（「改前先确认」「未经批准不改」）归本文件，改动流水与 `<!-- 复核 … -->` 注释归提交信息，在办事项归 `docs_local`。判据、准入 / 排除清单与「先补落点再 trim」的处置流程见 [`_docs-guide`](docs/evergreen/_docs-guide.md) §0。
 - 哪个 evergreen 子文档管哪块代码，**去 `architecture.md` §6「模块速查」或各文档 frontmatter 查**。
 - evergreen 大调整保留代码入口 / 路由 / 测试文件路径，便于按文档反查实现。
-- evergreen 该写什么 / 不该写什么（§0）、怎么组织、新增文档放哪、单文档多大该外提，见 [`docs/evergreen/_docs-guide.md`](docs/evergreen/_docs-guide.md)。
-- **文档撞 hard cap（25000 字符）时，合法动作只有三条**：删过时 / 越界内容（越界的先按 `_docs-guide` §0.4 补落点、再 trim 成「一句现状 + 指针」，不许就地删）/ 横切外提功能子域 / 纵切外提读者路径。**压缩措辞、删例子、把句子改短不是合法动作**——那是拿可读性换体量且不可逆。三条都走不通就停下来问人，不要让门禁绿变成目标。判据见 [_docs-guide](docs/evergreen/_docs-guide.md) §3。
+- evergreen 该写什么 / 不该写什么（§0）、怎么组织、新增文档放哪，见 [`docs/evergreen/_docs-guide.md`](docs/evergreen/_docs-guide.md)；单文档多大该外提见 [`_docs-guide/splitting`](docs/evergreen/_docs-guide/splitting.md)。
+- **文档撞 hard cap（25000 字符）时，合法动作只有四条**：删过时 / 越界内容（越界的先按 `_docs-guide` §0.4 补落点、再 trim 成「一句现状 + 指针」，不许就地删）/ 横切外提功能子域 / 纵切外提读者路径 / 长成主题后升格。**压缩措辞、删例子、把句子改短不是合法动作**——那是拿可读性换体量且不可逆。四条都走不通就停下来问人，不要让门禁绿变成目标。判据见 [_docs-guide/splitting](docs/evergreen/_docs-guide/splitting.md)。
 
 ------
 

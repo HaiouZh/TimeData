@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Check that long-lived (evergreen / ADR) docs stay in sync with the code they cover.
 // covers = 纯归属声明（coverage / 查代码去哪篇）；contracts = 「改它文档必错」的契约点集合，只有它触发 strict。
-// 两者各自独立，contracts 不必是 covers 的子集——陈述契约的纵切子文档可零 covers、独立持 contracts（见 _docs-guide §1.3）。
+// 两者各自独立，至少一个非空；双空会触发 no-gate（见 _docs-guide §1.3）。
 // Usage: node scripts/check-evergreen-docs.mjs [--mode=warn|strict|stale|size|coverage|links] [--since=<rev>] [--write-size-baseline]
 // Zero external deps. Glob syntax: **/, **, *, ?, optional ":Symbol" suffix is stripped.
 
@@ -493,7 +493,8 @@ export const EVERGREEN_RULES_SUMMARY = [
   "—— evergreen 写作规矩（详见 docs/evergreen/_docs-guide.md §0）——",
   "  只写「没有任何改动发生时也成立」的现状：机制 / 契约 / 不变量 / 边界。",
   "  决策论证归 docs/adr，对 agent 的指令与授权归 AGENTS.md，改动流水归提交信息，在办事项归 docs_local。",
-  "  禁时间性措辞（目前 / 本轮 / 新增了 / 已改为）；读代码 30 秒能得到的清单别抄进正文。",
+  "  禁时间性措辞（目前 / 本轮 / 新增了 / 已改为）；只写 grep 不出来的，其余只指路。",
+  "  抄了清单就把源文件挂进 contracts；无源派生汇总只能删，权威导航入口除外。",
 ];
 
 function printRulesSummary(log) {
@@ -808,7 +809,7 @@ export function modeSize(docs, { baseline = readSizeBaseline(), error = console.
   // 而是破提示疲劳——同一句警告长期不变会退化成背景噪音，措辞随余量加重才还能被看见。
   const hints = buildSizeHints(evergreenDocs, SIZE_CAPS);
   if (hints.length > 0) {
-    log(`ℹ️ 体量提示（hard cap ${SIZE_CAPS.hardChars} 字符，判据见 docs/evergreen/_docs-guide.md §3）：`);
+    log(`ℹ️ 体量提示（hard cap ${SIZE_CAPS.hardChars} 字符，判据见 docs/evergreen/_docs-guide/splitting.md）：`);
     for (const h of hints) {
       log(`   ${h.mark} ${h.filePath}（${h.chars} 字符，余量 ${h.remaining}）——${h.hint}`);
     }

@@ -175,11 +175,11 @@ iOS 原生工程不入库，构建链路与原生补丁见 [deployment/ios-ipa](
 
 ## 6. 文档登记簿
 
-文档组织规则、主题轴（域/模块/设计语言/横切）判定树、单轴 covers 归属、骨架模板和体量阈值见 [_docs-guide](_docs-guide.md)。本登记簿只列**主题文档**；主题膨胀后外提的子文档由各自主题文档在“子文档索引”里登记，不在此重复（当前有子文档的主题：health、todo、categories-settings、design-language、deployment、sync）。
+文档准入、详略、主题轴（域/模块/设计语言/横切）判定树、单轴 `covers` 归属和骨架模板见 [_docs-guide](_docs-guide.md)；拆分与体量阈值见 [_docs-guide/splitting](_docs-guide/splitting.md)。本登记簿只列**主题文档**；主题膨胀后外提的子文档由各自主题文档在“子文档索引”里登记，不在此重复。
 
 | 文档 | 类型 | 职责 |
 |---|---|---|
-| [_docs-guide](_docs-guide.md) | 横切 | evergreen 文档组织规则、骨架模板、毕业阈值、体量棘轮 |
+| [_docs-guide](_docs-guide.md) | 横切 | evergreen 写作准入、详略、组织和骨架模板；拆分与检查分别见子文档 |
 | [architecture](architecture.md) | 横切 | 系统地图、五包关系、启动顺序、文档登记簿 |
 | [data-model](data-model.md) | 横切 | 跨域数据契约、全表索引脉、同步信封、时间/ID/映射约定 |
 | [development](development.md) | 横切 | 开发流程、测试分层、工程约定 |
