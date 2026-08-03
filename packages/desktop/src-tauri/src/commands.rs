@@ -12,7 +12,9 @@ use tauri_plugin_notification::NotificationExt;
 
 use crate::config::{self, action_id, DesktopConfig, HotkeyAction, HotkeyBinding};
 use crate::hotkeys::{HotkeyDispatcher, HotkeyEventPayload, RegistrationOutcome, HOTKEY_EVENT};
-use crate::shell::{resolve_toggle_from_window, Minimized, ToggleAction, Visible};
+use crate::shell::{
+    resolve_toggle_from_window, AncestorRoot, ForegroundRaw, Minimized, SelfHwnd, ToggleAction, Visible,
+};
 
 /// 配置文件写锁：所有 load→modify→save 形态的命令先拿它再动文件。
 /// 没有它，两个并发写命令（如设置页同时改阈值与热键）会交错成
@@ -65,33 +67,41 @@ pub fn show_main_window(app: &AppHandle) {
 /// `shell::resolve_toggle_from_window` 里做——归一（`GA_ROOT`）这一步留在本文件时
 /// 没有任何测试锁得住它：删掉 `GetAncestor` 全套 Rust 单测照绿，而那正是 db28d8b5
 /// 修的那个真机 bug 的成因（前台常常是我们自己的 WebView2 子窗口，不归一就比不上）。
+///
+/// **在取值这一处就套上 newtype**（不在调用处现包）：两个都是 `isize`，返回裸元组时
+/// 下游把它们对调照样编译、47 条单测照绿，效果正是「拿未归一的原始句柄去比」——
+/// 上面那个 bug 原样复活。套上之后对调是 `error[E0308]`。
 #[cfg(windows)]
-fn foreground_handles() -> (isize, isize) {
+fn foreground_handles() -> (ForegroundRaw, AncestorRoot) {
     use windows::Win32::UI::WindowsAndMessaging::{GetAncestor, GetForegroundWindow, GA_ROOT};
     // SAFETY: 两个调用都只读窗口管理器状态、不解引用返回的句柄，NULL 输入也有定义
     // （GetAncestor 原样返回 NULL），因此无前置条件可违反。
     unsafe {
         let foreground = GetForegroundWindow();
-        (foreground.0 as isize, GetAncestor(foreground, GA_ROOT).0 as isize)
+        (
+            ForegroundRaw(foreground.0 as isize),
+            AncestorRoot(GetAncestor(foreground, GA_ROOT).0 as isize),
+        )
     }
 }
 
 /// 非 Windows 平台没有这条事实来源，恒 (0, 0) 让判定退回只看 `is_focused()`——
 /// 被修的误报是 Windows/WebView2 特有的。
 #[cfg(not(windows))]
-fn foreground_handles() -> (isize, isize) {
-    (0, 0)
+fn foreground_handles() -> (ForegroundRaw, AncestorRoot) {
+    (ForegroundRaw(0), AncestorRoot(0))
 }
 
 fn toggle_main_window(app: &AppHandle) {
     let Some(window) = app.get_webview_window("main") else { return };
     #[cfg(windows)]
-    let self_hwnd = window.hwnd().map(|h| h.0 as isize).unwrap_or(0);
+    let self_hwnd = SelfHwnd(window.hwnd().map(|h| h.0 as isize).unwrap_or(0));
     #[cfg(not(windows))]
-    let self_hwnd = 0isize;
+    let self_hwnd = SelfHwnd(0);
     let (foreground_raw, ancestor_root) = foreground_handles();
-    // 两个 bool 先各自套上 newtype 再往下传（而不是在调用处现包）：这样把它们的**顺序**写反
+    // 六个值全都先各自绑名带类型再往下传（而不是在调用处现包）：这样把它们的**顺序**写反
     // 是编译错误，正是 newtype 要拦的那类错——纯函数真值表锁得再满也管不到参数落位。
+    // 在调用处现包挡不住把两个取值塞进对方的构造器，等于没套。
     let visible = Visible(window.is_visible().unwrap_or(false));
     let minimized = Minimized(window.is_minimized().unwrap_or(false));
     match resolve_toggle_from_window(

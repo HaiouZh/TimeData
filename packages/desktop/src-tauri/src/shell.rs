@@ -51,6 +51,22 @@ pub struct Enabled(pub bool);
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct UserDisabled(pub bool);
 
+/// 三个窗口句柄同理，而且更险：它们是**同类型同量纲**的三个 `isize`，写反不但编译得过、
+/// 真值表也一条都不会红。`foreground_raw` 与 `ancestor_root` 对调的效果恰好是「拿未归一的
+/// 原始句柄去比」——db28d8b5 修的那个真机 bug 的成因原样复活（前台是自己的 WebView2
+/// 子窗口时判不在前台 → 每次都 Show → 窗口再也收不起来）。
+///
+/// 取值处就套上（`foreground_handles` 直接返回这对 newtype、`self_hwnd` 绑名时就包好），
+/// **不在调用处现包**：调用处现包挡不住把两个取值塞进对方的构造器，等于没套。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ForegroundRaw(pub isize);
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct AncestorRoot(pub isize);
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SelfHwnd(pub isize);
+
 #[derive(Debug, PartialEq, Eq)]
 pub enum AutostartAction {
     /// （重新）注册自启到当前可执行文件，并记下这个路径。
@@ -108,8 +124,8 @@ pub enum ToggleAction {
 ///
 /// 句柄 0 = 没有窗口（无前台窗口时 `GetForegroundWindow` 返回 NULL），**不参与相等比较**，
 /// 否则「两边都拿不到」会被当成「前台就是我」，凭空造出一次误 Hide。
-pub fn resolve_is_foreground(is_focused: bool, foreground_root: isize, self_hwnd: isize) -> bool {
-    let foreground_is_ours = self_hwnd != 0 && foreground_root == self_hwnd;
+pub fn resolve_is_foreground(is_focused: bool, foreground_root: AncestorRoot, self_hwnd: SelfHwnd) -> bool {
+    let foreground_is_ours = self_hwnd.0 != 0 && foreground_root.0 == self_hwnd.0;
     is_focused || foreground_is_ours
 }
 
@@ -132,16 +148,17 @@ pub fn resolve_toggle_action(visible: Visible, minimized: Minimized, focused: bo
 /// → 窗口再也收不起来）。
 ///
 /// `foreground_raw` 只回答「有没有前台窗口」（NULL/0 → 谁都不是，不参与相等比较）；
-/// 真正拿去比的必须是归一后的 `ancestor_root`。
+/// 真正拿去比的必须是归一后的 `ancestor_root`。这两个各有 newtype（见上），把它们对调
+/// 是**编译错误**——它们同类型同量纲，靠真值表或人眼都拦不住。
 pub fn resolve_toggle_from_window(
     visible: Visible,
     minimized: Minimized,
     is_focused: bool,
-    foreground_raw: isize,
-    ancestor_root: isize,
-    self_hwnd: isize,
+    foreground_raw: ForegroundRaw,
+    ancestor_root: AncestorRoot,
+    self_hwnd: SelfHwnd,
 ) -> ToggleAction {
-    let foreground_root = if foreground_raw == 0 { 0 } else { ancestor_root };
+    let foreground_root = if foreground_raw.0 == 0 { AncestorRoot(0) } else { ancestor_root };
     resolve_toggle_action(visible, minimized, resolve_is_foreground(is_focused, foreground_root, self_hwnd))
 }
 
@@ -293,46 +310,54 @@ mod tests {
 
     // ---- 前台判定真值表：is_focused 与 Win32 前台句柄两路取或 ----
 
-    const SELF_HWND: isize = 0x1234;
-    const OTHER_HWND: isize = 0x9999;
+    const SELF_HWND: SelfHwnd = SelfHwnd(0x1234);
+    const OTHER_ROOT: AncestorRoot = AncestorRoot(0x9999);
+    const NO_ROOT: AncestorRoot = AncestorRoot(0);
+    const NO_SELF: SelfHwnd = SelfHwnd(0);
+    /// 与 `SELF_HWND` 同一个窗口，只是站在「前台归一后的句柄」这一侧。
+    const SELF_ROOT: AncestorRoot = AncestorRoot(0x1234);
 
     #[test]
     fn is_focused_alone_is_enough() {
         // 老的唯一来源仍然算数：它报 true 就不必再问 Win32。
-        assert!(resolve_is_foreground(true, OTHER_HWND, SELF_HWND));
-        assert!(resolve_is_foreground(true, 0, 0));
+        assert!(resolve_is_foreground(true, OTHER_ROOT, SELF_HWND));
+        assert!(resolve_is_foreground(true, NO_ROOT, NO_SELF));
     }
 
     #[test]
     fn foreground_hwnd_rescues_stale_is_focused() {
         // 本次修的那条：WebView2 子窗口吃走焦点，is_focused 报 false，但前台顶层就是本窗口。
         // 归一后句柄相等 → 判在前台 → toggleMain 才会走 Hide。
-        assert!(resolve_is_foreground(false, SELF_HWND, SELF_HWND));
+        assert!(resolve_is_foreground(false, SELF_ROOT, SELF_HWND));
     }
 
     #[test]
     fn other_app_in_foreground_is_not_ours() {
-        assert!(!resolve_is_foreground(false, OTHER_HWND, SELF_HWND));
+        assert!(!resolve_is_foreground(false, OTHER_ROOT, SELF_HWND));
     }
 
     #[test]
     fn null_handles_never_match_each_other() {
         // GetForegroundWindow 无前台窗口时返回 NULL，hwnd() 取不到时也是 0。
         // 「两边都拿不到」绝不能被当成「前台就是我」——那是凭空一次误 Hide。
-        assert!(!resolve_is_foreground(false, 0, 0));
+        assert!(!resolve_is_foreground(false, NO_ROOT, NO_SELF));
     }
 
     #[test]
     fn missing_self_hwnd_degrades_to_is_focused_only() {
         // hwnd() 失败时不瞎猜，行为退回原样（此处 is_focused=false → 不在前台 → Show）。
-        assert!(!resolve_is_foreground(false, OTHER_HWND, 0));
-        assert!(resolve_is_foreground(true, OTHER_HWND, 0));
+        assert!(!resolve_is_foreground(false, OTHER_ROOT, NO_SELF));
+        assert!(resolve_is_foreground(true, OTHER_ROOT, NO_SELF));
     }
 
     // ---- 归一到顶层这一步：合成在 shell.rs 里，装配层删不掉也传不歪 ----
 
     /// 前台是我们自己的 WebView2 子窗口时，`GetForegroundWindow()` 拿到的原始句柄。
-    const WEBVIEW_CHILD_HWND: isize = 0x4321;
+    const WEBVIEW_CHILD_RAW: ForegroundRaw = ForegroundRaw(0x4321);
+    /// 前台是本窗口自己（无子窗口插一脚）时的原始句柄。
+    const SELF_RAW: ForegroundRaw = ForegroundRaw(0x1234);
+    const OTHER_RAW: ForegroundRaw = ForegroundRaw(0x9999);
+    const NO_FOREGROUND: ForegroundRaw = ForegroundRaw(0);
 
     #[test]
     fn 前台是自己的webview2子窗口时仍然收起() {
@@ -344,8 +369,8 @@ mod tests {
                 Visible(true),
                 Minimized(false),
                 false,
-                WEBVIEW_CHILD_HWND,
-                SELF_HWND,
+                WEBVIEW_CHILD_RAW,
+                SELF_ROOT,
                 SELF_HWND,
             ),
             ToggleAction::Hide
@@ -357,7 +382,7 @@ mod tests {
         // GetForegroundWindow 返回 NULL（0）时「谁都不在前台」，归一结果一律不参与比较——
         // 否则「两边都拿不到」会被当成「前台就是我」，凭空造出一次误 Hide。
         assert_eq!(
-            resolve_toggle_from_window(Visible(true), Minimized(false), false, 0, SELF_HWND, SELF_HWND),
+            resolve_toggle_from_window(Visible(true), Minimized(false), false, NO_FOREGROUND, SELF_ROOT, SELF_HWND),
             ToggleAction::Show
         );
     }
@@ -365,7 +390,7 @@ mod tests {
     #[test]
     fn 别的应用在前台时提到前面() {
         assert_eq!(
-            resolve_toggle_from_window(Visible(true), Minimized(false), false, OTHER_HWND, OTHER_HWND, SELF_HWND),
+            resolve_toggle_from_window(Visible(true), Minimized(false), false, OTHER_RAW, OTHER_ROOT, SELF_HWND),
             ToggleAction::Show
         );
     }
@@ -374,11 +399,11 @@ mod tests {
     fn 前台判定为真也要窗口可见未最小化才收起() {
         // 合成函数不能把 resolve_toggle_action 的另外两个词项丢掉。
         assert_eq!(
-            resolve_toggle_from_window(Visible(false), Minimized(false), true, SELF_HWND, SELF_HWND, SELF_HWND),
+            resolve_toggle_from_window(Visible(false), Minimized(false), true, SELF_RAW, SELF_ROOT, SELF_HWND),
             ToggleAction::Show
         );
         assert_eq!(
-            resolve_toggle_from_window(Visible(true), Minimized(true), true, SELF_HWND, SELF_HWND, SELF_HWND),
+            resolve_toggle_from_window(Visible(true), Minimized(true), true, SELF_RAW, SELF_ROOT, SELF_HWND),
             ToggleAction::Show
         );
     }
