@@ -4,6 +4,7 @@ import { Link } from "react-router";
 import { useAppUpdate } from "../appUpdate.tsx";
 import { useSyncContext } from "../contexts/SyncContext.tsx";
 import { useConfirm } from "../hooks/useConfirm.tsx";
+import { isDesktopShell } from "../lib/desktop/shell.js";
 import { type AndroidApkUpdate, fetchAndroidApkUpdate, openAndroidApkUpdate } from "../lib/mobileUpdate.ts";
 import { fetchServerVersion, pollServerUpdate, triggerServerUpdate } from "../lib/serverVersion.ts";
 import type { SyncStreamState } from "../lib/syncStream.js";
@@ -17,6 +18,7 @@ import {
   ChartBar,
   Cloud,
   Database,
+  Desktop,
   DeviceMobile,
   HardDrives,
   Moon,
@@ -358,6 +360,15 @@ export default function SettingsPage() {
           title="导航"
           subtitle="配置手机底栏入口与桌面侧栏"
         />
+        {/* 桌面壳专属：Web / Android / iOS 三端没有这些 IPC，进去只会撞一串「只能在桌面壳里调用」。 */}
+        {isDesktopShell() && (
+          <SettingsRow
+            to="/settings/desktop"
+            icon={<Icon icon={Desktop} size={20} />}
+            title="桌面设置"
+            subtitle="全局快捷键与开机自启"
+          />
+        )}
       </SettingsSection>
 
       <SettingsSection title="高级与更新">

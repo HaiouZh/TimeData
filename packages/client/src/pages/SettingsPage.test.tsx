@@ -126,6 +126,9 @@ function buttonByText(root: ParentNode, text: string): HTMLButtonElement {
 
 describe("SettingsPage", () => {
   beforeEach(() => {
+    // 桌面壳判定走真的 isDesktopShell（读 window.__TAURI_INTERNALS__），不 mock：
+    // 这样「gate 用对了函数」也一并守住。每条用例前清干净，防上一条的注入串味。
+    Reflect.deleteProperty(window, "__TAURI_INTERNALS__");
     localStorage.clear();
     localStorage.setItem("timedata_api_url", "https://example.com");
     useSyncContextMock.mockReturnValue(defaultSyncState());
@@ -202,6 +205,25 @@ describe("SettingsPage", () => {
     expect(html).toContain('href="/settings/admin-insights"');
     expect(html).toContain("水位线与翻牌");
     expect(html).toContain('href="/settings/todo-gravity"');
+  });
+
+  // 桌面壳 gate 的两面，必须成对断言：只测「桌面端有」时，把 gate 整个删掉照样绿，
+  // 而后果是 Web/Android/iOS 三端点进去只会撞一串「只能在桌面壳里调用」的 IPC 报错。
+  it("桌面壳里显示「桌面设置」入口", () => {
+    (window as unknown as Record<string, unknown>).__TAURI_INTERNALS__ = {};
+
+    const html = renderToStaticMarkup(createElement(MemoryRouter, null, createElement(SettingsPage)));
+
+    expect(html).toContain("桌面设置");
+    expect(html).toContain('href="/settings/desktop"');
+  });
+
+  it("非桌面端（Web / Android / iOS）不显示「桌面设置」入口", () => {
+    const html = renderToStaticMarkup(createElement(MemoryRouter, null, createElement(SettingsPage)));
+
+    expect(html).toContain('href="/settings/nav"'); // 同组其余行照常渲染，确认不是整组没出来
+    expect(html).not.toContain("桌面设置");
+    expect(html).not.toContain('href="/settings/desktop"');
   });
 
   it("organizes settings into four user-facing groups", () => {

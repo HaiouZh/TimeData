@@ -17,6 +17,7 @@ const SettingsAdminInsightsPage = lazy(() => import("../../pages/settings/Settin
 const SettingsCategoriesPage = lazy(() => import("../../pages/settings/SettingsCategoriesPage.tsx"));
 const SettingsCategoryDetailPage = lazy(() => import("../../pages/settings/SettingsCategoryDetailPage.tsx"));
 const SettingsDataPage = lazy(() => import("../../pages/settings/SettingsDataPage.tsx"));
+const SettingsDesktopPage = lazy(() => import("../../pages/settings/SettingsDesktopPage.tsx"));
 const SettingsDiaryPage = lazy(() => import("../../pages/settings/SettingsDiaryPage.tsx"));
 const SettingsInsightsPage = lazy(() => import("../../pages/settings/SettingsInsightsPage.tsx"));
 const SettingsMorePage = lazy(() => import("../../pages/settings/SettingsMorePage.tsx"));
@@ -76,6 +77,7 @@ export function AppRoutes({ location }: { location?: Location } = {}) {
       <Route path="/settings/diary" element={<SettingsDiaryPage />} />
       <Route path="/settings/todo-gravity" element={<SettingsTodoGravityPage />} />
       <Route path="/settings/todo-stats-layout" element={<SettingsTodoStatsLayoutPage />} />
+      <Route path="/settings/desktop" element={<SettingsDesktopPage />} />
       <Route path="/dev/styleguide" element={<StyleguidePage />} />
     </Routes>
   );

@@ -120,6 +120,7 @@
   "dirty-in-clean-bucket:pages/settings/SettingsCategoriesPage.test.tsx",
   "dirty-in-clean-bucket:pages/settings/SettingsCategoryDetailPage.test.tsx",
   "dirty-in-clean-bucket:pages/settings/SettingsDataPage.test.tsx",
+  "dirty-in-clean-bucket:pages/settings/SettingsDesktopPage.dom.test.tsx",
   "dirty-in-clean-bucket:pages/settings/SettingsDiaryPage.test.tsx",
   "dirty-in-clean-bucket:pages/settings/SettingsInsightsPage.test.tsx",
   "dirty-in-clean-bucket:pages/settings/SettingsMorePage.test.tsx",
