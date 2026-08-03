@@ -34,6 +34,11 @@ export function resolveIndentLevel(
 /** 拖拽横向车道：在缩进两档（root/child）左侧再加一档 dock（投递坞现身并接投递）。 */
 export type TodoDragLane = TodoIndentLevel | "dock";
 
+/** 坞容器宽度（`w-44`）。`holdDock` 的几何判定要用它，故与样式同源登记在此。 */
+export const TODO_DOCK_WIDTH_PX = 176;
+/** 坞右缘外的保持缓冲：指针在此带内仍算"在坞上"，避免贴边抖动把坞抖没。 */
+export const TODO_DOCK_HOLD_BUFFER_PX = 16;
+
 /**
  * 由横向位移判定三档车道，dock 档与缩进档同构叠加：
  * - `base="root"`（拖根任务）：左拉越过 -28 进 dock，回撤到 -12 内释放回 root。
@@ -42,23 +47,41 @@ export type TodoDragLane = TodoIndentLevel | "dock";
  * - root/child 之间的判定原样委托 `resolveIndentLevel`，右移语义一字不变。
  * - `keyboard=true`（键盘拖拽）恒返回基线档：跨栏键盘移动会产生很大的 delta.x，
  *   不判 sensor 会把键盘重排误判成出坞/换档；恒基线等价于"视作 deltaX=0"。
+ * - `holdDock=true` 短路释放：**释放线是相对起手点的位移，而坞画在绝对位置**（来源栏左缘），
+ *   两者是两个坐标系。起手点距该左缘近于释放距离时，指针一进坞矩形就已满足释放条件——
+ *   坞会在指针够到药丸前自己关掉，坞开着却一个也投不中。调用方按"指针是否落在坞矩形
+ *  （含右缘缓冲）内"算出 `holdDock`，把"坞开着时指针在坞内永不释放"补成硬保证。
+ *   它只短路释放、不短路进档：否则指针恰好扫过坞矩形就会凭空开坞。
  */
 export function resolveTodoDragLane(
   deltaX: number,
   previous: TodoDragLane,
   base: TodoIndentLevel = "root",
   keyboard = false,
+  holdDock = false,
 ): TodoDragLane {
   if (keyboard) return base;
   const origin = base === "child" ? -TODO_CHILD_INDENT_PX : 0;
   const engage = origin - TODO_CHILD_INDENT_PX;
   const release = origin - TODO_INDENT_RELEASE_PX;
   if (previous === "dock") {
-    if (deltaX < release) return "dock";
+    if (holdDock || deltaX < release) return "dock";
     return resolveIndentLevel(deltaX, "root", base);
   }
   if (deltaX <= engage) return "dock";
   return resolveIndentLevel(deltaX, previous, base);
+}
+
+/**
+ * 车道 → 缩进语义。**dock 档绝不是收纳**：左拉出坞后松手若落在某一行上，按 root 解析
+ * （通常是无操作或同容器重排），不能收纳成该行的子任务。
+ *
+ * 提成纯函数而不是在页面里写三元：这条派生此前只是 `TodoPage` 里的一行，把它合并成
+ * `lane !== "root" ? "child" : "root"` 这类似是而非的写法，整套页面测试照绿，而真机上
+ * 左拉出坞松手会静默改数据（收纳落库）。落在这里才锁得住。
+ */
+export function laneToIndentLevel(lane: TodoDragLane): TodoIndentLevel {
+  return lane === "child" ? "child" : "root";
 }
 
 /**
@@ -399,18 +422,35 @@ export function containerIdForTask(task: Pick<Task, "parentId" | "scheduledAt">,
  *
  * **入参是对象不是两个位置参数**：两者同型 `Collision[]`，写反完全合法、tsc 与任何测试都拦不住，
  * 而写反的后果是每次拖拽都被判成归入项目（closestCenter 几乎总含 `project:` 项，filter 恒非空）。
+ *
+ * **坞的命中资格由 `dockAllowed` 一处裁决**（调用方传 `laneRef.current === "dock"`，ref 逐帧同步、
+ * 零延迟）。此前这条闸挂在药丸的 `useDroppable({disabled})` 上，那是 state 驱动的：值要先经
+ * 一次 React 提交、再经 `useDroppable` 自己的 effect dispatch 一次，才落进 dnd-kit 的可碰撞集合——
+ * 比车道慢两跳。慢出来的窗口两个方向都会咬人：刚释放（坞视觉已收）时 `over` 仍指着药丸，松手
+ * 落一次用户以为已放弃的真实投递；刚进档（坞已展开）时药丸还是禁用的，对着药丸松手却漏接。
+ * 放在这里则两侧同拍。**两条路都要滤**：`pointerHits` 与 `fallback()`（closestCenter 会把坞药丸
+ * 的矩形一并算进去）在无资格时都得剔掉 `dock:`，只滤前者会让兜底路把坞重新放进来。
  */
 export function preferProjectCollisions({
   pointerHits,
   fallback,
+  dockAllowed,
 }: {
   pointerHits: Collision[];
   /** 惰性：指针已落在项目卡内时 closestCenter 的结果注定被丢弃，没必要每帧遍历全部 droppable。 */
   fallback: () => Collision[];
+  /** 当前是否在 dock 车道；false 时坞不参与命中（排序/收纳因此不被坞拦）。 */
+  dockAllowed: boolean;
 }): Collision[] {
+  const isDock = (collision: Collision) => String(collision.id).startsWith("dock:");
   // 坞药丸浮在列表之上:指针同时落在药丸与其下方行/项目组的矩形内时只认坞。
-  const dock = pointerHits.filter((collision) => String(collision.id).startsWith("dock:"));
-  if (dock.length > 0) return dock;
-  const projects = pointerHits.filter((collision) => String(collision.id).startsWith("project:"));
-  return projects.length > 0 ? projects : fallback();
+  if (dockAllowed) {
+    const dock = pointerHits.filter(isDock);
+    if (dock.length > 0) return dock;
+  }
+  const hits = dockAllowed ? pointerHits : pointerHits.filter((collision) => !isDock(collision));
+  const projects = hits.filter((collision) => String(collision.id).startsWith("project:"));
+  if (projects.length > 0) return projects;
+  const rest = fallback();
+  return dockAllowed ? rest : rest.filter((collision) => !isDock(collision));
 }

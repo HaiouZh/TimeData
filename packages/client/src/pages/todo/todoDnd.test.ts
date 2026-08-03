@@ -5,6 +5,7 @@ import {
   clampTodoIndentPreview,
   containerIdForTask,
   hoveredRootIdFromOver,
+  laneToIndentLevel,
   parseTodoContainerId,
   parseTodoDockId,
   preferProjectCollisions,
@@ -115,6 +116,51 @@ describe("resolveTodoDragLane（三档车道）", () => {
     expect(resolveTodoDragLane(-300, "root", "root", true)).toBe("root");
     expect(resolveTodoDragLane(-300, "child", "child", true)).toBe("child");
     expect(resolveTodoDragLane(300, "root", "root", true)).toBe("root");
+  });
+
+  it("dock 释放后落 root 档，不掉进 child（释放线右侧的中间带）", () => {
+    // 终审实测：把 fall-through 的 resolveIndentLevel(deltaX, "root", base) 写成
+    // (deltaX, "child", base) 或 (deltaX, base, base)，只探释放阈值那一个点的用例全绿。
+    // 拖根任务出坞后右甩到 +20（未到 +28 缩进线）应回 root；变异下会进 child 档，
+    // 缩进高亮亮起、松手静默收纳成子任务（真写库）。
+    expect(resolveTodoDragLane(20, "dock")).toBe("root");
+    // 拖子任务出坞后回撤到 -20（已过 -40 释放线）应停在 root（已升根，滞回保持）。
+    expect(resolveTodoDragLane(-20, "dock", "child")).toBe("root");
+  });
+
+  it("base=child：单帧大位移可一步从 child 直达 dock（快速左甩不卡档）", () => {
+    expect(resolveTodoDragLane(-TODO_CHILD_INDENT_PX * 2, "child", "child")).toBe("dock");
+  });
+
+  it("base=child：dock 态右甩越过缩进阈值直接落 child 档", () => {
+    expect(resolveTodoDragLane(TODO_CHILD_INDENT_PX, "dock", "child")).toBe("child");
+  });
+
+  it("holdDock 短路释放：同一位移，指针在坞矩形内就保持 dock、不在就释放", () => {
+    // 释放线是相对起手点的位移，坞却画在绝对位置；起手点贴近栏左缘时，指针一进坞就已满足
+    // 释放条件——坞会在够到药丸前自己关掉。holdDock 是把"坞开着时指针在坞内永不释放"补成硬保证。
+    expect(resolveTodoDragLane(-5, "dock", "root", false, true)).toBe("dock");
+    expect(resolveTodoDragLane(-5, "dock", "root", false, false)).toBe("root");
+  });
+
+  it("holdDock 不制造 dock：未进坞档时它一律不改判定", () => {
+    // 只短路释放、不短路进档——否则指针恰好扫过坞矩形就会凭空开坞。
+    expect(resolveTodoDragLane(-5, "root", "root", false, true)).toBe("root");
+    expect(resolveTodoDragLane(TODO_CHILD_INDENT_PX, "root", "root", false, true)).toBe("child");
+  });
+
+  it("键盘守卫压过 holdDock：键盘拖拽恒基线档", () => {
+    expect(resolveTodoDragLane(-300, "dock", "root", true, true)).toBe("root");
+  });
+});
+
+describe("laneToIndentLevel（车道 → 缩进语义）", () => {
+  it("dock 档按 root 解析——左拉出坞绝不是收纳", () => {
+    // 终审实测：页面里这行三元被合并成 `lane !== "root" ? "child" : "root"`，197 条测试全绿，
+    // 而真机上左拉出坞后松手落在某行会静默收纳落库。提成纯函数才锁得住。
+    expect(laneToIndentLevel("dock")).toBe("root");
+    expect(laneToIndentLevel("root")).toBe("root");
+    expect(laneToIndentLevel("child")).toBe("child");
   });
 });
 
@@ -553,24 +599,28 @@ describe("preferProjectCollisions", () => {
     const result = preferProjectCollisions({
       pointerHits: [hit("project:g1"), hit("t9")],
       fallback: () => [hit("t9")],
+      dockAllowed: true,
     });
     expect(result.map((c) => c.id)).toEqual(["project:g1"]);
   });
 
   it("指针没落在任何项目组 → 原样退回 closestCenter 的结果（既有行为一字不变）", () => {
     const fallback = [hit("t9"), hit("t8")];
-    expect(preferProjectCollisions({ pointerHits: [hit("t9")], fallback: () => fallback })).toBe(fallback);
+    expect(preferProjectCollisions({ pointerHits: [hit("t9")], fallback: () => fallback, dockAllowed: true })).toBe(
+      fallback,
+    );
   });
 
   it("指针命中为空（如键盘拖拽）→ 退回 closestCenter", () => {
     const fallback = [hit("t9")];
-    expect(preferProjectCollisions({ pointerHits: [], fallback: () => fallback })).toBe(fallback);
+    expect(preferProjectCollisions({ pointerHits: [], fallback: () => fallback, dockAllowed: true })).toBe(fallback);
   });
 
   it("同时命中多个项目组时全部保留，交给 dnd-kit 定序", () => {
     const result = preferProjectCollisions({
       pointerHits: [hit("project:g1"), hit("project:g2")],
       fallback: () => [],
+      dockAllowed: true,
     });
     expect(result.map((c) => c.id)).toEqual(["project:g1", "project:g2"]);
   });
@@ -583,6 +633,7 @@ describe("preferProjectCollisions", () => {
         calls += 1;
         return [hit("t9")];
       },
+      dockAllowed: true,
     });
     expect(result.map((c) => c.id)).toEqual(["project:g1"]);
     expect(calls).toBe(0);
@@ -595,13 +646,44 @@ describe("preferProjectCollisions", () => {
       preferProjectCollisions({
         pointerHits: [hit("parent:my-project-notes"), hit("project-ideas")],
         fallback: () => fallback,
+        dockAllowed: true,
       }),
     ).toBe(fallback);
   });
 
   it("数字型 UniqueIdentifier 不炸（dnd-kit 的 id 是 string | number）", () => {
     const fallback = [hit("t9")];
-    expect(preferProjectCollisions({ pointerHits: [{ id: 42 } as never], fallback: () => fallback })).toBe(fallback);
+    expect(
+      preferProjectCollisions({ pointerHits: [{ id: 42 } as never], fallback: () => fallback, dockAllowed: true }),
+    ).toBe(fallback);
+  });
+
+  it("dockAllowed 决定同一份 pointer 命中是投坞还是让给下面的行", () => {
+    // 非 dock 档坞不接投递的机制保证落在这一层（此前挂在药丸的 droppable disabled 上，
+    // 那是 state 驱动、比车道慢两跳提交）。同一份输入只改 dockAllowed：
+    // true → 只认坞；false → 坞被剔除，落点按既有契约退回 closestCenter（下面那行）。
+    const args = { pointerHits: [hit("dock:hand"), hit("t1")], fallback: () => [hit("t1")] };
+    expect(preferProjectCollisions({ ...args, dockAllowed: true }).map((c) => c.id)).toEqual(["dock:hand"]);
+    expect(preferProjectCollisions({ ...args, dockAllowed: false }).map((c) => c.id)).toEqual(["t1"]);
+  });
+
+  it("dockAllowed=false:fallback（closestCenter）里的 dock 药丸同样被剔除", () => {
+    // 只滤 pointerHits 不够：closestCenter 把坞药丸的矩形也算进去，兜底路会把坞重新放回来。
+    const result = preferProjectCollisions({
+      pointerHits: [],
+      fallback: () => [hit("dock:pool:today"), hit("t1")],
+      dockAllowed: false,
+    });
+    expect(result.map((c) => c.id)).toEqual(["t1"]);
+  });
+
+  it("dockAllowed=false:项目组仍照常优先（只剔坞，不动项目判定）", () => {
+    const result = preferProjectCollisions({
+      pointerHits: [hit("dock:hand"), hit("project:g1"), hit("t1")],
+      fallback: () => [],
+      dockAllowed: false,
+    });
+    expect(result.map((c) => c.id)).toEqual(["project:g1"]);
   });
 });
 
@@ -719,15 +801,20 @@ describe("dock 对既有判定的守卫", () => {
     expect(hoveredRootIdFromOver("dock:project:g1", "dock:project:g1", "pool:today")).toBeNull();
   });
 
-  it("preferProjectCollisions:pointer 同时命中 dock 与行/项目时只认 dock", () => {
+  it("preferProjectCollisions:dock 档下 pointer 同时命中 dock 与行/项目时只认 dock", () => {
     const hit = (id: string) => ({ id }) as never;
     const result = preferProjectCollisions({
       pointerHits: [hit("t1"), hit("dock:project:g1"), hit("project:g2")],
       fallback: () => [],
+      dockAllowed: true,
     });
     expect((result as { id: string }[]).map((c) => c.id)).toEqual(["dock:project:g1"]);
     // 无 dock 命中时行为一字不变
-    const noDock = preferProjectCollisions({ pointerHits: [hit("t1"), hit("project:g2")], fallback: () => [] });
+    const noDock = preferProjectCollisions({
+      pointerHits: [hit("t1"), hit("project:g2")],
+      fallback: () => [],
+      dockAllowed: true,
+    });
     expect((noDock as { id: string }[]).map((c) => c.id)).toEqual(["project:g2"]);
   });
 });

@@ -101,9 +101,12 @@ import {
   hoveredRootIdFromOver,
   parseTodoContainerId,
   preferProjectCollisions,
+  laneToIndentLevel,
   resolveTodoDockDrop,
   resolveTodoDragLane,
   resolveTodoDragWithIndent,
+  TODO_DOCK_HOLD_BUFFER_PX,
+  TODO_DOCK_WIDTH_PX,
   type TodoContainer,
   type TodoDragLane,
   type TodoIndentLevel,
@@ -176,6 +179,9 @@ export function TodoPage() {
   const indentBaseRef = useRef<TodoIndentLevel>("root");
   // 键盘拖拽标记：键盘 sensor 的跨栏移动会产生很大 delta.x,不标记会被车道判定误认成左拉出坞。
   const keyboardDragRef = useRef(false);
+  // 拖起时的指针视口 x。车道判定吃的是位移(相对起手点),而坞画在绝对位置——要判"指针是不是在坞上"
+  // 就得把两者换算到同一坐标系,起点即这一份。量不到(键盘/异常路径)记 null,holdDock 恒 false。
+  const dragStartClientXRef = useRef<number | null>(null);
   // dock 车道离散 state：只在越档时变化(setState 同值跳过渲染),驱动坞的细条↔完整形态。
   const [dockEngaged, setDockEngaged] = useState(false);
   const [indentTargetId, setIndentTargetId] = useState<string | null>(null);
@@ -678,12 +684,43 @@ export function TodoPage() {
     const activator = event.activatorEvent?.target;
     const sourceSection = activator instanceof Element ? activator.closest("[data-section]") : null;
     setDockAnchorLeftPx(sourceSection ? Math.round(sourceSection.getBoundingClientRect().left) : null);
+    // PointerEvent 是 MouseEvent 的子类,故一条 instanceof 同时兜住鼠标与指针事件;触摸取首指。
+    const activatorEvent = event.activatorEvent;
+    dragStartClientXRef.current =
+      activatorEvent instanceof MouseEvent
+        ? activatorEvent.clientX
+        : typeof TouchEvent !== "undefined" && activatorEvent instanceof TouchEvent
+          ? (activatorEvent.touches[0]?.clientX ?? null)
+          : null;
   }
 
   function handleDragMove(event: DragMoveEvent): void {
-    const lane = resolveTodoDragLane(event.delta.x, laneRef.current, indentBaseRef.current, keyboardDragRef.current);
-    laneRef.current = lane;
-    setDockEngaged(lane === "dock");
+    // 指针当前视口 x = 起手 x + 位移。坞占 [anchor, anchor+176]，右缘再留一条缓冲带防贴边抖动:
+    // 指针落在这一带内就锁住 dock 档(holdDock)，否则起手点离栏左缘太近时,指针一进坞就先触发释放,
+    // 坞会在够到药丸之前自己关掉(位移坐标系与绝对坐标系的错配,见 resolveTodoDragLane 注释)。
+    const startX = dragStartClientXRef.current;
+    const pointerX = startX === null ? null : startX + event.delta.x;
+    const holdDock =
+      pointerX !== null &&
+      dockAnchorLeftPx !== null &&
+      pointerX >= dockAnchorLeftPx &&
+      pointerX <= dockAnchorLeftPx + TODO_DOCK_WIDTH_PX + TODO_DOCK_HOLD_BUFFER_PX;
+    const lane = resolveTodoDragLane(
+      event.delta.x,
+      laneRef.current,
+      indentBaseRef.current,
+      keyboardDragRef.current,
+      holdDock,
+    );
+    // 量不到锚点时坞退视口右缘,而出坞手势是向左——两者方向互斥,指针结构性够不到药丸。
+    // 与其让坞开在够不着的地方,不如干脆不进 dock 档(坞至多停在细条态)。
+    const finalLane: TodoDragLane = lane === "dock" && dockAnchorLeftPx === null ? "root" : lane;
+    laneRef.current = finalLane;
+    setDockEngaged(finalLane === "dock");
+    // 缩进高亮只在 handleDragOver 里重算,而它只在 over 变化时触发:右移亮起高亮后不纵移、
+    // 直接左拉出坞,高亮会一直挂着与坞同屏——两个互相矛盾的落点承诺。换出 child 档就清掉。
+    // (同值 setState 被 React bailout,不产生逐帧渲染。)
+    if (finalLane !== "child") setIndentTargetId(null);
   }
 
   function targetContainerFromOver(overContainerId: string, rootAboveId: string | null): TodoContainer | null {
@@ -715,7 +752,8 @@ export function TodoPage() {
     setDragCandidateId(null);
     setDragCandidateContainerId(null);
     setDockEngaged(false);
-    const indentLevel: TodoIndentLevel = laneRef.current === "child" ? "child" : "root";
+    const endLane = laneRef.current;
+    const indentLevel: TodoIndentLevel = laneToIndentLevel(endLane);
     laneRef.current = "root";
     setIndentTargetId(null);
     const { active, over } = event;
@@ -751,6 +789,9 @@ export function TodoPage() {
       activeContainerId,
       activeParentId,
     });
+    // 末道闸:over 指着坞、结束时却已不在 dock 档 = dnd-kit 的 over 账本比车道滞后一拍
+    //(它只在指针移动时重算)。用户此刻看到的是坞正在收起,按放弃处理,不替他投一次。
+    if (dockResolution.kind !== "not-dock" && endLane !== "dock") return;
     const dockOutcome =
       dockResolution.kind === "not-dock"
         ? null
@@ -1264,7 +1305,13 @@ export function TodoPage() {
     <DndContext
       sensors={sensors}
       collisionDetection={(args) =>
-        preferProjectCollisions({ pointerHits: pointerWithin(args), fallback: () => closestCenter(args) })
+        preferProjectCollisions({
+          pointerHits: pointerWithin(args),
+          fallback: () => closestCenter(args),
+          // 读 ref 不读 state:车道逐帧同步,state 要多等一次提交才生效——坞的命中资格必须与
+          // 手势同拍,否则刚释放/刚进档两个方向都会开出误投与漏接的窗口。
+          dockAllowed: laneRef.current === "dock",
+        })
       }
       modifiers={[clampTodoIndentPreview]}
       onDragStart={handleDragStart}

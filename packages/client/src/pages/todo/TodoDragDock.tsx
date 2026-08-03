@@ -11,7 +11,11 @@ export interface TodoDockProject {
 export interface TodoDragDockProps {
   /** 拖拽进行中才显形;false 时保持挂载(droppable rect 在拖起瞬间已就绪)但透明。 */
   dragging: boolean;
-  /** 是否处于 dock 车道（左拉过阈值）：true=完整坞并接投递；false 且 dragging=细提示条。 */
+  /**
+   * 是否处于 dock 车道（左拉过阈值）。**true 不等于坞可见**：手头源等空坞时仍是 hidden，
+   * 可见性由 `dragging` 与 `targets` 另行决定（见下方 `state` 推导）。想表达"坞真的展开了"
+   * 要读派生出来的 `state`，别直接读这个 prop。
+   */
   dockEngaged: boolean;
   /** 被拖行的 dnd 容器 id,决定隐藏哪个池药丸;null = 未在拖拽。 */
   activeContainerId: string | null;
@@ -28,6 +32,7 @@ export interface TodoDragDockProps {
    * 坞的左缘锚点(视口坐标 px):拖起时按**来源栏左缘**定位——拖柄在行左 2/5,
    * 锚右缘意味着全程向右横穿,恰是缩进手势(+28px 变子任务)的方向,极易误触;
    * 锚来源栏左缘让行程向左,缩进阈值永远不会被拖向坞的手势触发。null 退回视口右缘。
+   * null 退路下页面层不会进入 dock 车道(右缘与左拉方向互斥、结构性够不到),坞至多停在细条态。
    */
   anchorLeftPx?: number | null;
 }
@@ -50,9 +55,10 @@ function dockTargetIcon(target: TodoDockTarget) {
  */
 function DockPill({ target, label, blocked, engaged }: { target: TodoDockTarget; label: string; blocked: boolean; engaged: boolean }) {
   const id = todoDockId(target);
-  // disabled 的 droppable 不参与任何碰撞（pointerWithin/closestCenter 都不产出）——
-  // 隐身/细条态的坞因此绝不接投递,这是"排序/收纳不被拦"的机制保证,不是视觉让路。
-  const { setNodeRef, isOver } = useDroppable({ id, data: { containerId: id }, disabled: !engaged });
+  // 药丸恒注册 droppable:命中控制集中在 `preferProjectCollisions` 的 `dockAllowed`(页面按车道 ref
+  // 判定、逐帧同步)。此处曾用 `disabled: !engaged`,那是 state 驱动的、比车道慢两跳提交,
+  // 刚释放/刚进档两个方向都会开出误投与漏接的窗口(理由详见该函数注释)。
+  const { setNodeRef, isOver } = useDroppable({ id, data: { containerId: id } });
   return (
     <li
       ref={setNodeRef}
@@ -75,16 +81,18 @@ function DockPill({ target, label, blocked, engaged }: { target: TodoDockTarget;
 }
 
 /**
- * 拖拽投递坞:拖起任务时视口右缘淡入的一列瞬态落点按钮(design spec 2026-07-28-todo-drag-dock,
- * 验收后按用户反馈从小药丸改成等宽大按钮:落点要大、命中要一眼可见)。
- * - 三形态只切透明度/pointer-events/disabled,容器恒 w-44:droppable rect 在拖起时测量,
- *   改宽或晚挂载都会让 dock 档的命中区错位(常驻挂载铁律,与旧版同因)。
- * - pointer-events 只在拖拽中放开:dnd-kit 命中走指针坐标不吃 DOM 事件,但坞内滚动要接滚轮——
- *   恒 none 时滚轮穿透到页面,超出一屏的项目按钮在拖拽中永远够不到;平时 none,不拦点击。
+ * 拖拽投递坞:拖起时来源栏左缘浮出细提示条,左拉过阈值展开成一列落点按钮
+ *(design spec 2026-07-28-todo-drag-dock,验收后按用户反馈从小药丸改成等宽大按钮:
+ * 落点要大、命中要一眼可见;左拉现身见 2026-08-03-todo-dock-left-reveal)。
+ * - 三形态只切透明度/pointer-events/overflow,容器恒 w-44、药丸恒挂载:droppable rect 在拖起时
+ *   测量,改宽或晚挂载都会让 dock 档的命中区错位(常驻挂载铁律,与旧版同因)。
+ * - pointer-events 仅 engaged 态放开:dnd-kit 命中走指针坐标不吃 DOM 事件,但坞内滚动要接滚轮——
+ *   坞展开后滚轮才该归它,超出一屏的项目按钮否则永远够不到;细条态与平时都是 none,不拦点击。
  * - 原 300ms 淡入延迟取消:出坞已有显式左拉信号,"短距重排闪坞"不复存在;
- *   细条/完整坞均 150ms 快速淡入,一拉就到。
- * - overflow-x-hidden 是硬约束:纵向 overflow 会把横向 visible 自动算成 auto,任何内容溢出
- *   都会在坞里生出横向滚动条。
+ *   细条/完整坞均 150ms 快速淡入,一拉就到;隐藏 duration 0 = 松手即散。
+ * - overflow 两轴都是硬约束:纵向 overflow 会把横向 visible 自动算成 auto,任何内容溢出都会在坞里
+ *   生出横向滚动条;纵向 auto 只在 engaged 态开——细条态药丸虽透明仍占高,恒 auto 会让经典
+ *   滚动条系统上浮出一条孤零零的滚动条(旁边只有 4px 细条,什么内容都没有)。
  */
 export function TodoDragDock({
   dragging,
@@ -103,14 +111,14 @@ export function TodoDragDock({
       data-testid="todo-drag-dock"
       data-dock-state={state}
       aria-hidden={state !== "engaged"}
-      className={`group fixed top-1/2 z-[var(--z-dropdown)] flex w-44 max-h-[calc(100vh-6rem)] -translate-y-1/2 flex-col gap-1.5 overflow-y-auto overflow-x-hidden transition-opacity duration-150 before:absolute before:bottom-0 before:left-0 before:top-0 before:w-1 before:rounded-pill before:bg-accent before:opacity-0 before:transition-opacity before:duration-150 ${
+      className={`group fixed top-1/2 z-[var(--z-dropdown)] flex w-44 max-h-[calc(100vh-6rem)] -translate-y-1/2 flex-col gap-1.5 overflow-x-hidden transition-opacity before:absolute before:bottom-0 before:left-0 before:top-0 before:w-1 before:rounded-pill before:bg-accent before:opacity-0 before:transition-opacity before:duration-150 ${
         anchorLeftPx === null ? "right-3" : ""
       } ${
         state === "hidden"
-          ? "pointer-events-none opacity-0"
+          ? "pointer-events-none overflow-y-hidden opacity-0 duration-0"
           : state === "hint"
-            ? "pointer-events-none opacity-100 before:opacity-60"
-            : "pointer-events-auto opacity-100"
+            ? "pointer-events-none overflow-y-hidden opacity-100 duration-150 before:opacity-60"
+            : "pointer-events-auto overflow-y-auto opacity-100 duration-150"
       }`}
       style={anchorLeftPx === null ? undefined : { left: anchorLeftPx }}
     >

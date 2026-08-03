@@ -58,7 +58,27 @@ describe("TodoDragDock", () => {
 });
 
 describe("TodoDragDock 三形态", () => {
-  it("拖拽中未进 dock 档:hint 细条形态,药丸 droppable 禁用", async () => {
+  it("aria-hidden 只在 engaged 态放开:hint 的药丸不可见也投不中,不该报给读屏", async () => {
+    // 把判据写成 `state === "hidden"` 会让 hint 态的四个药丸被读屏当可用落点报出来，
+    // 而此刻它们既隐身又不接投递。原用例只覆盖 dragging=false，这个变异全绿。
+    const hint = await renderDom(
+      <DndContext>
+        <TodoDragDock dragging dockEngaged={false} activeContainerId="pool:inbox" projects={projects} dropBlocked={false} />
+      </DndContext>,
+    );
+    expect(dock(hint.host).getAttribute("aria-hidden")).toBe("true");
+    await unmount(hint.root);
+
+    const engaged = await renderDom(
+      <DndContext>
+        <TodoDragDock dragging dockEngaged activeContainerId="pool:inbox" projects={projects} dropBlocked={false} />
+      </DndContext>,
+    );
+    expect(dock(engaged.host).getAttribute("aria-hidden")).toBe("false");
+    await unmount(engaged.root);
+  });
+
+  it("拖拽中未进 dock 档:hint 细条形态,药丸不接投递(命中由碰撞层按车道剔除)", async () => {
     const { host, root } = await renderDom(
       <DndContext>
         <TodoDragDock dragging dockEngaged={false} activeContainerId="pool:inbox" projects={projects} dropBlocked={false} />
@@ -71,7 +91,7 @@ describe("TodoDragDock 三形态", () => {
     await unmount(root);
   });
 
-  it("进 dock 档:engaged 完整坞,药丸 droppable 启用", async () => {
+  it("进 dock 档:engaged 完整坞,药丸标记为可投", async () => {
     const { host, root } = await renderDom(
       <DndContext>
         <TodoDragDock dragging dockEngaged activeContainerId="pool:inbox" projects={projects} dropBlocked={false} />
