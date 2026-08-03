@@ -30,6 +30,7 @@
     "@fontsource/tinos": "^5.2.7",
     "@meauxt/react-swipeable-list": "^1.0.0",
     "@phosphor-icons/react": "^2.1.10",
+    "@tauri-apps/api": "^2",
     "@timedata/shared": "workspace:*",
     "@xyflow/react": "12.11.1",
     "d3-force": "^3.0.0",

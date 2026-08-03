@@ -58,7 +58,7 @@ export async function punchNow(now: Date = new Date()): Promise<PunchNowResult> 
   return { ok: true, entry };
 }
 
-async function resolveConfiguredPunchCategoryId(): Promise<string | null> {
+export async function resolveConfiguredPunchCategoryId(): Promise<string | null> {
   const categoryId = await getPunchCategoryId();
   if (!categoryId) return null;
 
