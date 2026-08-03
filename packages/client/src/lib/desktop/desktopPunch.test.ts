@@ -152,4 +152,13 @@ describe("确认卡批准后重试：maxHours = 用户批准的那个区间长�
     const outcome = await desktopPunch(PRESSED_AT_MS, 12);
     expect(outcome).toEqual({ kind: "noRange" });
   });
+
+  // 守门员的失败方向必须 fail-closed：NaN 的一切比较都是 false，写成 `> maxHours`
+  // 会让上一条用例那种 `? … : Number.NaN` 的回退模式一旦走错分支就静默放行整段区间。
+  it("maxHours 为 NaN 时弹卡而不是放行（闸坏了要往安全一侧倒）", async () => {
+    await configurePunchCategory();
+    const outcome = await desktopPunch(PRESSED_AT_MS, Number.NaN);
+    expect(outcome.kind).toBe("needsConfirm");
+    expect(await db.timeEntries.count()).toBe(0);
+  });
 });

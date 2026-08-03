@@ -35,7 +35,9 @@ export async function desktopPunch(pressedAtMs: number, maxHours: number): Promi
   const range = resolvePunchRange(nowUtc, todayStartUtc, lastEntry?.endTime ?? null);
   if (!range) return { kind: "noRange" };
   if (!(await resolveConfiguredPunchCategoryId())) return { kind: "missingCategory" };
-  if (rangeHours(range) > maxHours) return { kind: "needsConfirm", range };
+  // 写成否定式而不是 `> maxHours`：NaN 的一切比较都是 false，正向写法会让守门员
+  // 在 maxHours 为 NaN（调用方分支写歪）或 range 含非法 ISO 时静默放行。失败要 fail-closed。
+  if (!(rangeHours(range) <= maxHours)) return { kind: "needsConfirm", range };
 
   const result = await punchNow(pressedAt);
   if (!result.ok) {
