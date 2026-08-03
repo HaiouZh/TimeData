@@ -69,6 +69,7 @@
   "dirty-in-clean-bucket:pages/DiaryPage.wide.test.tsx",
   "dirty-in-clean-bucket:pages/EntryPage.freeze.test.tsx",
   "dirty-in-clean-bucket:pages/EntryPage.test.tsx",
+  "dirty-in-clean-bucket:pages/QuickNotesPage.haptics.test.tsx",
   "dirty-in-clean-bucket:pages/QuickNotesPage.keyboard.test.tsx",
   "dirty-in-clean-bucket:pages/QuickNotesPage.test.tsx",
   "dirty-in-clean-bucket:pages/SearchPage.test.tsx",

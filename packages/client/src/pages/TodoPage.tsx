@@ -830,6 +830,7 @@ export function TodoPage() {
               showToast: (message) => showActionToast({ message }),
               subtaskBlockMessage: (goalTitle) => projectAssignBlockMessage("subtask", goalTitle),
               findGoalTitle: (goalId) => buckets.projects.find((g) => g.goalId === goalId)?.goalTitle ?? null,
+              hapticDrop,
             },
             { dockId: overContainerId || overId, activeContainerId, activeParentId, activeId },
           );

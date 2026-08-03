@@ -16,6 +16,12 @@ export interface TodoDockDropDeps {
   /** 子任务投项目的拒绝文案(页面注入 projectAssignBlockMessage("subtask", title))。 */
   subtaskBlockMessage: (goalTitle: string) => string;
   findGoalTitle: (goalId: string) => string | null;
+  /**
+   * 吸附落位的触感(页面注入 hapticDrop)。只在**手头投递成功**那一支调:
+   * 折算成 op 的那支由页面在 op switch 前统一震,invalid 拒绝与投递失败都不是落位。
+   * design-language §4 第 13 条把「hapticDrop = 拖拽吸附落位」写死了,坞不能例外。
+   */
+  hapticDrop: () => void;
 }
 
 export interface TodoDockDropInput {
@@ -44,6 +50,10 @@ export async function applyTodoDockDrop(
   if (resolution.kind === "grab-to-hand") {
     try {
       await deps.grabToHand(input.activeId);
+      // 抓到手头是**落位成功**,只是被坞消化掉、不再走页面的 op switch,于是曾经绕过了那边的
+      // hapticDrop——同一个动作在药丸上震、在池子里不震,口径劈叉。放在 await 之后:
+      // 与其余落位不同,这一支的成败要等写入回来才知道,失败(下面 catch)不该震。
+      deps.hapticDrop();
     } catch (error) {
       // grabTaskToHand 的抛错消息本就是用户文案(如「子任务不能单独抓到手头」),直接说给用户;
       // 静默吞掉的话体感是「拖上去没反应」——投项目有拒绝 toast、投手头没有,口径会劈叉。
