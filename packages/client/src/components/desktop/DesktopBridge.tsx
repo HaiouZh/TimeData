@@ -152,7 +152,14 @@ export async function startDesktopBridge(
     // toggleMain 由 Rust 直办，前端只认 punch。
     if (event.action === "punch") onPunch(event.pressedAtMs);
   });
-  await io.invoke("desktop_ready");
+  try {
+    await io.invoke("desktop_ready");
+  } catch (err) {
+    // 先占资源、后可能抛：这一步 reject 时监听已经挂上了，而注销函数还没 return 出去——
+    // 调用方的 unlisten 停在 null，卸载时是空操作，监听就此泄漏（重挂一次桥再泄漏一次）。
+    unlisten();
+    throw err;
+  }
   return unlisten;
 }
 

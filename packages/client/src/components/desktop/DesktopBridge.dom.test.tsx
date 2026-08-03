@@ -186,20 +186,58 @@ describe("DesktopBridge 组件接线", () => {
 
   // 队列是 .then 链：某一步 reject 会让后面的 .then 全部跳过，此后每次打点都静音且无报错。
   // 这条同时守「失败要出通知」和「失败之后队列还活着」——少了 catch 两者一起没。
-  it("一次打点失败不卡死队列：出通知，下一次照常写库", async () => {
+  //
+  // 注入形状是**字符串**不是 Error：Tauri 的 invoke 失败 reject 的是 Rust 的 `Err(String)`。
+  // 此前这里抛 `new Error(...)`，正好绕开桥里那条只认 Error 的分支，于是用例绿着、
+  // 还能读到原因，而真机上用户看到的是无信息的「打点失败」四个字。
+  it("一次打点失败不卡死队列：出通知（读得到 Rust 给的原因），下一次照常写库", async () => {
     await seedPunchable();
     await mount();
 
     ipc.invoke.mockImplementationOnce(async (cmd: string) => {
       calls.push(cmd);
-      throw new Error("读配置失败");
+      // eslint 会嫌弃，但这就是 Tauri 的真实形状。
+      throw "读取配置文件 C:\\Users\\me\\desktop-config.json 失败：拒绝访问";
     });
 
     await emitPunch(PRESSED_AT_MS);
-    expect(ipc.invoke).toHaveBeenCalledWith("notify_user", { title: "TimeData", body: "读配置失败" });
+    expect(ipc.invoke).toHaveBeenCalledWith("notify_user", {
+      title: "TimeData",
+      body: "读取配置文件 C:\\Users\\me\\desktop-config.json 失败：拒绝访问",
+    });
     expect(await db.timeEntries.count()).toBe(1); // 失败那次一个字没写，只剩 seed
 
     await emitPunch(PRESSED_AT_MS);
     expect(await db.timeEntries.count()).toBe(2); // 队列没卡死
+  });
+
+  it("失败原因也画进窗口（通知被系统吞掉时还看得见）", async () => {
+    await seedPunchable();
+    const { host } = await mount();
+
+    ipc.invoke.mockImplementationOnce(async (cmd: string) => {
+      calls.push(cmd);
+      throw "读取配置文件失败：拒绝访问";
+    });
+
+    await emitPunch(PRESSED_AT_MS);
+    expect(host.querySelector('[aria-label="桌面打点提示"]')?.textContent).toContain("拒绝访问");
+  });
+
+  // Error 形状（前端自己抛的，如 invokeDesktop 的非桌面守卫）也要读得出原文。
+  it("失败注入换成 Error 形状时同样读得到原因", async () => {
+    await seedPunchable();
+    await mount();
+
+    ipc.invoke.mockImplementationOnce(async (cmd: string) => {
+      calls.push(cmd);
+      throw new Error("invokeDesktop 只能在桌面壳里调用");
+    });
+
+    await emitPunch(PRESSED_AT_MS);
+    expect(ipc.invoke).toHaveBeenCalledWith("notify_user", {
+      title: "TimeData",
+      body: "invokeDesktop 只能在桌面壳里调用",
+    });
   });
 });

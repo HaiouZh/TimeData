@@ -120,6 +120,18 @@ describe("startDesktopBridge 接线顺序", () => {
     returned();
     expect(unlisten).toHaveBeenCalledOnce();
   });
+
+  // 先 listen 再 invoke：中间那步 reject 时监听已经挂上，而注销函数还没 return 出去。
+  // 不在这里摘掉就永远摘不掉了——调用方的 unlisten 停在 null，卸载时是空操作。
+  it("desktop_ready 失败时先把监听摘掉再抛，不留下摘不掉的监听", async () => {
+    const unlisten = vi.fn();
+    const { io, listen, invoke } = makeIo();
+    listen.mockImplementation(async () => unlisten);
+    invoke.mockRejectedValueOnce(new Error("壳没起来"));
+
+    await expect(startDesktopBridge(io, vi.fn())).rejects.toThrow("壳没起来");
+    expect(unlisten).toHaveBeenCalledOnce();
+  });
 });
 
 describe("热键打点分流", () => {
