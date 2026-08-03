@@ -2,7 +2,6 @@ import {
   closestCenter,
   DndContext,
   type DragEndEvent,
-  type DragMoveEvent,
   type DragOverEvent,
   type DragStartEvent,
   KeyboardSensor,
@@ -103,9 +102,8 @@ import {
   preferProjectCollisions,
   laneToIndentLevel,
   resolveTodoDockDrop,
-  resolveTodoDragLane,
+  resolveTodoDragLaneAtPointer,
   resolveTodoDragWithIndent,
-  TODO_DOCK_HOLD_BUFFER_PX,
   type TodoContainer,
   type TodoDragLane,
   type TodoIndentLevel,
@@ -176,11 +174,16 @@ export function TodoPage() {
   const laneRef = useRef<TodoDragLane>("root");
   // 被拖项自身的缩进基线：拖根任务=root（向右变子），拖子任务=child（向左升级为根）。
   const indentBaseRef = useRef<TodoIndentLevel>("root");
-  // 键盘拖拽标记：键盘 sensor 的跨栏移动会产生很大 delta.x,不标记会被车道判定误认成左拉出坞。
+  // 键盘拖拽标记：键盘 sensor 的跨栏移动本身就是一大段横向位移,不标记会被车道判定误认成左拉出坞。
+  // 守卫显式落在纯函数里,不靠"键盘不发 pointermove、坐标恰好没动"这种隐式行为兜底。
   const keyboardDragRef = useRef(false);
   // 拖起时的指针视口坐标。车道判定吃的是位移(相对起手点),而坞画在绝对位置——要判"指针是不是在坞上"
   // 就得把两者换算到同一坐标系,起点即这一份。量不到(键盘/异常路径)记 null,holdDock 恒 false。
   const dragStartPointRef = useRef<{ x: number; y: number } | null>(null);
+  // 指针当前视口坐标,由原生 pointermove/touchmove 直接喂(见下方 useEffect)。**不能改回 dnd-kit
+  // 的 event.delta**:那是过 modifiers 之后的值,出坞要的负位移被 clampTodoIndentPreview 钳没了
+  // (理由详见 resolveTodoDragLaneAtPointer 注释)。
+  const pointerPosRef = useRef<{ x: number; y: number } | null>(null);
   // 坞容器,用来取它的真实矩形:坞垂直居中、高度随药丸数量变,横向带宽算得出、纵向范围只能量。
   const dockElRef = useRef<HTMLUListElement | null>(null);
   // dock 车道离散 state：只在越档时变化(setState 同值跳过渲染),驱动坞的细条↔完整形态。
@@ -695,41 +698,54 @@ export function TodoPage() {
         : touch
           ? { x: touch.clientX, y: touch.clientY }
           : null;
+    // 起手即当下位置,位移为 0：第一个 pointermove 到达前车道判定也拿得到坐标(否则那一帧退回 previous)。
+    pointerPosRef.current = dragStartPointRef.current;
   }
 
-  function handleDragMove(event: DragMoveEvent): void {
-    // 指针当前视口坐标 = 起手点 + 位移。落在坞的真实矩形(四周各留一条缓冲带防贴边抖动)内就锁住
-    // dock 档(holdDock),否则起手点离栏左缘太近时,指针一进坞就先触发释放、坞在够到药丸前自己关掉
-    //(位移坐标系与绝对坐标系的错配,见 resolveTodoDragLane 注释)。
-    // **两轴都要判**:坞垂直居中且只有药丸那么高,只判 x 会让整条纵向带都算"在坞上"——起手点几乎
-    // 总在坞的横向带内(拖柄贴着区块左缘),那样一旦进档就再也释放不掉,右移回去坞也不关。
-    const startPoint = dragStartPointRef.current;
-    const dockRect = dockElRef.current?.getBoundingClientRect() ?? null;
-    const holdDock =
-      startPoint !== null &&
-      dockRect !== null &&
-      dockAnchorLeftPx !== null &&
-      startPoint.x + event.delta.x >= dockRect.left - TODO_DOCK_HOLD_BUFFER_PX &&
-      startPoint.x + event.delta.x <= dockRect.right + TODO_DOCK_HOLD_BUFFER_PX &&
-      startPoint.y + event.delta.y >= dockRect.top - TODO_DOCK_HOLD_BUFFER_PX &&
-      startPoint.y + event.delta.y <= dockRect.bottom + TODO_DOCK_HOLD_BUFFER_PX;
-    const lane = resolveTodoDragLane(
-      event.delta.x,
-      laneRef.current,
-      indentBaseRef.current,
-      keyboardDragRef.current,
-      holdDock,
-    );
-    // 量不到锚点时坞退视口右缘,而出坞手势是向左——两者方向互斥,指针结构性够不到药丸。
-    // 与其让坞开在够不着的地方,不如干脆不进 dock 档(坞至多停在细条态)。
-    const finalLane: TodoDragLane = lane === "dock" && dockAnchorLeftPx === null ? "root" : lane;
-    laneRef.current = finalLane;
-    setDockEngaged(finalLane === "dock");
+  // 车道判定的唯一驱动点。几何全在 resolveTodoDragLaneAtPointer 里(可测),这里只取值、写回。
+  const syncLaneFromPointer = useCallback(() => {
+    const lane = resolveTodoDragLaneAtPointer({
+      pointer: pointerPosRef.current,
+      startPoint: dragStartPointRef.current,
+      // 坞垂直居中、高度随药丸数量变:横向带宽算得出,纵向范围只能量。
+      dockRect: dockElRef.current?.getBoundingClientRect() ?? null,
+      dockAnchored: dockAnchorLeftPx !== null,
+      previous: laneRef.current,
+      base: indentBaseRef.current,
+      keyboard: keyboardDragRef.current,
+    });
+    laneRef.current = lane;
+    setDockEngaged(lane === "dock");
     // 缩进高亮只在 handleDragOver 里重算,而它只在 over 变化时触发:右移亮起高亮后不纵移、
     // 直接左拉出坞,高亮会一直挂着与坞同屏——两个互相矛盾的落点承诺。换出 child 档就清掉。
     // (同值 setState 被 React bailout,不产生逐帧渲染。)
-    if (finalLane !== "child") setIndentTargetId(null);
-  }
+    if (lane !== "child") setIndentTargetId(null);
+  }, [dockAnchorLeftPx]);
+
+  // 车道判定挂**原生指针事件**,不挂 dnd-kit 的 onDragMove:后者只在 event.delta 变化时才发,
+  // 而 delta 过了 modifiers——clampTodoIndentPreview 把根任务的 x 钳死在 0,纯水平左拉时它一动不动,
+  // 事件根本不来(何况那个值本身也判不出出坞位移,见 resolveTodoDragLaneAtPointer)。
+  // 键盘拖拽无指针事件,守卫在纯函数里(恒基线档),这里不特判也不会误动。
+  useEffect(() => {
+    if (!dragging) return;
+    const onPointerMove = (event: PointerEvent) => {
+      pointerPosRef.current = { x: event.clientX, y: event.clientY };
+      syncLaneFromPointer();
+    };
+    // touchmove 是老 WebView 的退路(不发 pointer 事件时);两条写同一份 ref,重复更新无副作用。
+    const onTouchMove = (event: TouchEvent) => {
+      const touch = event.touches[0];
+      if (!touch) return;
+      pointerPosRef.current = { x: touch.clientX, y: touch.clientY };
+      syncLaneFromPointer();
+    };
+    window.addEventListener("pointermove", onPointerMove, { passive: true });
+    window.addEventListener("touchmove", onTouchMove, { passive: true });
+    return () => {
+      window.removeEventListener("pointermove", onPointerMove);
+      window.removeEventListener("touchmove", onTouchMove);
+    };
+  }, [dragging, syncLaneFromPointer]);
 
   function targetContainerFromOver(overContainerId: string, rootAboveId: string | null): TodoContainer | null {
     const container = parseTodoContainerId(overContainerId);
@@ -763,6 +779,7 @@ export function TodoPage() {
     const endLane = laneRef.current;
     const indentLevel: TodoIndentLevel = laneToIndentLevel(endLane);
     laneRef.current = "root";
+    pointerPosRef.current = null;
     setIndentTargetId(null);
     const { active, over } = event;
     if (!over) return;
@@ -1323,7 +1340,6 @@ export function TodoPage() {
       }
       modifiers={[clampTodoIndentPreview]}
       onDragStart={handleDragStart}
-      onDragMove={handleDragMove}
       onDragOver={handleDragOver}
       onDragEnd={(event) => void handleDragEnd(event)}
       onDragCancel={() => {
@@ -1331,6 +1347,7 @@ export function TodoPage() {
         setDragCandidateId(null);
         setDragCandidateContainerId(null);
         laneRef.current = "root";
+        pointerPosRef.current = null;
         setIndentTargetId(null);
         setDockEngaged(false);
       }}

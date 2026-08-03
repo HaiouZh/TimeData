@@ -13,11 +13,15 @@ import {
   projectContainerId,
   resolveIndentLevel,
   resolveTodoDragLane,
+  resolveTodoDragLaneAtPointer,
+  type ResolveTodoDragLaneAtPointerInput,
   resolveTodoDragOperation,
   resolveTodoDragWithIndent,
   TODO_CHILD_INDENT_PX,
   TODO_INDENT_RELEASE_PX,
   type TodoContainer,
+  type TodoDockRect,
+  type TodoDragLane,
   todoContainerId,
   todoDockId,
   todoDockTargets,
@@ -161,6 +165,87 @@ describe("laneToIndentLevel（车道 → 缩进语义）", () => {
     expect(laneToIndentLevel("dock")).toBe("root");
     expect(laneToIndentLevel("root")).toBe("root");
     expect(laneToIndentLevel("child")).toBe("child");
+  });
+});
+
+describe("resolveTodoDragLaneAtPointer（按指针真实坐标解车道）", () => {
+  const START = { x: 300, y: 400 };
+  // 坞:横向 [100,276]（左缘锚区块、宽 w-44=176）,纵向 [300,500]（垂直居中、高随药丸数）。
+  const DOCK: TodoDockRect = { left: 100, right: 276, top: 300, bottom: 500 };
+  const input = (
+    over: Partial<ResolveTodoDragLaneAtPointerInput>,
+  ): ResolveTodoDragLaneAtPointerInput => ({
+    pointer: START,
+    startPoint: START,
+    dockRect: DOCK,
+    dockAnchored: true,
+    previous: "root",
+    base: "root",
+    keyboard: false,
+    ...over,
+  });
+
+  it("根任务左拉过阈值进 dock", () => {
+    expect(resolveTodoDragLaneAtPointer(input({ pointer: { x: START.x - 200, y: START.y } }))).toBe("dock");
+  });
+
+  it("子任务左拉两段：-28 只升根，-56 才出坞", () => {
+    const at = (dx: number, previous: TodoDragLane) =>
+      resolveTodoDragLaneAtPointer(
+        input({ pointer: { x: START.x + dx, y: START.y }, base: "child", previous }),
+      );
+    expect(at(-TODO_CHILD_INDENT_PX, "child")).toBe("root");
+    expect(at(-TODO_CHILD_INDENT_PX * 2, "root")).toBe("dock");
+  });
+
+  it("holdDock 两轴都判：同一位移，指针在坞矩形内保持 dock、只是横向带内则释放", () => {
+    // 位移 -10 已过释放线(-12)：坞开着时靠 holdDock 才留得住。
+    // 坞垂直居中且只有药丸那么高,只判 x 会让整条纵向带都算"在坞上"——起手点几乎总在坞的横向带内
+    //(拖柄贴着区块左缘),那样一旦进档就再也释放不掉,右移回去坞也不关。
+    const at = (y: number) =>
+      resolveTodoDragLaneAtPointer(input({ pointer: { x: START.x - 10, y }, previous: "dock" }));
+    expect(at(START.y)).toBe("dock"); // y 落在坞纵向范围内
+    expect(at(100)).toBe("root"); // x 同在带内、y 在坞上方 → 不该 hold
+  });
+
+  it("量不到锚点（坞退视口右缘）时不进 dock 档", () => {
+    // 坞落右缘而出坞手势向左,方向互斥、指针结构性够不到药丸——与其开在够不着的地方,不如不开。
+    expect(
+      resolveTodoDragLaneAtPointer(input({ pointer: { x: START.x - 200, y: START.y }, dockAnchored: false })),
+    ).toBe("root");
+  });
+
+  it("键盘拖拽恒基线档，不吃指针坐标", () => {
+    expect(
+      resolveTodoDragLaneAtPointer(
+        input({ pointer: { x: START.x - 200, y: START.y }, previous: "dock", keyboard: true }),
+      ),
+    ).toBe("root");
+  });
+
+  it("坐标缺失（首帧未动 / 异常路径）保持原档，不乱跳", () => {
+    expect(resolveTodoDragLaneAtPointer(input({ pointer: null, previous: "child" }))).toBe("child");
+    expect(resolveTodoDragLaneAtPointer(input({ startPoint: null, previous: "dock" }))).toBe("dock");
+  });
+
+  it("防回潮：dnd-kit 的 event.delta 接回车道判定就会坏，那条路已废", () => {
+    // 2026-08-03 真机验收退回的根因。dnd-kit 6.3.1 的 onDragMove 里 delta 不是原始手势位移:
+    //   core.esm.js:2959 modifiedTranslate = applyModifiers(modifiers, { transform: 原始 translate })
+    //   core.esm.js:2983 scrollAdjustedTranslate = add(modifiedTranslate, scrollAdjustment)
+    //   core.esm.js:3229 onDragMove 的 event.delta = scrollAdjustedTranslate
+    // 页面当时喂给车道判定的就是它,而 clampTodoIndentPreview 把根任务的 x 夹进 [0,28]、子任务夹进
+    // [-28,0]——出坞阈值(-28/-56)落在钳制值域之外,dock 档结构性不可达,坞左拉多远都只停在细条态。
+    // 两侧各自的单元测试都不会红:纯函数层直接喂 -28 当然进 dock,modifier 层只断言自己钳得对。
+    // 缩进档当时没跟着坏是边界巧合:钳制上限与缩进阈值同为 TODO_CHILD_INDENT_PX。
+    const clampedX = (containerId: string) =>
+      clampTodoIndentPreview({
+        transform: { x: -200, y: 0, scaleX: 1, scaleY: 1 },
+        active: { data: { current: { containerId } } },
+      } as Parameters<Modifier>[0]).x;
+    expect(resolveTodoDragLane(clampedX("pool:today"), "root", "root")).not.toBe("dock");
+    expect(resolveTodoDragLane(clampedX("parent:root-1"), "child", "child")).not.toBe("dock");
+    // 同一个手势走真实坐标就判得出来。
+    expect(resolveTodoDragLaneAtPointer(input({ pointer: { x: START.x - 200, y: START.y } }))).toBe("dock");
   });
 });
 

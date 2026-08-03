@@ -2828,6 +2828,80 @@ describe("拖拽投递坞", () => {
     }
   });
 
+  it("宽屏鼠标拖起后左拉过阈值:坞展开成完整形态,右拉回位再收回细条", async () => {
+    // 2026-08-03 真机验收退回的回归闸。车道判定曾吃 dnd-kit `onDragMove` 的 `event.delta`,
+    // 而那个值是过了 modifiers 之后的——`clampTodoIndentPreview` 把根任务的 x 夹进 [0,28],
+    // 出坞要的负位移在那条通路上结构性不存在,坞左拉多远都停在 hint。纯函数层(直接喂 -28 当然进 dock)
+    // 与 modifier 层(只断言自己钳得对)各自的用例都不会红,只有这条跨到页面接线的会。
+    const originalMatchMedia = Object.getOwnPropertyDescriptor(window, "matchMedia");
+    Object.defineProperty(window, "matchMedia", {
+      configurable: true,
+      value: (query: string) => ({
+        matches: query === "(min-width: 1024px)",
+        media: query,
+        onchange: null,
+        addEventListener: () => {},
+        removeEventListener: () => {},
+        addListener: () => {},
+        removeListener: () => {},
+        dispatchEvent: () => false,
+      }),
+    });
+    try {
+      await addTask({ title: "买窗帘", toInbox: true });
+      const { host, root } = await renderPage();
+      await waitForText(host, "买窗帘");
+
+      const dockEl = () => host.querySelector('[data-testid="todo-drag-dock"]');
+      await waitForCondition(() => dockEl() !== null, "dock 常驻挂载");
+      const dockState = () => dockEl()?.getAttribute("data-dock-state");
+      expect(dockState()).toBe("hidden");
+
+      // 起手点随便挑一处视口坐标:判定只看它与后续指针坐标的差,不依赖 jsdom 量不出的布局。
+      const START = { x: 300, y: 400 };
+      const handle = host.querySelector('[aria-label="移动 买窗帘"]') as HTMLElement;
+      // MouseSensor 的 activationConstraint 是 { delay: 180, tolerance: 6 }:按住不动等它激活。
+      // 用假定时器推过去,不占真实墙钟。
+      vi.useFakeTimers();
+      try {
+        await act(async () => {
+          handle.dispatchEvent(
+            new MouseEvent("mousedown", { bubbles: true, cancelable: true, clientX: START.x, clientY: START.y }),
+          );
+        });
+        await act(async () => {
+          await vi.advanceTimersByTimeAsync(260);
+        });
+      } finally {
+        vi.useRealTimers();
+      }
+      await waitForCondition(() => dockState() === "hint", "拖起后先出细条预告");
+
+      // 左拉 200px:远超根任务出坞阈值 -28。
+      await act(async () => {
+        window.dispatchEvent(
+          new MouseEvent("pointermove", { bubbles: true, clientX: START.x - 200, clientY: START.y }),
+        );
+      });
+      await waitForCondition(() => dockState() === "engaged", "左拉过阈值坞展开");
+
+      // 右拉回起手点:位移 0 已过释放线(-12),坞收回细条。jsdom 里坞矩形恒 0,指针够不着它,
+      // holdDock 不会误锁——这正是"右移回去坞也不关"那条复审用例的页面侧对照。
+      await act(async () => {
+        window.dispatchEvent(new MouseEvent("pointermove", { bubbles: true, clientX: START.x, clientY: START.y }));
+      });
+      await waitForCondition(() => dockState() === "hint", "右拉回位坞收回细条");
+
+      await act(async () => {
+        document.dispatchEvent(new MouseEvent("mouseup", { bubbles: true }));
+      });
+      await waitForCondition(() => dockState() === "hidden", "松手即散");
+      await unmount(root);
+    } finally {
+      if (originalMatchMedia) Object.defineProperty(window, "matchMedia", originalMatchMedia);
+    }
+  });
+
   it("窄屏(默认 jsdom)不渲染坞", async () => {
     await addTask({ title: "买窗帘", toInbox: true });
     const { host, root } = await renderPage();

@@ -43,7 +43,7 @@ export const TODO_DOCK_HOLD_BUFFER_PX = 16;
  * - `base="child"`（拖子任务）：-28 先升 root（缩进档既有语义），出坞阈值按基线加深一档到 -56，
  *   释放线随之左移到 -40——升根瞬间绝不同时满足出坞条件，两次越档等距、可分辨。
  * - root/child 之间的判定原样委托 `resolveIndentLevel`，右移语义一字不变。
- * - `keyboard=true`（键盘拖拽）恒返回基线档：跨栏键盘移动会产生很大的 delta.x，
+ * - `keyboard=true`（键盘拖拽）恒返回基线档：跨栏键盘移动本身就是一段很大的横向位移，
  *   不判 sensor 会把键盘重排误判成出坞/换档；恒基线等价于"视作 deltaX=0"。
  * - `holdDock=true` 短路释放：**释放线是相对起手点的位移，而坞画在绝对位置**（来源栏左缘），
  *   两者是两个坐标系。起手点距该左缘近于释放距离时，指针一进坞矩形就已满足释放条件——
@@ -70,6 +70,69 @@ export function resolveTodoDragLane(
   return resolveIndentLevel(deltaX, previous, base);
 }
 
+/** 判 `holdDock` 用的坞矩形（与 DOMRect 结构兼容，测试里可直接给字面量）。 */
+export interface TodoDockRect {
+  left: number;
+  right: number;
+  top: number;
+  bottom: number;
+}
+
+export interface ResolveTodoDragLaneAtPointerInput {
+  /** 指针当前视口坐标；量不到（键盘拖拽、拖起后一帧未动）为 null。 */
+  pointer: { x: number; y: number } | null;
+  /** 拖起瞬间的指针视口坐标；键盘拖拽恒 null。 */
+  startPoint: { x: number; y: number } | null;
+  /** 坞元素的真实矩形（`getBoundingClientRect()`）；未挂载为 null。 */
+  dockRect: TodoDockRect | null;
+  /** 坞是否锚到了来源栏左缘；false = 退到视口右缘。 */
+  dockAnchored: boolean;
+  previous: TodoDragLane;
+  base: TodoIndentLevel;
+  keyboard: boolean;
+}
+
+/**
+ * 由**指针真实视口坐标**解出车道——页面接线的唯一入口。
+ *
+ * **横向位移必须自己算，不能用 dnd-kit `onDragMove` 的 `event.delta`**：那个值是过了
+ * `modifiers` 之后的（core.esm.js 2959 `applyModifiers` → 2983 `scrollAdjustedTranslate`
+ * → 3229 事件的 `delta`），而 `clampTodoIndentPreview` 把根任务的 x 夹进 `[0,28]`、子任务夹进
+ * `[-28,0]`——出坞要的更深负位移在那条通路上**结构性不存在**，坞永远停在细条态，左拉多远都不展开
+ * （2026-08-03 真机验收退回项）。缩进档当时没跟着坏纯属边界巧合：modifier 的钳制上限与缩进阈值
+ * 同为 `TODO_CHILD_INDENT_PX`，恰好够得着。
+ *
+ * 同一个理由，`holdDock` 也必须拿真实坐标判，不能按"起手点 + delta"拼装——手拉 200px 而 delta
+ * 只报 0，拼出来的"指针位置"根本不是指针在哪，坞矩形判定会整条失效。
+ *
+ * 另一面：`event.delta` 变了才触发 `onDragMove`，x 被钳死时纯水平左拉根本不发事件。所以调用方
+ * 的驱动源也得是指针事件本身，不能挂在 `onDragMove` 上。
+ */
+export function resolveTodoDragLaneAtPointer({
+  pointer,
+  startPoint,
+  dockRect,
+  dockAnchored,
+  previous,
+  base,
+  keyboard,
+}: ResolveTodoDragLaneAtPointerInput): TodoDragLane {
+  // 键盘拖拽没有指针坐标，判定原样委托给车道函数的键盘守卫（恒基线档）。
+  if (keyboard) return resolveTodoDragLane(0, previous, base, true, false);
+  if (pointer === null || startPoint === null) return previous;
+  const holdDock =
+    dockAnchored &&
+    dockRect !== null &&
+    pointer.x >= dockRect.left - TODO_DOCK_HOLD_BUFFER_PX &&
+    pointer.x <= dockRect.right + TODO_DOCK_HOLD_BUFFER_PX &&
+    pointer.y >= dockRect.top - TODO_DOCK_HOLD_BUFFER_PX &&
+    pointer.y <= dockRect.bottom + TODO_DOCK_HOLD_BUFFER_PX;
+  const lane = resolveTodoDragLane(pointer.x - startPoint.x, previous, base, false, holdDock);
+  // 量不到锚点时坞退视口右缘，而出坞手势向左——两者方向互斥、指针结构性够不到药丸。
+  // 与其让坞开在够不着的地方，不如干脆不进 dock 档（坞至多停在细条态）。
+  return lane === "dock" && !dockAnchored ? "root" : lane;
+}
+
 /**
  * 车道 → 缩进语义。**dock 档绝不是收纳**：左拉出坞后松手若落在某一行上，按 root 解析
  * （通常是无操作或同容器重排），不能收纳成该行的子任务。
@@ -87,7 +150,10 @@ export function laneToIndentLevel(lane: TodoDragLane): TodoIndentLevel {
  * - 拖根任务：只允许向右缩进，夹到 `[0, 28]`。
  * - 拖子任务：只允许向左升级，夹到 `[-28, 0]`，让"向左拽出父"的手势有跟手的虚影。
  *
- * 仅影响渲染 transform；落点判定仍用 `handleDragMove` 里的 raw `delta.x`。
+ * **它不只影响渲染 transform**：dnd-kit 把 modifier 的输出同时当成事件里的 `delta`
+ *（`onDragMove`/`onDragEnd` 都是），所以这里夹掉的位移在整条事件通路上就不存在了。
+ * 车道判定因此不读 `delta`，改由 `resolveTodoDragLaneAtPointer` 拿指针真实坐标自己算——
+ * 早先那句"落点判定仍用 raw delta.x"是错的，坞左拉现身当场栽在这上面（见该函数注释）。
  */
 export const clampTodoIndentPreview: Modifier = ({ transform, active }) => {
   const containerId = (active?.data.current as { containerId?: string } | undefined)?.containerId ?? "";

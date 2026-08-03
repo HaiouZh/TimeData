@@ -14,7 +14,7 @@ last-reviewed: 2026-08-03
 
 ## 承上启下
 
-- **上游**：`TodoPage` 的 `DndContext`。拖起时 `handleDragStart` 量来源区块（`[data-section]`）左缘存 `dockAnchorLeftPx`、记起手指针 x（`dragStartClientXRef`）与是否键盘拖拽（`keyboardDragRef`）；`handleDragMove` 每帧算车道写 `laneRef` 并派生 `dockEngaged` state。
+- **上游**：`TodoPage` 的 `DndContext`。拖起时 `handleDragStart` 量来源区块（`[data-section]`）左缘存 `dockAnchorLeftPx`、记起手指针视口坐标（`dragStartPointRef`）与是否键盘拖拽（`keyboardDragRef`）；此后由 window 上的 `pointermove`/`touchmove` 驱动 `syncLaneFromPointer` 算车道，写 `laneRef` 并派生 `dockEngaged` state。**不走 dnd-kit 的 `onDragMove`**，理由见 §3.1。
 - **下游**：`TodoDragDock` 按 `dragging`/`dockEngaged`/`targets` 推导三形态；`preferProjectCollisions` 按车道决定坞参不参与命中；`handleDragEnd` 经 `resolveTodoDockDrop`/`applyTodoDockDrop` 落库。
 - **契约**：车道判定与落点解析的纯函数全在 `pages/todo/todoDnd.ts`（归母文 covers）：`resolveTodoDragLane` / `laneToIndentLevel` / `preferProjectCollisions` / `todoDockId` / `parseTodoDockId` / `todoDockTargets` / `resolveTodoDockDrop`。本文 §1–§4 是它们的语义合同。
 - **邻居**：[todo](../todo.md)（Task 落点全貌、缩进收纳手势、`§3.5` 的 dnd 身份规则）、[todo/at-hand](at-hand.md)（手头源整区不出坞的理由、子任务投手头的两步落库）、[todo/project-zone](project-zone.md)（子任务不可入组的拒绝口径）。
@@ -40,7 +40,7 @@ last-reviewed: 2026-08-03
   坞展开、接投递      无坞、正常排序      无坞、候选父高亮
 ```
 
-判定在 `resolveTodoDragLane(deltaX, previous, base, keyboard, holdDock)`，与缩进档同构叠加：
+判定分两层：页面唯一入口 `resolveTodoDragLaneAtPointer`（吃指针真实坐标，含 `holdDock` 几何，见 §3）委托阈值状态机 `resolveTodoDragLane(deltaX, previous, base, keyboard, holdDock)`。阈值与缩进档同构叠加：
 
 | 基线 | 出坞阈值 | 释放线 | 说明 |
 |---|---|---|---|
@@ -50,17 +50,29 @@ last-reviewed: 2026-08-03
 - **子任务是两次等距越档，不是一步跨两档**：-28 升根、-56 出坞。升根瞬间绝不同时满足出坞条件——一步跨两档是设计违例。
 - **右移语义一字不变**：root/child 之间的判定原样委托 `resolveIndentLevel`。
 - **`laneToIndentLevel` 派生缩进语义**：`child → child`，`root`/`dock` → `root`。**dock 档绝不是收纳**——左拉出坞后松手若落在某一行上，按 root 解析（通常无操作或同容器重排），不能把任务收纳成那一行的子任务。这条派生落在纯函数而非页面的三元里：写在页面时，把它合并成 `lane !== "root" ? "child" : "root"` 这类似是而非的写法整套页面测试照绿，而真机上左拉出坞松手会静默改数据。
-- **换档要清缩进高亮**：`indentTargetId` 只在 `handleDragOver` 里重算，而 dnd-kit 只在 `over` 变化时触发它。右移亮起高亮后不纵移、直接左拉出坞，高亮会一直挂着与坞同屏——两个互相矛盾的落点承诺，且按高亮松手其实不会收纳（`indentLevel` 此刻已是 root）。故 `handleDragMove` 里换出 child 档就清掉它。
+- **换档要清缩进高亮**：`indentTargetId` 只在 `handleDragOver` 里重算，而 dnd-kit 只在 `over` 变化时触发它。右移亮起高亮后不纵移、直接左拉出坞，高亮会一直挂着与坞同屏——两个互相矛盾的落点承诺，且按高亮松手其实不会收纳（`indentLevel` 此刻已是 root）。故 `syncLaneFromPointer` 里换出 child 档就清掉它。
 
-## 3. 两个坐标系：为什么需要 `holdDock`
+## 3. 两个坐标陷阱：位移从哪来，坞画在哪
 
-车道判定吃的是 `delta.x`——相对**起手点**的位移；而坞画在**绝对位置**——来源区块左缘（`anchorLeftPx`），宽 `w-44`。两者是不同的坐标系。
+### 3.1 位移必须自己算，不能用 dnd-kit 的 `delta`
+
+事件里的 `delta`（`onDragMove` / `onDragEnd`）**不是原始手势位移**，而是过了 `modifiers` 之后的值（dnd-kit 6.3.1：`applyModifiers` → `scrollAdjustedTranslate` → 事件的 `delta`）。本页挂着 `clampTodoIndentPreview`，它把根任务的 x 夹进 `[0,28]`、子任务夹进 `[-28,0]`——**出坞阈值（-28/-56）落在钳制值域之外，dock 档结构性不可达**，坞左拉多远都只停在细条态。
+
+- **缩进档当时没跟着坏纯属边界巧合**：modifier 的钳制上限与缩进阈值同为 `TODO_CHILD_INDENT_PX`，恰好够得着。
+- **两侧各自的单元测试都不会红**：纯函数层直接喂 -28 当然进 dock，modifier 层只断言自己钳得对。闸只能落在跨两者的接缝上（`todoDnd.test.ts` 的"防回潮"用例）与页面接线层（`TodoPage.test.tsx` 的鼠标左拉用例）。
+- **驱动源也得一起换**：`delta` 变了才发 `onDragMove`，x 被钳死时纯水平左拉根本不发事件。
+
+故车道判定走 `resolveTodoDragLaneAtPointer`，吃**指针真实视口坐标**——由页面挂在 window 上的 `pointermove` / `touchmove` 直接喂（`pointerPosRef`），位移 = 当前坐标 − 起手点（`dragStartPointRef`，取自 `activatorEvent`）。`modifiers` 只管视觉预览。
+
+### 3.2 位移是相对量，坞画在绝对位置
+
+车道判定吃的是位移——相对**起手点**；而坞画在**绝对位置**——来源区块左缘（`anchorLeftPx`），宽 `w-44`。两者是不同的坐标系。
 
 坞锚来源区块左缘：拖柄在行左 2/5，锚右缘意味着去坞全程向右横穿，恰是缩进手势（+28px 变子任务）的方向、极易误触；锚左缘让去坞行程向左，与缩进方向岔开。
 
 单靠位移判释放会与这个几何打架：**起手点距该左缘近于释放距离时，指针一进坞矩形就已经满足释放条件**，坞在指针够到药丸之前自己关掉——坞全幅展开、对着药丸松手，什么都不发生。拖柄命中区从行左缘就开始（`absolute left-0 w-2/5`），而行左缘恰好等于区块左缘，"抓行最左边拖起"这个常见起手位必然撞上。
 
-因此判定含一项几何：指针落在坞矩形（四周各含 `TODO_DOCK_HOLD_BUFFER_PX` = 16px 缓冲，防贴边抖动）内时，`holdDock` 短路释放。页面在 `handleDragMove` 里用 `起手点 + delta` 换算指针视口坐标，与坞元素的 `getBoundingClientRect()` 比对（`containerRef`）。
+因此判定含一项几何：指针落在坞矩形（四周各含 `TODO_DOCK_HOLD_BUFFER_PX` = 16px 缓冲，防贴边抖动）内时，`holdDock` 短路释放。几何全在 `resolveTodoDragLaneAtPointer` 里（因而可测），页面只负责把指针坐标与坞元素的 `getBoundingClientRect()`（`containerRef`）取来传进去。**`holdDock` 同样必须拿真实坐标**：按"起手点 + delta"拼装会算出一个根本不是指针所在的位置（手拉 200px 而 delta 只报 0），矩形判定整条失效——与 §3.1 同一个根因。
 
 - **两轴都判，且矩形要量不要算**：坞垂直居中、高度随药丸数量变，纵向范围算不出来。只判 x 会把整条纵向带都算作"在坞上"——而拖柄贴着区块左缘，起手点几乎总落在坞的横向带内，那样一旦进档就再也释放不掉，右移回去坞也不关，纵向扫过药丸带松手即是一次误投。
 - **只短路释放，不短路进档**：否则指针恰好扫过坞矩形就会凭空开坞。
@@ -81,12 +93,12 @@ last-reviewed: 2026-08-03
 
 ## 5. 键盘拖拽：恒基线档
 
-`resolveTodoDragLane` 对键盘拖拽（`keyboard=true`）恒返回基线档。键盘 sensor 的跨栏移动会产生很大的 `delta.x`，不判 sensor 会把键盘重排误判成出坞/换档。
+`resolveTodoDragLane` 对键盘拖拽（`keyboard=true`）恒返回基线档。键盘 sensor 的跨栏移动本身就是"位移"，不判 sensor 会把键盘重排误判成出坞/换档。守卫显式落在纯函数里，不靠"键盘不发指针事件、坐标恰好没动"这种隐式行为兜底——那是实现细节，换 sensor 或补键盘坐标就会失效。
 
 两个后果都是取舍，不是遗漏：
 
 - **键盘投坞不可达**。替代入口齐全：行内滑出菜单、`TaskRow` 行尾 overlay、`TaskDetailSheet` 抽屉里的排今天/回收件箱/抓手头按钮。
-- **键盘拖子任务跨栏悬停在某根行上，解析为收纳而非升根**：恒基线意味着子任务全程停在 child 档，大负 `delta.x` 不再判出"升根"。指针拖拽两条路径都在，键盘下要升根走详情抽屉。
+- **键盘拖子任务跨栏悬停在某根行上，解析为收纳而非升根**：恒基线意味着子任务全程停在 child 档，跨栏移动不再判出"升根"。指针拖拽两条路径都在，键盘下要升根走详情抽屉。
 
 ## 6. 三形态渲染
 
@@ -108,7 +120,8 @@ DOM 见证是容器上的 `data-dock-state`；药丸另有 `data-dock-engaged`�
 
 ## 7. 测试清单
 
-- `pages/todo/todoDnd.test.ts`：三档车道全阈值与滞回（含 base=child 的两次越档、单帧大位移一步进坞、dock 右甩落 child）、`holdDock` 短路释放与"不短路进档"、键盘守卫压过 holdDock、`laneToIndentLevel` 三档、`preferProjectCollisions` 的 `dockAllowed` 双路剔除、坞 id 域往返与落点解析矩阵。
+- `pages/todo/todoDnd.test.ts`：三档车道全阈值与滞回（含 base=child 的两次越档、单帧大位移一步进坞、dock 右甩落 child）、`holdDock` 短路释放与"不短路进档"、键盘守卫压过 holdDock、`laneToIndentLevel` 三档、`preferProjectCollisions` 的 `dockAllowed` 双路剔除、坞 id 域往返与落点解析矩阵。另有 `resolveTodoDragLaneAtPointer` 的几何用例（真实坐标进坞、两轴 `holdDock`、无锚点降级、坐标缺失保持原档）与**防回潮闸**：断言 `clampTodoIndentPreview` 的输出接回车道判定就够不到 dock（§3.1 的根因）。
 - `pages/todo/TodoDragDock.test.tsx`：三形态 DOM 见证、`aria-hidden` 仅 engaged 放开、空坞（手头源/父在手头）不出细条、`dropBlocked` 项目药丸灰态。
-- `pages/TodoPage.test.tsx`：键盘拖起时坞出细条预告（恒基线档）、手头子任务拖起坞恒空。
-- **已知覆盖边界**：页面接线层的指针路径（`holdDock` 组装、`dockAllowed` 传参、末道闸）在 jsdom 造不出真实指针拖拽，靠代码审读与真机验收，不写恒绿用例充数。
+- `pages/TodoPage.test.tsx`：键盘拖起时坞出细条预告（恒基线档）、手头子任务拖起坞恒空、**鼠标拖起后左拉过阈值坞展开、右拉回位收回细条**。
+- **jsdom 造得出指针拖拽**：`mousedown`（带 `clientX/Y`）→ 等 `MouseSensor` 的 180ms delay → 往 window 发 `pointermove` 即可。车道判定只看坐标差，不依赖 jsdom 量不出的布局；坞矩形恒 0 使 `holdDock` 恒 false，正好把释放路径也测进去。
+- **覆盖边界**：真投递（`dockAllowed` 传参、末道闸、药丸命中）要 droppable 矩形，jsdom 全 0 量不出，靠代码审读与真机验收，不写恒绿用例充数。
