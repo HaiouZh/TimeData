@@ -2137,6 +2137,31 @@ describe("主线日期条", () => {
     await unmount(root);
   });
 
+  it("主线药丸走 DateField 的 bare 形态，观感与搜索态那颗逐字同款", async () => {
+    // 守的是一次真实回归：DateField 的字段外观（min-h-11 圆角方块 + 自带底色）曾经赢过
+    // 调用处的 rounded-pill，药丸被撑成 44px 高的方角块。工具类之间比的是生成 CSS 的先后、
+    // 不是 class 串里的先后，所以「在 className 里覆盖」是赌运气——必须靠 bare 换掉基础类。
+    // 漏传 bare 时下面两条断言会同时红。
+    await db.quickNotes.add({
+      id: "p1",
+      text: "药丸形态样本",
+      occurredAt: "2026-06-01T04:00:00.000Z",
+      createdAt: "2026-06-01T04:00:00.000Z",
+      updatedAt: "2026-06-01T04:00:00.000Z",
+    });
+    const { host, root } = await renderPage();
+
+    const trigger = host.querySelector<HTMLButtonElement>('button[aria-label*="点击跳转到其他日期"]');
+    if (!trigger) throw new Error("missing date trigger");
+    expect(trigger.className).toContain("rounded-pill");
+    // 字段外观的三件套一个都不该在：撑高的 min-h-11、方角的 rounded-row、自带的 bg-surface-elevated。
+    for (const fieldLook of ["min-h-11", "rounded-row", "bg-surface-elevated"]) {
+      expect(trigger.className).not.toContain(fieldLook);
+    }
+
+    await unmount(root);
+  });
+
   it("每天各自成一个 sticky 包含块——两天的日期条不共享父节点", async () => {
     await db.quickNotes.bulkAdd([
       {

@@ -19,6 +19,15 @@ export interface DateFieldProps {
   portal?: boolean;
   /** 紧凑场景（如速记日期气泡）不渲染日历图标，只留文字。 */
   hideIcon?: boolean;
+  /**
+   * 触发钮只留行为、不带字段外观（不套 min-h-11 / rounded-row / 边框 / 底色 / 内距 / td-time /
+   * 文字色），整套观感交给 className。
+   *
+   * 为什么需要它而不是「在 className 里覆盖」：Tailwind 工具类之间没有先后之分——同层同特异性
+   * 时谁生效取决于**生成的 CSS 里谁在后面**，不是 class 字符串里谁写在后面。所以给基础类
+   * 追加 `min-h-0 rounded-pill` 是赌运气，实测赌输了（速记日期条被撑成 44px 高的方角块）。
+   */
+  bare?: boolean;
 }
 
 export function DateField({
@@ -35,6 +44,7 @@ export function DateField({
   onOpenChange,
   portal = false,
   hideIcon = false,
+  bare = false,
 }: DateFieldProps) {
   const [open, setOpen] = useState(false);
   const valueDescriptionId = useId();
@@ -88,11 +98,15 @@ export function DateField({
         aria-describedby={valueDescriptionId}
         disabled={disabled}
         onClick={openSheet}
-        className={`flex min-h-11 w-full items-center justify-between gap-2 rounded-row border border-border bg-surface-elevated px-3 td-text-body transition-colors hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-50 ${className ?? ""}`}
+        className={
+          bare
+            ? `flex items-center gap-2 transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${className ?? ""}`
+            : `flex min-h-11 w-full items-center justify-between gap-2 rounded-row border border-border bg-surface-elevated px-3 td-text-body transition-colors hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-50 ${className ?? ""}`
+        }
       >
-        <span className={`flex min-w-0 items-center gap-2 ${value ? "text-ink" : "text-ink-3"}`}>
+        <span className={`flex min-w-0 items-center gap-2 ${bare ? "" : value ? "text-ink" : "text-ink-3"}`}>
           {!hideIcon && <Icon icon={CalendarBlank} size={18} className="shrink-0" />}
-          <span className={`truncate ${value ? "td-time" : ""}`}>{displayValue}</span>
+          <span className={`truncate ${!bare && value ? "td-time" : ""}`}>{displayValue}</span>
         </span>
         <span id={valueDescriptionId} className="sr-only">
           {accessibleValue}

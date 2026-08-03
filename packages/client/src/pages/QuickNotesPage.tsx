@@ -1488,7 +1488,12 @@ export default function QuickNotesPage() {
                           onOpenChange={setDatePickerOpen}
                           portal
                           hideIcon
-                          className="min-h-0 rounded-pill border border-border bg-surface px-2.5 td-text-body font-medium text-ink-3 shadow-none"
+                          // bare 是承重的：不加它，DateField 的字段外观（min-h-11 / rounded-row /
+                          // 底色 / td-time）会赢过这里的 className——工具类之间比的是生成 CSS 的
+                          // 先后，不是 class 串里的先后。className 与搜索态那颗药丸逐字一致，
+                          // 两处观感必须同款（搜索态在 data-search-date 那段）。
+                          bare
+                          className="rounded-pill border border-border bg-surface px-2.5 td-text-body font-medium text-ink-3"
                           formatValue={() => <span>{groupDate.label}</span>}
                         />
                         {selectionMode && (
