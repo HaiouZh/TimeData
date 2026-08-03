@@ -135,4 +135,20 @@ describe("undoToggleWithTrackConclude", () => {
     expect((await db.tasks.get(done.id))?.done).toBe(false);
     expect((await db.tracks.get(track.id))?.status).toBe("active");
   });
+
+  // 提示存活 6 秒，期间用户完全可能自己先取消了勾选，再回头点撤销。
+  // toggleTaskDone 是**翻转**——无条件调它会把任务反向勾成已完成，与「撤销 = 回退」相反。
+  it("撤销时任务已被自己取消勾选 → 不把它反向勾成已完成，只重开轨道", async () => {
+    const task = await addTask({ title: "先勾后悔又手动取消的活" });
+    const track = await promoteTaskToTrack(task);
+    const { task: done, concludedTrack } = await toggleTaskDoneWithTrackConclude(task.id);
+    // 用户没点撤销，而是自己又取消勾选一次（单向联动：这次不会重开轨道、也不弹新提示，旧提示还在）。
+    await toggleTaskDoneWithTrackConclude(done.id);
+    expect((await db.tasks.get(done.id))?.done).toBe(false);
+
+    // 此刻点旧提示上的「撤销」。
+    await undoToggleWithTrackConclude(done.id, (concludedTrack as Track).id);
+    expect((await db.tasks.get(done.id))?.done).toBe(false);
+    expect((await db.tracks.get(track.id))?.status).toBe("active");
+  });
 });

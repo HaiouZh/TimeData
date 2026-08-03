@@ -1,4 +1,5 @@
 import type { Task, Track } from "@timedata/shared";
+import { db } from "../db/index.js";
 import { findActiveTrackForTask } from "./taskTrackIndex.js";
 import { toggleTaskDone } from "./tasks.js";
 import { addTrack, listTracks, setTrackStatus } from "./tracks.js";
@@ -79,6 +80,10 @@ export async function undoToggleWithTrackConclude(
   trackId: string,
   options: { now?: Date } = {},
 ): Promise<void> {
-  await toggleTaskDone(taskId, options);
+  // 先读当前态再决定翻不翻：`toggleTaskDone` 是**翻转**、不接受目标状态。提示存活 6 秒，
+  // 期间用户完全可能自己已经取消过勾选——那时再无条件 toggle 会把任务反向勾成已完成，
+  // 与「撤销 = 回退」正好相反。只有仍停在已完成态时才需要翻回去。
+  const current = await db.tasks.get(taskId);
+  if (current?.done === true) await toggleTaskDone(taskId, options);
   await setTrackStatus(trackId, "active", { now: options.now });
 }

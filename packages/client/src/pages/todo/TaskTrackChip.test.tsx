@@ -54,6 +54,21 @@ describe("TaskTrackChip", () => {
     await unmount(root);
   });
 
+  // 只钉 agent 一档的话，把 warn 与 default 两行的类名串互换不会被抓到——三档要各钉各的。
+  it.each([
+    ["warn", "待我处理"],
+    ["default", "卡住"],
+  ] as const)("有信号 tone=%s：落对应真实类名", async (tone, tag) => {
+    const info: TaskTrackInfo = { track: makeTrack(), signal: { tag, stepId: "s1" }, tone };
+    const { host, root } = await renderChip(info);
+    const chip = host.querySelector('[data-testid="task-track-chip"]') as HTMLAnchorElement;
+    expect(chip.dataset.tone).toBe(tone);
+    for (const cls of BADGE_TONE_CLASSES[tone].split(" ")) {
+      expect(chip.className).toContain(cls);
+    }
+    await unmount(root);
+  });
+
   it("无信号：显示「轨道」、data-tone=none", async () => {
     const info: TaskTrackInfo = { track: makeTrack(), signal: null, tone: "default" };
     const { host, root } = await renderChip(info);
