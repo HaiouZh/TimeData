@@ -103,7 +103,7 @@ export function TodoDragDock({
       data-testid="todo-drag-dock"
       data-dock-state={state}
       aria-hidden={state !== "engaged"}
-      className={`group fixed top-1/2 z-[var(--z-dropdown)] flex w-44 max-h-[calc(100vh-6rem)] -translate-y-1/2 flex-col gap-1.5 overflow-y-auto overflow-x-hidden transition-opacity duration-150 before:absolute before:bottom-0 before:left-0 before:top-0 before:w-1 before:rounded-full before:bg-accent before:opacity-0 before:transition-opacity before:duration-150 ${
+      className={`group fixed top-1/2 z-[var(--z-dropdown)] flex w-44 max-h-[calc(100vh-6rem)] -translate-y-1/2 flex-col gap-1.5 overflow-y-auto overflow-x-hidden transition-opacity duration-150 before:absolute before:bottom-0 before:left-0 before:top-0 before:w-1 before:rounded-pill before:bg-accent before:opacity-0 before:transition-opacity before:duration-150 ${
         anchorLeftPx === null ? "right-3" : ""
       } ${
         state === "hidden"
