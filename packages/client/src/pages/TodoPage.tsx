@@ -101,10 +101,11 @@ import {
   hoveredRootIdFromOver,
   parseTodoContainerId,
   preferProjectCollisions,
-  resolveIndentLevel,
   resolveTodoDockDrop,
+  resolveTodoDragLane,
   resolveTodoDragWithIndent,
   type TodoContainer,
+  type TodoDragLane,
   type TodoIndentLevel,
 } from "./todo/todoDnd.js";
 
@@ -170,9 +171,13 @@ export function TodoPage() {
   // 拖拽期间挂 todo-dnd-dragging：临时解除 .swipeable-list-item 的 overflow:hidden，
   // 否则 dnd-kit 的 translateY 会被裁掉、被拖/让位的行隐身（index.css 有对应规则）。
   const [dragging, setDragging] = useState(false);
-  const indentRef = useRef<TodoIndentLevel>("root");
+  const laneRef = useRef<TodoDragLane>("root");
   // 被拖项自身的缩进基线：拖根任务=root（向右变子），拖子任务=child（向左升级为根）。
   const indentBaseRef = useRef<TodoIndentLevel>("root");
+  // 键盘拖拽标记：键盘 sensor 的跨栏移动会产生很大 delta.x,不标记会被车道判定误认成左拉出坞。
+  const keyboardDragRef = useRef(false);
+  // dock 车道离散 state：只在越档时变化(setState 同值跳过渲染),驱动坞的细条↔完整形态。
+  const [dockEngaged, setDockEngaged] = useState(false);
   const [indentTargetId, setIndentTargetId] = useState<string | null>(null);
   const [revealChildren, setRevealChildren] = useState<{ id: string; nonce: number } | null>(null);
   // 拖拽落库前的乐观重排：containerId → 该容器的最新渲染序。放手瞬间先同步渲染新序，
@@ -662,7 +667,9 @@ export function TodoPage() {
     const activeContainerId = (event.active.data.current as { containerId?: string } | undefined)?.containerId ?? "";
     const base: TodoIndentLevel = parseTodoContainerId(activeContainerId)?.kind === "parent" ? "child" : "root";
     indentBaseRef.current = base;
-    indentRef.current = base;
+    laneRef.current = base;
+    keyboardDragRef.current = event.activatorEvent instanceof KeyboardEvent;
+    setDockEngaged(false);
     setIndentTargetId(null);
     setDragging(true);
     setDragCandidateId(String(event.active.id));
@@ -674,7 +681,9 @@ export function TodoPage() {
   }
 
   function handleDragMove(event: DragMoveEvent): void {
-    indentRef.current = resolveIndentLevel(event.delta.x, indentRef.current, indentBaseRef.current);
+    const lane = resolveTodoDragLane(event.delta.x, laneRef.current, indentBaseRef.current, keyboardDragRef.current);
+    laneRef.current = lane;
+    setDockEngaged(lane === "dock");
   }
 
   function targetContainerFromOver(overContainerId: string, rootAboveId: string | null): TodoContainer | null {
@@ -689,7 +698,7 @@ export function TodoPage() {
 
   function handleDragOver(event: DragOverEvent): void {
     const { active, over } = event;
-    if (!over || indentRef.current !== "child") {
+    if (!over || laneRef.current !== "child") {
       setIndentTargetId(null);
       return;
     }
@@ -705,8 +714,9 @@ export function TodoPage() {
     setDragging(false);
     setDragCandidateId(null);
     setDragCandidateContainerId(null);
-    const indentLevel = indentRef.current;
-    indentRef.current = "root";
+    setDockEngaged(false);
+    const indentLevel: TodoIndentLevel = laneRef.current === "child" ? "child" : "root";
+    laneRef.current = "root";
     setIndentTargetId(null);
     const { active, over } = event;
     if (!over) return;
@@ -1265,8 +1275,9 @@ export function TodoPage() {
         setDragging(false);
         setDragCandidateId(null);
         setDragCandidateContainerId(null);
-        indentRef.current = "root";
+        laneRef.current = "root";
         setIndentTargetId(null);
+        setDockEngaged(false);
       }}
     >
       <div className={`min-h-full bg-page text-ink${dragging ? " todo-dnd-dragging" : ""}`}>
@@ -1340,6 +1351,7 @@ export function TodoPage() {
         {wide && (
           <TodoDragDock
             dragging={dragging}
+            dockEngaged={dockEngaged}
             activeContainerId={dragCandidateContainerId}
             projects={selectableProjects}
             dropBlocked={dragDropBlocked}

@@ -2767,7 +2767,7 @@ describe("TodoPage 多选提交", () => {
 });
 
 describe("拖拽投递坞", () => {
-  it("宽屏键盘拖起收件箱行:坞显形、药丸集合正确;Escape 后隐藏", async () => {
+  it("宽屏键盘拖起收件箱行:坞出细条预告、药丸集合正确;Escape 后隐藏", async () => {
     // 宽屏:useIsWideScreen 走 matchMedia("(min-width: 1024px)")。存原值,测试尾恢复,别污染同文件其他用例。
     const originalMatchMedia = Object.getOwnPropertyDescriptor(window, "matchMedia");
     Object.defineProperty(window, "matchMedia", {
@@ -2802,13 +2802,14 @@ describe("拖拽投递坞", () => {
 
       const dockEl = () => host.querySelector('[data-testid="todo-drag-dock"]');
       await waitForCondition(() => dockEl() !== null, "dock 常驻挂载");
-      expect(dockEl()?.getAttribute("aria-hidden")).toBe("true");
+      expect(dockEl()?.getAttribute("data-dock-state")).toBe("hidden");
 
       const handle = host.querySelector('[aria-label="移动 买窗帘"]') as HTMLElement;
       await act(async () => {
         handle.dispatchEvent(new KeyboardEvent("keydown", { code: "Space", bubbles: true, cancelable: true }));
       });
-      expect(dockEl()?.getAttribute("aria-hidden")).toBe("false");
+      // 键盘拖拽恒基线档，坞只出细条预告、不接投递。
+      expect(dockEl()?.getAttribute("data-dock-state")).toBe("hint");
       const ids = [...host.querySelectorAll('[data-testid="todo-dock-pill"]')].map((el) =>
         el.getAttribute("data-dock-id"),
       );
@@ -2820,7 +2821,7 @@ describe("拖拽投递坞", () => {
       await act(async () => {
         document.dispatchEvent(new KeyboardEvent("keydown", { code: "Escape", bubbles: true, cancelable: true }));
       });
-      await waitForCondition(() => dockEl()?.getAttribute("aria-hidden") === "true", "松手即散");
+      await waitForCondition(() => dockEl()?.getAttribute("data-dock-state") === "hidden", "松手即散");
       await unmount(root);
     } finally {
       if (originalMatchMedia) Object.defineProperty(window, "matchMedia", originalMatchMedia);
@@ -2898,14 +2899,10 @@ describe("拖拽投递坞", () => {
       await act(async () => {
         childHandle.dispatchEvent(new KeyboardEvent("keydown", { code: "Space", bubbles: true, cancelable: true }));
       });
-      // 拖拽中(dragging=true)坞容器本身可见,但一个药丸都不出——与手头根行拖起时的行为一致。
-      expect(dockEl()?.getAttribute("aria-hidden")).toBe("false");
+      // 手头源空坞连细条都不出(hidden 态),药丸恒零——与手头根行(拖起不出坞)保持一致。
+      expect(dockEl()?.getAttribute("data-dock-state")).toBe("hidden");
       expect(host.querySelectorAll('[data-testid="todo-dock-pill"]').length).toBe(0);
 
-      await act(async () => {
-        document.dispatchEvent(new KeyboardEvent("keydown", { code: "Escape", bubbles: true, cancelable: true }));
-      });
-      await waitForCondition(() => dockEl()?.getAttribute("aria-hidden") === "true", "松手即散");
       await unmount(root);
     } finally {
       if (originalMatchMedia) Object.defineProperty(window, "matchMedia", originalMatchMedia);
