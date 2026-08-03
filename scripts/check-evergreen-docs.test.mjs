@@ -37,6 +37,31 @@ test("stripCode preserves line count while removing fenced and inline code", () 
   assert.doesNotMatch(stripped, /inline/);
 });
 
+test("stripCode removes tilde, long, unclosed, and indented code blocks", () => {
+  const content = [
+    "~~~html",
+    '<a id="tilde-example"></a>',
+    "~~~~",
+    "````markdown",
+    '<a id="long-example"></a>',
+    "````",
+    "    <a id=\"indented-example\"></a>",
+    "```md",
+    '<a id="unclosed-example"></a>',
+  ].join("\n");
+
+  const stripped = docsCheck.stripCode(content);
+
+  assert.equal(stripped.split("\n").length, content.split("\n").length);
+  assert.deepEqual(docsCheck.parseAnchors(stripped), []);
+});
+
+test("stripCode removes inline code spans delimited by more than one backtick", () => {
+  const content = 'before ``<a id="inline-example"></a>`` after';
+
+  assert.deepEqual(docsCheck.parseAnchors(docsCheck.stripCode(content)), []);
+});
+
 test("parseMarkdownLinks records the source line for links on lines 3 and 5", () => {
   assert.equal(typeof docsCheck.parseMarkdownLinks, "function");
   const content = ["one", "two", "[A](a.md)", "four", "[B](b.md#target)"].join("\n");
@@ -432,6 +457,12 @@ test("findMalformedAnchors reports only malformed standalone anchor lines", () =
     { line: 2, text: '<a id="unclosed">' },
     { line: 3, text: '<a id="self-closing" />' },
   ]);
+});
+
+test("findMalformedAnchors ignores attributes whose names or values merely contain id", () => {
+  const content = ['<a data-id="demo"></a>', '<a aria-label="foo id=demo"></a>'].join("\n");
+
+  assert.deepEqual(docsCheck.findMalformedAnchors(content), []);
 });
 
 test("findDuplicateAnchors reports the first and second documents sharing an id", () => {

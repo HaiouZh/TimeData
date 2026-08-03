@@ -142,8 +142,61 @@ function parseFrontmatter(content) {
   return data;
 }
 
+function stripInlineCode(line) {
+  let output = "";
+  let cursor = 0;
+  while (cursor < line.length) {
+    const start = line.indexOf("`", cursor);
+    if (start < 0) {
+      output += line.slice(cursor);
+      break;
+    }
+    output += line.slice(cursor, start);
+    let openingEnd = start + 1;
+    while (line[openingEnd] === "`") openingEnd += 1;
+    const runLength = openingEnd - start;
+    let search = openingEnd;
+    let closingStart = -1;
+    while (search < line.length) {
+      const candidate = line.indexOf("`", search);
+      if (candidate < 0) break;
+      let candidateEnd = candidate + 1;
+      while (line[candidateEnd] === "`") candidateEnd += 1;
+      if (candidateEnd - candidate === runLength) {
+        closingStart = candidate;
+        break;
+      }
+      search = candidateEnd;
+    }
+    if (closingStart < 0) {
+      output += line.slice(start, openingEnd);
+      cursor = openingEnd;
+      continue;
+    }
+    cursor = closingStart + runLength;
+  }
+  return output;
+}
+
 export function stripCode(content) {
-  return content.replace(/```[\s\S]*?```/g, (block) => block.replace(/[^\n]/g, "")).replace(/`[^`\n]*`/g, "");
+  let fence = null;
+  return content
+    .split("\n")
+    .map((line) => {
+      if (fence) {
+        const closing = line.match(/^[ \t]{0,3}([`~]{3,})[ \t]*$/);
+        if (closing && closing[1][0] === fence.char && closing[1].length >= fence.length) fence = null;
+        return "";
+      }
+      const opening = line.match(/^[ \t]{0,3}([`~]{3,})(.*)$/);
+      if (opening && !(opening[1][0] === "`" && opening[2].includes("`"))) {
+        fence = { char: opening[1][0], length: opening[1].length };
+        return "";
+      }
+      if (/^(?: {4}|\t)/.test(line)) return "";
+      return stripInlineCode(line);
+    })
+    .join("\n");
 }
 
 export function parseAnchors(content) {
@@ -155,7 +208,9 @@ export function findMalformedAnchors(content) {
   const lines = content.split("\n");
   for (let index = 0; index < lines.length; index++) {
     const text = lines[index].trim();
-    if (!/^<a\b/.test(text) || !/\bid=/.test(text)) continue;
+    const opening = text.match(/^<a\b[^>]*>/i)?.[0];
+    const attributes = opening?.slice(2, -1).replace(/"[^"]*"|'[^']*'/g, "") ?? "";
+    if (!opening || !/(?:^|\s)id\s*=/i.test(attributes)) continue;
     if (!/^<a\s+id="[^"]+"\s*>\s*<\/a\s*>$/.test(text)) {
       malformed.push({ line: index + 1, text });
     }
