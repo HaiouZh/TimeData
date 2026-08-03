@@ -18,6 +18,9 @@ import {
   getAddedFiles,
   getChangedFiles,
   listSubDocs,
+  modeSize,
+  parseDoc,
+  parseFrontmatter,
   parseArgs,
   selectChangedEvergreenDocs,
   selectUncovered,
@@ -206,6 +209,44 @@ function validateFrontmatter(fm, filePath = "docs/evergreen/demo.md") {
   return docsCheck.validateFrontmatter(fm, filePath);
 }
 
+test("parseDoc carries unconsumed, malformed-list, and duplicate-key frontmatter errors from raw markdown", () => {
+  const doc = parseDoc(
+    "docs/evergreen/demo.md",
+    [
+      "---",
+      "type: evergreen",
+      "title: Demo",
+      "covers:",
+      "  -",
+      "  this must not be ignored",
+      "title: Duplicate",
+      "last-reviewed: 2026-08-04",
+      "---",
+      "",
+      "# Demo",
+    ].join("\n"),
+  );
+
+  assert.deepEqual(
+    doc.frontmatterIssues.map((issue) => [issue.kind, issue.key]),
+    [
+      ["invalid-list-item", "covers"],
+      ["unconsumed-line", undefined],
+      ["duplicate-key", "title"],
+    ],
+  );
+  assert.match(doc.frontmatterIssues[0].detail, /invalid list item/);
+  assert.match(doc.frontmatterIssues[1].detail, /unconsumed frontmatter line/);
+  assert.match(doc.frontmatterIssues[2].detail, /duplicate frontmatter key "title"/);
+});
+
+test("parseFrontmatter keeps parsed data and raw parsing issues separate", () => {
+  const result = parseFrontmatter(["---", "type: evergreen", "title: Demo", "title: Duplicate", "---"].join("\n"));
+
+  assert.equal(result.data.title, "Duplicate");
+  assert.deepEqual(result.issues.map((issue) => issue.kind), ["duplicate-key"]);
+});
+
 test("validateFrontmatter reports unknown frontmatter keys", () => {
   assert.deepEqual(validateFrontmatter({ type: "evergreen", title: "Demo", cover: [], "last-reviewed": "2026-08-04" }), [
     {
@@ -256,6 +297,16 @@ test("validateFrontmatter accepts a vertical doc with contracts and empty covers
   );
 });
 
+test("parseDoc requires exact evergreen type only for an evergreen path", () => {
+  const raw = ["---", "type: adr", "title: Demo", "last-reviewed: 2026-08-04", "---"].join("\n");
+
+  const evergreen = parseDoc("docs/evergreen/disguised.md", raw);
+  const adr = parseDoc("docs/adr/disguised.md", raw);
+
+  assert.deepEqual(evergreen.frontmatterIssues.map((issue) => [issue.kind, issue.key]), [["bad-value", "type"]]);
+  assert.deepEqual(adr.frontmatterIssues, []);
+});
+
 test("evaluateSizes does NOT ratchet char growth under the hard cap", () => {
   // 正文可自由增长：远超旧「基线」字符数，只要不过 hard cap 就放行。
   const docs = [{ filePath: "docs/evergreen/a.md", covers: ["x"], chars: 24000 }];
@@ -292,6 +343,24 @@ test("evaluateSizes flags an evergreen doc with both covers and contracts empty"
   });
 });
 
+test("evaluateSizes still checks an evergreen path whose raw type says adr", () => {
+  const { data } = parseFrontmatter(["---", "type: adr", "title: Disguised", "last-reviewed: 2026-08-04", "---"].join("\n"));
+  const docs = [{ filePath: "docs/evergreen/disguised.md", ...data, chars: 9000 }];
+
+  const res = evaluateSizes(docs, { "docs/evergreen/disguised.md": { covers: 0 } }, SIZE_CAPS);
+
+  assert.deepEqual(res.violations, [
+    { filePath: "docs/evergreen/disguised.md", kind: "no-gate", current: 0, limit: 0 },
+  ]);
+});
+
+test("evaluateSizes does not size-check an ADR path even when its raw type says evergreen", () => {
+  const { data } = parseFrontmatter(["---", "type: evergreen", "title: ADR", "last-reviewed: 2026-08-04", "---"].join("\n"));
+  const docs = [{ filePath: "docs/adr/example.md", ...data, chars: 26000 }];
+
+  assert.deepEqual(evaluateSizes(docs, {}, SIZE_CAPS), { violations: [], ok: true });
+});
+
 test("evaluateSizes accepts an evergreen doc with empty covers but non-empty contracts", () => {
   const docs = [{ filePath: "docs/evergreen/a.md", covers: [], contracts: ["packages/shared/src/schemas.ts"], chars: 9000 }];
   const baseline = { "docs/evergreen/a.md": { covers: 0 } };
@@ -299,6 +368,13 @@ test("evaluateSizes accepts an evergreen doc with empty covers but non-empty con
   const res = evaluateSizes(docs, baseline, { softChars: 15000, hardChars: 25000 });
 
   assert.equal(res.ok, true);
+});
+
+test("evaluateSizes normalizes a missing covers field before checking contracts", () => {
+  const docs = [{ filePath: "docs/evergreen/vertical.md", contracts: ["packages/shared/src/schemas.ts"], chars: 9000 }];
+  const baseline = { "docs/evergreen/vertical.md": { covers: 0 } };
+
+  assert.deepEqual(evaluateSizes(docs, baseline, SIZE_CAPS), { violations: [], ok: true });
 });
 
 test("evaluateSizes accepts older fixtures without a contracts property", () => {
@@ -384,6 +460,37 @@ test("evaluateSizes fails when baseline contains a removed evergreen doc", () =>
     current: 0,
     limit: 0,
   });
+});
+
+test("modeSize does not suggest rewriting the baseline for a pure no-gate failure", () => {
+  const errors = [];
+  const exitCode = modeSize(
+    [{ filePath: "docs/evergreen/ungated.md", covers: [], contracts: [], chars: 9000, frontmatterIssues: [] }],
+    {
+      baseline: { "docs/evergreen/ungated.md": { covers: 0 } },
+      error: (line) => errors.push(line),
+      log: () => {},
+    },
+  );
+
+  assert.equal(exitCode, 1);
+  assert.doesNotMatch(errors.join("\n"), /重写基线/);
+  assert.match(errors.join("\n"), /covers\/contracts 双空/);
+});
+
+test("modeSize suggests rewriting the baseline for covers growth", () => {
+  const errors = [];
+  const exitCode = modeSize(
+    [{ filePath: "docs/evergreen/grown.md", covers: ["a", "b"], contracts: [], chars: 9000, frontmatterIssues: [] }],
+    {
+      baseline: { "docs/evergreen/grown.md": { covers: 1 } },
+      error: (line) => errors.push(line),
+      log: () => {},
+    },
+  );
+
+  assert.equal(exitCode, 1);
+  assert.match(errors.join("\n"), /重写基线/);
 });
 
 test("getAddedFiles invokes git diff --diff-filter=A plus untracked", () => {

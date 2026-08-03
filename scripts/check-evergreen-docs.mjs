@@ -113,13 +113,14 @@ function unquote(s) {
   return t;
 }
 
-function parseFrontmatter(content) {
+export function parseFrontmatter(content) {
   const norm = content.replace(/\r\n?/g, "\n");
-  if (!norm.startsWith("---\n")) return {};
+  if (!norm.startsWith("---\n")) return { data: {}, issues: [] };
   const closeIdx = norm.indexOf("\n---", 4);
-  if (closeIdx === -1) return {};
+  if (closeIdx === -1) return { data: {}, issues: [] };
   const lines = norm.slice(4, closeIdx).split("\n");
   const data = {};
+  const issues = [];
   let i = 0;
   while (i < lines.length) {
     const line = lines[i];
@@ -129,24 +130,44 @@ function parseFrontmatter(content) {
     }
     const m = line.match(/^([a-zA-Z][\w-]*):\s*(.*)$/);
     if (!m) {
+      issues.push({
+        kind: "unconsumed-line",
+        detail: `unconsumed frontmatter line: ${JSON.stringify(line)}`,
+      });
       i++;
       continue;
     }
     const [, key, raw] = m;
+    if (key in data) {
+      issues.push({
+        kind: "duplicate-key",
+        key,
+        detail: `duplicate frontmatter key "${key}"`,
+      });
+    }
     if (raw !== "") {
       data[key] = unquote(raw);
       i++;
     } else {
       i++;
       const arr = [];
-      while (i < lines.length && /^\s+-\s+/.test(lines[i])) {
-        arr.push(unquote(lines[i].replace(/^\s+-\s+/, "")));
+      while (i < lines.length && /^\s*-/.test(lines[i])) {
+        const item = lines[i].match(/^  -\s+(\S.*)$/);
+        if (item) {
+          arr.push(unquote(item[1]));
+        } else {
+          issues.push({
+            kind: "invalid-list-item",
+            key,
+            detail: `invalid list item for "${key}": ${JSON.stringify(lines[i])}`,
+          });
+        }
         i++;
       }
       data[key] = arr;
     }
   }
-  return data;
+  return { data, issues };
 }
 
 function formatFrontmatterListTypeDetail(key) {
@@ -193,6 +214,14 @@ export function validateFrontmatter(fm, filePath) {
         detail: `"${key}" must be a scalar string`,
       });
     }
+  }
+  if (filePath.startsWith("docs/evergreen/") && fm.type !== "evergreen") {
+    issues.push({
+      filePath,
+      kind: "bad-value",
+      key: "type",
+      detail: '"type" must be exactly "evergreen"',
+    });
   }
   return issues;
 }
@@ -289,11 +318,12 @@ export function parseMarkdownLinks(content) {
   return links;
 }
 
-function readDoc(rel) {
-  const content = fs.readFileSync(path.join(REPO_ROOT, rel), "utf8");
-  const fm = parseFrontmatter(content);
+export function parseDoc(rel, content) {
+  const { data: fm, issues: parseIssues } = parseFrontmatter(content);
   const strippedContent = stripCode(content);
-  const frontmatterIssues = rel.startsWith("docs/evergreen/") ? validateFrontmatter(fm, rel) : [];
+  const frontmatterIssues = rel.startsWith("docs/evergreen/")
+    ? [...parseIssues.map((issue) => ({ filePath: rel, ...issue })), ...validateFrontmatter(fm, rel)]
+    : [];
   return {
     filePath: rel,
     type: fm.type ?? "",
@@ -310,6 +340,10 @@ function readDoc(rel) {
     malformedAnchors: findMalformedAnchors(strippedContent),
     frontmatterIssues,
   };
+}
+
+function readDoc(rel) {
+  return parseDoc(rel, fs.readFileSync(path.join(REPO_ROOT, rel), "utf8"));
 }
 
 function patternToRegex(pattern) {
@@ -573,7 +607,7 @@ function modeStale(docs) {
 }
 
 function isEvergreenDoc(d) {
-  return d.filePath.startsWith("docs/evergreen/") && d.type !== "adr";
+  return d.filePath.startsWith("docs/evergreen/");
 }
 
 // size 不再对字符数做「只降不升」棘轮——正文随便写、随便加长都放行。
@@ -584,18 +618,20 @@ export function evaluateSizes(docs, baseline, caps) {
   const currentEvergreenPaths = new Set(docs.filter(isEvergreenDoc).map((d) => d.filePath));
   for (const d of docs) {
     if (!isEvergreenDoc(d)) continue;
+    const covers = Array.isArray(d.covers) ? d.covers : [];
+    const contracts = Array.isArray(d.contracts) ? d.contracts : [];
     const base = baseline[d.filePath];
     if (!base) {
       violations.push({ filePath: d.filePath, kind: "missing-baseline", current: d.chars, limit: 0 });
       continue;
     }
-    if (d.covers.length > base.covers) {
-      violations.push({ filePath: d.filePath, kind: "grew-covers", current: d.covers.length, limit: base.covers });
+    if (covers.length > base.covers) {
+      violations.push({ filePath: d.filePath, kind: "grew-covers", current: covers.length, limit: base.covers });
     }
     if (d.chars > hardChars) {
       violations.push({ filePath: d.filePath, kind: "too-long", current: d.chars, limit: hardChars });
     }
-    if ((d.covers ?? []).length === 0 && (d.contracts ?? []).length === 0) {
+    if (covers.length === 0 && contracts.length === 0) {
       violations.push({ filePath: d.filePath, kind: "no-gate", current: 0, limit: 0 });
     }
   }
@@ -751,18 +787,17 @@ export function formatSizeViolationKind(kind) {
   }
 }
 
-function modeSize(docs) {
-  const baseline = readSizeBaseline();
+export function modeSize(docs, { baseline = readSizeBaseline(), error = console.error, log = console.log } = {}) {
   if (!baseline) {
-    console.error(`✗ 缺少 evergreen 文档体量基线：${SIZE_BASELINE_PATH}`);
-    console.error("  请运行 node scripts/check-evergreen-docs.mjs --write-size-baseline 后提交基线。");
+    error(`✗ 缺少 evergreen 文档体量基线：${SIZE_BASELINE_PATH}`);
+    error("  请运行 node scripts/check-evergreen-docs.mjs --write-size-baseline 后提交基线。");
     return 1;
   }
   const frontmatterIssues = docs.flatMap((d) => d.frontmatterIssues ?? []);
   if (frontmatterIssues.length > 0) {
-    console.error("✗ evergreen frontmatter 形状检查失败：\n");
-    for (const issue of frontmatterIssues) console.error(`  ${issue.filePath}: ${issue.detail}`);
-    console.error(
+    error("✗ evergreen frontmatter 形状检查失败：\n");
+    for (const issue of frontmatterIssues) error(`  ${issue.filePath}: ${issue.detail}`);
+    error(
       "\n  covers/contracts 列表写法：冒号后绝对留空无字符（含行尾 # 注释），下一行直接写 `  - item`；不要写 `covers: []`。",
     );
     return 1;
@@ -773,31 +808,31 @@ function modeSize(docs) {
   // 而是破提示疲劳——同一句警告长期不变会退化成背景噪音，措辞随余量加重才还能被看见。
   const hints = buildSizeHints(evergreenDocs, SIZE_CAPS);
   if (hints.length > 0) {
-    console.log(`ℹ️ 体量提示（hard cap ${SIZE_CAPS.hardChars} 字符，判据见 docs/evergreen/_docs-guide.md §3）：`);
+    log(`ℹ️ 体量提示（hard cap ${SIZE_CAPS.hardChars} 字符，判据见 docs/evergreen/_docs-guide.md §3）：`);
     for (const h of hints) {
-      console.log(`   ${h.mark} ${h.filePath}（${h.chars} 字符，余量 ${h.remaining}）——${h.hint}`);
+      log(`   ${h.mark} ${h.filePath}（${h.chars} 字符，余量 ${h.remaining}）——${h.hint}`);
     }
-    console.log("");
+    log("");
   }
   if (res.violations.length === 0) {
-    console.log(`✓ evergreen 文档体量检查通过（无文档超 hard cap ${SIZE_CAPS.hardChars} 字符、无 covers 越基线）。`);
+    log(`✓ evergreen 文档体量检查通过（无文档超 hard cap ${SIZE_CAPS.hardChars} 字符、无 covers 越基线）。`);
     return 0;
   }
-  console.log("📏 evergreen 文档体量检查：\n");
-  console.log("| 文档 | 问题 | 当前 | 限制 |");
-  console.log("|---|---|---:|---:|");
+  log("📏 evergreen 文档体量检查：\n");
+  log("| 文档 | 问题 | 当前 | 限制 |");
+  log("|---|---|---:|---:|");
   for (const v of res.violations) {
-    console.log(`| \`${v.filePath}\` | ✗ ${formatSizeViolationKind(v.kind)} | ${v.current} | ${v.limit} |`);
+    log(`| \`${v.filePath}\` | ✗ ${formatSizeViolationKind(v.kind)} | ${v.current} | ${v.limit} |`);
   }
   const tooLong = res.violations.filter((v) => v.kind === "too-long");
   if (tooLong.length > 0) {
-    for (const line of buildHardCapAdviceLines(tooLong, evergreenDocs, SIZE_CAPS)) console.error(line);
+    for (const line of buildHardCapAdviceLines(tooLong, evergreenDocs, SIZE_CAPS)) error(line);
   }
-  if (res.violations.some((v) => v.kind !== "too-long")) {
-    console.error("\n✗ covers 管辖范围越基线 / 基线缺项或含已删文档：重写基线 `--write-size-baseline` 并在提交信息说明。");
+  if (res.violations.some((v) => ["grew-covers", "missing-baseline", "stale-baseline"].includes(v.kind))) {
+    error("\n✗ covers 管辖范围越基线 / 基线缺项或含已删文档：重写基线 `--write-size-baseline` 并在提交信息说明。");
   }
   if (res.violations.some((v) => v.kind === "no-gate")) {
-    console.error(
+    error(
       "\n✗ 有 evergreen 文档 covers/contracts 双空：请补 covers 或 contracts；纵切契约文档可 covers 留空，但必须列 contracts，纯代码入口地图应列精确 covers。",
     );
   }
