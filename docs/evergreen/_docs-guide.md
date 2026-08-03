@@ -205,7 +205,7 @@ last-reviewed: YYYY-MM-DD
 
 ## 3. 毕业阈值
 
-通过 §0 后，内容的**安置有三个动作**：沿功能子域横切外提、沿读者路径纵切外提，或在长成独立主题时升格。前两者是外提的两条轴，先判该走哪条：**能沿功能子域切的走横切；功能子域已切尽、剩下的是跨子域公共层（流程 / 不变量 / 速查 / 排障）的，走纵切。** 升格的准入与动作见 §3.3。
+通过 §0 后，文档撞 hard cap 时合法动作只有四个：删过时 / 越界内容（越界内容按 §0.4 先补落点再 trim）、沿功能子域横切外提、沿读者路径纵切外提，或在长成独立主题时升格。后三者是结构安置动作：前两者是外提的两条轴，另一个是升格。外提前先判该走哪条：**能沿功能子域切的走横切；功能子域已切尽、剩下的是跨子域公共层（流程 / 不变量 / 速查 / 排障）的，走纵切。** 升格的准入与动作见 §3.3。
 
 **判轴前先消歧**：本节的轴相对**代码归属边界**而言——横切 = 沿功能子域把归属切开（`covers` 跟着走），纵切 = 垂直于它、按读者路径切开（`covers` 不动）。§1 那个「横切关注点/层」（architecture、data-model 这类跨所有主题的层）是另一个词，同名不同义：**跨全部子域的公共层在本节走的是纵切**。判反了会去迁一片与母主题全交叉的 `covers`，只能靠切碎或复制硬凑——而这种错切过得了全部门禁，没有闸会喊。
 
@@ -315,7 +315,7 @@ last-reviewed: YYYY-MM-DD
 | `check:docs:strict --since=<base>` | **改了契约点 → 同步对应文档** | 改动命中某文档 `contracts`（非 `covers`）但该文档没一起改；见 §1.3 |
 | `check:docs:coverage --since=<base>` | **加了源码 → 必须有文档认领** | 新增 `packages/*/src/**` 文件不匹配任何 covers，且非豁免（测试/`.d.ts`/mock/夹具/story） |
 | `check:docs:size` | **frontmatter 有效、单文档别膨胀到该拆** | frontmatter 形状错误、`covers`/`contracts` 双空、字符数超 hard cap（≈25k，按 §4 的四条合法动作处置：删过时 / 越界内容、横切、纵切、升格；字符不做棘轮），或 `covers` 数超基线，或基线漏项/含已删文档 |
-| `check:docs:links` | **互链/指针别指向消失的文档** | evergreen 内、以及 `AGENTS.md` / `README.md` 指向 evergreen·ADR 的 `[..](x.md)` 指向不存在的 .md |
+| `check:docs:links` | **互链/指针别指向消失的文档** | evergreen 内、以及 `AGENTS.md` / `README.md` 指向 evergreen·ADR 的 Markdown 链接中，`.md` 路径不存在；或链接目标 `.md#id` 指向的目标文档缺独立 `<a id="..."></a>`。不校验同页 fragment、Markdown 标题自动锚点或 prose `§x.y` |
 | `check:docs:stale` | **last-reviewed 别过期** | 超 180 天或缺字段 |
 
 脚本在「要动 evergreen 文档」的时刻打印 §0 内核摘要（判据一句话 + 四个归属去向 + 指针回本文）：strict / coverage 失败时印在报错后；改动集里含 evergreen 正文（不含 ADR）时无论过不过都印一行自查提醒。摘要文本住在脚本的 `EVERGREEN_RULES_SUMMARY`，只抄 §0 最稳定的内核——§0 内核变了要同步它。
