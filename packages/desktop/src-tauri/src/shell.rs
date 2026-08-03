@@ -35,6 +35,22 @@ pub fn should_show_on_startup(args: &[String]) -> bool {
     !args.iter().any(|arg| arg == "--hidden")
 }
 
+/// 相邻同类型 bool 的传反是纯函数真值表**锁不住**的一类错：`resolve_toggle_action` 与
+/// `resolve_autostart_action` 的真值表锁得很满（合并判断、`&&`/`||` 反转、守卫换序都会红），
+/// 但装配层把两个参数写颠倒照样编译、整套用例照绿——分别复活「toggleMain 永远收不起来」
+/// 与「换安装路径后自启静默失效」两个已修 bug。套成 newtype 后传反是编译错误。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Visible(pub bool);
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Minimized(pub bool);
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Enabled(pub bool);
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct UserDisabled(pub bool);
+
 #[derive(Debug, PartialEq, Eq)]
 pub enum AutostartAction {
     /// （重新）注册自启到当前可执行文件，并记下这个路径。
@@ -57,13 +73,13 @@ pub enum AutostartAction {
 pub fn resolve_autostart_action(
     recorded_path: Option<&str>,
     current_path: &str,
-    currently_enabled: bool,
-    user_disabled: bool,
+    currently_enabled: Enabled,
+    user_disabled: UserDisabled,
 ) -> AutostartAction {
-    if user_disabled {
+    if user_disabled.0 {
         return AutostartAction::LeaveAlone;
     }
-    if !currently_enabled {
+    if !currently_enabled.0 {
         return AutostartAction::Enable;
     }
     match recorded_path {
@@ -99,12 +115,34 @@ pub fn resolve_is_foreground(is_focused: bool, foreground_root: isize, self_hwnd
 
 /// toggleMain 语义：前台可见（未最小化且有焦点）才收起；其余一律带到前面。
 /// "可见但被别的窗口盖住"判 Show——用户按热键是想见到它。
-pub fn resolve_toggle_action(visible: bool, minimized: bool, focused: bool) -> ToggleAction {
-    if visible && !minimized && focused {
+pub fn resolve_toggle_action(visible: Visible, minimized: Minimized, focused: bool) -> ToggleAction {
+    if visible.0 && !minimized.0 && focused {
         ToggleAction::Hide
     } else {
         ToggleAction::Show
     }
+}
+
+/// 从「窗口的原始事实」一步合成 toggle 动作：装配层（`commands.rs`）只负责取这六个值，
+/// 一句判断都不做。
+///
+/// 这么切是因为**「前台句柄必须先归一到顶层」这个自由度原先完全没锁**——它留在装配层时，
+/// 把 `GetAncestor(GA_ROOT)` 整句删掉，全套 Rust 单测照绿，而那正是 db28d8b5 修的真机
+/// bug 的成因（WebView2 子窗口在前台时，原始句柄 ≠ 主窗口句柄 → 判不在前台 → 每次都 Show
+/// → 窗口再也收不起来）。
+///
+/// `foreground_raw` 只回答「有没有前台窗口」（NULL/0 → 谁都不是，不参与相等比较）；
+/// 真正拿去比的必须是归一后的 `ancestor_root`。
+pub fn resolve_toggle_from_window(
+    visible: Visible,
+    minimized: Minimized,
+    is_focused: bool,
+    foreground_raw: isize,
+    ancestor_root: isize,
+    self_hwnd: isize,
+) -> ToggleAction {
+    let foreground_root = if foreground_raw == 0 { 0 } else { ancestor_root };
+    resolve_toggle_action(visible, minimized, resolve_is_foreground(is_focused, foreground_root, self_hwnd))
 }
 
 #[cfg(test)]
@@ -158,7 +196,7 @@ mod tests {
     #[test]
     fn 首次运行注册自启() {
         assert_eq!(
-            resolve_autostart_action(None, "C:/app/TimeData.exe", false, false),
+            resolve_autostart_action(None, "C:/app/TimeData.exe", Enabled(false), UserDisabled(false)),
             AutostartAction::Enable
         );
     }
@@ -166,7 +204,7 @@ mod tests {
     #[test]
     fn 已注册到当前exe就不动() {
         assert_eq!(
-            resolve_autostart_action(Some("C:/app/TimeData.exe"), "C:/app/TimeData.exe", true, false),
+            resolve_autostart_action(Some("C:/app/TimeData.exe"), "C:/app/TimeData.exe", Enabled(true), UserDisabled(false)),
             AutostartAction::LeaveAlone
         );
     }
@@ -176,7 +214,7 @@ mod tests {
         // 实测踩过：NSIS 装新版会先卸载旧版，把启动项一并带走，升级后自启静默消失。
         // 记录路径与当前一致、但系统里已经没有启动项——必须恢复。
         assert_eq!(
-            resolve_autostart_action(Some("C:/app/TimeData.exe"), "C:/app/TimeData.exe", false, false),
+            resolve_autostart_action(Some("C:/app/TimeData.exe"), "C:/app/TimeData.exe", Enabled(false), UserDisabled(false)),
             AutostartAction::Enable
         );
     }
@@ -186,7 +224,7 @@ mod tests {
         // 实测踩过：dev/release 构建先注册过，装了正式版后启动项仍指向构建产物，
         // 那个目录一清理，开机自启就无声失效。
         assert_eq!(
-            resolve_autostart_action(Some("D:/build/timedata-desktop.exe"), "C:/app/TimeData.exe", true, false),
+            resolve_autostart_action(Some("D:/build/timedata-desktop.exe"), "C:/app/TimeData.exe", Enabled(true), UserDisabled(false)),
             AutostartAction::Enable
         );
     }
@@ -196,7 +234,7 @@ mod tests {
         // 早期实现往标记里写的是 "1"，与任何真实路径都不相等，因此会被重新注册并改写成路径，
         // 不需要单独的迁移代码。
         assert_eq!(
-            resolve_autostart_action(Some("1"), "C:/app/TimeData.exe", true, false),
+            resolve_autostart_action(Some("1"), "C:/app/TimeData.exe", Enabled(true), UserDisabled(false)),
             AutostartAction::Enable
         );
     }
@@ -207,7 +245,7 @@ mod tests {
     fn user_disabled_beats_missing_registration() {
         // NSIS 升级清掉了启动项（enabled=false），但用户此前主动关过 → 不恢复。
         assert_eq!(
-            resolve_autostart_action(None, r"C:\app\TimeData.exe", false, true),
+            resolve_autostart_action(None, r"C:\app\TimeData.exe", Enabled(false), UserDisabled(true)),
             AutostartAction::LeaveAlone
         );
     }
@@ -215,7 +253,7 @@ mod tests {
     #[test]
     fn user_disabled_beats_path_change() {
         assert_eq!(
-            resolve_autostart_action(Some(r"C:\old\TimeData.exe"), r"C:\new\TimeData.exe", true, true),
+            resolve_autostart_action(Some(r"C:\old\TimeData.exe"), r"C:\new\TimeData.exe", Enabled(true), UserDisabled(true)),
             AutostartAction::LeaveAlone
         );
     }
@@ -223,7 +261,7 @@ mod tests {
     #[test]
     fn user_disabled_leaves_matching_registration_alone() {
         assert_eq!(
-            resolve_autostart_action(Some(r"C:\app\TimeData.exe"), r"C:\app\TimeData.exe", true, true),
+            resolve_autostart_action(Some(r"C:\app\TimeData.exe"), r"C:\app\TimeData.exe", Enabled(true), UserDisabled(true)),
             AutostartAction::LeaveAlone
         );
     }
@@ -232,15 +270,25 @@ mod tests {
 
     #[test]
     fn toggle_hides_only_when_visible_and_focused() {
-        assert_eq!(resolve_toggle_action(true, false, true), ToggleAction::Hide);
+        assert_eq!(resolve_toggle_action(Visible(true), Minimized(false), true), ToggleAction::Hide);
     }
 
     #[test]
     fn toggle_shows_when_hidden_or_minimized_or_unfocused() {
-        assert_eq!(resolve_toggle_action(false, false, false), ToggleAction::Show);
-        assert_eq!(resolve_toggle_action(true, true, false), ToggleAction::Show);
-        assert_eq!(resolve_toggle_action(true, false, false), ToggleAction::Show); // 被别的窗口盖住 → 提到前面
-        assert_eq!(resolve_toggle_action(false, true, false), ToggleAction::Show);
+        assert_eq!(resolve_toggle_action(Visible(false), Minimized(false), false), ToggleAction::Show);
+        assert_eq!(resolve_toggle_action(Visible(true), Minimized(true), false), ToggleAction::Show);
+        assert_eq!(resolve_toggle_action(Visible(true), Minimized(false), false), ToggleAction::Show); // 被别的窗口盖住 → 提到前面
+        assert_eq!(resolve_toggle_action(Visible(false), Minimized(true), false), ToggleAction::Show);
+    }
+
+    #[test]
+    fn toggle_的三个词项各自都算数() {
+        // 上面两条用例把 `visible && !minimized && focused` 整体换成 `if focused { Hide }`
+        // 也全绿——所有 Show 用例的 focused 都是 false，另两位从没在「focused 为真」时被单独问过。
+        // 这两个词项本身有价值：is_focused() 若哪天在隐藏 / 最小化的窗口上报 stale-true，
+        // 它们正是防「按了反而再隐藏一次、永远出不来」的闸（刚修那个 bug 的镜像）。
+        assert_eq!(resolve_toggle_action(Visible(false), Minimized(false), true), ToggleAction::Show);
+        assert_eq!(resolve_toggle_action(Visible(true), Minimized(true), true), ToggleAction::Show);
     }
 
     // ---- 前台判定真值表：is_focused 与 Win32 前台句柄两路取或 ----
@@ -279,5 +327,59 @@ mod tests {
         // hwnd() 失败时不瞎猜，行为退回原样（此处 is_focused=false → 不在前台 → Show）。
         assert!(!resolve_is_foreground(false, OTHER_HWND, 0));
         assert!(resolve_is_foreground(true, OTHER_HWND, 0));
+    }
+
+    // ---- 归一到顶层这一步：合成在 shell.rs 里，装配层删不掉也传不歪 ----
+
+    /// 前台是我们自己的 WebView2 子窗口时，`GetForegroundWindow()` 拿到的原始句柄。
+    const WEBVIEW_CHILD_HWND: isize = 0x4321;
+
+    #[test]
+    fn 前台是自己的webview2子窗口时仍然收起() {
+        // db28d8b5 修的那个真机 bug：WebView2 子窗口吃走焦点 → is_focused 报 false，
+        // 且前台**原始**句柄 ≠ 主窗口句柄，只有归一到顶层（GA_ROOT）后才相等。
+        // 忘了归一（拿 foreground_raw 去比）这条就翻成 Show——窗口永远收不起来。
+        assert_eq!(
+            resolve_toggle_from_window(
+                Visible(true),
+                Minimized(false),
+                false,
+                WEBVIEW_CHILD_HWND,
+                SELF_HWND,
+                SELF_HWND,
+            ),
+            ToggleAction::Hide
+        );
+    }
+
+    #[test]
+    fn 没有前台窗口时不拿归一结果凑数() {
+        // GetForegroundWindow 返回 NULL（0）时「谁都不在前台」，归一结果一律不参与比较——
+        // 否则「两边都拿不到」会被当成「前台就是我」，凭空造出一次误 Hide。
+        assert_eq!(
+            resolve_toggle_from_window(Visible(true), Minimized(false), false, 0, SELF_HWND, SELF_HWND),
+            ToggleAction::Show
+        );
+    }
+
+    #[test]
+    fn 别的应用在前台时提到前面() {
+        assert_eq!(
+            resolve_toggle_from_window(Visible(true), Minimized(false), false, OTHER_HWND, OTHER_HWND, SELF_HWND),
+            ToggleAction::Show
+        );
+    }
+
+    #[test]
+    fn 前台判定为真也要窗口可见未最小化才收起() {
+        // 合成函数不能把 resolve_toggle_action 的另外两个词项丢掉。
+        assert_eq!(
+            resolve_toggle_from_window(Visible(false), Minimized(false), true, SELF_HWND, SELF_HWND, SELF_HWND),
+            ToggleAction::Show
+        );
+        assert_eq!(
+            resolve_toggle_from_window(Visible(true), Minimized(true), true, SELF_HWND, SELF_HWND, SELF_HWND),
+            ToggleAction::Show
+        );
     }
 }

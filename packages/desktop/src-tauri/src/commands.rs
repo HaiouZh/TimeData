@@ -11,13 +11,31 @@ use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
 use tauri_plugin_notification::NotificationExt;
 
 use crate::config::{self, action_id, DesktopConfig, HotkeyAction, HotkeyBinding};
-use crate::hotkeys::{HotkeyDispatcher, HotkeyEventPayload, RegistrationOutcome};
-use crate::shell::{resolve_is_foreground, resolve_toggle_action, ToggleAction};
+use crate::hotkeys::{HotkeyDispatcher, HotkeyEventPayload, RegistrationOutcome, HOTKEY_EVENT};
+use crate::shell::{resolve_toggle_from_window, Minimized, ToggleAction, Visible};
 
 /// 配置文件写锁：所有 load→modify→save 形态的命令先拿它再动文件。
 /// 没有它，两个并发写命令（如设置页同时改阈值与热键）会交错成
 /// 「都基于旧文件各改各的、后写者静默抹掉先写者」的丢更新竞态。
 static CONFIG_WRITE_LOCK: Mutex<()> = Mutex::new(());
+
+/// 热键**注册表**写锁。注册表与配置文件是两份独立资源，各要各的锁：
+/// `set_hotkeys` / `suspend_hotkeys` / `resume_hotkeys` 三个命令改的是同一份注册表
+/// （`apply_bindings` = `unregister_all` + 逐条注册），而后两个此前全程在锁外。
+///
+/// 实测形态：点一次「保存快捷键」这个动作本身就会先 blur 录入框发出 `resume_hotkeys`、
+/// 再发出 `set_hotkeys`，前端那两条 promise 互不等待。交错时 `resume` 读到旧配置，
+/// `set_hotkeys` 写完文件并注册好新表之后，`resume` 的 `unregister_all` 才落下——
+/// 抹掉新表、装回旧表。最终：文件里是新表、页面显示全绿、系统里跑的是旧表。
+static HOTKEY_REGISTRY_LOCK: Mutex<()> = Mutex::new(());
+
+/// 持有注册表锁的凭证。碰注册表的函数一律要它的引用，**漏拿锁就编译不过**——
+/// 这把锁要防的恰恰是「每个调用点自己记得拿」这种靠约定的写法。
+pub struct RegistryGuard<'a>(#[allow(dead_code)] std::sync::MutexGuard<'a, ()>);
+
+pub fn lock_registry() -> RegistryGuard<'static> {
+    RegistryGuard(HOTKEY_REGISTRY_LOCK.lock().expect("hotkey registry lock poisoned"))
+}
 
 pub struct HotkeyState(pub Mutex<HotkeyDispatcher>);
 
@@ -43,43 +61,43 @@ pub fn show_main_window(app: &AppHandle) {
     }
 }
 
-/// 当前前台窗口归一到顶层后的句柄；没有前台窗口时为 0。
-/// 归一（`GA_ROOT`）这步是关键：前台常常是我们自己的 WebView2 子窗口，不归一就比不上。
+/// 当前前台窗口的 **(原始句柄, 归一到顶层后的句柄)**。两个都往上送，判定全在
+/// `shell::resolve_toggle_from_window` 里做——归一（`GA_ROOT`）这一步留在本文件时
+/// 没有任何测试锁得住它：删掉 `GetAncestor` 全套 Rust 单测照绿，而那正是 db28d8b5
+/// 修的那个真机 bug 的成因（前台常常是我们自己的 WebView2 子窗口，不归一就比不上）。
 #[cfg(windows)]
-fn foreground_root_hwnd() -> isize {
+fn foreground_handles() -> (isize, isize) {
     use windows::Win32::UI::WindowsAndMessaging::{GetAncestor, GetForegroundWindow, GA_ROOT};
     // SAFETY: 两个调用都只读窗口管理器状态、不解引用返回的句柄，NULL 输入也有定义
     // （GetAncestor 原样返回 NULL），因此无前置条件可违反。
     unsafe {
         let foreground = GetForegroundWindow();
-        if foreground.0.is_null() {
-            return 0;
-        }
-        GetAncestor(foreground, GA_ROOT).0 as isize
+        (foreground.0 as isize, GetAncestor(foreground, GA_ROOT).0 as isize)
     }
 }
 
-/// 非 Windows 平台没有这条事实来源，恒 0 让判定退回只看 `is_focused()`——
+/// 非 Windows 平台没有这条事实来源，恒 (0, 0) 让判定退回只看 `is_focused()`——
 /// 被修的误报是 Windows/WebView2 特有的。
 #[cfg(not(windows))]
-fn foreground_root_hwnd() -> isize {
-    0
+fn foreground_handles() -> (isize, isize) {
+    (0, 0)
 }
 
 fn toggle_main_window(app: &AppHandle) {
     let Some(window) = app.get_webview_window("main") else { return };
-    let visible = window.is_visible().unwrap_or(false);
-    let minimized = window.is_minimized().unwrap_or(false);
     #[cfg(windows)]
     let self_hwnd = window.hwnd().map(|h| h.0 as isize).unwrap_or(0);
     #[cfg(not(windows))]
     let self_hwnd = 0isize;
-    let focused = resolve_is_foreground(
+    let (foreground_raw, ancestor_root) = foreground_handles();
+    match resolve_toggle_from_window(
+        Visible(window.is_visible().unwrap_or(false)),
+        Minimized(window.is_minimized().unwrap_or(false)),
         window.is_focused().unwrap_or(false),
-        foreground_root_hwnd(),
+        foreground_raw,
+        ancestor_root,
         self_hwnd,
-    );
-    match resolve_toggle_action(visible, minimized, focused) {
+    ) {
         ToggleAction::Hide => {
             let _ = window.hide();
         }
@@ -98,14 +116,24 @@ fn handle_hotkey(app: &AppHandle, action: &HotkeyAction) {
             let state: State<HotkeyState> = app.state();
             let deliver = state.0.lock().expect("hotkey dispatcher poisoned").accept(payload);
             if let Some(payload) = deliver {
-                let _ = app.emit("desktop-hotkey", payload);
+                let _ = app.emit(HOTKEY_EVENT, payload);
             }
         }
     }
 }
 
+/// 注销全部热键。与 `apply_bindings` 一样要注册表锁——它单独出现在 `suspend_hotkeys` 里。
+pub fn unregister_all_bindings(app: &AppHandle, _registry: &RegistryGuard<'_>) {
+    let _ = app.global_shortcut().unregister_all();
+}
+
 /// 全量重注册：先注销全部，再逐条注册。单条失败（被占用/格式非法）不影响其余条目。
-pub fn apply_bindings(app: &AppHandle, bindings: &[HotkeyBinding]) -> Vec<RegistrationOutcome> {
+/// `_registry` 只为把「必须先拿注册表锁」变成编译期约束（见 `HOTKEY_REGISTRY_LOCK`）。
+pub fn apply_bindings(
+    app: &AppHandle,
+    bindings: &[HotkeyBinding],
+    _registry: &RegistryGuard<'_>,
+) -> Vec<RegistrationOutcome> {
     let _ = app.global_shortcut().unregister_all();
     bindings
         .iter()
@@ -126,18 +154,23 @@ pub fn apply_bindings(app: &AppHandle, bindings: &[HotkeyBinding]) -> Vec<Regist
         .collect()
 }
 
+/// 读配置失败照原样往上抛，**不拿默认值糊弄**：默认阈值 4 小时可能比用户设的宽得多，
+/// 静默顶上去就等于替他把「超过 1 小时要先问」放宽成 4 小时、闷头落库。
 #[tauri::command]
-pub fn get_desktop_config(app: AppHandle) -> DesktopConfig {
+pub fn get_desktop_config(app: AppHandle) -> Result<DesktopConfig, String> {
     config::load_config(&app)
 }
 
+/// 三个写命令都是 load→改→**全量覆盖**写回：`load_config` 一旦读失败就必须在这里止步，
+/// 绝不能拿伪造的默认值（`hotkeys: []`、`autostartDisabled: false`）覆盖真文件。
 #[tauri::command]
 pub fn set_hotkeys(app: AppHandle, bindings: Vec<HotkeyBinding>) -> Result<Vec<RegistrationOutcome>, String> {
     let _guard = CONFIG_WRITE_LOCK.lock().expect("config write lock poisoned");
-    let mut cfg = config::load_config(&app);
+    let mut cfg = config::load_config(&app)?;
     cfg.hotkeys = bindings;
     config::save_config(&app, &cfg)?;
-    Ok(apply_bindings(&app, &cfg.hotkeys))
+    let registry = lock_registry();
+    Ok(apply_bindings(&app, &cfg.hotkeys, &registry))
 }
 
 #[tauri::command]
@@ -146,17 +179,17 @@ pub fn set_punch_confirm_hours(app: AppHandle, hours: f64) -> Result<(), String>
         return Err("阈值必须是大于 0 的小时数".to_owned());
     }
     let _guard = CONFIG_WRITE_LOCK.lock().expect("config write lock poisoned");
-    let mut cfg = config::load_config(&app);
+    let mut cfg = config::load_config(&app)?;
     cfg.punch_confirm_hours = hours;
     config::save_config(&app, &cfg)
 }
 
 #[tauri::command]
-pub fn get_autostart_state(app: AppHandle) -> AutostartState {
-    AutostartState {
+pub fn get_autostart_state(app: AppHandle) -> Result<AutostartState, String> {
+    Ok(AutostartState {
         enabled: app.autolaunch().is_enabled().unwrap_or(false),
-        user_disabled: config::load_config(&app).autostart_disabled,
-    }
+        user_disabled: config::load_config(&app)?.autostart_disabled,
+    })
 }
 
 /// 系统动作（enable/disable）成功而意图落盘失败时，是「系统已变、记录没跟上」的
@@ -164,7 +197,8 @@ pub fn get_autostart_state(app: AppHandle) -> AutostartState {
 #[tauri::command]
 pub fn set_autostart_enabled(app: AppHandle, enabled: bool) -> Result<(), String> {
     let _guard = CONFIG_WRITE_LOCK.lock().expect("config write lock poisoned");
-    let mut cfg = config::load_config(&app);
+    // 先读、读不到就走人：这一步在 enable()/disable() **之前**，读失败时系统状态一个字没改。
+    let mut cfg = config::load_config(&app)?;
     if enabled {
         app.autolaunch().enable().map_err(|e| e.to_string())?;
         cfg.autostart_disabled = false;
@@ -184,20 +218,24 @@ pub fn set_autostart_enabled(app: AppHandle, enabled: bool) -> Result<(), String
 
 #[tauri::command]
 pub fn suspend_hotkeys(app: AppHandle) {
-    let _ = app.global_shortcut().unregister_all();
+    let registry = lock_registry();
+    unregister_all_bindings(&app, &registry);
 }
 
+/// 读失败时**一根手指都不碰注册表**：`apply_bindings(&[])` 会先 `unregister_all` 再一条不注册，
+/// 一次读不到文件就等于把当前活着的全部热键静默抹掉。
 #[tauri::command]
-pub fn resume_hotkeys(app: AppHandle) -> Vec<RegistrationOutcome> {
-    let cfg = config::load_config(&app);
-    apply_bindings(&app, &cfg.hotkeys)
+pub fn resume_hotkeys(app: AppHandle) -> Result<Vec<RegistrationOutcome>, String> {
+    let cfg = config::load_config(&app)?;
+    let registry = lock_registry();
+    Ok(apply_bindings(&app, &cfg.hotkeys, &registry))
 }
 
 #[tauri::command]
 pub fn desktop_ready(app: AppHandle, state: State<HotkeyState>) {
     let drained = state.0.lock().expect("hotkey dispatcher poisoned").mark_ready();
     for payload in drained {
-        let _ = app.emit("desktop-hotkey", payload);
+        let _ = app.emit(HOTKEY_EVENT, payload);
     }
 }
 

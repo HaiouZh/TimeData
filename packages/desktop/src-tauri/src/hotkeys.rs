@@ -1,6 +1,14 @@
 use serde::Serialize;
 use std::collections::VecDeque;
 
+/// 热键事件名：Rust `emit` 与前端 `listen` 之间唯一的约定，两端没有共享类型。
+/// **Rust 侧的字面量只准出现在这一处**——`commands.rs` 有两处 emit（实时投递、就绪后补投），
+/// 各写一遍字面量时改事件名很容易只改到第一处：闸照绿、日常按键正常，唯独「WebView 就绪前
+/// 排队的那批」发的是旧名字、前端永远收不到，正好打掉「开机第一秒按下也生效」这条承诺。
+/// 配置闸（check-desktop-config.mjs）据此断言：commands.rs 里不许有裸字面量 emit，
+/// 前端 api.ts 的 listen 名必须逐字等于这里的值。
+pub const HOTKEY_EVENT: &str = "desktop-hotkey";
+
 /// 投递给 WebView 的热键事件。pressed_at_ms 是 Rust 侧按键那一刻，
 /// 排队补投也不变——封口时刻以按键为准（spec §五.3）。
 #[derive(Debug, Clone, PartialEq, Serialize)]

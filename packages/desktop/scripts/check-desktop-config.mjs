@@ -36,20 +36,41 @@ if (mainWindow?.visible !== true) {
 // ---- 跨语言契约：热键事件名两端必须逐字相同 ----
 // Rust `app.emit(name, …)` 与前端 `listen(name, …)` 之间没有共享类型，typecheck 管不到
 // 字符串字面量。打错一个字母：注册成功、按键有反应、Rust 侧照常 emit，前端永远收不到，
-// 整条打点链路静默失效且没有任何报错。两边都比对同一个字面量，改一侧就红。
-const HOTKEY_EVENT_NAME = "desktop-hotkey";
-const EVENT_NAME_SITES = [
-  ["packages/desktop/src-tauri/src/commands.rs", "../src-tauri/src/commands.rs"],
-  ["packages/client/src/lib/desktop/api.ts", "../../client/src/lib/desktop/api.ts"],
-];
-for (const [label, relative] of EVENT_NAME_SITES) {
-  const source = readFileSync(new URL(relative, import.meta.url), "utf8");
-  if (!source.includes(`"${HOTKEY_EVENT_NAME}"`)) {
-    throw new Error(
-      `[desktop-config] ${label} 里找不到热键事件名 "${HOTKEY_EVENT_NAME}"。` +
-        `Rust emit 与前端 listen 用的是同一个字符串字面量，只改一侧会让打点静默失效——两侧要一起改，本闸也要跟着改。`,
-    );
-  }
+// 整条打点链路静默失效且没有任何报错。
+//
+// 闸是**全匹配**而不是「文件里出现过一次」：`commands.rs` 有两处 emit（实时投递、就绪后补投），
+// 「出现过一次」的写法在改事件名时只改到第一处就照绿——日常按键正常，唯独「WebView 就绪前
+// 排队的那批」发的是旧名字、前端永远收不到。因此：Rust 侧字面量只准活在 hotkeys.rs 的常量里，
+// commands.rs 里一处裸字面量 emit 都不许有；前端 listen 的名字集合必须恰好等于那个常量。
+const HOTKEY_EVENT_CONST = /pub const HOTKEY_EVENT: &str = "([^"]+)";/;
+const rustHotkeys = readFileSync(new URL("../src-tauri/src/hotkeys.rs", import.meta.url), "utf8");
+const declared = HOTKEY_EVENT_CONST.exec(rustHotkeys);
+if (!declared) {
+  throw new Error(
+    '[desktop-config] packages/desktop/src-tauri/src/hotkeys.rs 里找不到 `pub const HOTKEY_EVENT: &str = "…";`。' +
+      "热键事件名的 Rust 侧字面量只准出现在这一处——两端一致靠本闸比对它，常量没了闸就没有比对对象。",
+  );
+}
+const HOTKEY_EVENT_NAME = declared[1];
+
+const rustCommands = readFileSync(new URL("../src-tauri/src/commands.rs", import.meta.url), "utf8");
+const literalEmits = [...rustCommands.matchAll(/app\.emit\(\s*"([^"]+)"/g)].map((match) => match[1]);
+if (literalEmits.length > 0) {
+  throw new Error(
+    `[desktop-config] packages/desktop/src-tauri/src/commands.rs 里有裸字面量 emit：${JSON.stringify(literalEmits)}。` +
+      "事件名一律用 hotkeys.rs 的 HOTKEY_EVENT 常量——本文件有两处 emit，各写一遍字面量时改名很容易漏掉补投那处，" +
+      "而漏掉的表现是「开机第一秒按下的那批永远收不到」，没有任何报错。",
+  );
+}
+
+const clientApi = readFileSync(new URL("../../client/src/lib/desktop/api.ts", import.meta.url), "utf8");
+const listened = [...clientApi.matchAll(/listen<[^>]*>\(\s*"([^"]+)"/g)].map((match) => match[1]);
+const listenedSet = [...new Set(listened)].sort();
+if (listenedSet.length !== 1 || listenedSet[0] !== HOTKEY_EVENT_NAME) {
+  throw new Error(
+    `[desktop-config] packages/client/src/lib/desktop/api.ts 监听的事件名是 ${JSON.stringify(listenedSet)}，` +
+      `而 Rust 的 HOTKEY_EVENT 是 "${HOTKEY_EVENT_NAME}"。两端逐字一致才收得到，只改一侧会让打点静默失效。`,
+  );
 }
 
 // ---- 三端 bundle 隔离：@tauri-apps/api 只准动态 import ----
