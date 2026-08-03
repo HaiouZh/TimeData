@@ -482,8 +482,15 @@ test("classifySizeWarning returns null past hard cap (too-long violation handles
 
 // caps 缺 warnChars/criticalChars（本文件里就有大量两键 caps 的既有写法）时，裸读会让
 // `chars > undefined` 恒假，把 🔴 静默降成 🟡；caps 整个缺失则直接 TypeError。
-test("classifySizeWarning 对缺字段 / 缺参数的 caps 回落到 SIZE_CAPS", () => {
-  assert.equal(classifySizeWarning(24000, { softChars: 15000, hardChars: 25000 }), "critical");
+test("classifySizeWarning 的 caps 胜出于默认值，缺的键才回落到 SIZE_CAPS", () => {
+  // 刻度全部远离 SIZE_CAPS：合并方向若反过来（默认值盖住调用方），这三条都会转红。
+  const TINY = { softChars: 100, warnChars: 200, criticalChars: 300, hardChars: 400 };
+  assert.equal(classifySizeWarning(150, TINY), "notice");
+  assert.equal(classifySizeWarning(250, TINY), "warning");
+  assert.equal(classifySizeWarning(350, TINY), "critical");
+  assert.equal(classifySizeWarning(450, TINY), null);
+  // 部分键：给的键要胜出，没给的键才回落——150 过自定义 softChars 100，但够不着默认 warnChars 20000。
+  assert.equal(classifySizeWarning(150, { softChars: 100, hardChars: 400 }), "notice");
   assert.equal(classifySizeWarning(24000, undefined), "critical");
   assert.equal(classifySizeWarning(100, undefined), null);
 });
@@ -529,7 +536,12 @@ test("buildSizeHints 按字符数倒序——最逼近上限的排最前", () =>
 });
 
 test("buildSizeHints 给每档配上对应提示语，且超 hard cap 的不进软提示", () => {
-  const [hint] = buildSizeHints([{ filePath: "s.md", chars: 16000 }], CAPS);
-  assert.match(hint.hint, /soft cap/);
+  // 三档各喂一份：只验 notice 一档时，把 hint 恒定成 notice 那句的变异不会红。
+  const [notice] = buildSizeHints([{ filePath: "s.md", chars: 16000 }], CAPS);
+  const [warning] = buildSizeHints([{ filePath: "s.md", chars: 21000 }], CAPS);
+  const [critical] = buildSizeHints([{ filePath: "s.md", chars: 24000 }], CAPS);
+  assert.match(notice.hint, /soft cap/);
+  assert.match(warning.hint, /不足 5k/);
+  assert.match(critical.hint, /不足 2k/);
   assert.deepEqual(buildSizeHints([{ filePath: "s.md", chars: 25001 }], CAPS), []);
 });
