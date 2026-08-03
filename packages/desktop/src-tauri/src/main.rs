@@ -103,13 +103,11 @@ fn main() {
                 let current_exe = std::env::current_exe()
                     .map(|p| p.to_string_lossy().into_owned())
                     .unwrap_or_default();
-                let enabled = app.autolaunch().is_enabled().unwrap_or(false);
-                match resolve_autostart_action(
-                    recorded.as_deref(),
-                    &current_exe,
-                    Enabled(enabled),
-                    UserDisabled(desktop_config.autostart_disabled),
-                ) {
+                // 先套 newtype 再传（不在调用处现包）：这两个 bool 相邻同类型，写反
+                // 会复活「换安装路径后自启静默失效」，而纯函数真值表锁不到参数落位。
+                let enabled = Enabled(app.autolaunch().is_enabled().unwrap_or(false));
+                let user_disabled = UserDisabled(desktop_config.autostart_disabled);
+                match resolve_autostart_action(recorded.as_deref(), &current_exe, enabled, user_disabled) {
                     AutostartAction::Enable => {
                         let _ = app.autolaunch().enable();
                         if let Some(dir) = marker.parent() {

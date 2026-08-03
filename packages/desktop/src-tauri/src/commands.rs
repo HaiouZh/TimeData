@@ -90,9 +90,13 @@ fn toggle_main_window(app: &AppHandle) {
     #[cfg(not(windows))]
     let self_hwnd = 0isize;
     let (foreground_raw, ancestor_root) = foreground_handles();
+    // 两个 bool 先各自套上 newtype 再往下传（而不是在调用处现包）：这样把它们的**顺序**写反
+    // 是编译错误，正是 newtype 要拦的那类错——纯函数真值表锁得再满也管不到参数落位。
+    let visible = Visible(window.is_visible().unwrap_or(false));
+    let minimized = Minimized(window.is_minimized().unwrap_or(false));
     match resolve_toggle_from_window(
-        Visible(window.is_visible().unwrap_or(false)),
-        Minimized(window.is_minimized().unwrap_or(false)),
+        visible,
+        minimized,
         window.is_focused().unwrap_or(false),
         foreground_raw,
         ancestor_root,
