@@ -8,7 +8,7 @@ covers:
   - packages/client/src/hooks/useSync.ts
   - packages/client/src/hooks/useAppHideFlush.ts
   - packages/client/src/contexts/SyncContext.tsx
-last-reviewed: 2026-07-31
+last-reviewed: 2026-08-03
 ---
 
 # 同步 · 实时通道与调度器
@@ -23,7 +23,7 @@ last-reviewed: 2026-07-31
 
 `packages/server/src/sync/notifier.ts` 维护进程内连接集合，广播函数为 `notifySyncChange(latestSeq, payload?)`；`event: bump` 的 data 形状是 `SyncStreamBumpSchema`（`{latestSeq, fromSeq?, changes?}`，`packages/shared/src/schemas.ts`）——`fromSeq`/`changes` 成对出现时收端可就地 apply，缺省即纯通知。**仅 `/api/sync/push` 构造带数据的载荷**：apply 事务结束后用 `buildBumpPayload` 读出本次 push 造成的 `(fromSeq, latestSeqAfter]` 区间 changes；超过 `BUMP_MAX_CHANGES`（50 条）或序列化后超过 `BUMP_MAX_BYTES`（32KB）任一上限就放弃 payload、退化为纯 `{latestSeq}`（常量与 `buildBumpPayload` 均在 `packages/server/src/routes/sync.ts`）。其余写路径——`/api/sync/force-push`、CLI `/api/entries` 创建、agent `POST /api/quick-notes` 投递、agent `POST /api/agent/tasks/:id/status` 回写任务状态或 tags——成功后仍只调用 `notifySyncChange(getLatestSeq())`，保持纯 bump 不变。决策与退化规则见 [ADR 0021](../../adr/0021-sse-bump-carries-changes.md)。
 
-客户端连接逻辑在 `packages/client/src/lib/syncStream.ts`：前台可见、云同步开启且已配置 API 地址时启动；断开按 1s/2s/4s 退避封顶 30s 带抖动。每次 start 都有独立 generation、AbortController、连接超时与 watchdog，旧 run 收尾不能污染新连接；等待响应头超过 15 秒会中止并走重连。`hello` / `bump` 统一处理：远端 `latestSeq <= 本地读数` 视为回声忽略；更高则经 `shouldPullForBump` 判定后 `syncScheduler.requestSync("bump")`。设置页连接灯读 `SyncContext.connection`。
+客户端连接逻辑在 `packages/client/src/lib/syncStream.ts`：前台可见、云同步开启且已配置 API 地址时启动；断开按 1s/2s/4s 退避封顶 30s 带抖动。每次 start 都有独立 generation、AbortController、连接超时与 watchdog，旧 run 收尾不能污染新连接；等待响应头超过 15 秒会中止并走重连。`hello` / `bump` 统一处理：远端 `latestSeq <= 本地读数` 视为回声忽略；更高则经 `shouldPullForBump` 判定后 `syncScheduler.requestSync("bump")`。设置页连接灯读 `SyncContext.connection` **与 `cloudSyncEnabled` 两个入参**（`getServerConnectionState`，`packages/client/src/pages/SettingsPage.tsx`），共五档：未配 API 地址 → 灰「未配置服务器」；已配但云同步关闭 → 灰「云同步已关闭」；其余按连接态走绿「服务器已连接」/ 黄「正在连接服务器」/ 红「服务器未连接」。**关闭档必须判在连接态之前**：关掉云同步时本节的流根本不建、`connection` 被钉成 `disconnected`，少了这一档就会与服务器真故障共用红点同文案，分不出「自己关的」还是「连不上」。云同步开关本身在 `设置 → 数据设置`（`SettingsDataPage.tsx`），与连接灯不同页。
 
 `SyncContext` 解析每条 SSE 消息时先用 `SyncStreamBumpSchema` 校验；`event: bump` 且 `fromSeq`/`changes`/数字 `latestSeq` 三者齐全就 `stashBumpPayload()` 存入 `engine.ts` 模块级单槽（新覆盖旧、取出即清），随后仍按上一段的 `shouldPullForBump` 判定唤醒 `requestSync("bump")`。真正的零网络落地发生在 `runRegularSync`：本地无 pending 且 stash 的 `fromSeq` 与本地游标连续时，直接复用 pull 同一套 `applyPullChangesBatch` 就地写入、游标推进到 `stash.latestSeq`，跳过 `/api/sync/status` 与 `/api/sync/pull`；schema 校验失败、游标不连续、apply 抛错都自然退化为现状的 status 预查 + pull 链路；仍有 pending 时该轮走写后 push 路径、stash 原地排队（不取不清）等下一轮无 pending 再判定——各分支都不丢事件也不跳号。
 

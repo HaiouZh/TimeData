@@ -152,6 +152,20 @@ describe("SettingsPage", () => {
     expect(html).not.toContain("未配置服务器");
   });
 
+  // 接线闸：纯函数测试绿不代表这里传对了参数——漏传 cloudSyncEnabled 时本例必红。
+  it("云同步关掉时状态点显示已关闭，不误报服务器未连接", () => {
+    useSyncContextMock.mockReturnValue({
+      ...defaultSyncState(),
+      cloudSyncEnabled: false,
+      connection: "disconnected",
+    });
+
+    const html = renderToStaticMarkup(createElement(MemoryRouter, null, createElement(SettingsPage)));
+
+    expect(html).toContain("云同步已关闭");
+    expect(html).not.toContain("服务器未连接");
+  });
+
   it("renders the target horizontal settings entries", () => {
     const html = renderToStaticMarkup(createElement(MemoryRouter, null, createElement(SettingsPage)));
 
@@ -361,24 +375,45 @@ describe("SettingsPage", () => {
 
 describe("getServerConnectionState", () => {
   it("apiUrl 为空时灰点未配置", () => {
-    expect(getServerConnectionState("", "disconnected")).toEqual({ color: "gray", subtitle: "未配置服务器" });
+    expect(getServerConnectionState("", "disconnected", true)).toEqual({ color: "gray", subtitle: "未配置服务器" });
   });
   it("connected 时绿灯已连接", () => {
-    expect(getServerConnectionState("https://example.com", "connected")).toEqual({
+    expect(getServerConnectionState("https://example.com", "connected", true)).toEqual({
       color: "green",
       subtitle: "服务器已连接",
     });
   });
   it("disconnected 时红灯未连接", () => {
-    expect(getServerConnectionState("https://example.com", "disconnected")).toEqual({
+    expect(getServerConnectionState("https://example.com", "disconnected", true)).toEqual({
       color: "red",
       subtitle: "服务器未连接",
     });
   });
   it("connecting 时黄灯正在连接", () => {
-    expect(getServerConnectionState("https://example.com", "connecting")).toEqual({
+    expect(getServerConnectionState("https://example.com", "connecting", true)).toEqual({
       color: "yellow",
       subtitle: "正在连接服务器",
+    });
+  });
+
+  // 2026-08-03 事故闸：云同步开关关掉后 SyncContext 直接把 connection 钉成 disconnected 且根本不建流，
+  // 状态点却报红「服务器未连接」——与服务器真挂掉无法区分，害人一路往服务端排查。关闭是主动选择，不是故障。
+  it("云同步关闭时灰点云同步已关闭，不报红", () => {
+    expect(getServerConnectionState("https://example.com", "disconnected", false)).toEqual({
+      color: "gray",
+      subtitle: "云同步已关闭",
+    });
+  });
+  it("云同步关闭优先于连接态：残留 connected 也显示已关闭", () => {
+    expect(getServerConnectionState("https://example.com", "connected", false)).toEqual({
+      color: "gray",
+      subtitle: "云同步已关闭",
+    });
+  });
+  it("apiUrl 为空时未配置优先于云同步已关闭", () => {
+    expect(getServerConnectionState("", "disconnected", false)).toEqual({
+      color: "gray",
+      subtitle: "未配置服务器",
     });
   });
 });

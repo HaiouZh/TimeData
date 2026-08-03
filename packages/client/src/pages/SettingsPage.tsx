@@ -37,9 +37,18 @@ interface ServerConnectionState {
   subtitle: string;
 }
 
-export function getServerConnectionState(apiUrl: string, connection: SyncStreamState): ServerConnectionState {
+export function getServerConnectionState(
+  apiUrl: string,
+  connection: SyncStreamState,
+  cloudSyncEnabled: boolean,
+): ServerConnectionState {
   if (!apiUrl) {
     return { color: "gray", subtitle: "未配置服务器" };
+  }
+  // 关掉云同步时 SyncContext 不建 SSE 流、把 connection 钉成 disconnected；不单列一档就会
+  // 与服务器真挂掉共用红点同文案，分不出「自己关的」还是「连不上」。关闭是主动选择，走灰点。
+  if (!cloudSyncEnabled) {
+    return { color: "gray", subtitle: "云同步已关闭" };
   }
   if (connection === "connected") {
     return { color: "green", subtitle: "服务器已连接" };
@@ -106,7 +115,7 @@ function ServerStatusCard() {
     lastResult,
     sync,
   } = useSyncContext();
-  const connectionState = getServerConnectionState(apiUrl, connection);
+  const connectionState = getServerConnectionState(apiUrl, connection, cloudSyncEnabled);
 
   return (
     <section className="overflow-hidden rounded-card border border-border bg-surface">
@@ -165,7 +174,7 @@ function ServerStatusCard() {
 }
 
 export default function SettingsPage() {
-  const { apiUrl, connection } = useSyncContext();
+  const { apiUrl, connection, cloudSyncEnabled } = useSyncContext();
   const { currentBuildId, forceRefresh } = useAppUpdate();
   const { confirm, dialog } = useConfirm();
   const [serverVersion, setServerVersion] = useState<ServerVersionState | null>(null);
@@ -189,7 +198,7 @@ export default function SettingsPage() {
     };
   }, [apiUrl]);
 
-  const connectionState = getServerConnectionState(apiUrl, connection);
+  const connectionState = getServerConnectionState(apiUrl, connection, cloudSyncEnabled);
 
   async function handleCheckApkUpdate() {
     setApkChecking(true);
