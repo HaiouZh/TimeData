@@ -228,10 +228,16 @@ pub fn suspend_hotkeys(app: AppHandle) {
 
 /// 读失败时**一根手指都不碰注册表**：`apply_bindings(&[])` 会先 `unregister_all` 再一条不注册，
 /// 一次读不到文件就等于把当前活着的全部热键静默抹掉。
+///
+/// **先拿注册表锁、再读配置**，这两句的顺序不能倒。互斥锁只保证两条命令不交错、**不保证顺序**：
+/// 在锁外读配置时，`resume` 可以读到 `set_hotkeys` 落盘之前的旧表，然后一路排队等锁；等它拿到
+/// 锁，`set_hotkeys` 已经写完文件、装好新表并全部释放——`resume` 这才按旧表 `unregister_all`
+/// 加重注册，抹掉新表装回旧表。终态正是这把锁本来要防的那一个：文件里是新表、页面显示全绿、
+/// 系统里跑的是旧表。锁内读不会死锁：`load_config` 只读文件、不碰 `CONFIG_WRITE_LOCK`，两把锁无环。
 #[tauri::command]
 pub fn resume_hotkeys(app: AppHandle) -> Result<Vec<RegistrationOutcome>, String> {
-    let cfg = config::load_config(&app)?;
     let registry = lock_registry();
+    let cfg = config::load_config(&app)?;
     Ok(apply_bindings(&app, &cfg.hotkeys, &registry))
 }
 

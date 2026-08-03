@@ -120,6 +120,10 @@ fn main() {
 
                 // 启动即注册热键（不等 WebView，spec §五.1）。失败无处回显（窗口可能还没
                 // 起来），设置页打开时 resume_hotkeys 会重报注册结果。
+                //
+                // 这里的配置是上面读的、锁在这一句才拿——`resume_hotkeys` 里被判为竞态的正是这个
+                // 「先读后锁」形态，在这里却安全：setup 跑在事件循环启动**之前**，而三个写注册表的
+                // 命令全都要事件循环派发，此刻一条都不可能在跑。别照搬这个顺序到命令里。
                 let registry = commands::lock_registry();
                 let _ = commands::apply_bindings(app.handle(), &desktop_config.hotkeys, &registry);
             }
