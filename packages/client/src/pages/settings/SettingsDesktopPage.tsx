@@ -10,7 +10,7 @@ import type {
   DesktopHotkeyBinding,
   RegistrationOutcome,
 } from "../../lib/desktop/api.js";
-import { invokeDesktop } from "../../lib/desktop/api.js";
+import { invokeDesktop, messageOf } from "../../lib/desktop/api.js";
 import SettingsDetailPage from "./SettingsDetailPage.tsx";
 
 /**
@@ -49,13 +49,26 @@ export async function loadDesktopSettings(io: DesktopSettingsIo): Promise<Deskto
   };
 }
 
-/** 全量存盘并重注册。空快捷键行是「加了还没录」的草稿，不能当 accelerator 送去注册。 */
+/** 送去注册的那些行：空快捷键行是「加了还没录」的草稿，不能当 accelerator 送出去。 */
+export function bindingsToRegister(hotkeys: DesktopHotkeyBinding[]): DesktopHotkeyBinding[] {
+  return hotkeys.filter((binding) => binding.shortcut !== "");
+}
+
+/**
+ * 空行被跳过时给一句可见的话。**不能静默 filter**：用户按了个非法组合以为录上了 → 保存 →
+ * 那行被无声丢弃 → 无红字、行还在原地 → 认定保存成功；退出再进设置页，行消失，热键从未生效。
+ */
+export function skippedRowsNotice(hotkeys: DesktopHotkeyBinding[]): string | null {
+  const skipped = hotkeys.length - bindingsToRegister(hotkeys).length;
+  return skipped === 0 ? null : `有 ${skipped} 行还没录快捷键，已跳过——录上组合再保存才会生效。`;
+}
+
+/** 全量存盘并重注册。 */
 export async function saveHotkeys(
   hotkeys: DesktopHotkeyBinding[],
   io: DesktopSettingsIo,
 ): Promise<RegistrationOutcome[]> {
-  const bindings = hotkeys.filter((binding) => binding.shortcut !== "");
-  return io.invoke<RegistrationOutcome[]>("set_hotkeys", { bindings });
+  return io.invoke<RegistrationOutcome[]>("set_hotkeys", { bindings: bindingsToRegister(hotkeys) });
 }
 
 /**
@@ -81,7 +94,13 @@ export async function setRecordingHotkeys(
   return io.invoke<RegistrationOutcome[]>("resume_hotkeys");
 }
 
-/** 阈值落盘。Rust 对 <=0 / 非有限值一律返回 Err，前端先拦住，打到一半的输入不会每敲一下抛一次。 */
+/**
+ * 阈值落盘。Rust 对 <=0 / 非有限值一律返回 Err，前端先拦住不发 IPC（挂在 onBlur 上，
+ * 本来就只在离开输入框时触发一次；拦住是为了不拿必然失败的值去打一趟 IPC 再把 Rust 的
+ * 报错原样糊到页面上）。**返回 null 表示「没保存」，调用方必须处理**——不处理的话
+ * 输入框停在 0，用户以为「从此每次都弹确认卡」，实际仍是旧值，3 小时的区间照样闷头写。
+ * IPC 真失败时照原样抛给调用方，不假报成功。
+ */
 export async function saveConfirmHours(text: string, io: DesktopSettingsIo): Promise<number | null> {
   const hours = Number(text);
   if (!Number.isFinite(hours) || hours <= 0) return null;
@@ -89,9 +108,31 @@ export async function saveConfirmHours(text: string, io: DesktopSettingsIo): Pro
   return hours;
 }
 
+/**
+ * 把注册结果**按下标**贴回每一行。
+ *
+ * 不能按 shortcut 字符串 find：快捷键可以重复（两行都录 `Ctrl+Alt+P`，一行打点一行切窗口），
+ * 那时两行都会 find 到第一条（ok）→ 真正注册失败的第二行**不显示红字**，用户按下只会打点、
+ * 切窗口永远不响应，页面上没有任何解释。`apply_bindings` 返回的数组与送出的 bindings
+ * 下标对齐，而 bindings = 过滤掉空行后的 rows——照这个顺序贴回去。
+ *
+ * 贴回前还要比对 shortcut：行被改过但还没保存时，上一次的结果已经不是这一行的结果了
+ * （壳里注册着的仍是旧绑定，这一点由「未保存」标记去说，不靠红字）。
+ */
+export function outcomesForRows(
+  hotkeys: DesktopHotkeyBinding[],
+  outcomes: RegistrationOutcome[],
+): (RegistrationOutcome | null)[] {
+  let next = 0;
+  return hotkeys.map((row) => {
+    if (row.shortcut === "") return null; // 空行没送出去，也就没有对应结果
+    const outcome = outcomes[next++] ?? null;
+    return outcome && outcome.shortcut === row.shortcut ? outcome : null;
+  });
+}
+
 /** 某条快捷键的注册失败原因；成功或压根没有对应结果时为 null。 */
-export function registrationErrorOf(shortcut: string, outcomes: RegistrationOutcome[]): string | null {
-  const outcome = outcomes.find((item) => item.shortcut === shortcut);
+export function registrationErrorOf(outcome: RegistrationOutcome | null): string | null {
   if (!outcome || outcome.ok) return null;
   return outcome.error ?? "注册失败";
 }
@@ -112,19 +153,28 @@ function toRows(bindings: DesktopHotkeyBinding[], nextRowId: { current: number }
   return bindings.map((binding) => ({ ...binding, rowId: `row-${nextRowId.current++}` }));
 }
 
-// Tauri 的 invoke 失败时 reject 的是字符串（Rust 的 Err(String)），不是 Error。
-function messageOf(err: unknown): string {
-  return err instanceof Error ? err.message : String(err);
-}
-
 export default function SettingsDesktopPage() {
   const [rows, setRows] = useState<HotkeyRow[]>([]);
   const [outcomes, setOutcomes] = useState<RegistrationOutcome[]>([]);
   const [autostart, setAutostart] = useState<AutostartState | null>(null);
   const [confirmHours, setConfirmHours] = useState("");
+  /** 最后一次**存住了**的阈值。非法输入回退到它，而不是把 0 留在框里假装保存过。 */
+  const [savedHours, setSavedHours] = useState("");
   const [saving, setSaving] = useState(false);
+  /** 快捷键表改过但还没保存。改动不保存就离开的话，壳里注册着的仍是旧表，
+   *  而且再聚焦任意录入框会 resume_hotkeys 按磁盘配置重装，把「删掉」的那条装回来。 */
+  const [dirty, setDirty] = useState(false);
   const [error, setError] = useState("");
+  const [hint, setHint] = useState("");
   const nextRowId = useRef(0);
+
+  /**
+   * 录入态的挂起 / 恢复串成一条链。两行之间移焦点时 DOM 先发 blur（resume：读文件 + 逐条注册）
+   * 再发 focus（suspend：只 unregister_all），fire-and-forget 的话完成顺序无保证：
+   * suspend 先完成、resume 后完成时，**第二行正处于录入态而全局热键是注册着的**——
+   * 按下已注册的组合会触发打点而不是被录进去，正是挂起逻辑要防的那件事。
+   */
+  const recordingQueue = useRef<Promise<void>>(Promise.resolve());
 
   useEffect(() => {
     let cancelled = false;
@@ -134,6 +184,7 @@ export default function SettingsDesktopPage() {
         if (cancelled) return;
         setRows(toRows(snapshot.hotkeys, nextRowId));
         setConfirmHours(snapshot.confirmHours);
+        setSavedHours(snapshot.confirmHours);
         setAutostart(snapshot.autostart);
         setOutcomes(snapshot.outcomes);
       } catch (err) {
@@ -145,8 +196,24 @@ export default function SettingsDesktopPage() {
     };
   }, []);
 
+  // 离开本页时无条件恢复全局热键。挂起挂在 focus、恢复挂在 blur，而 React **卸载一个正在
+  // 聚焦的元素不触发 blur**：进设置 → 点录入框 → 按返回，全部热键就此失效，直到再进一次
+  // 设置页或重启壳。批 2 的全部价值就是这些热键，这条不能只靠 blur。
+  useEffect(() => {
+    return () => {
+      recordingQueue.current = recordingQueue.current.then(async () => {
+        try {
+          await DESKTOP_IO.invoke("resume_hotkeys");
+        } catch {
+          // 页面已经卸载了，没有回显的地方；恢复不了也不该把卸载搞崩。
+        }
+      });
+    };
+  }, []);
+
   function updateRow(rowId: string, patch: Partial<DesktopHotkeyBinding>) {
     setRows((prev) => prev.map((row) => (row.rowId === rowId ? { ...row, ...patch } : row)));
+    setDirty(true);
   }
 
   async function handleToggleAutostart() {
@@ -159,20 +226,24 @@ export default function SettingsDesktopPage() {
     }
   }
 
-  async function handleRecordingChange(recording: boolean) {
-    try {
-      const resumed = await setRecordingHotkeys(recording, DESKTOP_IO);
-      if (resumed) setOutcomes(resumed);
-    } catch (err) {
-      setError(messageOf(err));
-    }
+  function handleRecordingChange(recording: boolean) {
+    recordingQueue.current = recordingQueue.current.then(async () => {
+      try {
+        const resumed = await setRecordingHotkeys(recording, DESKTOP_IO);
+        if (resumed) setOutcomes(resumed);
+      } catch (err) {
+        setError(messageOf(err));
+      }
+    });
   }
 
   async function handleSave() {
     setSaving(true);
     setError("");
+    setHint(skippedRowsNotice(rows) ?? "");
     try {
       setOutcomes(await saveHotkeys(rows, DESKTOP_IO));
+      setDirty(false);
     } catch (err) {
       setError(messageOf(err));
     } finally {
@@ -183,16 +254,31 @@ export default function SettingsDesktopPage() {
   async function handleConfirmHoursBlur() {
     setError("");
     try {
-      await saveConfirmHours(confirmHours, DESKTOP_IO);
+      const saved = await saveConfirmHours(confirmHours, DESKTOP_IO);
+      if (saved === null) {
+        // 非法值一个字都没存。回退显示值并说清楚，否则框里留着 0，用户以为「从此每次
+        // 都弹确认卡」，实际仍是旧值，3 小时的区间照样闷头写。
+        setConfirmHours(savedHours);
+        setError(`阈值要是大于 0 的小时数，已改回 ${savedHours}`);
+        return;
+      }
+      setSavedHours(String(saved));
     } catch (err) {
+      setConfirmHours(savedHours);
       setError(messageOf(err));
     }
   }
+
+  // 注册结果按下标贴回行（快捷键可以重复，字符串 find 会让失败那行不显示红字）。
+  const rowOutcomes = outcomesForRows(rows, outcomes);
 
   return (
     <SettingsDetailPage title="桌面设置">
       {error && (
         <p className="rounded-ctl border border-danger/50 bg-danger/10 p-2 td-text-caption text-danger">{error}</p>
+      )}
+      {hint && (
+        <p className="rounded-ctl border border-border bg-surface-hover p-2 td-text-caption text-ink-2">{hint}</p>
       )}
 
       <section className="rounded-card border border-border bg-surface p-4">
@@ -219,15 +305,15 @@ export default function SettingsDesktopPage() {
           <p className="mt-3 td-text-caption text-ink-3">还没有配置快捷键。</p>
         ) : (
           <ul className="mt-3 space-y-3">
-            {rows.map((row) => {
-              const failure = registrationErrorOf(row.shortcut, outcomes);
+            {rows.map((row, index) => {
+              const failure = registrationErrorOf(rowOutcomes[index]);
               return (
                 <li key={row.rowId} className="space-y-1">
                   <div className="flex flex-wrap items-center gap-2">
                     <ShortcutInput
                       value={row.shortcut}
                       onChange={(shortcut) => updateRow(row.rowId, { shortcut })}
-                      onRecordingChange={(recording) => void handleRecordingChange(recording)}
+                      onRecordingChange={handleRecordingChange}
                     />
                     <SegmentedControl
                       options={ACTION_OPTIONS}
@@ -240,7 +326,10 @@ export default function SettingsDesktopPage() {
                     <button
                       type="button"
                       aria-label="删除"
-                      onClick={() => setRows((prev) => prev.filter((item) => item.rowId !== row.rowId))}
+                      onClick={() => {
+                        setRows((prev) => prev.filter((item) => item.rowId !== row.rowId));
+                        setDirty(true);
+                      }}
                       className="shrink-0 rounded-ctl p-1.5 text-ink-3 transition-colors hover:bg-surface-hover hover:text-danger"
                     >
                       <Icon icon={Trash} size={18} />
@@ -255,7 +344,10 @@ export default function SettingsDesktopPage() {
         <div className="mt-4 flex flex-wrap items-center gap-2">
           <button
             type="button"
-            onClick={() => setRows((prev) => [...prev, ...toRows([{ shortcut: "", action: "punch" }], nextRowId)])}
+            onClick={() => {
+              setRows((prev) => [...prev, ...toRows([{ shortcut: "", action: "punch" }], nextRowId)]);
+              setDirty(true);
+            }}
             className="rounded-ctl border border-border px-3 py-1.5 td-text-label text-ink-2 transition-colors hover:bg-surface-hover"
           >
             添加快捷键
@@ -263,11 +355,12 @@ export default function SettingsDesktopPage() {
           <button
             type="button"
             onClick={() => void handleSave()}
-            disabled={saving}
+            disabled={saving || !dirty}
             className="rounded-ctl bg-accent px-3 py-1.5 td-text-label font-medium text-page transition-colors hover:bg-accent-strong disabled:opacity-50"
           >
             {saving ? "保存中…" : "保存快捷键"}
           </button>
+          {dirty && <span className="td-text-caption text-ink-3">改动要保存才生效</span>}
         </div>
       </section>
 
