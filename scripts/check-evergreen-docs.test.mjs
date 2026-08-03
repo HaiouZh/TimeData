@@ -564,6 +564,32 @@ test("listSubDocs returns an empty array when the doc has no subdirectory", () =
 
 const CAPS = { softChars: 15000, warnChars: 20000, criticalChars: 23000, hardChars: 25000 };
 
+test("buildHardCapAdviceLines renders legal actions, splitting criteria, and subdoc facts", () => {
+  const tooLong = [{ filePath: "docs/evergreen/todo.md", chars: 25001, kind: "too-long" }];
+  const allDocs = [
+    { filePath: "docs/evergreen/todo.md", chars: 25001, covers: ["root"] },
+    { filePath: "docs/evergreen/todo/modules.md", chars: 6490, covers: [] },
+    { filePath: "docs/evergreen/todo/project-zone.md", chars: 21912, covers: ["a", "b", "c"] },
+    { filePath: "docs/evergreen/todos.md", chars: 99999, covers: ["sibling"] },
+  ];
+
+  const text = docsCheck.buildHardCapAdviceLines(tooLong, allDocs, CAPS).join("\n");
+
+  assert.match(text, /合法动作四条/);
+  assert.match(text, /① 删过时 \/ 越界内容/);
+  assert.match(text, /② 横切外提（功能子域）/);
+  assert.match(text, /③ 纵切外提（读者路径）/);
+  assert.match(text, /④ 升格（子文档长成主题时提到上一层）/);
+  assert.match(text, /压缩措辞、删例子、把句子改短不是合法动作/);
+  assert.match(text, /docs\/evergreen\/_docs-guide\/splitting\.md/);
+  assert.match(text, /docs\/evergreen\/todo\.md 已有 2 份子文档/);
+  assert.match(text, /docs\/evergreen\/todo\/project-zone\.md（21912 字符，covers 3）/);
+  assert.match(text, /docs\/evergreen\/todo\/modules\.md（6490 字符，covers 0）/);
+  assert.ok(text.indexOf("project-zone.md") < text.indexOf("modules.md"));
+  assert.doesNotMatch(text, /docs\/evergreen\/todos\.md/);
+  assert.doesNotMatch(text, /横切多半已用尽/);
+});
+
 test("classifySizeWarning returns null below soft cap and at the boundary", () => {
   assert.equal(classifySizeWarning(14999, CAPS), null);
   assert.equal(classifySizeWarning(15000, CAPS), null);

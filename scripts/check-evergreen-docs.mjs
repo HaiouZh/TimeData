@@ -613,6 +613,28 @@ export function listSubDocs(docPath, allDocs) {
     .sort((a, b) => b.chars - a.chars);
 }
 
+export function buildHardCapAdviceLines(tooLong, allDocs, caps = SIZE_CAPS) {
+  const hardChars = caps?.hardChars ?? SIZE_CAPS.hardChars;
+  const lines = [
+    `\n✗ 有文档超过 hard cap（${hardChars} 字符）。字符数本身不做棘轮，正文可自由增长——过长说明该拆了。`,
+    "  合法动作四条：① 删过时 / 越界内容（越界的先补落点、再 trim 成「一句现状 + 指针」，不许就地删）",
+    "               ② 横切外提（功能子域） ③ 纵切外提（读者路径）",
+    "               ④ 升格（子文档长成主题时提到上一层）。",
+    "  ⚠️ 压缩措辞、删例子、把句子改短不是合法动作——那是拿可读性换体量，且不可逆。",
+    "  四条都走不通就停下来问人，不要让门禁绿变成目标。",
+  ];
+  for (const v of tooLong) {
+    const subDocs = listSubDocs(v.filePath, allDocs);
+    if (subDocs.length === 0) continue;
+    lines.push(`  · ${v.filePath} 已有 ${subDocs.length} 份子文档：`);
+    for (const subDoc of subDocs) {
+      lines.push(`      - ${subDoc.filePath}（${subDoc.chars} 字符，covers ${subDoc.covers}）`);
+    }
+  }
+  lines.push("  判据：docs/evergreen/_docs-guide/splitting.md（横切三条 / 纵切四条 / 升格三条）。");
+  return lines;
+}
+
 /**
  * 软提示分级。超 hard cap 的返回 null——那由 too-long 违规硬报错处理，不再叠加软提示。
  * caps 缺字段就回落到 SIZE_CAPS（与 evaluateSizes 同姿态）：裸读会让 `chars > undefined` 恒假，
@@ -698,21 +720,7 @@ function modeSize(docs) {
   }
   const tooLong = res.violations.filter((v) => v.kind === "too-long");
   if (tooLong.length > 0) {
-    console.error(`\n✗ 有文档超过 hard cap（${SIZE_CAPS.hardChars} 字符）。字符数本身不做棘轮，正文可自由增长——过长说明该拆了。`);
-    console.error("  合法动作四条：① 删过时 / 越界内容（越界的先补落点、再 trim 成「一句现状 + 指针」，不许就地删）");
-    console.error("               ② 横切外提（功能子域） ③ 纵切外提（读者路径）");
-    console.error("               ④ 升格（子文档长成主题时提到上一层）。");
-    console.error("  ⚠️ 压缩措辞、删例子、把句子改短不是合法动作——那是拿可读性换体量，且不可逆。");
-    console.error("  四条都走不通就停下来问人，不要让门禁绿变成目标。");
-    for (const v of tooLong) {
-      const subDocs = listSubDocs(v.filePath, evergreenDocs);
-      if (subDocs.length === 0) continue;
-      console.error(`  · ${v.filePath} 已有 ${subDocs.length} 份子文档：`);
-      for (const subDoc of subDocs) {
-        console.error(`      - ${subDoc.filePath}（${subDoc.chars} 字符，covers ${subDoc.covers}）`);
-      }
-    }
-    console.error("  判据：docs/evergreen/_docs-guide/splitting.md（横切三条 / 纵切四条 / 升格三条）。");
+    for (const line of buildHardCapAdviceLines(tooLong, evergreenDocs, SIZE_CAPS)) console.error(line);
   }
   if (res.violations.some((v) => v.kind !== "too-long")) {
     console.error("\n✗ covers 管辖范围越基线 / 基线缺项或含已删文档：重写基线 `--write-size-baseline` 并在提交信息说明。");
