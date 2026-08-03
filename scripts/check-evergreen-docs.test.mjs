@@ -284,7 +284,12 @@ test("evaluateSizes flags an evergreen doc with both covers and contracts empty"
   const res = evaluateSizes(docs, baseline, { softChars: 15000, hardChars: 25000 });
 
   assert.equal(res.ok, false);
-  assert.equal(res.violations[0].kind, "no-gate");
+  assert.deepEqual(res.violations[0], {
+    filePath: "docs/evergreen/a.md",
+    kind: "no-gate",
+    current: 0,
+    limit: 0,
+  });
 });
 
 test("evaluateSizes accepts an evergreen doc with empty covers but non-empty contracts", () => {
@@ -658,7 +663,7 @@ test("buildHardCapAdviceLines renders legal actions, splitting criteria, and sub
   const tooLong = [{ filePath: "docs/evergreen/todo.md", chars: 25001, kind: "too-long" }];
   const allDocs = [
     { filePath: "docs/evergreen/todo.md", chars: 25001, covers: ["root"] },
-    { filePath: "docs/evergreen/todo/modules.md", chars: 6490, covers: [] },
+    { filePath: "docs/evergreen/todo/modules.md", chars: 6490, covers: ["a", "b", "c", "d", "e", "f", "g"] },
     { filePath: "docs/evergreen/todo/project-zone.md", chars: 21912, covers: ["a", "b", "c"] },
     { filePath: "docs/evergreen/todos.md", chars: 99999, covers: ["sibling"] },
   ];
@@ -674,7 +679,7 @@ test("buildHardCapAdviceLines renders legal actions, splitting criteria, and sub
   assert.match(text, /docs\/evergreen\/_docs-guide\/splitting\.md/);
   assert.match(text, /docs\/evergreen\/todo\.md 已有 2 份子文档/);
   assert.match(text, /docs\/evergreen\/todo\/project-zone\.md（21912 字符，covers 3）/);
-  assert.match(text, /docs\/evergreen\/todo\/modules\.md（6490 字符，covers 0）/);
+  assert.match(text, /docs\/evergreen\/todo\/modules\.md（6490 字符，covers 7）/);
   assert.ok(text.indexOf("project-zone.md") < text.indexOf("modules.md"));
   assert.doesNotMatch(text, /docs\/evergreen\/todos\.md/);
   assert.doesNotMatch(text, /横切多半已用尽/);

@@ -137,7 +137,7 @@ frontmatter 里两个字段分工不同，别混用：
 
 判据一句话：**「改这个文件而不改文档，文档一定错」才进 `contracts`**。典型进 `contracts` 的：`*Schemas.ts`、`syncDomains.ts` / `sync/domains.ts`（域登记簿）、`db/schema.ts`、`types.ts` 里被文档钉死字段的类型、API 路由契约、`index.css` token、控件目录 `ui/**`。纯实现文件、内部 helper 只进 `covers` 不进 `contracts`。
 
-**`contracts` 与 `covers` 各自独立，不构成子集关系。** `covers` 声明「这片代码归本文档讲」，`contracts` 声明「改这个文件本文档一定错」。多数文档的 `contracts` 确实取自它的 `covers`，但那是常见情形不是约束——**纵切子文档（见 §3）拥有的是知识不是代码，零 `covers` + 独立 `contracts` 是它的正常形态**。脚本从不校验二者的包含关系（`readDoc` 分别解析、strict 只匹配 `contracts`），也不要加这条校验：加了会把纵切这条外提路径焊死。
+**`contracts` 与 `covers` 各自独立，不构成子集关系。** `covers` 声明「这片代码归本文档讲」，`contracts` 声明「改这个文件本文档一定错」。多数文档的 `contracts` 确实取自它的 `covers`，但那是常见情形不是约束——**陈述契约或不变量的纵切子文档（见 §3）通常是零 `covers` + 独立 `contracts`；纯代码入口地图则持精确 `covers`、不挂 `contracts`**。脚本从不校验二者的包含关系（`readDoc` 分别解析、strict 只匹配 `contracts`），也不要加这条校验：加了会把纵切这条外提路径焊死。
 
 一份文档**可以没有 `contracts`**（如 development、stats-insights）——说明它没有「改某文件必错」的硬契约点，strict 对它天然是 no-op，这是诚实状态，不是漏配。共享契约文件（`syncDomains.ts`、`entitySchemas.ts` 等）可同时进多份文档的 `contracts`，等价于「改它 → 复查所有把它当契约的文档」，有意为之。
 
@@ -153,9 +153,9 @@ architecture.md（地图）         第 1 层：只索引「主题文档」，�
 
 - **地图（architecture）**：只列主题文档与横切文档（文档登记簿），不索引子文档、不展开域字段细节。
 - **主题文档**：一个主题的稳定入口。承载定位、承上启下、核心契约/不变量，并在“子文档索引”小节列出自己的子文档。**目标控制在 ~15k 字符以内**；超了就按 §3 的两条轴外提一份子文档（横切一个功能子域，或纵切一条读者路径），而不是把正文写厚。
-- **子文档**：放在子目录 `docs/evergreen/<主题>/<子主题>.md`。它仍是完整 evergreen 文档（`type` / `last-reviewed` 必填，**横切必带 `covers`、纵切按设计留空**），但**由它的主题文档索引，不由 architecture 索引**。子文档顶部用 `../<主题>.md` 形式回链主题文档。子文档有**两种形态**，判据不同（见 §3）：
+- **子文档**：放在子目录 `docs/evergreen/<主题>/<子主题>.md`。它仍是完整 evergreen 文档（`type` / `last-reviewed` 必填；**横切必带 `covers`，纵切按内容选择闸：契约路径可留空 `covers`，纯代码入口地图带精确 `covers`**），但**由它的主题文档索引，不由 architecture 索引**。子文档顶部用 `../<主题>.md` 形式回链主题文档。子文档有**两种形态**，判据不同（见 §3）：
   - **横切子文档**：外提一个功能子域，从母文档**迁走**对应 `covers`。例：[todo/at-hand](todo/at-hand.md)、[sync/domain-registry](sync/domain-registry.md)。
-  - **纵切子文档**：外提一条读者路径（不变量 / 模块速查 / 排障），**零 `covers`**，可独立持 `contracts`。母文档横切用尽后，剩下的跨子域公共层只能这样切。例：[todo/invariants](todo/invariants.md)、[todo/modules](todo/modules.md)。
+  - **纵切子文档**：外提一条读者路径（不变量 / 模块速查 / 排障）。契约与不变量路径通常零 `covers`、可独立持 `contracts`；纯代码入口地图持与正文一致的精确 `covers`、不挂 `contracts`。母文档横切用尽后，剩下的跨子域公共层只能这样切。例：[todo/invariants](todo/invariants.md)（前者）、[todo/modules](todo/modules.md)（后者）。
 
 `covers:` 在三层间**单一归属**：一个代码文件原则上只进一份文档的 covers（共享契约/登记簿类文件可被多份消费域同时 cover，属有意为之）。主题文档**横切**外提子文档时（§3.1），把对应 covers 一并迁到子文档；**纵切**外提不迁，母文档 covers 不变（§3.2）。
 
@@ -231,7 +231,7 @@ last-reviewed: YYYY-MM-DD
 
 这些数字是治理参考值，不是机械铁律。三条一起满足，才说明拆出去会降低维护成本。
 
-母文档名下已有 **≥2 份横切子文档**时，横切轴多半已用尽，出路要往纵切找——`check:docs:size` 撞 hard cap 的报错会点名这类文档。它只数带 `covers` 的横切子文档：纵切子文档 `covers` 恒空、不占横切轴，不计入。
+母文档名下已有 **≥2 份横切子文档**时，横切轴多半已用尽，出路要往纵切找——`check:docs:size` 撞 hard cap 的报错会点名这类文档。纵切是否带 `covers` 取决于内容，不能仅凭 `covers` 非空把纯代码入口地图误判为横切。
 
 **判完准入回 §3 前言动手**：搬迁步骤（外提动作）与 `§x.y` 四类处置表两条轴共用，只写在那里，本节不重复。
 
@@ -248,7 +248,7 @@ last-reviewed: YYYY-MM-DD
 
 **判据 2 先于判据 3**：先圈边界再量体量，顺序反了会把一条完整路径按小节切碎。判据 2 也天然限制数量：读者路径本就没几条，**每个主题纵切通常只产出 2–3 份**。
 
-**纵切子文档的 frontmatter**（纯 yaml，可整块复制）：
+**陈述契约或不变量的纵切子文档 frontmatter**（纯 yaml，可整块复制）：
 
 ```yaml
 ---
@@ -261,9 +261,7 @@ last-reviewed: YYYY-MM-DD
 ---
 ```
 
-`covers` 留空或省略都行，它不拥有代码；**但冒号后绝不能跟任何字符**，`covers: []` 和行尾 `#` 注释都会把它解析成标量并被 `check:docs:size` 拦下（机理见 §2）。这条对纵切最要命：纵切子文档 `covers` 按设计恒空，`contracts` 是它**唯一的机检闸**，一丢就 warn / coverage / strict 三个闸全成 no-op，此后再没有任何东西提醒你回来更新它。
-
-`contracts` 挂不挂看内容：陈述契约与不变量的（改 schema 会让它变假）该挂；纯代码入口地图的（改实现不会让「文件在哪」变假）不挂，但它必须自己拥有 `covers`。`check:docs:size` 会拦 `covers` 与 `contracts` 双空的 evergreen 文档。
+上面这类文档的 `covers` 留空或省略都行，`contracts` 是它的机检闸。纯代码入口地图改为在 `covers` 列出正文实际指向的精确入口，`contracts` 留空或省略：改实现不会必然让「文件在哪」变假，但入口文件变化会经 `covers` 命中 warn。两类写法的冒号后都绝不能跟任何字符，`covers: []`、`contracts: []` 和行尾 `#` 注释都会被解析成标量并由 `check:docs:size` 拦下（机理见 §2）。`check:docs:size` 也会拦 `covers` 与 `contracts` 双空的 evergreen 文档。
 
 **判完准入回 §3 前言动手**：搬迁步骤（外提动作）与 `§x.y` 四类处置表两条轴共用，只写在那里，本节不重复——入向那一类尤其别漏，它是唯一要全仓搜的。
 
@@ -272,7 +270,7 @@ last-reviewed: YYYY-MM-DD
 `pnpm check:docs:size` 先守 frontmatter 形状，再守体量与管辖；**字符数不做棘轮**——正文想写多长写多长，只在单个文档真的膨胀到上限时才拦：
 
 - **frontmatter 形状 = 硬闸**。evergreen 文档只接受 `type` / `title` / `last-reviewed` 三个必填标量，以及 `covers` / `contracts` 两个可选列表；未知键、缺必填键、列表被写成标量都会失败。ADR 不参与这条形状校验。
-- **机检闸存在 = no-gate**。evergreen 文档不能 `covers` 与 `contracts` 双空：横切文档至少有 `covers`，纵切文档若零 `covers` 就必须有 `contracts`。
+- **机检闸存在 = no-gate**。evergreen 文档不能 `covers` 与 `contracts` 双空：横切文档至少有 `covers`；纯代码入口地图列精确 `covers`；其他纵切文档若零 `covers` 就必须有 `contracts`。
 - **字符数 = 绝对上限（cap），不是基线棘轮**。写作、补充、加例子随便加，不会因为「比上次长」而失败。只有单文档超过 **hard cap（约 25000 字符）** 才报错，含义是「这篇太长了，该拆」。**撞线时合法动作只有三条**：① 删过时 / 越界内容——越界内容不过时、只是放错层，按 §0.4 先补落点再 trim 成「一句现状 + 指针」，不许就地删；② **横切**外提一个功能子域；③ **纵切**外提一条读者路径（判据见 §3）。压缩措辞、删例子、把句子改短**不是**合法动作，三条都走不通就停下来问人。过 **soft cap（约 15000 字符）** 只软提示、不失败。软提示按余量分三档（超 15000 起 🟡 / 超 20000 起 🟠 / 超 23000 起 🔴，边界是严格大于），措辞随逼近程度加重——同一句警告长期不变会退化成背景噪音，分档是为了让「快撞线了」这件事仍然可感。
 - **`covers` 数 = 棘轮（只增要过基线）**。`scripts/evergreen-size-baseline.json` 只记每篇文档的 `covers` 数与存在性；某文档 `covers` 数比基线大会报错——防止一篇文档悄悄把越来越多代码划进自己管辖。基线**不再记字符数**。
 - 基线必须覆盖当前全部 evergreen 文档；新增 / 删除 / 重命名 evergreen 文档后不更新基线会失败（缺项 / 含已删文档都报）。

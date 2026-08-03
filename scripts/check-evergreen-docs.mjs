@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Check that long-lived (evergreen / ADR) docs stay in sync with the code they cover.
 // covers = 纯归属声明（coverage / 查代码去哪篇）；contracts = 「改它文档必错」的契约点集合，只有它触发 strict。
-// 两者各自独立，contracts 不必是 covers 的子集——纵切子文档零 covers 却持 contracts 是正常形态（见 _docs-guide §1.3）。
+// 两者各自独立，contracts 不必是 covers 的子集——陈述契约的纵切子文档可零 covers、独立持 contracts（见 _docs-guide §1.3）。
 // Usage: node scripts/check-evergreen-docs.mjs [--mode=warn|strict|stale|size|coverage|links] [--since=<rev>] [--write-size-baseline]
 // Zero external deps. Glob syntax: **/, **, *, ?, optional ":Symbol" suffix is stripped.
 
@@ -300,7 +300,7 @@ function readDoc(rel) {
     title: fm.title ?? path.basename(rel, ".md"),
     covers: Array.isArray(fm.covers) ? fm.covers : [],
     // contracts：「改这个文件、不改文档，文档一定错」的契约点集合（schema / 登记簿 / API 面）。
-    // 与 covers 各自独立解析，不校验包含关系——零 covers + 独立 contracts 的纵切子文档是合法形态。
+    // 与 covers 各自独立解析，不校验包含关系——陈述契约的纵切子文档可零 covers、独立持 contracts。
     // strict 只认它；covers 是纯归属声明，不触发 strict。
     contracts: Array.isArray(fm.contracts) ? fm.contracts : [],
     lastReviewed: fm["last-reviewed"] ?? null,
@@ -596,7 +596,7 @@ export function evaluateSizes(docs, baseline, caps) {
       violations.push({ filePath: d.filePath, kind: "too-long", current: d.chars, limit: hardChars });
     }
     if ((d.covers ?? []).length === 0 && (d.contracts ?? []).length === 0) {
-      violations.push({ filePath: d.filePath, kind: "no-gate", current: 0, limit: 1 });
+      violations.push({ filePath: d.filePath, kind: "no-gate", current: 0, limit: 0 });
     }
   }
   for (const [filePath, base] of Object.entries(baseline)) {
@@ -797,7 +797,9 @@ function modeSize(docs) {
     console.error("\n✗ covers 管辖范围越基线 / 基线缺项或含已删文档：重写基线 `--write-size-baseline` 并在提交信息说明。");
   }
   if (res.violations.some((v) => v.kind === "no-gate")) {
-    console.error("\n✗ 有 evergreen 文档 covers/contracts 双空：请补 covers 或 contracts；纵切文档可 covers 留空，但 contracts 必须列出守门文件。");
+    console.error(
+      "\n✗ 有 evergreen 文档 covers/contracts 双空：请补 covers 或 contracts；纵切契约文档可 covers 留空，但必须列 contracts，纯代码入口地图应列精确 covers。",
+    );
   }
   return 1;
 }
