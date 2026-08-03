@@ -15,11 +15,19 @@ export type DesktopPunchOutcome =
   | { kind: "noRange" }
   | { kind: "missingCategory" };
 
+/** 区间小时数——调用方拿它把「用户已批准的长度」传回来，保证两边算法同源。 */
+export function rangeHours(range: PunchRange): number {
+  return (new Date(range.endTime).getTime() - new Date(range.startTime).getTime()) / 3_600_000;
+}
+
 /**
- * 热键打点的「先看再写」（spec §五.5）：算区间→校验分类→比阈值，超阈值不落笔，
- * 交给确认卡。now 一律用按键那一刻（pressedAtMs），排队补投也不歪。
+ * 热键打点（spec §五.5）：每次都按**当下数据**重算区间，绝不写下超过 maxHours 的区间。
+ * - 首次按键：maxHours = 配置的确认阈值。
+ * - 用户在确认卡上批准后重试：maxHours = 批准的那个区间长度（rangeHours(range)）。
+ *   这样「批准期间数据变了导致区间变长」会再弹一次卡，而不是闷头写下用户没看过的区间
+ *   （同步会传播删除，重算只保证更准是错的）。区间变短则直接写，仍是更准。
  */
-export async function desktopPunch(pressedAtMs: number, confirmHours: number): Promise<DesktopPunchOutcome> {
+export async function desktopPunch(pressedAtMs: number, maxHours: number): Promise<DesktopPunchOutcome> {
   const pressedAt = new Date(Math.floor(pressedAtMs / 60000) * 60000);
   const nowUtc = pressedAt.toISOString();
   const todayStartUtc = localDateTimeToUtc(`${getDateString(pressedAt)}T00:00:00`);
@@ -27,18 +35,9 @@ export async function desktopPunch(pressedAtMs: number, confirmHours: number): P
   const range = resolvePunchRange(nowUtc, todayStartUtc, lastEntry?.endTime ?? null);
   if (!range) return { kind: "noRange" };
   if (!(await resolveConfiguredPunchCategoryId())) return { kind: "missingCategory" };
+  if (rangeHours(range) > maxHours) return { kind: "needsConfirm", range };
 
-  const rangeHours = (new Date(range.endTime).getTime() - new Date(range.startTime).getTime()) / 3_600_000;
-  if (rangeHours > confirmHours) return { kind: "needsConfirm", range };
-  return writePunch(pressedAtMs);
-}
-
-/**
- * 真正落笔（阈值内直写；确认卡「记录」也走这里）。按当下数据重算区间——
- * 确认卡上的区间只是预览，同步刚拉完时写入的是缩短后的准确区间，只会更准不会更歪。
- */
-export async function writePunch(pressedAtMs: number): Promise<Exclude<DesktopPunchOutcome, { kind: "needsConfirm" }>> {
-  const result = await punchNow(new Date(pressedAtMs));
+  const result = await punchNow(pressedAt);
   if (!result.ok) {
     return result.reason === "no_range" ? { kind: "noRange" } : { kind: "missingCategory" };
   }
