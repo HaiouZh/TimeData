@@ -142,11 +142,28 @@ function parseFrontmatter(content) {
   return data;
 }
 
-function stripCode(content) {
-  return content.replace(/```[\s\S]*?```/g, "").replace(/`[^`\n]*`/g, "");
+export function stripCode(content) {
+  return content.replace(/```[\s\S]*?```/g, (block) => block.replace(/[^\n]/g, "")).replace(/`[^`\n]*`/g, "");
 }
 
-function parseMarkdownLinks(content) {
+export function parseAnchors(content) {
+  return [...content.matchAll(/<a\s+id="([^"]+)"\s*>\s*<\/a\s*>/g)].map((match) => match[1]);
+}
+
+export function findMalformedAnchors(content) {
+  const malformed = [];
+  const lines = content.split("\n");
+  for (let index = 0; index < lines.length; index++) {
+    const text = lines[index].trim();
+    if (!/^<a\b/.test(text) || !/\bid=/.test(text)) continue;
+    if (!/^<a\s+id="[^"]+"\s*>\s*<\/a\s*>$/.test(text)) {
+      malformed.push({ line: index + 1, text });
+    }
+  }
+  return malformed;
+}
+
+export function parseMarkdownLinks(content) {
   const links = [];
   const re = /\[[^\]]*\]\(([^)]+)\)/g;
   let m = re.exec(content);
@@ -155,7 +172,8 @@ function parseMarkdownLinks(content) {
     const hashIdx = raw.indexOf("#");
     const target = hashIdx >= 0 ? raw.slice(0, hashIdx) : raw;
     const anchor = hashIdx >= 0 ? raw.slice(hashIdx + 1) : null;
-    if (target.endsWith(".md")) links.push({ target, anchor });
+    const line = content.slice(0, m.index).split("\n").length;
+    if (target.endsWith(".md")) links.push({ target, anchor, line });
     m = re.exec(content);
   }
   return links;
@@ -164,6 +182,7 @@ function parseMarkdownLinks(content) {
 function readDoc(rel) {
   const content = fs.readFileSync(path.join(REPO_ROOT, rel), "utf8");
   const fm = parseFrontmatter(content);
+  const strippedContent = stripCode(content);
   return {
     filePath: rel,
     type: fm.type ?? "",
@@ -175,7 +194,9 @@ function readDoc(rel) {
     contracts: Array.isArray(fm.contracts) ? fm.contracts : [],
     lastReviewed: fm["last-reviewed"] ?? null,
     chars: content.length,
-    links: parseMarkdownLinks(stripCode(content)),
+    links: parseMarkdownLinks(strippedContent),
+    anchors: parseAnchors(strippedContent),
+    malformedAnchors: findMalformedAnchors(strippedContent),
   };
 }
 
@@ -271,7 +292,7 @@ export function selectUncovered(files, docs, { roots, exempts }) {
 }
 
 export function evaluateLinks(docs) {
-  const known = new Set(docs.map((d) => d.filePath));
+  const known = new Map(docs.map((d) => [d.filePath, d]));
   const broken = [];
   for (const d of docs) {
     for (const link of d.links ?? []) {
@@ -279,10 +300,35 @@ export function evaluateLinks(docs) {
       if (/^https?:/.test(target)) continue;
       const resolved = path.posix.normalize(path.posix.join(path.posix.dirname(d.filePath), target));
       if (!(resolved.startsWith("docs/evergreen/") || resolved.startsWith("docs/adr/"))) continue;
-      if (!known.has(resolved)) broken.push({ from: d.filePath, target });
+      const targetDoc = known.get(resolved);
+      if (!targetDoc) {
+        broken.push({ from: d.filePath, line: link.line ?? 0, target, kind: "missing-doc" });
+        continue;
+      }
+      if (link.anchor && !(targetDoc.anchors ?? []).includes(link.anchor)) {
+        broken.push({
+          from: d.filePath,
+          line: link.line ?? 0,
+          target: `${target}#${link.anchor}`,
+          kind: "missing-anchor",
+        });
+      }
     }
   }
   return { broken, ok: broken.length === 0 };
+}
+
+export function findDuplicateAnchors(docs) {
+  const firstById = new Map();
+  const duplicates = [];
+  for (const doc of docs) {
+    for (const id of doc.anchors ?? []) {
+      const first = firstById.get(id);
+      if (first) duplicates.push({ id, first, second: doc.filePath });
+      else firstById.set(id, doc.filePath);
+    }
+  }
+  return duplicates;
 }
 
 function isCodeFile(f) {
@@ -641,15 +687,35 @@ function modeCoverage(docs, since) {
   return 1;
 }
 
-function modeLinks(docs) {
-  const res = evaluateLinks(docs);
-  if (res.ok) {
-    console.log(`✓ evergreen 文档内部 .md 链接全部解析通过（${docs.length} 份）。`);
+export function modeLinks(docs) {
+  const linkResult = evaluateLinks(docs);
+  const malformed = docs.flatMap((doc) =>
+    (doc.malformedAnchors ?? []).map((anchor) => ({ filePath: doc.filePath, ...anchor })),
+  );
+  const duplicates = findDuplicateAnchors(docs);
+  if (linkResult.ok && malformed.length === 0 && duplicates.length === 0) {
+    console.log(`✓ evergreen 文档内部 .md 链接与显式锚点全部解析通过（${docs.length} 份）。`);
     return 0;
   }
-  console.error("✗ 发现指向不存在文档的内部链接：\n");
-  for (const b of res.broken) console.error(`  ${b.from} → ${b.target}`);
-  console.error("\n文档重命名/移动后请更新引用方的链接。");
+  if (!linkResult.ok) {
+    console.error("✗ 发现指向不存在文档或显式锚点的内部链接：\n");
+    for (const broken of linkResult.broken) {
+      console.error(`  ${broken.from}:${broken.line} → ${broken.target}`);
+    }
+    console.error("\n文档重命名/移动后请更新引用；带 # 的链接必须指向目标文档中的显式锚点。");
+  }
+  if (malformed.length > 0) {
+    console.error("\n✗ 发现畸形的显式锚点：\n");
+    for (const anchor of malformed) console.error(`  ${anchor.filePath}:${anchor.line ?? 0} → ${anchor.text}`);
+    console.error('\n显式锚点必须独立成行并严格配对，例如 <a id="example"></a>；不接受未闭合或自闭合。');
+  }
+  if (duplicates.length > 0) {
+    console.error("\n✗ 发现重复的显式锚点 ID：\n");
+    for (const duplicate of duplicates) {
+      console.error(`  ${duplicate.id} → ${duplicate.first} / ${duplicate.second}`);
+    }
+    console.error("\n显式锚点 ID 必须在全部长期文档中保持唯一。");
+  }
   return 1;
 }
 

@@ -3,6 +3,8 @@ import test from "node:test";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
+import * as docsCheck from "./check-evergreen-docs.mjs";
+
 import {
   CliUsageError,
   EVERGREEN_RULES_SUMMARY,
@@ -23,6 +25,40 @@ import {
 } from "./check-evergreen-docs.mjs";
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+
+test("stripCode preserves line count while removing fenced and inline code", () => {
+  assert.equal(typeof docsCheck.stripCode, "function");
+  const content = ["before `inline`", "```js", "const a = 1;", "```", "after"].join("\n");
+
+  const stripped = docsCheck.stripCode(content);
+
+  assert.equal(stripped.split("\n").length, 5);
+  assert.doesNotMatch(stripped, /const a/);
+  assert.doesNotMatch(stripped, /inline/);
+});
+
+test("parseMarkdownLinks records the source line for links on lines 3 and 5", () => {
+  assert.equal(typeof docsCheck.parseMarkdownLinks, "function");
+  const content = ["one", "two", "[A](a.md)", "four", "[B](b.md#target)"].join("\n");
+
+  assert.deepEqual(docsCheck.parseMarkdownLinks(content), [
+    { target: "a.md", anchor: null, line: 3 },
+    { target: "b.md", anchor: "target", line: 5 },
+  ]);
+});
+
+test("parseAnchors extracts paired anchors and ignores fenced examples", () => {
+  assert.equal(typeof docsCheck.parseAnchors, "function");
+  const content = [
+    '<a id="first"></a>',
+    "```html",
+    '<a id="example"></a>',
+    "```",
+    '<a id="second"></a>',
+  ].join("\n");
+
+  assert.deepEqual(docsCheck.parseAnchors(docsCheck.stripCode(content)), ["first", "second"]);
+});
 
 test("parseArgs rejects unknown arguments with CLI usage exit code", () => {
   assert.throws(
@@ -317,6 +353,55 @@ test("evaluateLinks passes when all links resolve", () => {
   assert.equal(evaluateLinks(docs).ok, true);
 });
 
+test("evaluateLinks passes when the target document contains the explicit anchor", () => {
+  const docs = [
+    { filePath: "docs/evergreen/a.md", links: [{ target: "b.md", anchor: "exists", line: 12 }] },
+    { filePath: "docs/evergreen/b.md", links: [], anchors: ["exists"] },
+  ];
+
+  assert.deepEqual(evaluateLinks(docs), { broken: [], ok: true });
+});
+
+test("evaluateLinks reports a missing anchor with target fragment and source line", () => {
+  const docs = [
+    { filePath: "docs/evergreen/a.md", links: [{ target: "b.md", anchor: "gone", line: 42 }] },
+    { filePath: "docs/evergreen/b.md", links: [], anchors: ["exists"] },
+  ];
+
+  assert.deepEqual(evaluateLinks(docs).broken, [
+    {
+      from: "docs/evergreen/a.md",
+      line: 42,
+      target: "b.md#gone",
+      kind: "missing-anchor",
+    },
+  ]);
+});
+
+test("evaluateLinks does not validate anchors when the link has no fragment", () => {
+  const docs = [
+    { filePath: "docs/evergreen/a.md", links: [{ target: "b.md", anchor: null, line: 5 }] },
+    { filePath: "docs/evergreen/b.md", links: [] },
+  ];
+
+  assert.equal(evaluateLinks(docs).ok, true);
+});
+
+test("evaluateLinks reports a missing target document only once", () => {
+  const docs = [
+    { filePath: "docs/evergreen/a.md", links: [{ target: "missing.md", anchor: "gone", line: 7 }] },
+  ];
+
+  assert.deepEqual(evaluateLinks(docs).broken, [
+    {
+      from: "docs/evergreen/a.md",
+      line: 7,
+      target: "missing.md",
+      kind: "missing-doc",
+    },
+  ]);
+});
+
 test("evaluateLinks resolves ../ relative links across subdirs", () => {
   const docs = [
     { filePath: "docs/evergreen/sync/domain-registry.md", links: [{ target: "../sync.md", anchor: null }] },
@@ -332,6 +417,63 @@ test("evaluateLinks ignores links outside the docs tree", () => {
   ];
 
   assert.equal(evaluateLinks(docs).ok, true);
+});
+
+test("findMalformedAnchors reports only malformed standalone anchor lines", () => {
+  assert.equal(typeof docsCheck.findMalformedAnchors, "function");
+  const content = [
+    '<a id="good"></a>',
+    '<a id="unclosed">',
+    '<a id="self-closing" />',
+    "## 标题 <a id=\"inline\"></a>",
+  ].join("\n");
+
+  assert.deepEqual(docsCheck.findMalformedAnchors(docsCheck.stripCode(content)), [
+    { line: 2, text: '<a id="unclosed">' },
+    { line: 3, text: '<a id="self-closing" />' },
+  ]);
+});
+
+test("findDuplicateAnchors reports the first and second documents sharing an id", () => {
+  assert.equal(typeof docsCheck.findDuplicateAnchors, "function");
+  const docs = [
+    { filePath: "docs/evergreen/first.md", anchors: ["shared-id"] },
+    { filePath: "docs/evergreen/second.md", anchors: ["shared-id"] },
+  ];
+
+  assert.deepEqual(docsCheck.findDuplicateAnchors(docs), [
+    { id: "shared-id", first: "docs/evergreen/first.md", second: "docs/evergreen/second.md" },
+  ]);
+});
+
+test("modeLinks reports link, malformed-anchor, and duplicate-anchor failures together", () => {
+  assert.equal(typeof docsCheck.modeLinks, "function");
+  const docs = [
+    {
+      filePath: "docs/evergreen/a.md",
+      links: [{ target: "missing.md", anchor: null, line: 11 }],
+      anchors: ["shared-id"],
+      malformedAnchors: [{ line: 12, text: '<a id="bad" />' }],
+    },
+    { filePath: "docs/evergreen/b.md", links: [], anchors: ["shared-id"], malformedAnchors: [] },
+  ];
+  const output = [];
+  const originalError = console.error;
+  const originalLog = console.log;
+  console.error = (...args) => output.push(args.join(" "));
+  console.log = (...args) => output.push(args.join(" "));
+  try {
+    assert.equal(docsCheck.modeLinks(docs), 1);
+  } finally {
+    console.error = originalError;
+    console.log = originalLog;
+  }
+
+  const text = output.join("\n");
+  assert.match(text, /docs\/evergreen\/a\.md:11 → missing\.md/);
+  assert.match(text, /docs\/evergreen\/a\.md:12/);
+  assert.match(text, /shared-id/);
+  assert.match(text, /docs\/evergreen\/b\.md/);
 });
 
 test("diffSizeBaseline 把被抬高的 covers 单列出来（重写基线时要喊出来的那部分）", () => {

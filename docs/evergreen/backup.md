@@ -226,6 +226,8 @@ UI 提示文案在 `SettingsDataPage.tsx`，每次改恢复流程时都要顺便
 
 ## 6. Server backup（服务端快照）
 
+<a id="backup-server-write-path"></a>
+
 `packages/server/src/sync/backup.ts` 的 `createServerBackup(operation)`：
 
 - 在 `<DB_PATH>/../backups/` 下生成 `<operation>-<ISO 时间>.db` 文件。

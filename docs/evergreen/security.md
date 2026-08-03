@@ -117,6 +117,8 @@ Android 原生环境保持 HTTPS-only：`packages/mobile/capacitor.config.ts` �
 
 ## 陌生来源提醒
 
+<a id="security-new-ip-alert"></a>
+
 `known_ip_scopes` 表按 token tier(master/agent/dev_bypass)隔离记录见过的**来源范围**，主键 `(token_tier, scope_key)`。`scope_key` 由 `lib/ipScope.ts` 的 `computeIpScope` 算出，两套键并存、前缀不同因而不碰撞：**中国**（内置段表命中）走 `asn:<asn>|cn:<省>:<市>`，缺市退 `asn:<asn>|cn:<省>`（香港等 5802 个段只有省没有市，缺这档会掉进最宽的 asn 档）；**国外**仍走 GeoLite2 的 `asn:<asn>|geo:<cityGeonameId>`（城市档用 `geoname_id` 而非地名，理由见 [ADR 0025](../adr/0025-new-ip-alert-scoped-by-asn-and-city.md)）。中国档用归一后的中文省市名做键而非数字 id——内置表是固定版本、跨版本稳定，且键带 `cn:` 前缀、只用于中国，「同名不同国」碰撞不成立（[ADR 0028](../adr/0028-china-geo-from-builtin-ip2region-table.md)）。省市皆无或 ASN 缺失时退 `asn:<asn>` / `net:<网段前缀>`。收敛到范围而非精确 IP 是因为动态 IP 与 VPN 出口下按精确 IP 永远确认不完——代价是同运营商同城换 IP 不再报警，取舍见 ADR 0025。
 
 `net:` 档的前缀由 `networkPrefix` 算，共四种形态：合法 IPv4 取 /24；合法 IPv6 取展开并去前导零后的 /64；真正的 IPv4-mapped / IPv4-compatible 形式（`::ffff:a.b.c.d`、`::a.b.c.d`）按内嵌 IPv4 的 /24；**不是合法 IP 的字符串按整串当前缀**（键即 `net:<原始串>`）。前置闸是 `node:net` 的 `isIP`，与 `geoip.ts` 的 `maxmind.validate` 是同一把闸——IP 取自 `X-Real-IP` / `X-Forwarded-For`，是外部可控字符串，这条兜底保证不同来源绝不被静默并成一个键（宁可对同一个来源多报一次）。

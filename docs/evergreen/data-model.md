@@ -73,7 +73,7 @@ last-reviewed: 2026-07-30
 | `api_request_logs` | 服务端 `/api/*` 请求审计运维表；不同步客户端，不保存 body、Authorization 或完整 query。`is_new_ip` INTEGER 0/1 列（幂等补列，默认 0）标记该请求的来源范围在其 token tier 下首见 |
 | `totp_config` | TOTP 危险操作锁的单行配置表，`id` 恒为 1，`secret` 存 base32 明文；不同步客户端。见 [security](security.md) |
 | `totp_recovery_codes` | 恢复码表，主键是 sha256 哈希（不存明文），`used_at` 非空即已消费（一次性） |
-| `known_ip_scopes` | 已见来源范围表，复合主键 `(token_tier, scope_key)`，带 `country` / `city` / `asn_org` / `last_ip` / `first_seen` / `last_seen` / `acknowledged`；`acknowledged=0` 即未确认的新来源。`scope_key` 算法与收敛取舍见 [security](security.md#陌生来源提醒) 与 [ADR 0025](../adr/0025-new-ip-alert-scoped-by-asn-and-city.md)。**`schema.ts` 建表段里有一条常驻的 `DROP TABLE IF EXISTS known_ips`**：它不在一次性迁移脚本里，而是每次进程启动都无条件执行，任何名为 `known_ips` 的表启动即被清空删除。退出条件与「删除前不要新建同名表」的约束记在 ADR 0025 |
+| `known_ip_scopes` | 已见来源范围表，复合主键 `(token_tier, scope_key)`，带 `country` / `city` / `asn_org` / `last_ip` / `first_seen` / `last_seen` / `acknowledged`；`acknowledged=0` 即未确认的新来源。`scope_key` 算法与收敛取舍见 [security](security.md#security-new-ip-alert) 与 [ADR 0025](../adr/0025-new-ip-alert-scoped-by-asn-and-city.md)。**`schema.ts` 建表段里有一条常驻的 `DROP TABLE IF EXISTS known_ips`**：它不在一次性迁移脚本里，而是每次进程启动都无条件执行，任何名为 `known_ips` 的表启动即被清空删除。退出条件与「删除前不要新建同名表」的约束记在 ADR 0025 |
 | `deleted_tasks_archive` | tasks 域 delete 生效前的整行快照归档，不进同步域，经 `GET /api/tasks/deleted-archive` 只读查询，用于删除死因分析 |
 | `sync_push_requests` | push `requestId` 幂等回放表：(requestId → status_code, 原响应 JSON)，TTL 24h 惰性清理；见 [ADR 0020](../adr/0020-sync-push-request-idempotency.md) |
 
