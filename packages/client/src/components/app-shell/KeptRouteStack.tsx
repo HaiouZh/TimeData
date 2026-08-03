@@ -68,6 +68,12 @@ export function nextStack(prev: KeptLayer[], location: Location, navigationType:
   const existing = prev.findIndex((l) => l.location.key === location.key);
   if (existing >= 0) return withTailLocation(prev.slice(0, existing + 1), location);
 
+  // POP 到栈**外**的条目（回退超出两层窗口、或前进）：我们并不知道当前页的「来处」是谁。
+  // 此时留着旧栈尾当保留层，露出来的是历史上更靠**前方**的页，而 navigate(-1) 落到的是别处——
+  // 与 replace 那个缺陷同一类的「露 A 落 B」。唯一诚实的状态是没有保留层：栈重置为当前这一层，
+  // EdgeSwipeBack 因「无保留层」自动不启动。宁可手势少一次可用，也不能露错页面。
+  if (navigationType === NavigationType.Pop) return [{ key: location.key, location }];
+
   const appended = [...prev, { key: location.key, location }];
   // 超限只从**头部**丢：剩余层的相对顺序不变，React 只做 removeChild、不移动已挂载节点。
   // 一旦让 React 移动某层，DOM 节点被搬走，其滚动容器 scrollTop 就可能被清掉——

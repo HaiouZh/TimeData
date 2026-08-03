@@ -208,8 +208,34 @@ describe("nextStack REPLACE", () => {
   });
 });
 
+describe("nextStack POP 到栈外", () => {
+  it("POP 到栈外的历史条目时丢弃保留层，只剩当前这一层", () => {
+    // A→B→C（栈 [B,C]）→ 回 B（栈截断成 [B]）→ 再回 A：A 已不在栈里。
+    // 此时若把 B 留作保留层，露出来的是历史上**更靠前方**的页，而 navigate(-1) 落到的是 A 之前那条——
+    // 又一次「露 A 落 B」。不知道来处是谁时，唯一诚实的状态就是没有保留层。
+    const b = layer("/settings/data", "k2");
+    const c = layer("/settings/categories/c1", "k3");
+    const a = loc("/todo", "k1");
+
+    const result = nextStack([b, c], a, NavigationType.Pop);
+
+    expect(result).toHaveLength(1);
+    expect(result[0].location).toBe(a);
+  });
+
+  it("POP 到栈**内**的那条仍是截断复用，不受影响", () => {
+    const b = layer("/settings/data", "k2");
+    const c = layer("/settings/categories/c1", "k3");
+
+    const result = nextStack([b, c], loc("/settings/data", "k2"), NavigationType.Pop);
+
+    expect(result).toHaveLength(1);
+    expect(result[0]).toBe(b);
+  });
+});
+
 describe("nextStack 不变式 fuzz", () => {
-  it("随机 push/pop/replace 序列下：当前 location 恒为栈尾、React key 不重复、栈长不超 2、幂等", () => {
+  it("随机 push/pop/replace 序列下：当前 location 恒为栈尾、保留层恒为历史前一条、React key 不重复、栈长不超 2、幂等", () => {
     // 固定种子的线性同余，跑得快又可复现；失败时 violations 里带着现场。
     let seed = 12345;
     const rnd = () => {
@@ -258,6 +284,11 @@ describe("nextStack 不变式 fuzz", () => {
           violations.push(`当前 location 不在栈尾 stack=${JSON.stringify(keys)} cur=${cur.key} @${where}`);
         }
         if (stack.length > 2) violations.push(`栈长 ${stack.length} 超限 @${where}`);
+        if (stack.length === 2 && stack[0].location.key !== history[idx - 1]?.key) {
+          // 保留层就是手势要露出、松手要落到的那一页，它必须恰好是历史上当前条目的前一条。
+          // 露出的是别的页（哪怕只是前进方向的页）就等于「露 A 落 B」。
+          violations.push(`保留层不是历史前一条 kept=${stack[0].location.key} 应为=${history[idx - 1]?.key} @${where}`);
+        }
         if (nextStack(stack, cur, navigationType) !== stack) violations.push(`不幂等 @${where}`);
       }
     }
@@ -379,6 +410,33 @@ describe("KeptRouteStack", () => {
     const active = host.querySelector('[data-kept-layer="active"]') as HTMLElement;
     expect(active.querySelector('[data-page="/"]')).not.toBeNull();
     expect(mountCounts["/"]).toBe(1);
+    await unmount(root);
+  });
+
+  it("回退到栈外的历史条目时不留保留层，手势因此不会露出前进方向的页", async () => {
+    const { host, root } = await renderDom(
+      createElement(
+        MemoryRouter,
+        { initialEntries: ["/todo"] },
+        createElement(KeptRouteStack, {}),
+        createElement(Nav, null),
+      ),
+    );
+    await click(host.querySelector('[data-testid="to-data"]'));
+    // 栈满两层，/todo 已被挤出窗口。
+    await click(host.querySelector('[data-testid="to-cat"]'));
+    // 回 /settings/data：它在栈里，截断复用（这条既有行为不受影响）。
+    await click(host.querySelector('[data-testid="go-back"]'));
+    // 再回 /todo：已不在栈里。留着 /settings/data 当保留层的话，露出来的是**前进方向**的页，
+    // 而 navigate(-1) 落到的是 /todo 之前那条——正是本批要消灭的「露 A 落 B」。
+    await click(host.querySelector('[data-testid="go-back"]'));
+
+    expect(host.querySelectorAll("[data-kept-layer]")).toHaveLength(1);
+    // 没有 kept 层 → EdgeSwipeBack 的启动条件之一不成立，手势自动哑火，用户走左上角返回。
+    // 宁可手势少一次可用，也不能露错页面。
+    expect(host.querySelector('[data-kept-layer="kept"]')).toBeNull();
+    const active = host.querySelector('[data-kept-layer="active"]') as HTMLElement;
+    expect(active.querySelector('[data-page="/todo"]')).not.toBeNull();
     await unmount(root);
   });
 
