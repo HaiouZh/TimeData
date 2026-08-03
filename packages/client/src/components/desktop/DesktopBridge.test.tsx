@@ -6,8 +6,10 @@ import type { DesktopHotkeyEvent } from "../../lib/desktop/api.js";
 import { setPunchCategoryId } from "../../lib/settings/punchCategorySetting.js";
 import { db, resetDb } from "../../test/dbReset.js";
 import {
+  cancelConfirm,
   confirmPunch,
   DesktopBridge,
+  dismissUndo,
   IDLE_BRIDGE_STATE,
   punchFromHotkey,
   startDesktopBridge,
@@ -159,7 +161,7 @@ describe("热键打点分流", () => {
     expect(asked.confirm?.retry).toBe(false);
     expect(await db.timeEntries.count()).toBe(0);
 
-    const done = await confirmPunch(asked, io);
+    const done = await confirmPunch(asked, io, asked.confirm);
     expect(done.confirm).toBeNull();
     expect(done.undo?.message).toBe("已打点 00:00–12:00");
     expect(await db.timeEntries.count()).toBe(1);
@@ -178,7 +180,7 @@ describe("热键打点分流", () => {
 
     await db.timeEntries.clear(); // 用户盯着卡的这会儿，那条记录被同步删掉了
 
-    const again = await confirmPunch(asked, io);
+    const again = await confirmPunch(asked, io, asked.confirm);
     expect(again.confirm?.message).toBe("要把 00:00–12:00 记为打点吗？"); // 换新区间再问一次
     expect(again.confirm?.retry).toBe(true);
     expect(await db.timeEntries.count()).toBe(0); // 一个字都没写
@@ -240,7 +242,7 @@ describe("撤销", () => {
     const entryId = written.undo?.entryId;
     expect(entryId).toBeTruthy();
 
-    const after = await undoPunch(written, io);
+    const after = await undoPunch(written, io, written.undo);
 
     expect(deleteEntry).toHaveBeenCalledWith(entryId);
     expect(after.undo).toBeNull();
@@ -250,10 +252,120 @@ describe("撤销", () => {
   it("没有可撤销的记录时不乱删", async () => {
     const { io, deleteEntry } = makeIo();
 
-    const after = await undoPunch(IDLE_BRIDGE_STATE, io);
+    const after = await undoPunch(IDLE_BRIDGE_STATE, io, null);
 
     expect(deleteEntry).not.toHaveBeenCalled();
     expect(after.undo).toBeNull();
+  });
+});
+
+// 队列里排队要几十~几百毫秒（一趟 IPC + 读盘 + 若干 Dexie 事务 + 一次通知）。用户在这个
+// 窗口里点上一条撤销条的按钮时，队列会先跑完新打点、把状态里的撤销条 / 确认卡换成新的，
+// 然后才轮到他这一下——不带身份就会作用在**他没看过的那一条**上。
+describe("动作带身份：排队期间状态被换掉就放弃，不动新的那条", () => {
+  it("撤销删的是他看着的那条；队列里已换成新记录时一个字不删", async () => {
+    await configurePunchCategory();
+    await seedEntry("2026-06-15T00:00:00.000Z", "2026-06-15T03:00:00.000Z");
+    const { io, deleteEntry } = makeIo();
+
+    const written = await punchFromHotkey(PRESSED_AT_MS, io, IDLE_BRIDGE_STATE);
+    const staleUndo = written.undo; // 用户点「撤销」时屏幕上的那条（entry A）
+    expect(staleUndo).toBeTruthy();
+
+    // 他点下去之后、这一下轮到之前，队列先跑完了另一次打点，撤销条换成了 entry B
+    const swapped = { ...written, undo: { message: "已打点 12:00–12:30", entryId: "entry-B" } };
+
+    const after = await undoPunch(swapped, io, staleUndo);
+
+    expect(deleteEntry).not.toHaveBeenCalled(); // 尤其不能删 entry-B
+    expect(after.undo).toBe(swapped.undo); // 新撤销条原样留在屏幕上
+    expect(await db.timeEntries.count()).toBe(2);
+  });
+
+  it("「✕」只关他看的那条，队列里刚弹出来的新撤销条不许被顺手带走", () => {
+    const stale = { message: "已打点 11:00–12:00", entryId: "entry-A" };
+    const fresh = { message: "已打点 12:00–12:30", entryId: "entry-B" };
+
+    expect(dismissUndo({ ...IDLE_BRIDGE_STATE, undo: fresh }, stale).undo).toBe(fresh);
+    expect(dismissUndo({ ...IDLE_BRIDGE_STATE, undo: fresh }, fresh).undo).toBeNull();
+  });
+
+  it("「算了」只关他看的那张卡，队列里刚弹的新卡不许被顺手带走", () => {
+    const stale = { message: "要把 00:00–12:00 记为打点吗？", retry: false, pressedAtMs: 1, approvedHours: 12 };
+    const fresh = { message: "要把 11:00–12:00 记为打点吗？", retry: false, pressedAtMs: 2, approvedHours: 1 };
+
+    expect(cancelConfirm({ ...IDLE_BRIDGE_STATE, confirm: fresh }, stale).confirm).toBe(fresh);
+    expect(cancelConfirm({ ...IDLE_BRIDGE_STATE, confirm: fresh }, fresh).confirm).toBeNull();
+  });
+
+  // 身份用对象引用而不是 pressedAtMs：重试卡与原卡的 pressedAtMs **相同**（同一次按键），
+  // 拿字段比对会把「双击『记录』」放行——第二下按新卡那个更长的已批准长度落笔，
+  // 正是 T5 那个 Critical 的失败形态（批准 1 小时，闷头写下 12 小时）。
+  it("双击「记录」：第二下作用在重试卡上会写下没批准的长区间，必须被挡住", async () => {
+    await configurePunchCategory();
+    await seedEntry("2026-06-14T22:00:00.000Z", "2026-06-15T03:00:00.000Z");
+    const { io } = makeIo({ punchConfirmHours: 0.5 });
+
+    const asked = await punchFromHotkey(PRESSED_AT_MS, io, IDLE_BRIDGE_STATE);
+    expect(asked.confirm?.approvedHours).toBe(1); // 用户看到并批准的是 1 小时
+
+    await db.timeEntries.clear(); // 盯着卡的这会儿那条记录被同步删了
+    const again = await confirmPunch(asked, io, asked.confirm); // 第一下 → 换成 12 小时的重试卡
+    expect(again.confirm?.approvedHours).toBe(12);
+    expect(again.confirm?.pressedAtMs).toBe(asked.confirm?.pressedAtMs); // 同一次按键，字段比对认不出来
+
+    // 第二下带的仍是**第一张卡**的身份 → 必须原样返回，不能拿 12 小时那个上限去落笔
+    const second = await confirmPunch(again, io, asked.confirm);
+    expect(second).toBe(again);
+    expect(await db.timeEntries.count()).toBe(0);
+  });
+});
+
+// A22 / A26：停留中的确认卡在这两条出口必须被清掉。留着它，屏幕上就是
+// 「通知说没时间可记，却挂着一张要你记 00:00–12:00 的卡」这种自相矛盾的中间态。
+describe("停留中的确认卡在 noRange / missingCategory 出口被清掉", () => {
+  it("再按热键走 noRange：旧卡不许还挂着（punchFromHotkey 路径）", async () => {
+    await configurePunchCategory();
+    const { io } = makeIo();
+
+    const asked = await punchFromHotkey(PRESSED_AT_MS, io, IDLE_BRIDGE_STATE);
+    expect(asked.confirm).toBeTruthy(); // 卡记着 00:00–12:00
+
+    await seedEntry("2026-06-15T00:00:00.000Z", "2026-06-15T04:00:00.000Z"); // 用户在别处把区间补满了
+    const next = await punchFromHotkey(PRESSED_AT_MS, io, asked);
+
+    expect(next.confirm).toBeNull();
+    expect(next.notice?.message).toBe("距上次记录还没有时间");
+  });
+
+  it("在卡上点「记录」但区间已被盖满：卡片必须关掉，不许赖着不走（confirmPunch 路径）", async () => {
+    await configurePunchCategory();
+    const { io, invoke } = makeIo();
+
+    const asked = await punchFromHotkey(PRESSED_AT_MS, io, IDLE_BRIDGE_STATE);
+    expect(asked.confirm).toBeTruthy();
+
+    await seedEntry("2026-06-15T00:00:00.000Z", "2026-06-15T04:00:00.000Z"); // 盯着卡时同步把区间盖满
+
+    const next = await confirmPunch(asked, io, asked.confirm);
+
+    expect(next.confirm).toBeNull(); // 再点也是一样的结果，卡不能留在屏幕上
+    expect(invoke).toHaveBeenCalledWith("notify_user", { title: "TimeData", body: "距上次记录还没有时间" });
+    expect(await db.timeEntries.count()).toBe(1); // 只有 seed 那条
+  });
+
+  it("在卡上点「记录」但打点分类没了：卡片同样关掉", async () => {
+    await configurePunchCategory();
+    const { io } = makeIo();
+
+    const asked = await punchFromHotkey(PRESSED_AT_MS, io, IDLE_BRIDGE_STATE);
+    await db.categories.clear(); // 分类被同步删了
+
+    const next = await confirmPunch(asked, io, asked.confirm);
+
+    expect(next.confirm).toBeNull();
+    expect(next.notice?.message).toBe("请先在设置里选择打点分类");
+    expect(await db.timeEntries.count()).toBe(0);
   });
 });
 

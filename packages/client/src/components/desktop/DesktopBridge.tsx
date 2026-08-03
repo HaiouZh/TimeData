@@ -122,22 +122,64 @@ export async function punchFromHotkey(
   return applyPunchOutcome(outcome, pressedAtMs, false, io, prev);
 }
 
+/**
+ * 用户动作带进队列的**身份**：他点下去那一刻屏幕上的那张卡 / 那条撤销条本身（对象引用）。
+ *
+ * 队列里排队要时间——一次热键打点是一趟 IPC + 读盘 + 若干 Dexie 事务 + 一次系统通知，
+ * 几十到几百毫秒。这个窗口里用户点上一条撤销条的「撤销」，队列会**先**跑完新打点
+ * （写入 entry B，状态里的 undo 换成 B），**再**跑 undo——删掉的是 B，不是他正看着的 A。
+ * 「✕」和「算了」同形状：清掉的是新弹出来的那条，用户按了热键却什么都没看见、也什么都没写。
+ *
+ * 用对象引用而不是 `entryId` / `pressedAtMs` 这类字段值：确认卡重试时新卡的 `pressedAtMs`
+ * 与旧卡**相同**（同一次按键），拿字段比对会把「双击记录」放行——第二下按新卡（更长的
+ * 已批准长度）落笔，正是 T5 那个 Critical 的失败形态。引用相等恰好等于「还是你看的那张」。
+ */
+function stillOnScreen<T>(current: T | null, expected: T | null): boolean {
+  return current === expected;
+}
+
 /** 确认卡上点「记录」：上限 = 用户批准的那个区间长度，变长了就再问一次而不是闷头写。 */
-export async function confirmPunch(prev: BridgeState, io: DesktopBridgeIo): Promise<BridgeState> {
+export async function confirmPunch(
+  prev: BridgeState,
+  io: DesktopBridgeIo,
+  expected: ConfirmPending | null,
+): Promise<BridgeState> {
   const pending = prev.confirm;
-  if (!pending) return prev;
+  if (!pending || !stillOnScreen(pending, expected)) return prev;
   const outcome = await desktopPunch(pending.pressedAtMs, pending.approvedHours);
-  return applyPunchOutcome(outcome, pending.pressedAtMs, true, io, {
-    undo: prev.undo,
-    confirm: null,
-    notice: null,
-  });
+  // 直接把 prev 交下去，不在这里预先清 confirm：`applyPunchOutcome` 的四条臂**每条**都自己
+  // 钉死了 confirm 与 notice 的去向（写了 / 换新卡 / 两条不写出口清掉）。两处各清一遍是双保险，
+  // 而双保险的代价是「点完记录卡必关」这条不变量哪一处都锁不住——单独改坏任意一处都不会红。
+  return applyPunchOutcome(outcome, pending.pressedAtMs, true, io, prev);
+}
+
+/** 确认卡上点「算了」：只清掉他看的那张，队列里刚换上的新卡不许被顺手带走。 */
+export function cancelConfirm(prev: BridgeState, expected: ConfirmPending | null): BridgeState {
+  if (!stillOnScreen(prev.confirm, expected)) return prev;
+  return { ...prev, confirm: null };
 }
 
 /** 撤销条上点「撤销」：删掉刚写的那条，撤销条随即收起。 */
-export async function undoPunch(prev: BridgeState, io: DesktopBridgeIo): Promise<BridgeState> {
-  if (prev.undo) await io.deleteEntry(prev.undo.entryId);
+export async function undoPunch(
+  prev: BridgeState,
+  io: DesktopBridgeIo,
+  expected: UndoPending | null,
+): Promise<BridgeState> {
+  if (!prev.undo || !stillOnScreen(prev.undo, expected)) return prev;
+  await io.deleteEntry(prev.undo.entryId);
   return { ...prev, undo: null };
+}
+
+/** 撤销条上点「✕」：同上，只关他看的那条。 */
+export function dismissUndo(prev: BridgeState, expected: UndoPending | null): BridgeState {
+  if (!stillOnScreen(prev.undo, expected)) return prev;
+  return { ...prev, undo: null };
+}
+
+/** 提示条上点「✕」：同上。 */
+export function dismissNotice(prev: BridgeState, expected: DesktopNoticeState | null): BridgeState {
+  if (!stillOnScreen(prev.notice, expected)) return prev;
+  return { ...prev, notice: null };
 }
 
 /**
@@ -238,16 +280,18 @@ export function DesktopBridge() {
     };
   }, [io, run]);
 
+  // 五个回调都把**这一次渲染**里的那个对象带进队列：渲染出去的 prop 与闭包里捕获的是
+  // 同一个引用，正好是用户眼前那张卡 / 那条。执行时比对不上就原样返回（见 stillOnScreen）。
   return (
     <DesktopPunchLayer
       undo={state.undo}
       confirm={state.confirm}
       notice={state.notice}
-      onUndo={() => run((prev) => undoPunch(prev, io))}
-      onDismissUndo={() => run(async (prev) => ({ ...prev, undo: null }))}
-      onDismissNotice={() => run(async (prev) => ({ ...prev, notice: null }))}
-      onConfirm={() => run((prev) => confirmPunch(prev, io))}
-      onCancelConfirm={() => run(async (prev) => ({ ...prev, confirm: null }))}
+      onUndo={() => run((prev) => undoPunch(prev, io, state.undo))}
+      onDismissUndo={() => run(async (prev) => dismissUndo(prev, state.undo))}
+      onDismissNotice={() => run(async (prev) => dismissNotice(prev, state.notice))}
+      onConfirm={() => run((prev) => confirmPunch(prev, io, state.confirm))}
+      onCancelConfirm={() => run(async (prev) => cancelConfirm(prev, state.confirm))}
     />
   );
 }
