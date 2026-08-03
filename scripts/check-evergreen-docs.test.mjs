@@ -11,16 +11,15 @@ import {
   SIZE_CAPS,
   buildSizeHints,
   classifySizeWarning,
-  countSubDocs,
   diffSizeBaseline,
   evaluateDocSync,
   evaluateLinks,
   evaluateSizes,
   getAddedFiles,
   getChangedFiles,
+  listSubDocs,
   parseArgs,
   selectChangedEvergreenDocs,
-  selectCrossCutExhausted,
   selectUncovered,
 } from "./check-evergreen-docs.mjs";
 
@@ -529,108 +528,38 @@ test("diffSizeBaseline 在无变化时四个清单都是空的", () => {
   });
 });
 
-test("countSubDocs counts sibling docs under the topic's own subdirectory", () => {
+test("listSubDocs lists only docs under the topic directory sorted by chars descending", () => {
   const docs = [
-    { filePath: "docs/evergreen/todo.md", covers: ["a"] },
-    { filePath: "docs/evergreen/todo/at-hand.md", covers: ["b"] },
-    { filePath: "docs/evergreen/todo/gravity.md", covers: ["c"] },
-    { filePath: "docs/evergreen/sync.md", covers: ["d"] },
-    { filePath: "docs/evergreen/sync/domain-registry.md", covers: ["e"] },
+    { filePath: "docs/evergreen/todo.md", chars: 3000, covers: ["root"] },
+    { filePath: "docs/evergreen/todo/modules.md", chars: 6490, covers: ["a"] },
+    { filePath: "docs/evergreen/todo/project-zone.md", chars: 21912, covers: ["a", "b", "c"] },
+    { filePath: "docs/evergreen/todos.md", chars: 100, covers: ["sibling"] },
   ];
-  assert.equal(countSubDocs("docs/evergreen/todo.md", docs), 2);
-  assert.equal(countSubDocs("docs/evergreen/sync.md", docs), 1);
+
+  assert.deepEqual(listSubDocs("docs/evergreen/todo.md", docs), [
+    { filePath: "docs/evergreen/todo/project-zone.md", chars: 21912, covers: 3 },
+    { filePath: "docs/evergreen/todo/modules.md", chars: 6490, covers: 1 },
+  ]);
 });
 
-test("countSubDocs returns 0 for a doc that has no subdirectory", () => {
+test("listSubDocs includes vertical subdocs with zero covers", () => {
   const docs = [
-    { filePath: "docs/evergreen/cli.md", covers: ["a"] },
-    { filePath: "docs/evergreen/todo/at-hand.md", covers: ["b"] },
+    { filePath: "docs/evergreen/todo.md", chars: 3000, covers: ["root"] },
+    { filePath: "docs/evergreen/todo/invariants.md", chars: 1200, covers: [] },
   ];
-  assert.equal(countSubDocs("docs/evergreen/cli.md", docs), 0);
+
+  assert.deepEqual(listSubDocs("docs/evergreen/todo.md", docs), [
+    { filePath: "docs/evergreen/todo/invariants.md", chars: 1200, covers: 0 },
+  ]);
 });
 
-test("countSubDocs does not count a sub-doc as its own child", () => {
+test("listSubDocs returns an empty array when the doc has no subdirectory", () => {
   const docs = [
-    { filePath: "docs/evergreen/todo/at-hand.md", covers: ["a"] },
-    { filePath: "docs/evergreen/todo/gravity.md", covers: ["b"] },
+    { filePath: "docs/evergreen/cli.md", chars: 1000, covers: ["a"] },
+    { filePath: "docs/evergreen/todo/modules.md", chars: 6490, covers: ["b"] },
   ];
-  assert.equal(countSubDocs("docs/evergreen/todo/at-hand.md", docs), 0);
-});
 
-// 上面那条「does not count a sub-doc as its own child」其实测不到 `d.filePath !== docPath` 这道守卫：
-// docPath 以 .md 结尾时，dir 的末位是 `/`、自身末位是 `d`，本来就不可能自匹配。
-// 只有路径不带 .md 后缀（replace 不生效、dir === docPath）时守卫才真正承压——
-// 故自身这条也必须带 covers，否则它会先被「只数横切」那道过滤剔掉，守卫又落不到压力上。
-test("countSubDocs never counts the doc itself, even when the path has no .md suffix", () => {
-  const docs = [
-    { filePath: "docs/evergreen/todo", covers: ["a"] },
-    { filePath: "docs/evergreen/todo/at-hand.md", covers: ["b"] },
-  ];
-  assert.equal(countSubDocs("docs/evergreen/todo", docs), 1);
-});
-
-// `dir` 末尾那个 `/` 是唯一阻止同前缀兄弟被误数的机制，`startsWith` 则挡路径中段命中。
-test("countSubDocs 只认目录前缀，不认撞名兄弟、不认路径中段命中", () => {
-  const docs = [
-    { filePath: "docs/evergreen/todo.md", covers: ["a"] },
-    { filePath: "docs/evergreen/todo/at-hand.md", covers: ["b"] },
-    { filePath: "docs/evergreen/todos.md", covers: ["c"] },
-    { filePath: "docs/evergreen/todo-archive.md", covers: ["d"] },
-    { filePath: "docs/adr/docs/evergreen/todo/nested.md", covers: ["e"] },
-  ];
-  assert.equal(countSubDocs("docs/evergreen/todo.md", docs), 1);
-});
-
-// 判别数据：横切子文档从母文档迁走 covers（≥1），纵切子文档 covers 按设计恒空。
-// 若把纵切也算进来，一个只走过纵切的主题会被断言「横切已用尽」，把执行者从真正可走的轴上推开。
-test("countSubDocs 只数横切子文档，纵切（零 covers）不占横切轴", () => {
-  const docs = [
-    { filePath: "docs/evergreen/todo.md", covers: ["a"] },
-    { filePath: "docs/evergreen/todo/at-hand.md", covers: ["b"] },
-    { filePath: "docs/evergreen/todo/invariants.md", covers: [] },
-    { filePath: "docs/evergreen/todo/modules.md", covers: [] },
-  ];
-  assert.equal(countSubDocs("docs/evergreen/todo.md", docs), 1);
-});
-
-test("selectCrossCutExhausted 只点名横切子文档已有 2 份及以上的文档", () => {
-  // 1 份不入列（挡 `>= 1`）。
-  assert.deepEqual(
-    selectCrossCutExhausted(
-      [{ filePath: "a.md" }],
-      [
-        { filePath: "a.md", covers: ["x"] },
-        { filePath: "a/x.md", covers: ["y"] },
-      ],
-    ),
-    [],
-  );
-  // 2 份要入列（挡 `> 2`）。
-  assert.deepEqual(
-    selectCrossCutExhausted(
-      [{ filePath: "a.md" }],
-      [
-        { filePath: "a.md", covers: ["x"] },
-        { filePath: "a/x.md", covers: ["y"] },
-        { filePath: "a/y.md", covers: ["z"] },
-      ],
-    ),
-    [{ filePath: "a.md", subs: 2 }],
-  );
-});
-
-test("selectCrossCutExhausted 不把纵切子文档算成横切已用尽", () => {
-  assert.deepEqual(
-    selectCrossCutExhausted(
-      [{ filePath: "a.md" }],
-      [
-        { filePath: "a.md", covers: ["x"] },
-        { filePath: "a/p.md", covers: [] },
-        { filePath: "a/q.md", covers: [] },
-      ],
-    ),
-    [],
-  );
+  assert.deepEqual(listSubDocs("docs/evergreen/cli.md", docs), []);
 });
 
 const CAPS = { softChars: 15000, warnChars: 20000, criticalChars: 23000, hardChars: 25000 };

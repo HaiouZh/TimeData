@@ -605,26 +605,12 @@ function writeSizeBaseline(docs) {
   return 0;
 }
 
-/**
- * 数某份主题文档名下有几份**横切**子文档（`docs/evergreen/todo.md` → `docs/evergreen/todo/*.md` 里带 covers 的）。
- * 只数横切：纵切子文档 covers 恒空、不占横切轴，把它们算进来会在「横切一次没切过」的主题上误判横切已用尽，
- * 把执行者从真正可走的那条轴上推开。`dir` 末尾那个 `/` 是唯一阻止同前缀兄弟（`todos.md`）被误数的机制。
- * ≥2 时说明横切轴多半已用尽，撞 hard cap 的出路要往纵切找（见 _docs-guide §3.1）。
- */
-export function countSubDocs(docPath, allDocs) {
+export function listSubDocs(docPath, allDocs) {
   const dir = docPath.replace(/\.md$/, "/");
-  return allDocs.filter(
-    (d) => d.filePath !== docPath && d.filePath.startsWith(dir) && (d.covers?.length ?? 0) > 0,
-  ).length;
-}
-
-/**
- * 撞 hard cap 且横切轴多半已用尽（≥2 份横切子文档）的文档——报错时点名，把出路指向纵切。
- */
-export function selectCrossCutExhausted(tooLong, evergreenDocs) {
-  return tooLong
-    .map((v) => ({ filePath: v.filePath, subs: countSubDocs(v.filePath, evergreenDocs) }))
-    .filter((x) => x.subs >= 2);
+  return allDocs
+    .filter((d) => d.filePath !== docPath && d.filePath.startsWith(dir))
+    .map((d) => ({ filePath: d.filePath, chars: d.chars, covers: d.covers?.length ?? 0 }))
+    .sort((a, b) => b.chars - a.chars);
 }
 
 /**
@@ -713,14 +699,20 @@ function modeSize(docs) {
   const tooLong = res.violations.filter((v) => v.kind === "too-long");
   if (tooLong.length > 0) {
     console.error(`\n✗ 有文档超过 hard cap（${SIZE_CAPS.hardChars} 字符）。字符数本身不做棘轮，正文可自由增长——过长说明该拆了。`);
-    console.error("  合法动作三条：① 删过时 / 越界内容（越界的先补落点、再 trim 成「一句现状 + 指针」，不许就地删）");
-    console.error("               ② 横切外提（功能子域） ③ 纵切外提（读者路径）。");
+    console.error("  合法动作四条：① 删过时 / 越界内容（越界的先补落点、再 trim 成「一句现状 + 指针」，不许就地删）");
+    console.error("               ② 横切外提（功能子域） ③ 纵切外提（读者路径）");
+    console.error("               ④ 升格（子文档长成主题时提到上一层）。");
     console.error("  ⚠️ 压缩措辞、删例子、把句子改短不是合法动作——那是拿可读性换体量，且不可逆。");
-    console.error("  三条都走不通就停下来问人，不要让门禁绿变成目标。");
-    for (const x of selectCrossCutExhausted(tooLong, evergreenDocs)) {
-      console.error(`  · ${x.filePath} 已有 ${x.subs} 份横切子文档，横切多半已用尽——优先看纵切判据。`);
+    console.error("  四条都走不通就停下来问人，不要让门禁绿变成目标。");
+    for (const v of tooLong) {
+      const subDocs = listSubDocs(v.filePath, evergreenDocs);
+      if (subDocs.length === 0) continue;
+      console.error(`  · ${v.filePath} 已有 ${subDocs.length} 份子文档：`);
+      for (const subDoc of subDocs) {
+        console.error(`      - ${subDoc.filePath}（${subDoc.chars} 字符，covers ${subDoc.covers}）`);
+      }
     }
-    console.error("  判据：docs/evergreen/_docs-guide.md §3.1（横切三条）/ §3.2（纵切四条）。");
+    console.error("  判据：docs/evergreen/_docs-guide/splitting.md（横切三条 / 纵切四条 / 升格三条）。");
   }
   if (res.violations.some((v) => v.kind !== "too-long")) {
     console.error("\n✗ covers 管辖范围越基线 / 基线缺项或含已删文档：重写基线 `--write-size-baseline` 并在提交信息说明。");
