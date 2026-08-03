@@ -172,17 +172,24 @@ describe("热键打点分流", () => {
     expect(await db.timeEntries.count()).toBe(0); // 一个字都没写
   });
 
-  it("未配置打点分类：通知提示去设置，不写", async () => {
+  // 全新装机必然没配打点分类（首次启动是空数据），这条是新用户最先撞上的出口。
+  // 系统通知两端各吞一次（Rust 的 `let _ = …show()` + 桥的 quietly），专注助手开着 /
+  // 通知权限关了就是屏幕上零变化——所以除了通知，必须有一个**不经通知通道**的落点：
+  // 窗口内提示条 + 把窗口提起来（这条要用户去设置里做点什么）。
+  it("未配置打点分类：通知 + 提窗 + 窗口内提示条，不写", async () => {
     const { io, invoke } = makeIo();
 
     const next = await punchFromHotkey(PRESSED_AT_MS, io, IDLE_BRIDGE_STATE);
 
     expect(invoke).toHaveBeenCalledWith("notify_user", { title: "TimeData", body: "请先在设置里选择打点分类" });
-    expect(next).toEqual(IDLE_BRIDGE_STATE);
+    expect(invoke).toHaveBeenCalledWith("show_main");
+    expect(next.notice?.message).toBe("请先在设置里选择打点分类");
+    expect(next.undo).toBeNull();
+    expect(next.confirm).toBeNull();
     expect(await db.timeEntries.count()).toBe(0);
   });
 
-  it("无时间可记：通知「距上次记录还没有时间」，状态原样不动", async () => {
+  it("无时间可记：通知 + 窗口内提示条，不写", async () => {
     await configurePunchCategory();
     await seedEntry("2026-06-15T00:00:00.000Z", "2026-06-15T04:00:00.000Z"); // 盖到按键时刻
     const { io, invoke } = makeIo();
@@ -190,8 +197,23 @@ describe("热键打点分流", () => {
     const next = await punchFromHotkey(PRESSED_AT_MS, io, IDLE_BRIDGE_STATE);
 
     expect(invoke).toHaveBeenCalledWith("notify_user", { title: "TimeData", body: "距上次记录还没有时间" });
+    expect(next.notice?.message).toBe("距上次记录还没有时间");
     expect(next.confirm).toBeNull();
     expect(await db.timeEntries.count()).toBe(1);
+  });
+
+  // A4 的判据：新加的落点要真能让用户看见，不能是又一层同样会被吞掉的东西。
+  // 通知**发不出去**（invoke 抛）时，窗口内提示条必须照样在。
+  it("通知发不出去时窗口内提示条照样在（不能两条反馈同生共死）", async () => {
+    const { io, invoke } = makeIo();
+    invoke.mockImplementation(async (cmd: string) => {
+      if (cmd === "notify_user") throw new Error("通知权限被关了");
+      return cmd === "get_desktop_config" ? CONFIG : undefined;
+    });
+
+    const next = await punchFromHotkey(PRESSED_AT_MS, io, IDLE_BRIDGE_STATE);
+
+    expect(next.notice?.message).toBe("请先在设置里选择打点分类");
   });
 });
 

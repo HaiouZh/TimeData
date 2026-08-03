@@ -31,6 +31,20 @@ export interface DesktopHotkeyEvent {
   pressedAtMs: number;
 }
 
+/**
+ * IPC 失败的可读原因。**Tauri 的 invoke 失败 reject 的是字符串**（Rust 侧 `Err(String)`），
+ * 不是 `Error`——只认 `err instanceof Error` 的写法会把 Rust 精心写的那句
+ * （「自启已开启，但关闭意图记录失败：…」、带路径的「替换配置文件 X 失败」、
+ * 「读取配置文件 X 失败：…」）整句换成一个无信息的兜底词。
+ *
+ * 桥与设置页此前各写各的：设置页处理了字符串，桥没有。提到这里共用，两边同一套行为。
+ */
+export function messageOf(err: unknown, fallback = "操作失败"): string {
+  if (err instanceof Error && err.message !== "") return err.message;
+  if (typeof err === "string" && err !== "") return err;
+  return fallback;
+}
+
 // 非桌面环境的守卫：@tauri-apps/api 是真包，import 不会失败，只会在包内部抛
 // "Cannot read properties of undefined (reading 'invoke')" 这种不可读错误。先自报家门。
 export async function invokeDesktop<T>(cmd: string, args?: Record<string, unknown>): Promise<T> {

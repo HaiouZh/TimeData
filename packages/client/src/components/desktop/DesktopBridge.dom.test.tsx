@@ -16,7 +16,10 @@ const ipc = vi.hoisted(() => ({
   invoke: vi.fn(),
   listen: vi.fn(),
 }));
-vi.mock("../../lib/desktop/api.ts", () => ({
+// 只替换两个 IPC 入口，模块其余部分（messageOf 等纯函数）用真的——
+// 整体替换的写法会让「失败原因怎么读出来」这件被测的事变成 mock 自己说了算。
+vi.mock("../../lib/desktop/api.ts", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../lib/desktop/api.js")>()),
   invokeDesktop: ipc.invoke,
   listenDesktopHotkey: ipc.listen,
 }));

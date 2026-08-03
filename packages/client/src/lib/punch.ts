@@ -34,6 +34,11 @@ export function resolvePunchRange(
 /**
  * 一键打点：按规则 2 建一条 [起点 → 现在]、分类=全局打点分类 的普通时间记录。
  * 无时间可记或打点分类不可用时不写任何记录，由调用方提示。
+ *
+ * ⚠️ 下面这四行区间推导在 `lib/desktop/desktopPunch.ts` 里有一份**复刻**（桌面热键的
+ * 超阈值预检要在不写库的前提下先算出区间给用户看）。改这里的规则（取整粒度、起点回退、
+ * 锚点查询）必须两处一起改，否则「确认卡上给用户看的 / 自守闸比对的」与「真正落笔的」
+ * 会用两套规则。`desktopPunch.test.ts` 有一条跨文件一致性用例，分叉时它会红。
  */
 export async function punchNow(now: Date = new Date()): Promise<PunchNowResult> {
   const flooredNow = new Date(Math.floor(now.getTime() / 60000) * 60000);
@@ -58,6 +63,8 @@ export async function punchNow(now: Date = new Date()): Promise<PunchNowResult> 
   return { ok: true, entry };
 }
 
+/** 导出（而非私有）是为了 `lib/desktop/desktopPunch.ts` 的超阈值预检——它要在不写库的前提下
+ * 判「分类可不可用」，判定序必须与本文件一致，同一次按键两条路径不许两种说法。 */
 export async function resolveConfiguredPunchCategoryId(): Promise<string | null> {
   const categoryId = await getPunchCategoryId();
   if (!categoryId) return null;

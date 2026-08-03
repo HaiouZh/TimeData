@@ -5,6 +5,7 @@ import { DesktopPunchLayer } from "./DesktopPunchLayer.js";
 
 const UNDO = { message: "已打点 09:00–09:15" };
 const CONFIRM = { message: "要把 09:00–14:30 记为打点吗？", retry: false };
+const NOTICE = { message: "请先在设置里选择打点分类" };
 
 type ClickableProps = { children?: ReactNode; onClick?: () => void };
 
@@ -39,17 +40,18 @@ function markup(props: Parameters<typeof DesktopPunchLayer>[0]): string {
 const NOOP = {
   onUndo: () => {},
   onDismissUndo: () => {},
+  onDismissNotice: () => {},
   onConfirm: () => {},
   onCancelConfirm: () => {},
 };
 
 describe("DesktopPunchLayer", () => {
   it("undo 与 confirm 都为 null 时什么都不渲染", () => {
-    expect(markup({ undo: null, confirm: null, ...NOOP })).toBe("");
+    expect(markup({ undo: null, confirm: null, notice: null, ...NOOP })).toBe("");
   });
 
   it("撤销条渲染文案与 role=status", () => {
-    const html = markup({ undo: UNDO, confirm: null, ...NOOP });
+    const html = markup({ undo: UNDO, confirm: null, notice: null, ...NOOP });
     expect(html).toContain('role="status"');
     expect(html).toContain("已打点 09:00–09:15");
   });
@@ -57,7 +59,7 @@ describe("DesktopPunchLayer", () => {
   it("撤销条的「撤销」接 onUndo、「✕」接 onDismissUndo", () => {
     const onUndo = vi.fn();
     const onDismissUndo = vi.fn();
-    const tree = DesktopPunchLayer({ undo: UNDO, confirm: null, ...NOOP, onUndo, onDismissUndo });
+    const tree = DesktopPunchLayer({ undo: UNDO, confirm: null, notice: null, ...NOOP, onUndo, onDismissUndo });
     press(tree, "撤销");
     expect(onUndo).toHaveBeenCalledOnce();
     expect(onDismissUndo).not.toHaveBeenCalled();
@@ -65,8 +67,38 @@ describe("DesktopPunchLayer", () => {
     expect(onDismissUndo).toHaveBeenCalledOnce();
   });
 
+  // 「不写」与失败的窗口内落点：系统通知会被专注助手 / 关掉的通知权限静默吞掉，
+  // 这一条画在窗口里，不经通知通道。
+  it("提示条渲染文案与 role=status", () => {
+    const html = markup({ undo: null, confirm: null, notice: NOTICE, ...NOOP });
+    expect(html).toContain('role="status"');
+    expect(html).toContain("请先在设置里选择打点分类");
+  });
+
+  it("提示条的「✕」接 onDismissNotice，不误接撤销那条的回调", () => {
+    const onDismissNotice = vi.fn();
+    const onDismissUndo = vi.fn();
+    const tree = DesktopPunchLayer({
+      undo: null,
+      confirm: null,
+      notice: NOTICE,
+      ...NOOP,
+      onDismissNotice,
+      onDismissUndo,
+    });
+    press(tree, "✕");
+    expect(onDismissNotice).toHaveBeenCalledOnce();
+    expect(onDismissUndo).not.toHaveBeenCalled();
+  });
+
+  it("提示条与撤销条可以同时在（后者不被前者顶掉）", () => {
+    const html = markup({ undo: UNDO, confirm: null, notice: NOTICE, ...NOOP });
+    expect(html).toContain("请先在设置里选择打点分类");
+    expect(html).toContain("已打点 09:00–09:15");
+  });
+
   it("确认卡渲染预览区间与 role=alertdialog", () => {
-    const html = markup({ undo: null, confirm: CONFIRM, ...NOOP });
+    const html = markup({ undo: null, confirm: CONFIRM, notice: null, ...NOOP });
     expect(html).toContain('role="alertdialog"');
     expect(html).toContain("要把 09:00–14:30 记为打点吗？");
   });
@@ -74,7 +106,7 @@ describe("DesktopPunchLayer", () => {
   it("确认卡的「记录」「算了」各自回调", () => {
     const onConfirm = vi.fn();
     const onCancelConfirm = vi.fn();
-    const tree = DesktopPunchLayer({ undo: null, confirm: CONFIRM, ...NOOP, onConfirm, onCancelConfirm });
+    const tree = DesktopPunchLayer({ undo: null, confirm: CONFIRM, notice: null, ...NOOP, onConfirm, onCancelConfirm });
     press(tree, "记录");
     expect(onConfirm).toHaveBeenCalledOnce();
     expect(onCancelConfirm).not.toHaveBeenCalled();
@@ -83,7 +115,7 @@ describe("DesktopPunchLayer", () => {
   });
 
   it("首次弹卡的副文案说的是阈值", () => {
-    const html = markup({ undo: null, confirm: { ...CONFIRM, retry: false }, ...NOOP });
+    const html = markup({ undo: null, confirm: { ...CONFIRM, retry: false }, notice: null, ...NOOP });
     expect(html).toContain("间隔超过了确认阈值");
     expect(html).not.toContain("刚才那条记录已不在了");
   });
@@ -91,7 +123,7 @@ describe("DesktopPunchLayer", () => {
   // 点了「记录」后又弹一次时，用户看到的是一个变长了的新区间。副文案不与首次区分，
   // 用户只会以为自己点的那下没生效。
   it("重试弹卡的副文案说的是记录没了、区间比看到的更长", () => {
-    const html = markup({ undo: null, confirm: { ...CONFIRM, retry: true }, ...NOOP });
+    const html = markup({ undo: null, confirm: { ...CONFIRM, retry: true }, notice: null, ...NOOP });
     expect(html).toContain("刚才那条记录已不在了，区间比你看到的更长");
     expect(html).not.toContain("间隔超过了确认阈值");
   });

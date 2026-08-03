@@ -2,6 +2,16 @@ export interface DesktopUndoState {
   message: string;
 }
 
+/**
+ * 「不写」与失败的窗口内落点。此前 `noRange` / `missingCategory` / 队列里抛出的失败
+ * 唯一的反馈是系统通知，而通知两端各吞一次（Rust 的 `let _ = …show()`、桥的 `quietly`）：
+ * 专注助手开着或通知权限关了，这几条出口就是屏幕上零变化。本条是**不经通知通道**的那一份，
+ * 直接画在窗口里，通知发不发得出去都在。
+ */
+export interface DesktopNoticeState {
+  message: string;
+}
+
 export interface DesktopConfirmState {
   message: string;
   /**
@@ -22,43 +32,68 @@ const HINT_RETRY = "刚才那条记录已不在了，区间比你看到的更长
 export function DesktopPunchLayer({
   undo,
   confirm,
+  notice,
   onUndo,
   onDismissUndo,
+  onDismissNotice,
   onConfirm,
   onCancelConfirm,
 }: {
   undo: DesktopUndoState | null;
   confirm: DesktopConfirmState | null;
+  notice: DesktopNoticeState | null;
   onUndo: () => void;
   onDismissUndo: () => void;
+  onDismissNotice: () => void;
   onConfirm: () => void;
   onCancelConfirm: () => void;
 }) {
-  if (!undo && !confirm) return null;
+  if (!undo && !confirm && !notice) return null;
   return (
     <>
-      {undo && (
-        <div
-          role="status"
-          aria-label="桌面打点反馈"
-          className="fixed inset-x-4 top-4 z-[var(--z-backdrop)] mx-auto flex max-w-md items-center gap-3 rounded-card border border-border-strong bg-surface/95 px-3 py-2 td-text-body text-ink shadow-elev1"
-        >
-          <span className="min-w-0 flex-1 truncate">{undo.message}</span>
-          <button
-            type="button"
-            onClick={onUndo}
-            className="shrink-0 font-semibold text-accent transition hover:text-accent-ink"
-          >
-            撤销
-          </button>
-          <button
-            type="button"
-            onClick={onDismissUndo}
-            className="shrink-0 text-ink-3 transition hover:text-ink"
-            aria-label="关闭"
-          >
-            ✕
-          </button>
+      {(undo || notice) && (
+        <div className="fixed inset-x-4 top-4 z-[var(--z-backdrop)] mx-auto flex max-w-md flex-col gap-2">
+          {notice && (
+            <div
+              role="status"
+              aria-label="桌面打点提示"
+              className="flex items-center gap-3 rounded-card border border-border-strong bg-surface/95 px-3 py-2 td-text-body text-ink shadow-elev1"
+            >
+              <span className="min-w-0 flex-1">{notice.message}</span>
+              <button
+                type="button"
+                onClick={onDismissNotice}
+                className="shrink-0 text-ink-3 transition hover:text-ink"
+                aria-label="关闭提示"
+              >
+                ✕
+              </button>
+            </div>
+          )}
+          {undo && (
+            <div
+              role="status"
+              aria-label="桌面打点反馈"
+              className="flex items-center gap-3 rounded-card border border-border-strong bg-surface/95 px-3 py-2 td-text-body text-ink shadow-elev1"
+            >
+              <span className="min-w-0 flex-1 truncate">{undo.message}</span>
+              <button
+                type="button"
+                onClick={onUndo}
+                className="shrink-0 font-semibold text-accent transition hover:text-accent-ink"
+              >
+                撤销
+              </button>
+              <button
+                type="button"
+                onClick={onDismissUndo}
+                className="shrink-0 text-ink-3 transition hover:text-ink"
+                aria-label="关闭"
+              >
+                ✕
+              </button>
+            </div>
+          )}
         </div>
       )}
       {confirm && (

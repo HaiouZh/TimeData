@@ -1,10 +1,15 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useEntryMutations } from "../../hooks/useEntries.js";
 import type { DesktopConfigDto, DesktopHotkeyEvent } from "../../lib/desktop/api.js";
-import { invokeDesktop, listenDesktopHotkey } from "../../lib/desktop/api.js";
+import { invokeDesktop, listenDesktopHotkey, messageOf } from "../../lib/desktop/api.js";
 import { desktopPunch, rangeHours, type DesktopPunchOutcome } from "../../lib/desktop/desktopPunch.js";
 import { formatTime } from "../../lib/time.js";
-import { DesktopPunchLayer, type DesktopConfirmState, type DesktopUndoState } from "./DesktopPunchLayer.js";
+import {
+  DesktopPunchLayer,
+  type DesktopConfirmState,
+  type DesktopNoticeState,
+  type DesktopUndoState,
+} from "./DesktopPunchLayer.js";
 
 /**
  * 桥接层与外界的全部接触面。抽成参数而不是直接调模块函数，打点全链路（含「批准后重试」
@@ -32,9 +37,17 @@ export interface ConfirmPending extends DesktopConfirmState {
 export interface BridgeState {
   undo: UndoPending | null;
   confirm: ConfirmPending | null;
+  /**
+   * 窗口内的提示条。`noRange` / `missingCategory` / 队列里抛出来的失败此前**只**发系统通知，
+   * 而通知两端各吞一次（Rust 的 `let _ = …show()` + 前端的 `quietly`）。专注助手开着、
+   * 或通知权限关了，这几条出口就是屏幕上零变化——最伤的是全新装机必然没配打点分类，
+   * 按热键走 `missingCategory`：不写库、不提窗、无红字，用户只会去查热键注册（设置页全绿）。
+   * `needsConfirm` 有确认卡兜底、`written` 有撤销条兜底，恰恰这两条需要用户去做点什么的没有。
+   */
+  notice: DesktopNoticeState | null;
 }
 
-export const IDLE_BRIDGE_STATE: BridgeState = { undo: null, confirm: null };
+export const IDLE_BRIDGE_STATE: BridgeState = { undo: null, confirm: null, notice: null };
 
 // 通知与「把主窗口提到前面」都是尽力而为的告知手段：它们失败不该把「已经写进库了 /
 // 该弹卡了」这个结论一起吞掉。真正的失败（读配置、写库）照旧往上抛给调用方。
@@ -65,26 +78,36 @@ export async function applyPunchOutcome(
     case "written": {
       const message = `已打点 ${formatTime(outcome.entry.startTime)}–${formatTime(outcome.entry.endTime)}`;
       await notify(io, message);
-      return { undo: { message, entryId: outcome.entry.id }, confirm: null };
+      return { undo: { message, entryId: outcome.entry.id }, confirm: null, notice: null };
     }
     case "needsConfirm": {
+      const message = `要把 ${formatTime(outcome.range.startTime)}–${formatTime(outcome.range.endTime)} 记为打点吗？`;
       await quietly(() => io.invoke("show_main"));
+      // 也发一条通知：Windows 的前台锁会把 set_focus 降级成任务栏闪烁（用户在别的应用
+      // 全屏时尤其如此），只靠 show_main 的话这次按键可以是零可观察结果——
+      // 用户根本不知道有张卡在等他。四条出口里这条曾是唯一不发通知的。
+      await notify(io, `${message}（到 TimeData 窗口里确认）`);
       return {
         undo: prev.undo,
-        confirm: {
-          message: `要把 ${formatTime(outcome.range.startTime)}–${formatTime(outcome.range.endTime)} 记为打点吗？`,
-          retry,
-          pressedAtMs,
-          approvedHours: rangeHours(outcome.range),
-        },
+        confirm: { message, retry, pressedAtMs, approvedHours: rangeHours(outcome.range) },
+        notice: null,
       };
     }
-    case "noRange":
-      await notify(io, "距上次记录还没有时间");
-      return prev;
-    case "missingCategory":
-      await notify(io, "请先在设置里选择打点分类");
-      return prev;
+    // 下面两条出口都**清掉停留中的确认卡**：卡上写的区间是按下那一刻算的，走到这两条
+    // 说明当下数据已经不支持那张卡了（区间被盖满 / 分类没了）。留着它，屏幕上就是
+    // 「通知说没时间可记，却挂着一张要你记 00:00–12:00 的卡」这种自相矛盾的中间态。
+    case "noRange": {
+      const message = "距上次记录还没有时间";
+      await notify(io, message);
+      return { undo: prev.undo, confirm: null, notice: { message } };
+    }
+    case "missingCategory": {
+      const message = "请先在设置里选择打点分类";
+      // 这条要用户去做点什么（进设置选分类），所以除了通知还要把窗口提起来。
+      await quietly(() => io.invoke("show_main"));
+      await notify(io, message);
+      return { undo: prev.undo, confirm: null, notice: { message } };
+    }
   }
 }
 
@@ -104,13 +127,17 @@ export async function confirmPunch(prev: BridgeState, io: DesktopBridgeIo): Prom
   const pending = prev.confirm;
   if (!pending) return prev;
   const outcome = await desktopPunch(pending.pressedAtMs, pending.approvedHours);
-  return applyPunchOutcome(outcome, pending.pressedAtMs, true, io, { undo: prev.undo, confirm: null });
+  return applyPunchOutcome(outcome, pending.pressedAtMs, true, io, {
+    undo: prev.undo,
+    confirm: null,
+    notice: null,
+  });
 }
 
 /** 撤销条上点「撤销」：删掉刚写的那条，撤销条随即收起。 */
 export async function undoPunch(prev: BridgeState, io: DesktopBridgeIo): Promise<BridgeState> {
   if (prev.undo) await io.deleteEntry(prev.undo.entryId);
-  return { undo: null, confirm: prev.confirm };
+  return { ...prev, undo: null };
 }
 
 /**
@@ -166,7 +193,13 @@ export function DesktopBridge() {
         } catch (err) {
           // catch 必须在 .then 回调内部：漏在外面时一次 reject 会截断整条链，
           // 此后每次打点都静音且无报错。notify 走 quietly，catch 自身不会再 reject。
-          await notify(io, err instanceof Error ? err.message : "打点失败");
+          // 失败的原因要**两条路**都给：窗口内的提示条（通知被系统吞掉时它还在）+ 系统通知
+          // （窗口整段隐藏时它还在）。messageOf 而不是只认 Error——invoke 失败 reject 的是字符串。
+          const message = messageOf(err, "打点失败");
+          const next = { ...stateRef.current, notice: { message } };
+          stateRef.current = next;
+          setState(next);
+          await notify(io, message);
         }
       });
     },
@@ -202,8 +235,10 @@ export function DesktopBridge() {
     <DesktopPunchLayer
       undo={state.undo}
       confirm={state.confirm}
+      notice={state.notice}
       onUndo={() => run((prev) => undoPunch(prev, io))}
       onDismissUndo={() => run(async (prev) => ({ ...prev, undo: null }))}
+      onDismissNotice={() => run(async (prev) => ({ ...prev, notice: null }))}
       onConfirm={() => run((prev) => confirmPunch(prev, io))}
       onCancelConfirm={() => run(async (prev) => ({ ...prev, confirm: null }))}
     />

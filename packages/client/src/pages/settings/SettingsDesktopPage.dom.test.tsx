@@ -10,7 +10,8 @@ import { type Root, renderDom, unmount } from "../../test/domHarness.js";
 
 // 路径写 ".ts" 而不是 ".js"：本仓 vi.mock 按 vitest 的解析路径匹配（DesktopBridge.dom.test.tsx 已验证）。
 const ipc = vi.hoisted(() => ({ invoke: vi.fn() }));
-vi.mock("../../lib/desktop/api.ts", () => ({
+vi.mock("../../lib/desktop/api.ts", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../lib/desktop/api.js")>()),
   invokeDesktop: ipc.invoke,
 }));
 
