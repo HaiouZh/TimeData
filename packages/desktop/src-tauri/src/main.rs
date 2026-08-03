@@ -1,16 +1,19 @@
 // Windows release 构建下不要弹控制台窗口
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod commands;
 mod config;
 mod hotkeys;
 mod shell;
 
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Mutex;
 use tauri::menu::{Menu, MenuItem};
 use tauri::tray::TrayIconBuilder;
 use tauri::{Manager, WindowEvent};
 use tauri_plugin_autostart::{ManagerExt, MacosLauncher};
 
+use commands::HotkeyState;
 use shell::{
     resolve_autostart_action, resolve_close_behavior, resolve_tray_action, should_show_on_startup, AutostartAction,
     CloseBehavior, TrayAction,
@@ -19,20 +22,27 @@ use shell::{
 /// 托盘「退出」置上这个标记后再关窗，让 CloseRequested 放行。
 static QUITTING: AtomicBool = AtomicBool::new(false);
 
-fn show_main_window(app: &tauri::AppHandle) {
-    if let Some(window) = app.get_webview_window("main") {
-        let _ = window.show();
-        let _ = window.unminimize();
-        let _ = window.set_focus();
-    }
-}
-
 fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_autostart::init(
             MacosLauncher::LaunchAgent,
             Some(vec!["--hidden"]),
         ))
+        .plugin(tauri_plugin_global_shortcut::Builder::new().build())
+        .plugin(tauri_plugin_notification::init())
+        .manage(HotkeyState(Mutex::new(hotkeys::HotkeyDispatcher::new())))
+        .invoke_handler(tauri::generate_handler![
+            commands::get_desktop_config,
+            commands::set_hotkeys,
+            commands::set_punch_confirm_hours,
+            commands::get_autostart_state,
+            commands::set_autostart_enabled,
+            commands::suspend_hotkeys,
+            commands::resume_hotkeys,
+            commands::desktop_ready,
+            commands::notify_user,
+            commands::show_main,
+        ])
         .setup(|app| {
             let show_item = MenuItem::with_id(app, "show", "打开 TimeData", true, None::<&str>)?;
             let quit_item = MenuItem::with_id(app, "quit", "退出", true, None::<&str>)?;
@@ -44,7 +54,7 @@ fn main() {
                 .menu(&menu)
                 .show_menu_on_left_click(false)
                 .on_menu_event(|app, event| match resolve_tray_action(event.id().as_ref()) {
-                    TrayAction::ShowMain => show_main_window(app),
+                    TrayAction::ShowMain => commands::show_main_window(app),
                     TrayAction::Quit => {
                         QUITTING.store(true, Ordering::SeqCst);
                         app.exit(0);
@@ -59,7 +69,7 @@ fn main() {
                         ..
                     } = event
                     {
-                        show_main_window(tray.app_handle());
+                        commands::show_main_window(tray.app_handle());
                     }
                 })
                 .build(app)?;
@@ -89,6 +99,10 @@ fn main() {
                 }
                 AutostartAction::LeaveAlone => {}
             }
+
+            // 启动即注册热键（不等 WebView，spec §五.1）。失败无处回显（窗口可能还没
+            // 起来），设置页打开时 resume_hotkeys 会重报注册结果。
+            let _ = commands::apply_bindings(app.handle(), &desktop_config.hotkeys);
 
             // 被开机自启拉起时不弹窗口，直接躲托盘。
             let args: Vec<String> = std::env::args().collect();
