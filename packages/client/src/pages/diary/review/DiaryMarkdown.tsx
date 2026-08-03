@@ -131,7 +131,7 @@ const components = {
 export default function DiaryMarkdown({ content }: { content: string }) {
   const preprocessed = preprocessDiaryMarkdown(content);
   return (
-    <div className="td-text-body leading-relaxed">
+    <div className="td-text-body">
       <Markdown remarkPlugins={[remarkGfm]} urlTransform={urlTransform} components={components}>
         {preprocessed}
       </Markdown>

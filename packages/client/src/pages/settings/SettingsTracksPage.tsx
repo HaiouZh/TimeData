@@ -46,7 +46,7 @@ export function SettingsTracksPage() {
   return (
     <SettingsDetailPage title="轨道看板信号">
       <section className="space-y-3">
-        <p className="td-text-body leading-6 text-ink-3">配置会进入轨道列表顶部聚合的步骤标签。</p>
+        <p className="td-text-body text-ink-3">配置会进入轨道列表顶部聚合的步骤标签。</p>
         <form
           onSubmit={(e) => {
             e.preventDefault();

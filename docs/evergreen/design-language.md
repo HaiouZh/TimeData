@@ -79,7 +79,7 @@ last-reviewed: 2026-08-02
 - 字体在 `main.tsx` 引入：**只引霞鹭文楷 GB 屏显子集** `lxgw-wenkai-screen-webfont/lxgwwenkaigbscreen.css`（约 4.7MB，避免 R 变体与重复字族撑大 APK）+ `@fontsource/tinos` 的 400/400-italic/700。`fontLoading.test.ts` 守 import 顺序（lxgw 在 tinos 之前）。
 - 全站 `body` 用 `--font-body`；远程加载推迟到做字体设置时再上。
 - 排版**只用**语义排版类：`td-text-caption`、`td-text-label`、`td-text-body`、`td-text-title`、`td-text-display`。`bare-text-size` 是硬闸：新写 `text-xs/sm/base/...` 或 `text-[13px]` 一律直接失败，不得加 allowlist。**图标按钮与 `input`/`textarea`/`select` 上的字号声明不生效**（前者内容是 SVG，后者被顶层 iOS 防缩放兜底压过），这类行的正确处置是删掉字号而非迁语义类（见 [controls](design-language/controls.md) §1）。语义档与字号映射：caption≈12px、label≈13px、body≈15px、title≈20px(600)、display≈28px(600)。
-- **`.td-text-*` 定义在 `index.css` 顶层未分层区，会压过 `@layer utilities` 里的所有 Tailwind 排版 utility**：同一行上的 `leading-*`、`tracking-*` 一律不生效，`font-*` 只对 caption/label/body 生效（这三档不定义 `font-weight`），对 title/display 不生效（两档自带 600）。要偏离档位内建值时不要靠 utility 叠加，而是加一条**排版角色语义类**——如卡片眉标 `.td-eyebrow`（12px + 500 + 大写 + `letter-spacing: 0.16em`），放 `@layer components`。
+- **`.td-text-*` 定义在 `index.css` 顶层未分层区，会压过 `@layer utilities` 里的所有 Tailwind 排版 utility**：同一行上的 `leading-*`、`tracking-*` 一律不生效，`font-*` 只对 caption/label/body 生效（这三档不定义 `font-weight`），对 title/display 不生效（两档自带 600）。要偏离档位内建值时不要靠 utility 叠加，而是加一条**排版角色语义类**——如卡片眉标 `.td-eyebrow`（12px + 500 + 大写 + `letter-spacing: 0.16em`），放 `@layer components`——注意这类语义类是 `td-text-*` 的**替代品而非叠加物**（它自带 `font-size`/`line-height`，与 `td-text-*` 同用又会被顶层规则压回去）。`leading-*` 这一面由 §3 的 `dead-leading-on-td-text` 棘轮守着。
 - 数字/时间/时长使用 `td-num`、`td-time`、`td-duration`，三者指向 `--font-body` 并启用 `font-variant-numeric: tabular-nums`；统计卡数值使用 `td-num`。数字默认不使用等宽字体。
 
 ## 3. 设计语言棘轮
@@ -97,6 +97,7 @@ last-reviewed: 2026-08-02
 - 禁止业务时间/数字/统计值直接用 `font-mono`；代码、日志、ID、debug 标识应优先放在 `code/pre/kbd/samp` 或专用技术文本组件中，确有遗留例外必须进 allowlist。
 - 禁止原生圆角 `rounded-md/lg/xl/2xl/3xl/full` 及其方向变体、以及 `rounded-[…px|rem]` 任意值：规则 `bare-card-radius`，生产代码使用 `rounded-ctl/row/card/pill`，仅发丝级/小型原子细节保留 `rounded/rounded-sm`（测试文件豁免）。
 - 禁止裸字号 `text-{xs,sm,base,lg,xl,2xl…}` 与字号任意值 `text-[…px|rem]`：规则 `bare-text-size`，须用 `.td-text-{caption,label,body,title,display}` 语义类（`.css` 与测试文件豁免）。
+- 禁止 `leading-*` 与 `td-text-*` 出现在同一 className 串：规则 `dead-leading-on-td-text`。§2 那条优先级事实的执行闸——这类 `leading-*` 是完全不生效的死类，不是"写了但被覆盖"，删掉它渲染结果一字不变。要调元素高度改 `padding` 或 flex 居中，确需另一档行高则加排版角色语义类。带 `!` 的 important 写法会翻转层级优先级、确实生效，不在拦截范围（测试文件豁免）。
 - 禁止全局浮层裸高 z-index（`z-30/40/50/60/70`、`z-[…]`）：规则 `bare-zindex`，须用 `z-[var(--z-*)]`；局部 stacking `z-10`/`z-20` 放行（测试文件豁免）。注：`60` 不在当前 `--z-*` 阶梯（30/40/50/70）里，列在禁单是防新造全局层级；规则实际禁除 `0/10/20` 外的一切数字档。
 - 禁止裸任意尺寸/间距/定位值（`w-[34px]`、`top-[4.75rem]` 等纯数字+单位）：规则 `bare-arbitrary-value`，收进 token 或标准 Tailwind 阶；`calc()`/`var()` 例外，字号任意值归 `bare-text-size`（测试文件豁免）。数值无法落进 token 阶梯又确属某功能专有（如某区限高）时，正当出口是在 `index.css` 里加一条**功能语义类**（如 `.todo-project-group-body { max-height: 45vh; }`）交组件消费——不是在组件里留裸任意值，也不是进 allowlist。转盘 / 弹层 / 图表框 / 星图画布等专有几何集中在 `index.css` 的「功能几何语义类」块。**该块统一放 `@layer components`**：顶层裸规则会压过 Tailwind utilities，调用方就盖不住默认值了（如 `TagFilterPanel` 用 `max-h-28` 覆盖默认限高、速记日期气泡用 `sm:top-20` 覆盖吸顶位）。
 - 禁止手写单选筛选分段（同一元素 `aria-pressed={` + `rounded-pill`）：规则 `handwritten-segmented-control`，须用 `SegmentedControl`（`role=radiogroup`）；`role=tablist/tab` 的视图切换语义页与 `SegmentedControl` 自身豁免（测试文件豁免）。

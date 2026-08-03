@@ -51,8 +51,8 @@ export function MetricCard({
   return (
     <div className={`rounded-card border px-3.5 py-3 ${metricToneClass(tone)}`}>
       <div className="td-text-caption font-medium text-ink-2">{label}</div>
-      <div className="td-num td-text-title mt-1 leading-tight">{value}</div>
-      {hint && <div className="mt-1 td-text-caption leading-snug text-ink-3">{hint}</div>}
+      <div className="td-num td-text-title mt-1">{value}</div>
+      {hint && <div className="mt-1 td-text-caption text-ink-3">{hint}</div>}
     </div>
   );
 }

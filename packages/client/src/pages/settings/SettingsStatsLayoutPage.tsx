@@ -42,7 +42,7 @@ export default function SettingsStatsLayoutPage() {
   return (
     <SettingsDetailPage title="统计页面布局">
       <section className="space-y-3">
-        <p className="px-1 td-text-caption leading-relaxed text-ink-3">
+        <p className="px-1 td-text-caption text-ink-3">
           调整统计页各模块的显示与顺序，设置会跨设备同步。拖动调整顺序。
         </p>
         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
@@ -66,7 +66,7 @@ export default function SettingsStatsLayoutPage() {
                           {module.title}
                           {isHidden && <span className="ml-2 td-text-caption text-ink-3">已隐藏</span>}
                         </div>
-                        <div className="mt-0.5 td-text-caption leading-relaxed text-ink-3">{module.description}</div>
+                        <div className="mt-0.5 td-text-caption text-ink-3">{module.description}</div>
                       </div>
                       <button
                         type="button"

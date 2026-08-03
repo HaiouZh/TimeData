@@ -138,7 +138,7 @@ function TaskRow({
             className="flex shrink-0 flex-col items-center justify-center gap-0.5 px-1.5 text-ink-3 hover:text-ink"
           >
             <Icon icon={expanded ? CaretDown : CaretRight} size={14} />
-            <span className="td-text-caption leading-none tabular-nums">{children.length}</span>
+            <span className="td-text-caption tabular-nums">{children.length}</span>
           </button>
         )}
         {interaction.mode === "drag" ? (

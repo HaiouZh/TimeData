@@ -198,7 +198,7 @@ export function GoalGraphNodeView({
         id={`goal-graph-tooltip-${node.id.replace(/[^a-zA-Z0-9_-]/g, "_")}`}
         role="tooltip"
         data-goal-graph-node-tooltip="true"
-        className="pointer-events-none absolute left-1/2 top-full z-20 mt-2 w-72 max-w-[calc(100vw-2rem)] -translate-x-1/2 whitespace-normal break-words rounded-card border border-border-strong bg-surface-elevated/95 px-3 py-2 text-left td-text-caption leading-relaxed text-ink opacity-0 shadow-elev2 backdrop-blur-sm transition-opacity delay-150 group-hover/goal-node:opacity-100 group-focus-within/goal-node:opacity-100"
+        className="pointer-events-none absolute left-1/2 top-full z-20 mt-2 w-72 max-w-[calc(100vw-2rem)] -translate-x-1/2 whitespace-normal break-words rounded-card border border-border-strong bg-surface-elevated/95 px-3 py-2 text-left td-text-caption text-ink opacity-0 shadow-elev2 backdrop-blur-sm transition-opacity delay-150 group-hover/goal-node:opacity-100 group-focus-within/goal-node:opacity-100"
       >
         <span className="block font-medium">{node.title}</span>
         <span className="mt-0.5 block text-ink-3">{statusMeta.label}</span>

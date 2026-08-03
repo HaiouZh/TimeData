@@ -24,7 +24,7 @@ function NavIconLink({ item, activeRoute, badge = 0 }: { item: MainNavItem; acti
         <Icon icon={item.icon} size={22} weight="regular" />
         <NavBadge count={badge} />
       </span>
-      <span className="td-text-caption leading-none">{item.label}</span>
+      <span className="td-text-caption">{item.label}</span>
     </NavLink>
   );
 }
@@ -73,7 +73,7 @@ export function DesktopSidebar() {
               className="flex w-full flex-col items-center gap-1 rounded-row px-1 py-2 text-ink-3 transition-colors hover:bg-surface-hover hover:text-ink"
             >
               <Icon icon={MORE_NAV_ITEM.icon} size={22} weight="regular" />
-              <span className="td-text-caption leading-none">{MORE_NAV_ITEM.label}</span>
+              <span className="td-text-caption">{MORE_NAV_ITEM.label}</span>
             </button>
             {open && (
               <div className="absolute left-full top-0 ml-1 z-[var(--z-dropdown)] min-w-36 rounded-card border border-border bg-surface-elevated p-1 shadow-elev2">

@@ -15,6 +15,10 @@ const INTERACTIVE_TEXT_ICON_RE = new RegExp(
   `(?:>\\s*${INTERACTIVE_TEXT_ICON_PATTERN}\\s*<|\\{\\s*["']${INTERACTIVE_TEXT_ICON_PATTERN}["']\\s*\\})`,
 );
 const INTERACTIVE_CONTEXT_RE = /<button\b|<a\b|<Link\b|<NavLink\b|role=["']button["']|onClick=/;
+const TD_TEXT_STEP = "td-text-(?:caption|label|body|title|display)";
+// 变体前缀照收，但 important 不收：`leading-6!` / `!leading-6` 会翻转 layer 优先级、真的压过顶层
+// 规则，那不是死类，按死类报会给出错误指引。
+const LEADING_UTIL = "(?:[a-z][a-z0-9-]*:)*(?<!!)leading-(?:\\[[^\\]]+\\]|[a-z0-9.]+)(?!!)";
 
 const COLOR_FIXTURE_RULES = new Set([
   "retired-module-colors",
@@ -117,6 +121,13 @@ const RULES = [
     re: new RegExp(`\\b${TAILWIND_VARIANTS}text-(?:xs|sm|base|lg|\\dxl|xl)\\b|\\btext-\\[[0-9.]+(?:px|rem)\\]`),
     msg: "字号必须使用 .td-text-{caption,label,body,title,display} 语义类；input/textarea/select 与图标按钮上的字号声明不生效，直接删除",
     skip: (file) => isTestFile(file) || normalizePath(file).endsWith(".css"),
+  },
+  {
+    id: "dead-leading-on-td-text",
+    // 同一 className 串里同时出现两者即违规（谁在前都算）；[^"]* 保证不跨属性误伤。
+    re: new RegExp(`\\b${TD_TEXT_STEP}\\b[^"]*\\b${LEADING_UTIL}|\\b${LEADING_UTIL}[^"]*\\b${TD_TEXT_STEP}\\b`),
+    msg: "td-text-* 锁死 line-height 且定义在顶层未分层区、优先级压过 @layer utilities，同串的 leading-* 在此是死类；要调高度改 padding 或 flex 居中，确需改行高则加排版角色语义类（design-language §2）",
+    skip: (file) => isTestFile(file),
   },
   {
     id: "bare-arbitrary-value",

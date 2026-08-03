@@ -40,7 +40,7 @@ function OverviewCard({ label, value }: { label: string; value: number }) {
   return (
     <div className="rounded-card border border-border bg-surface-elevated px-3 py-2">
       <div className="td-text-caption text-ink-2">{label}</div>
-      <div className="td-num td-text-title mt-1 leading-none text-ink">{value}</div>
+      <div className="td-num td-text-title mt-1 text-ink">{value}</div>
     </div>
   );
 }

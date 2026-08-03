@@ -472,7 +472,7 @@ export default function SettingsCategoryDetailPage() {
         >
           <div className="w-96 space-y-3 rounded-card bg-surface-elevated p-5" onClick={(event) => event.stopPropagation()}>
             <h3 className="font-medium text-danger">删除分类</h3>
-            <p className="td-text-body leading-6 text-ink-2">{deleteMessage()}</p>
+            <p className="td-text-body text-ink-2">{deleteMessage()}</p>
             {deleteError && <p className="td-text-label text-danger">{deleteError}</p>}
             <div className="flex gap-2">
               <button

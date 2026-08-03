@@ -1121,7 +1121,7 @@ export default function QuickNotesPage() {
                 className="relative flex size-9 shrink-0 items-center justify-center rounded-pill border border-border bg-surface text-ink-2"
               >
                 <Icon icon={PushPin} size={16} />
-                <span className="td-num td-text-caption absolute -right-1 -top-1 flex min-w-5 items-center justify-center rounded-pill bg-accent px-1 font-semibold leading-5 text-page">
+                <span className="td-num td-text-caption absolute -right-1 -top-1 flex min-h-5 min-w-5 items-center justify-center rounded-pill bg-accent px-1 font-semibold text-page">
                   {pinnedNotes.length}
                 </span>
               </button>
@@ -1241,7 +1241,7 @@ export default function QuickNotesPage() {
                 className="relative flex size-9 shrink-0 items-center justify-center rounded-pill border border-border bg-surface text-ink-2 transition hover:border-accent hover:text-ink sm:size-11"
               >
                 <Icon icon={PushPin} size={16} />
-                <span className="td-num absolute -right-1 -top-1 flex min-w-5 items-center justify-center rounded-pill bg-accent px-1 td-text-caption font-semibold leading-5 text-page">
+                <span className="td-num absolute -right-1 -top-1 flex min-h-5 min-w-5 items-center justify-center rounded-pill bg-accent px-1 td-text-caption font-semibold text-page">
                   {pinnedNotes.length}
                 </span>
               </button>

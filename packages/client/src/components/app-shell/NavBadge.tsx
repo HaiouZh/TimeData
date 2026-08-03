@@ -5,7 +5,7 @@ export function NavBadge({ count }: { count: number }) {
     <span
       data-testid="nav-badge"
       aria-hidden="true"
-      className="absolute -right-2 -top-1 inline-flex min-w-4 items-center justify-center rounded-pill bg-accent px-1 td-text-caption leading-none text-page"
+      className="absolute -right-2 -top-1 inline-flex min-w-4 items-center justify-center rounded-pill bg-accent px-1 td-text-caption text-page"
     >
       {count > 9 ? "9+" : count}
     </span>

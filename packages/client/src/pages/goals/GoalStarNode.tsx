@@ -69,7 +69,7 @@ export function GoalStarNode({ data }: { data: GoalStarNodeData }) {
       >
         <span
           data-star-title="true"
-          className={collapsed ? "sr-only" : "td-text-label w-full truncate font-semibold leading-tight"}
+          className={collapsed ? "sr-only" : "td-text-label w-full truncate font-semibold"}
         >
           {star.title}
         </span>

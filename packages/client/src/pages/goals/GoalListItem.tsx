@@ -21,10 +21,10 @@ export function GoalListItem({ overview }: { overview: GoalOverview }) {
               {kindLabel(overview.goal.kind)}
             </span>
           </div>
-          {overview.goal.note && <p className="mt-1 line-clamp-2 td-text-caption leading-5 text-ink-3">{overview.goal.note}</p>}
+          {overview.goal.note && <p className="mt-1 line-clamp-2 td-text-caption text-ink-3">{overview.goal.note}</p>}
         </div>
       </div>
-      <div className="mt-2 space-y-0.5 td-text-caption leading-5 text-ink-3">
+      <div className="mt-2 space-y-0.5 td-text-caption text-ink-3">
         <p>{summary.momentum}</p>
         <p>{summary.frontline}</p>
         <p>{summary.completion}</p>

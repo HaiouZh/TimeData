@@ -147,7 +147,7 @@ export default function StyleguidePage() {
             {TINT_TOKENS.map((token, i) => (
               <span
                 key={token}
-                className="min-h-9 rounded-pill border px-2.5 td-text-caption leading-9"
+                className="inline-flex min-h-9 items-center rounded-pill border px-2.5 td-text-caption"
                 style={{
                   backgroundColor: `var(${token})`,
                   borderColor: `var(${token})`,

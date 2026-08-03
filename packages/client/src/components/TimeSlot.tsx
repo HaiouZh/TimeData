@@ -50,7 +50,7 @@ export default function TimeSlot({ slot, categoryPath, categoryColor, onClick, h
         style={{ backgroundColor: `${categoryColor}1a`, boxShadow: `inset 3px 0 0 ${categoryColor}` }}
       >
         <div className="flex items-start justify-between gap-2">
-          <span className="td-text-body font-medium leading-tight text-ink">{categoryPath}</span>
+          <span className="td-text-body font-medium text-ink">{categoryPath}</span>
           <span className="td-duration mt-0.5 shrink-0 td-text-caption text-ink-2">{duration}</span>
         </div>
         <div className="td-time mt-0.5 td-text-caption text-ink-2">{timeRange}</div>

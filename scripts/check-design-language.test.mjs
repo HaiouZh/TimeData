@@ -595,6 +595,81 @@ test("flags bare text empty states and allows EmptyState", () => {
   );
 });
 
+test("flags leading-* sitting next to td-text-* (dead class)", () => {
+  // 正向与反向：两个类在同一 className 串里即违规，谁在前都算
+  assert.equal(
+    classifyLine("x.tsx", 'className="td-text-caption leading-none"').some(
+      (v) => v.rule === "dead-leading-on-td-text",
+    ),
+    true,
+  );
+  assert.equal(
+    classifyLine("x.tsx", 'className="leading-relaxed td-text-body"').some((v) => v.rule === "dead-leading-on-td-text"),
+    true,
+  );
+  // 断点变体与任意值同样是死类
+  assert.equal(
+    classifyLine("x.tsx", 'className="td-text-body sm:leading-6"').some((v) => v.rule === "dead-leading-on-td-text"),
+    true,
+  );
+  assert.equal(
+    classifyLine("x.tsx", 'className="td-text-caption leading-[1.2]"').some((v) => v.rule === "dead-leading-on-td-text"),
+    true,
+  );
+});
+
+test("dead-leading-on-td-text is a real gate on the lines that actually shipped", () => {
+  // 真闸验证：直接用曾经在仓库里的原文行，确认规则抓得到真实点位而非只抓构造用例
+  const shipped = [
+    '      <span className="td-text-caption leading-none">{item.label}</span>',
+    '        className="absolute -right-2 -top-1 inline-flex min-w-4 items-center justify-center rounded-pill bg-accent px-1 td-text-caption leading-none text-page"',
+    '          className={collapsed ? "sr-only" : "td-text-label w-full truncate font-semibold leading-tight"}',
+    '                className="min-h-9 rounded-pill border px-2.5 td-text-caption leading-9"',
+  ];
+  for (const line of shipped) {
+    assert.equal(
+      classifyLine("packages/client/src/x.tsx", line).some((v) => v.rule === "dead-leading-on-td-text"),
+      true,
+      `should flag: ${line.trim()}`,
+    );
+  }
+});
+
+test("dead-leading-on-td-text does not fire without both classes on one string", () => {
+  // leading-* 单独用在非 td-text-* 元素上完全合法，不能误伤
+  assert.equal(
+    classifyLine("x.tsx", 'className="leading-none text-ink"').some((v) => v.rule === "dead-leading-on-td-text"),
+    false,
+  );
+  assert.equal(
+    classifyLine("x.tsx", 'className="td-text-caption text-ink-3"').some((v) => v.rule === "dead-leading-on-td-text"),
+    false,
+  );
+  // 跨属性不算同一 className 串
+  assert.equal(
+    classifyLine("x.tsx", '<div className="td-text-body" data-kind="leading-edge">').some(
+      (v) => v.rule === "dead-leading-on-td-text",
+    ),
+    false,
+  );
+  // important 会翻转层级优先级、真的压过顶层规则，那不是死类，不该按死类报
+  assert.equal(
+    classifyLine("x.tsx", 'className="td-text-caption leading-6!"').some((v) => v.rule === "dead-leading-on-td-text"),
+    false,
+  );
+  assert.equal(
+    classifyLine("x.tsx", 'className="td-text-caption !leading-6"').some((v) => v.rule === "dead-leading-on-td-text"),
+    false,
+  );
+  // 测试文件里的断言字符串不算违规
+  assert.equal(
+    classifyLine("x.test.tsx", 'expect(c).toContain("td-text-caption leading-none")').some(
+      (v) => v.rule === "dead-leading-on-td-text",
+    ),
+    false,
+  );
+});
+
 test("flags h1 without title size and allows title/display sized h1", () => {
   assert.equal(
     classifyLine("x.tsx", '<h1 className="td-text-body font-medium text-ink">日记</h1>').some(
