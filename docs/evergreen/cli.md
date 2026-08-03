@@ -60,7 +60,7 @@ last-reviewed: 2026-07-10
 - `--server`、`--token`：可选，覆盖配置。
 - `task-done` / `task-tag` 的 `--token` 可传 master `AUTH_TOKEN`，也可传窄域 `AGENT_TOKEN`；后者只能调用 `/api/agent/*`。
 - `timedata tasks`：只消费 server `GET /api/tasks` 返回的 root task 列表；child tasks 由 ToDo 子任务视图按 parent 单独读取，不进入 CLI 顶层列表。
-- `task-done`：非重复任务就地完成；重复模板代理完成「最新那一发」occurrence（无 active 由 server 先按引擎物化再完成；未到期/耗尽回 409 `RULE_NOT_DUE`），模板本体不动；child task 若被明确指定 id，则只轻量更新自身 `done/completedAt`。详见 [todo](todo.md) §3.1。
+- `task-done`：非重复任务就地完成；重复模板代理完成「最新那一发」occurrence（无 active 由 server 先按引擎物化再完成；未到期/耗尽回 409 `RULE_NOT_DUE`），模板本体不动；child task 若被明确指定 id，则只轻量更新自身 `done/completedAt`。详见 [todo/invariants](todo/invariants.md) 第 1 条。
 - `task-tag --tags`：逗号分隔、trim 后非空的自由标签列表，会覆盖任务当前 `tags`。tags 不驱动自动逻辑；需要代码可靠动作的维度应走结构化字段，见 [`ADR 0014`](../adr/0014-task-tags-vs-fields.md)。
 - `--format=json|human`：可选，显式指定输出格式；未指定时根据 stdout 是否 TTY 自动判断（管道/脚本默认 JSON，终端默认 human）。
 - 所有 flag 支持 `--key value` 和 `--key=value` 两种长选项格式；不支持短横线 `-k`。
@@ -186,7 +186,7 @@ CLI 的 `list` 命令调 `listEntriesForCliDate`，返回带分类路径和时�
 
 CLI 的 `notes` 命令调 `GET /api/quick-notes?...&format=cli`，只读返回 Quick Notes 视图：`quickNotes[*].occurredAt` 是 UTC ISO 存储时间，`occurredLocal` 是按应用时区转换的本地时间字符串（`YYYY-MM-DDTHH:mm:ss`）。支持按本地日期、闭区间日期范围和最近 N 条查询；不提供写入、编辑、删除或导入能力。授权 agent 投递 quick note 走服务端受控写接口 `POST /api/quick-notes`，不要求 CLI 增加写命令。
 
-CLI 的 `task-done` / `task-tag` 调 `/api/agent/tasks/:id/status`，只做任务完成和 tags 回写：`done` 写 `done=true`，`tag` 写自由 `tags`。该 API 接受 master `AUTH_TOKEN` 或窄域 `AGENT_TOKEN`，服务端仍通过 `applyChange()` + `sync_seq` + `notifySyncChange()` 下发到前台客户端。root `task-done` 对重复模板走「最新那一发」代理语义（见 [todo](todo.md) §3.1）；child `task-done` 只更新 child 自身完成状态。`note` 子任务能力仍保留在 server agent API，且 child note 会被服务端以 `TASK_CHILD_CANNOT_HAVE_CHILDREN` 拒绝；当前不再提供 CLI 封装。
+CLI 的 `task-done` / `task-tag` 调 `/api/agent/tasks/:id/status`，只做任务完成和 tags 回写：`done` 写 `done=true`，`tag` 写自由 `tags`。该 API 接受 master `AUTH_TOKEN` 或窄域 `AGENT_TOKEN`，服务端仍通过 `applyChange()` + `sync_seq` + `notifySyncChange()` 下发到前台客户端。root `task-done` 对重复模板走「最新那一发」代理语义（见 [todo/invariants](todo/invariants.md) 第 1 条）；child `task-done` 只更新 child 自身完成状态。`note` 子任务能力仍保留在 server agent API，且 child note 会被服务端以 `TASK_CHILD_CANNOT_HAVE_CHILDREN` 拒绝；当前不再提供 CLI 封装。
 
 CLI 的 `task-schedule` / `task-unschedule` 调 `POST /api/tasks/:id/schedule`。服务端任务 UPDATE 与 `recordSeqWithDb("tasks", id, "update")` 在同一个 SQLite transaction 内；记账失败会回滚业务更新，提交后再广播 SSE bump，其他前台设备可立即按 seq 补差。
 

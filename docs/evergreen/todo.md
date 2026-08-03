@@ -43,7 +43,7 @@ last-reviewed: 2026-08-03
 # 待办任务
 
 > 待办域的**主题文档**：`tasks` 表（轻量任务池 + 重复待办），跨端同步，不引用分类/时间记录/速记，不参与时长统计。
-> 本文讲：Task 字段契约（含 `parentId` 一层父子）、四分区落点、三条写入通道、tags、子任务=独立可拖 Task、agent/CLI 回写、关键不变量。
+> 本文讲：Task 字段契约（含 `parentId` 一层父子）、四分区落点、三条写入通道、tags、子任务=独立可拖 Task、agent/CLI 回写；不变量、坑与红线归纵切子文档 [todo/invariants](todo/invariants.md)。
 > 重复规则引擎见子文档 [todo/recurrence](todo/recurrence.md)；想法重力（水位线/翻牌/水下找回）见子文档 [todo/gravity](todo/gravity.md)；手头软会话（抓/移/散/续 + atHand 排他投影）见子文档 [todo/at-hand](todo/at-hand.md)；项目区与归属轴（`Goal.members` → 分组投影 + 收件箱排他）见子文档 [todo/project-zone](todo/project-zone.md)。不变量与坑见纵切子文档 [todo/invariants](todo/invariants.md)；代码入口地图见 [todo/modules](todo/modules.md)。
 > 不讲：同步账本机制（见 [sync](sync.md)）、备份（见 [backup](backup.md)）、CLI 命令清单（见 [cli](cli.md)）。
 
@@ -101,7 +101,7 @@ agent / CLI (task-done/task-tag)
 
 - `GET /api/tasks?kind=pool|recurring&done=0|1`（`routes/tasks.ts`）：严格 querySchema，SQL 层只取 `parent_id IS NULL` 的 root tasks，`ORDER BY sort_order, created_at, id`，`rowToTask` 映射后按 kind/done 过滤；受 `AUTH_TOKEN` 保护。
 - `POST /api/tasks/:id/schedule { scheduledDate: "YYYY-MM-DD" | null }`（`routes/tasks.ts`）：CLI `task-schedule`/`task-unschedule` 调用，受 `AUTH_TOKEN` 保护；重复模板 409 `TASK_RECURRING_USE_RULE`，occurrence（重复规则的这一发）409 `TASK_OCCURRENCE_NOT_SCHEDULABLE`——两个不同 code，让调用方区分「模板」与「这一发」。
-  - **红线**：这条端点仍直接 `UPDATE tasks SET scheduled_at, updated_at`，不走 `applyChange`/LWW 域，因此绕过 LWW 的 schema 校验/冲突路径；但业务 UPDATE 与 `recordSeqWithDb` 已在同一个 SQLite transaction 内，记账失败会整体回滚，提交后再广播 SSE bump。它是 tasks 的第三条 server 写入通道（受控、AUTH_TOKEN、server 权威写），三条通道机制各不相同（并列见 §3.3）。
+  - **红线**：这条端点仍直接 `UPDATE tasks SET scheduled_at, updated_at`，不走 `applyChange`/LWW 域，因此绕过 LWW 的 schema 校验/冲突路径；但业务 UPDATE 与 `recordSeqWithDb` 已在同一个 SQLite transaction 内，记账失败会整体回滚，提交后再广播 SSE bump。它是 tasks 的第三条 server 写入通道（受控、AUTH_TOKEN、server 权威写），三条通道机制各不相同（并列见 [todo/invariants](todo/invariants.md) 第 3 条）。
 
 ## 2. Schema / 契约（字段级）
 
@@ -169,7 +169,7 @@ agent / CLI (task-done/task-tag)
 
 ## 3. 关键不变量 / 坑 / 红线
 
-14 条不变量、踩过的坑与红线（完成语义两端不对称、四分区读时视图、DnD 拓扑与缩进基线、归属轴排他等）见纵切子文档 [todo/invariants](todo/invariants.md)——改本域代码前先过一遍。
+不变量、踩过的坑与红线（完成语义两端不对称、四分区读时视图、DnD 拓扑与缩进基线、归属轴排他等）见纵切子文档 [todo/invariants](todo/invariants.md)——改本域代码前先过一遍。
 
 ## 4. 模块速查
 
@@ -183,7 +183,7 @@ agent / CLI (task-done/task-tag)
 
 | 子文档 | 拥有什么 |
 |---|---|
-| [todo/invariants](todo/invariants.md) | 纵切：14 条不变量 / 坑 / 红线，改代码前必读 |
+| [todo/invariants](todo/invariants.md) | 纵切：不变量 / 坑 / 红线，改代码前必读 |
 | [todo/modules](todo/modules.md) | 纵切：代码入口地图与测试落点 |
 | [todo/recurrence](todo/recurrence.md) | 重复规则引擎：Recurrence schema、occurrence 物化、终止条件、预设门、删除级联 |
 | [todo/gravity](todo/gravity.md) | 想法重力：水位线浮沉、翻牌复查、已过目记忆、水下找回尾部、设置页 |

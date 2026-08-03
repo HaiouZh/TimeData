@@ -102,10 +102,10 @@ last-reviewed: 2026-08-03
 
 ## 6. 拖拽归入（动作二）
 
-从**今天 / 收件箱**把根任务拖到项目组上 = 归入该组。落点判定表与容器域在 [todo](../todo.md) §DnD；这里管归属侧的契约。
+从**今天 / 收件箱**把根任务拖到项目组上 = 归入该组。落点判定表与容器域在 [invariants](invariants.md) 第 5 条；这里管归属侧的契约。
 
-- **落点是整个组块**（标题行 + 展开态内容区），不是只有标题行：展开后标题行仅一行高、下面是一整片列表，只认标题行在展开态几乎瞄不准。组内不做用户自定义重排、组内行也不注册 sortable（`TaskList` 不传 `sortable`/`containerId` → 不渲染拖柄），因此整块当落点没有落点竞争。`useDroppable` 落点共两族：本处（id `project:<goalId>`）与宽屏投递坞的药丸（id `dock:*`，见 [todo](../todo.md) §3.14），与其余 droppable（全部来自 `useSortable`，id 是 task uuid）不可能相撞——**同一条今天区任务确实同屏出现两次，但项目区那一份零 dnd 注册**。
-- **碰撞策略必须让项目卡优先**（`preferProjectCollisions`）。页面用 `closestCenter`，它按 droppable 矩形**中心点**算距离，而展开的项目卡是几百像素高的大块、中心离手指很远，会被隔壁收件箱某一行抢走落点——整块 droppable 在展开态近乎失灵。故指针真落在项目卡内时只认它，否则原样退回 `closestCenter`；宽屏投递坞的药丸浮在列表之上，坞命中又优先于项目卡（[todo](../todo.md) §3.14）。`fallback` 传 thunk：指针已落在卡内时 `closestCenter` 的结果注定被丢弃，没必要每帧遍历全部 droppable。**已知限制**：键盘拖拽没有指针坐标，`pointerWithin` 恒空 → 走 fallback，项目组在纯键盘下仍难命中。
+- **落点是整个组块**（标题行 + 展开态内容区），不是只有标题行：展开后标题行仅一行高、下面是一整片列表，只认标题行在展开态几乎瞄不准。组内不做用户自定义重排、组内行也不注册 sortable（`TaskList` 不传 `sortable`/`containerId` → 不渲染拖柄），因此整块当落点没有落点竞争。`useDroppable` 落点共两族：本处（id `project:<goalId>`）与宽屏投递坞的药丸（id `dock:*`，见 [invariants](invariants.md) 第 14 条），与其余 droppable（全部来自 `useSortable`，id 是 task uuid）不可能相撞——**同一条今天区任务确实同屏出现两次，但项目区那一份零 dnd 注册**。
+- **碰撞策略必须让项目卡优先**（`preferProjectCollisions`）。页面用 `closestCenter`，它按 droppable 矩形**中心点**算距离，而展开的项目卡是几百像素高的大块、中心离手指很远，会被隔壁收件箱某一行抢走落点——整块 droppable 在展开态近乎失灵。故指针真落在项目卡内时只认它，否则原样退回 `closestCenter`；宽屏投递坞的药丸浮在列表之上，坞命中又优先于项目卡（见 [invariants](invariants.md) 第 14 条）。`fallback` 传 thunk：指针已落在卡内时 `closestCenter` 的结果注定被丢弃，没必要每帧遍历全部 droppable。**已知限制**：键盘拖拽没有指针坐标，`pointerWithin` 恒空 → 走 fallback，项目组在纯键盘下仍难命中。
 - **对缩进系统让位**：横向位移触发的缩进判定与「拖进项目」共用同一次手势，`canBecomeChild` 优先于目标容器。两道闸——`hoveredRootIdFromOver` 对 `project:` 容器恒返回 null，且 `canBecomeChild` 显式排除 project——第二道在当前调用路径上不可构造，是明写的防御闸。没有它，斜着拖进项目会被判成 `move-to-parent`（拆/接父子关系）。
 - **准入四拒，判在两处，不重合**：
   - **子任务 / 重复待办**由**页面**判（`dragDropBlocked`），给悬停禁止态。子任务这一支**必须从 dnd 容器 id 认**（`parent:` 前缀）：`listTasks` 主循环第一行就跳过 `parentId !== null` 的行，子任务不在任何 bucket 里，按 task 查恒为 null——`activeParentId` 同理恒为 null，不能用它判。
