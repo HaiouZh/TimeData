@@ -8,9 +8,11 @@ import { AppRoutes } from "./components/app-shell/AppRoutes.tsx";
 import { DesktopSidebar } from "./components/app-shell/DesktopSidebar.tsx";
 import { KeptRouteStack } from "./components/app-shell/KeptRouteStack.tsx";
 import { MobileBottomNav } from "./components/app-shell/MobileBottomNav.tsx";
+import { DesktopBridge } from "./components/desktop/DesktopBridge.tsx";
 import EdgeSwipeBack from "./components/EdgeSwipeBack.tsx";
 import { ErrorBoundary, RouteErrorFallback } from "./components/ErrorBoundary.tsx";
 import { TotpPromptDialog } from "./components/TotpPromptDialog.tsx";
+import { isDesktopShell } from "./lib/desktop/shell.ts";
 import { BottomNavProvider } from "./contexts/BottomNavContext.tsx";
 import { SyncProvider } from "./contexts/SyncContext.tsx";
 import { TrackAttentionProvider } from "./contexts/TrackAttentionContext.tsx";
@@ -60,6 +62,7 @@ export function AppShell() {
       )}
       <AppUpdatePrompt />
       <TotpPromptDialog />
+      {isDesktopShell() && <DesktopBridge />}
     </div>
   );
 }
