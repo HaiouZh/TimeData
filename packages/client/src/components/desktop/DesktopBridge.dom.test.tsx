@@ -180,4 +180,23 @@ describe("DesktopBridge 组件接线", () => {
     expect(await db.timeEntries.count()).toBe(2); // seed + 一条，不是 seed + 两条
     expect(calls).toContain("notify_user");
   });
+
+  // 队列是 .then 链：某一步 reject 会让后面的 .then 全部跳过，此后每次打点都静音且无报错。
+  // 这条同时守「失败要出通知」和「失败之后队列还活着」——少了 catch 两者一起没。
+  it("一次打点失败不卡死队列：出通知，下一次照常写库", async () => {
+    await seedPunchable();
+    await mount();
+
+    ipc.invoke.mockImplementationOnce(async (cmd: string) => {
+      calls.push(cmd);
+      throw new Error("读配置失败");
+    });
+
+    await emitPunch(PRESSED_AT_MS);
+    expect(ipc.invoke).toHaveBeenCalledWith("notify_user", { title: "TimeData", body: "读配置失败" });
+    expect(await db.timeEntries.count()).toBe(1); // 失败那次一个字没写，只剩 seed
+
+    await emitPunch(PRESSED_AT_MS);
+    expect(await db.timeEntries.count()).toBe(2); // 队列没卡死
+  });
 });

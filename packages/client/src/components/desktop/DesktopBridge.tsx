@@ -164,6 +164,8 @@ export function DesktopBridge() {
           stateRef.current = next;
           setState(next);
         } catch (err) {
+          // catch 必须在 .then 回调内部：漏在外面时一次 reject 会截断整条链，
+          // 此后每次打点都静音且无报错。notify 走 quietly，catch 自身不会再 reject。
           await notify(io, err instanceof Error ? err.message : "打点失败");
         }
       });
