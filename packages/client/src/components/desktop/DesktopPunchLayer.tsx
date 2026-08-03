@@ -97,9 +97,21 @@ export function DesktopPunchLayer({
         </div>
       )}
       {confirm && (
+        // 用户刚按完热键，手还在键盘上，却只能用鼠标点——所以焦点弹出即落在「记录」上
+        // （autoFocus 而不是 useEffect：本层是无 hook 的纯展示组件，元素树能被直接当函数
+        // 调用来验按钮接线），Esc = 算了。aria-modal 补上 alertdialog 该有的语义。
+        // biome-ignore lint/a11y/noNoninteractiveElementInteractions: alertdialog 要接 Esc，
+        // 焦点已由 autoFocus 送进卡内，keydown 冒泡到这里。
         <div
           role="alertdialog"
+          aria-modal="true"
           aria-label="打点确认"
+          onKeyDown={(e) => {
+            if (e.key === "Escape") {
+              e.stopPropagation();
+              onCancelConfirm();
+            }
+          }}
           className="fixed inset-x-4 top-1/3 z-[var(--z-backdrop)] mx-auto max-w-md rounded-card border border-border-strong bg-surface p-4 shadow-elev1"
         >
           <p className="td-text-body text-ink">{confirm.message}</p>
@@ -114,6 +126,9 @@ export function DesktopPunchLayer({
             </button>
             <button
               type="button"
+              // biome-ignore lint/a11y/noAutofocus: 这张卡是热键按下后弹的，用户手在键盘上；
+              // 焦点不进卡片就只剩鼠标一条路。
+              autoFocus
               onClick={onConfirm}
               className="rounded-ctl bg-accent px-3 py-1.5 td-text-label font-medium text-page transition hover:bg-accent-strong"
             >

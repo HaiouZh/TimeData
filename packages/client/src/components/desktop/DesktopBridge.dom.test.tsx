@@ -52,6 +52,13 @@ function category(id: string, name: string, parentId: string | null): Category {
   };
 }
 
+/** 只配打点分类、不留任何记录：起点回退今天 0 点 → 12 小时 → 必然超阈值弹确认卡。 */
+async function seedCategoryOnly() {
+  await db.categories.bulkAdd([category("cat-work", "工作", null), category(PUNCH_CATEGORY_ID, "深度", "cat-work")]);
+  await setPunchCategoryId(PUNCH_CATEGORY_ID);
+  await db.syncLog.clear();
+}
+
 async function seedPunchable() {
   await db.categories.bulkAdd([category("cat-work", "工作", null), category(PUNCH_CATEGORY_ID, "深度", "cat-work")]);
   await setPunchCategoryId(PUNCH_CATEGORY_ID);
@@ -75,9 +82,9 @@ async function settle(): Promise<void> {
 }
 
 /** 反复让位直到条件成立——Dexie 事务要好几轮微任务才落地，一轮 settle 不够。 */
-async function waitFor(check: () => boolean, label: string): Promise<void> {
+async function waitFor(check: () => boolean | Promise<boolean>, label: string): Promise<void> {
   for (let round = 0; round < 100; round++) {
-    if (check()) return;
+    if (await check()) return;
     await settle();
   }
   throw new Error(`等不到：${label}`);
@@ -105,6 +112,16 @@ async function emitPunch(...presses: number[]): Promise<void> {
 
 const buttonNamed = (host: HTMLElement, label: string) =>
   [...host.querySelectorAll("button")].find((element) => element.textContent?.trim() === label) ?? null;
+
+const confirmCard = (host: HTMLElement) => host.querySelector('[role="alertdialog"]');
+
+/** 空库 + 配好分类 → 12 小时区间必然超阈值 → 弹确认卡。等到它真出现在 DOM 里。 */
+async function raiseConfirmCard(host: HTMLElement): Promise<void> {
+  await act(async () => {
+    handlers[0]?.({ action: "punch", pressedAtMs: PRESSED_AT_MS });
+  });
+  await waitFor(() => confirmCard(host) !== null, "确认卡出现");
+}
 
 beforeEach(async () => {
   await resetDb();
@@ -160,6 +177,53 @@ describe("DesktopBridge 组件接线", () => {
     await waitFor(() => host.querySelector('[role="status"]') === null, "撤销条收起");
 
     expect(await db.timeEntries.count()).toBe(1); // 只剩 seed 那条
+  });
+
+  // ---- 确认卡这条路：bridge→layer 的 prop 落位 ----
+  // 层内测的是「点『记录』→ 调 onConfirm」，函数级测的是「confirmPunch 会落笔」，
+  // 中间那段 **bridge 把哪个回调接到哪个 prop 上** 从没人锁：两个回调对调，
+  // 上面两处全绿，而后果是点「记录」什么都不写、点「算了」反而落库一段没批准的区间。
+  it("点确认卡里的「记录」：真落库，卡片消失", async () => {
+    await seedCategoryOnly();
+    const { host } = await mount();
+    await raiseConfirmCard(host);
+    expect(await db.timeEntries.count()).toBe(0); // 弹卡时一个字都还没写
+
+    await click(buttonNamed(host, "记录"));
+    await waitFor(async () => (await db.timeEntries.count()) === 1, "落库");
+    await waitFor(() => confirmCard(host) === null, "卡片收起");
+
+    expect((await db.timeEntries.toArray())[0].endTime).toBe("2026-06-15T04:00:00.000Z");
+    expect(host.querySelector('[aria-label="桌面打点反馈"]')?.textContent).toContain("已打点 00:00–12:00");
+  });
+
+  it("点确认卡里的「算了」：一个字不写，卡片消失", async () => {
+    await seedCategoryOnly();
+    const { host } = await mount();
+    await raiseConfirmCard(host);
+
+    await click(buttonNamed(host, "算了"));
+    await waitFor(() => confirmCard(host) === null, "卡片消失");
+
+    expect(await db.timeEntries.count()).toBe(0);
+  });
+
+  // 用户刚按完热键，手在键盘上。焦点不进卡片 = 只剩鼠标一条路。
+  it("卡片弹出时焦点落在「记录」上，Esc 等于「算了」", async () => {
+    await seedCategoryOnly();
+    const { host } = await mount();
+    await raiseConfirmCard(host);
+
+    expect(document.activeElement).toBe(buttonNamed(host, "记录"));
+
+    await act(async () => {
+      document.activeElement?.dispatchEvent(
+        new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }),
+      );
+    });
+    await waitFor(() => confirmCard(host) === null, "Esc 关掉卡片");
+
+    expect(await db.timeEntries.count()).toBe(0);
   });
 
   it("卸载时把监听摘掉", async () => {

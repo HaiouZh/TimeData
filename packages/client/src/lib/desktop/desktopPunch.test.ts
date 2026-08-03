@@ -1,6 +1,7 @@
 import type { Category } from "@timedata/shared";
 import { beforeEach, describe, expect, it } from "vitest";
 import { db, resetDb } from "../../test/dbReset.js";
+import { punchNow } from "../punch.js";
 import { setPunchCategoryId } from "../settings/punchCategorySetting.js";
 import { desktopPunch, rangeHours } from "./desktopPunch.js";
 
@@ -160,5 +161,77 @@ describe("确认卡批准后重试：maxHours = 用户批准的那个区间长�
     const outcome = await desktopPunch(PRESSED_AT_MS, Number.NaN);
     expect(outcome.kind).toBe("needsConfirm");
     expect(await db.timeEntries.count()).toBe(0);
+  });
+});
+
+// 上面那些用例断的都是**具体时刻**（03:00 / 12:00 …），它们钉的是「这一次算对了」。
+// 这条钉的是不变量本身：无论走哪条分支，desktopPunch 落进库里的记录长度都不许超过
+// 调用方给的上限——这正是「超阈值防打歪」这个特性存在的全部理由。
+describe("不变量：落库长度绝不超过已批准长度", () => {
+  async function everyWrittenEntryWithin(maxHours: number) {
+    for (const entry of await db.timeEntries.toArray()) {
+      expect(rangeHours(entry)).toBeLessThanOrEqual(maxHours);
+    }
+  }
+
+  it("超上限时改弹卡，绝不落一条超长的（空库 → 12 小时 > 4）", async () => {
+    await configurePunchCategory();
+    const outcome = await desktopPunch(PRESSED_AT_MS, 4);
+    if (outcome.kind === "written") expect(rangeHours(outcome.entry)).toBeLessThanOrEqual(4);
+    await everyWrittenEntryWithin(4);
+  });
+
+  it("上限内写下的那条也在上限内（1 小时 ≤ 4）", async () => {
+    await configurePunchCategory();
+    await seedEntryEndingAt("2026-06-15T03:00:00.000Z");
+    const outcome = await desktopPunch(PRESSED_AT_MS, 4);
+    expect(outcome.kind).toBe("written");
+    if (outcome.kind === "written") expect(rangeHours(outcome.entry)).toBeLessThanOrEqual(4);
+    // seed 那条不是本次写的，逐条查会把它算进来——只查本次的结果即可。
+  });
+
+  it("批准后重试写下的那条不超过用户批准的长度", async () => {
+    await configurePunchCategory();
+    await seedEntryEndingAt("2026-06-15T03:00:00.000Z");
+    const approvedHours = 1;
+    const outcome = await desktopPunch(PRESSED_AT_MS, approvedHours);
+    expect(outcome.kind).toBe("written");
+    if (outcome.kind === "written") expect(rangeHours(outcome.entry)).toBeLessThanOrEqual(approvedHours);
+  });
+});
+
+// 桌面预检把 punch.ts 的区间推导复刻了一份（取整到分钟 → 今天 0 点 → 查锚点 →
+// resolvePunchRange）。分叉的后果不是「算错」，而是**守门员守错了对象**：确认卡上给用户看的
+// 区间、以及那道自守闸比对的，都是旧规则算的，落笔的却是新规则算的。历史上有过一次提交
+// （floor 到分钟）改的正是这四行中的三行。
+describe("跨文件一致性：预检算出的区间 = punchNow 实际写入的区间", () => {
+  it("同一份库状态下两处推导必须逐字一致", async () => {
+    await configurePunchCategory();
+    await seedEntryEndingAt("2026-06-15T03:00:00.000Z");
+    const pressedAtMs = PRESSED_AT_MS + 42_000; // 带秒，取整规则不一致时立刻分叉
+
+    // 阈值压到 0.5 小时强制走 needsConfirm，才拿得到预检那份区间（它不经 punchNow）
+    const preview = await desktopPunch(pressedAtMs, 0.5);
+    expect(preview.kind).toBe("needsConfirm");
+
+    const result = await punchNow(new Date(pressedAtMs));
+    expect(result.ok).toBe(true);
+
+    if (preview.kind === "needsConfirm" && result.ok) {
+      expect({ startTime: result.entry.startTime, endTime: result.entry.endTime }).toEqual(preview.range);
+    }
+  });
+
+  it("没有锚点记录时（起点回退今天 0 点）同样一致", async () => {
+    await configurePunchCategory();
+    const preview = await desktopPunch(PRESSED_AT_MS, 0.5);
+    expect(preview.kind).toBe("needsConfirm");
+
+    const result = await punchNow(new Date(PRESSED_AT_MS));
+    expect(result.ok).toBe(true);
+
+    if (preview.kind === "needsConfirm" && result.ok) {
+      expect({ startTime: result.entry.startTime, endTime: result.entry.endTime }).toEqual(preview.range);
+    }
   });
 });
