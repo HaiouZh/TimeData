@@ -133,6 +133,9 @@ export async function punchFromHotkey(
  * 用对象引用而不是 `entryId` / `pressedAtMs` 这类字段值：确认卡重试时新卡的 `pressedAtMs`
  * 与旧卡**相同**（同一次按键），拿字段比对会把「双击记录」放行——第二下按新卡（更长的
  * 已批准长度）落笔，正是 T5 那个 Critical 的失败形态。引用相等恰好等于「还是你看的那张」。
+ *
+ * 提示条是唯一的例外（见 `dismissNotice`）：它只有 `message` 一个字段，文案相同的两条
+ * 在屏幕上完全无从分辨，引用比对在那里会退化成「点了没反应」。
  */
 function stillOnScreen<T>(current: T | null, expected: T | null): boolean {
   return current === expected;
@@ -176,9 +179,23 @@ export function dismissUndo(prev: BridgeState, expected: UndoPending | null): Br
   return { ...prev, undo: null };
 }
 
-/** 提示条上点「✕」：同上。 */
+/**
+ * 提示条上点「✕」：同上，但身份**按文案比**，不按对象引用。
+ *
+ * 提示条只有 `message` 一个字段，屏幕上长什么样完全由它决定——文案相同的两条对用户就是同一条。
+ * 而三个生产者（`noRange` / `missingCategory` / 队列 `catch`）每次都现造 `{ message }`：
+ * 用户点 ✕ 的同一瞬间队列里还有一次打点在跑、也走 `noRange` 时，状态里换上的是一个文案
+ * 一模一样的**新对象**，引用比对为 false → 原样返回 → 屏幕上文字前后一个字不差，
+ * 用户只看到「点了没反应」。
+ *
+ * 另三处保持引用比对是对的：它们身份一变文案必变（撤销条换记录、确认卡换区间），
+ * 用户看得出屏幕上换了一条，「✕ 没关掉」在那里是有信息的结果。
+ *
+ * 比对放在消费端而不是「生产者文案没变时沿用原对象」：后者要三个生产者各自记得，
+ * 漏一处就复现同一个「点了没反应」，而漏了不会红——正是这里不该靠约定的地方。
+ */
 export function dismissNotice(prev: BridgeState, expected: DesktopNoticeState | null): BridgeState {
-  if (!stillOnScreen(prev.notice, expected)) return prev;
+  if (!prev.notice || prev.notice.message !== expected?.message) return prev;
   return { ...prev, notice: null };
 }
 

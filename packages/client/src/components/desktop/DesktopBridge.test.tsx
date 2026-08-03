@@ -9,6 +9,7 @@ import {
   cancelConfirm,
   confirmPunch,
   DesktopBridge,
+  dismissNotice,
   dismissUndo,
   IDLE_BRIDGE_STATE,
   punchFromHotkey,
@@ -296,6 +297,34 @@ describe("动作带身份：排队期间状态被换掉就放弃，不动新的�
 
     expect(cancelConfirm({ ...IDLE_BRIDGE_STATE, confirm: fresh }, stale).confirm).toBe(fresh);
     expect(cancelConfirm({ ...IDLE_BRIDGE_STATE, confirm: fresh }, fresh).confirm).toBeNull();
+  });
+
+  // 提示条只有 message 一个字段，屏幕上完全由它决定。三个生产者每次都现造 { message }，
+  // 于是「文案一模一样但换了对象」是必然会发生的一种状态更替——引用比对在这里退化成
+  // 「点了 ✕ 没反应」：屏幕上文字前后一个字不差，用户不知道自己点空了。
+  it("同文案的提示条被换成新对象后，✕ 照样要能关掉（不能「点了没反应」）", async () => {
+    await configurePunchCategory();
+    await seedEntry("2026-06-15T00:00:00.000Z", "2026-06-15T04:00:00.000Z"); // 区间被盖满 → noRange
+    const { io } = makeIo();
+
+    const first = await punchFromHotkey(PRESSED_AT_MS, io, IDLE_BRIDGE_STATE);
+    const seen = first.notice; // 用户点 ✕ 时屏幕上的这一条
+    expect(seen?.message).toBe("距上次记录还没有时间");
+
+    // 他点下去的同一瞬间，队列里还有一次打点在跑，那次也走 noRange
+    const second = await punchFromHotkey(PRESSED_AT_MS, io, first);
+    expect(second.notice).not.toBe(seen); // 现造的新对象（这一条是下面那句的前提）
+    expect(second.notice?.message).toBe(seen?.message); // 而屏幕上一个字没变
+
+    expect(dismissNotice(second, seen).notice).toBeNull();
+  });
+
+  it("文案变了说明换了一条（用户看得出来），✕ 不许把新的那条顺手带走", () => {
+    const seen = { message: "距上次记录还没有时间" };
+    const fresh = { message: "请先在设置里选择打点分类" };
+
+    expect(dismissNotice({ ...IDLE_BRIDGE_STATE, notice: fresh }, seen).notice).toBe(fresh);
+    expect(dismissNotice({ ...IDLE_BRIDGE_STATE, notice: fresh }, fresh).notice).toBeNull();
   });
 
   // 身份用对象引用而不是 pressedAtMs：重试卡与原卡的 pressedAtMs **相同**（同一次按键），
