@@ -11,6 +11,7 @@
   "dirty-in-clean-bucket:components/AndroidBackButtonHandler.test.tsx",
   "dirty-in-clean-bucket:components/CircularTimeline.test.tsx",
   "dirty-in-clean-bucket:components/DateNav.test.tsx",
+  "dirty-in-clean-bucket:components/EdgeSwipeBack.test.tsx",
   "dirty-in-clean-bucket:components/EntryForm.test.tsx",
   "dirty-in-clean-bucket:components/ErrorBoundary.test.tsx",
   "dirty-in-clean-bucket:components/Icon.test.tsx",

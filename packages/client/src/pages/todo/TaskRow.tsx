@@ -309,6 +309,9 @@ export function TaskRow({
             type="button"
             ref={dragHandle.setActivatorNodeRef}
             data-testid="task-row-grab-area"
+            // 拖柄压在行左 2/5，与 iOS 左边缘返回的起手区重叠：标记让 EdgeSwipeBack 起手时沿链路
+            // 遇到它即放弃，拖任务不会被返回抢走。只标拖柄本身——标到整行会把全行都挡住手势。
+            data-edge-swipe-block=""
             aria-label={`移动 ${task.title}`}
             className="absolute inset-y-0 left-0 z-10 w-2/5 cursor-grab touch-none select-none bg-transparent p-0 active:cursor-grabbing"
             onClick={(event) => {

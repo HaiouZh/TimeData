@@ -8,6 +8,7 @@ import { AppRoutes } from "./components/app-shell/AppRoutes.tsx";
 import { DesktopSidebar } from "./components/app-shell/DesktopSidebar.tsx";
 import { KeptRouteStack } from "./components/app-shell/KeptRouteStack.tsx";
 import { MobileBottomNav } from "./components/app-shell/MobileBottomNav.tsx";
+import EdgeSwipeBack from "./components/EdgeSwipeBack.tsx";
 import { ErrorBoundary, RouteErrorFallback } from "./components/ErrorBoundary.tsx";
 import { TotpPromptDialog } from "./components/TotpPromptDialog.tsx";
 import { BottomNavProvider } from "./contexts/BottomNavContext.tsx";
@@ -44,6 +45,8 @@ export function AppShell() {
   return (
     <div className="td-safe-top td-safe-x flex h-dvh bg-page text-ink">
       <AndroidBackButtonHandler />
+      {/* 自身按平台 gate（非 iOS 连监听都不挂），故与 AndroidBackButtonHandler 一样无条件渲染。 */}
+      <EdgeSwipeBack />
       {isWideScreen && <DesktopSidebar />}
       {useKeptStack ? (
         <KeptRouteStack isWideScreen={isWideScreen} onMainScroll={onMainScroll} />
