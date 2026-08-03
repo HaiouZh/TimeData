@@ -1,5 +1,6 @@
-import { useDroppable } from "@dnd-kit/core";
+import { useDndContext, useDroppable } from "@dnd-kit/core";
 import { Folder, HandGrabbing, Sun, Tray } from "@phosphor-icons/react";
+import { useEffect, type RefObject } from "react";
 import { Icon } from "../../components/Icon.js";
 import { todoDockId, todoDockTargets, type TodoDockTarget } from "./todoDnd.js";
 
@@ -35,6 +36,8 @@ export interface TodoDragDockProps {
    * null 退路下页面层不会进入 dock 车道(右缘与左拉方向互斥、结构性够不到),坞至多停在细条态。
    */
   anchorLeftPx?: number | null;
+  /** 坞容器 ref:页面按它的**真实矩形**判 `holdDock`(坞垂直居中、高度随药丸数变,算不出来只能量)。 */
+  containerRef?: RefObject<HTMLUListElement | null>;
 }
 
 function dockTargetLabel(target: TodoDockTarget, projects: readonly TodoDockProject[]): string {
@@ -102,12 +105,24 @@ export function TodoDragDock({
   dropBlocked,
   anchorLeftPx = null,
   activeParentInHand = false,
+  containerRef,
 }: TodoDragDockProps) {
   const targets = todoDockTargets(activeContainerId ?? "", projects, activeParentInHand);
   // 空坞（手头源/父在手头）连细条都不出：细条是坞的预告,无坞则无预告。
   const state = !dragging || targets.length === 0 ? "hidden" : dockEngaged ? "engaged" : "hint";
+  const { measureDroppableContainers } = useDndContext();
+  const dockIdKey = targets.map(todoDockId).join("|");
+  useEffect(() => {
+    if (!dragging || dockIdKey === "") return;
+    // 坞按 anchorLeftPx 横向落位,而该值要到 dragStart 那一批 setState 才定;dnd-kit 只在拖起瞬间与
+    // 可碰撞集合变化时测 droppable rect(默认 frequency 是字符串 "optimized",周期重测那条 effect
+    // 直接早退),测到的是坞挪位前的矩形。药丸集合与静止态相同的来源(如子任务源)不会触发第二次测量,
+    // 命中区就一直停在旧位置——坞开在这、却只在别处能投中。锚点落位后主动重测一次把它对回来。
+    measureDroppableContainers(dockIdKey.split("|"));
+  }, [dragging, anchorLeftPx, dockIdKey, measureDroppableContainers]);
   return (
     <ul
+      ref={containerRef}
       data-testid="todo-drag-dock"
       data-dock-state={state}
       aria-hidden={state !== "engaged"}

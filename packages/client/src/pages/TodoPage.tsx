@@ -106,7 +106,6 @@ import {
   resolveTodoDragLane,
   resolveTodoDragWithIndent,
   TODO_DOCK_HOLD_BUFFER_PX,
-  TODO_DOCK_WIDTH_PX,
   type TodoContainer,
   type TodoDragLane,
   type TodoIndentLevel,
@@ -179,9 +178,11 @@ export function TodoPage() {
   const indentBaseRef = useRef<TodoIndentLevel>("root");
   // 键盘拖拽标记：键盘 sensor 的跨栏移动会产生很大 delta.x,不标记会被车道判定误认成左拉出坞。
   const keyboardDragRef = useRef(false);
-  // 拖起时的指针视口 x。车道判定吃的是位移(相对起手点),而坞画在绝对位置——要判"指针是不是在坞上"
+  // 拖起时的指针视口坐标。车道判定吃的是位移(相对起手点),而坞画在绝对位置——要判"指针是不是在坞上"
   // 就得把两者换算到同一坐标系,起点即这一份。量不到(键盘/异常路径)记 null,holdDock 恒 false。
-  const dragStartClientXRef = useRef<number | null>(null);
+  const dragStartPointRef = useRef<{ x: number; y: number } | null>(null);
+  // 坞容器,用来取它的真实矩形:坞垂直居中、高度随药丸数量变,横向带宽算得出、纵向范围只能量。
+  const dockElRef = useRef<HTMLUListElement | null>(null);
   // dock 车道离散 state：只在越档时变化(setState 同值跳过渲染),驱动坞的细条↔完整形态。
   const [dockEngaged, setDockEngaged] = useState(false);
   const [indentTargetId, setIndentTargetId] = useState<string | null>(null);
@@ -686,25 +687,32 @@ export function TodoPage() {
     setDockAnchorLeftPx(sourceSection ? Math.round(sourceSection.getBoundingClientRect().left) : null);
     // PointerEvent 是 MouseEvent 的子类,故一条 instanceof 同时兜住鼠标与指针事件;触摸取首指。
     const activatorEvent = event.activatorEvent;
-    dragStartClientXRef.current =
+    const touch =
+      typeof TouchEvent !== "undefined" && activatorEvent instanceof TouchEvent ? activatorEvent.touches[0] : null;
+    dragStartPointRef.current =
       activatorEvent instanceof MouseEvent
-        ? activatorEvent.clientX
-        : typeof TouchEvent !== "undefined" && activatorEvent instanceof TouchEvent
-          ? (activatorEvent.touches[0]?.clientX ?? null)
+        ? { x: activatorEvent.clientX, y: activatorEvent.clientY }
+        : touch
+          ? { x: touch.clientX, y: touch.clientY }
           : null;
   }
 
   function handleDragMove(event: DragMoveEvent): void {
-    // 指针当前视口 x = 起手 x + 位移。坞占 [anchor, anchor+176]，右缘再留一条缓冲带防贴边抖动:
-    // 指针落在这一带内就锁住 dock 档(holdDock)，否则起手点离栏左缘太近时,指针一进坞就先触发释放,
-    // 坞会在够到药丸之前自己关掉(位移坐标系与绝对坐标系的错配,见 resolveTodoDragLane 注释)。
-    const startX = dragStartClientXRef.current;
-    const pointerX = startX === null ? null : startX + event.delta.x;
+    // 指针当前视口坐标 = 起手点 + 位移。落在坞的真实矩形(四周各留一条缓冲带防贴边抖动)内就锁住
+    // dock 档(holdDock),否则起手点离栏左缘太近时,指针一进坞就先触发释放、坞在够到药丸前自己关掉
+    //(位移坐标系与绝对坐标系的错配,见 resolveTodoDragLane 注释)。
+    // **两轴都要判**:坞垂直居中且只有药丸那么高,只判 x 会让整条纵向带都算"在坞上"——起手点几乎
+    // 总在坞的横向带内(拖柄贴着区块左缘),那样一旦进档就再也释放不掉,右移回去坞也不关。
+    const startPoint = dragStartPointRef.current;
+    const dockRect = dockElRef.current?.getBoundingClientRect() ?? null;
     const holdDock =
-      pointerX !== null &&
+      startPoint !== null &&
+      dockRect !== null &&
       dockAnchorLeftPx !== null &&
-      pointerX >= dockAnchorLeftPx &&
-      pointerX <= dockAnchorLeftPx + TODO_DOCK_WIDTH_PX + TODO_DOCK_HOLD_BUFFER_PX;
+      startPoint.x + event.delta.x >= dockRect.left - TODO_DOCK_HOLD_BUFFER_PX &&
+      startPoint.x + event.delta.x <= dockRect.right + TODO_DOCK_HOLD_BUFFER_PX &&
+      startPoint.y + event.delta.y >= dockRect.top - TODO_DOCK_HOLD_BUFFER_PX &&
+      startPoint.y + event.delta.y <= dockRect.bottom + TODO_DOCK_HOLD_BUFFER_PX;
     const lane = resolveTodoDragLane(
       event.delta.x,
       laneRef.current,
@@ -1404,6 +1412,7 @@ export function TodoPage() {
             dropBlocked={dragDropBlocked}
             anchorLeftPx={dockAnchorLeftPx}
             activeParentInHand={dragCandidateParentInHand}
+            containerRef={dockElRef}
           />
         )}
 

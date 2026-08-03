@@ -34,9 +34,7 @@ export function resolveIndentLevel(
 /** 拖拽横向车道：在缩进两档（root/child）左侧再加一档 dock（投递坞现身并接投递）。 */
 export type TodoDragLane = TodoIndentLevel | "dock";
 
-/** 坞容器宽度（`w-44`）。`holdDock` 的几何判定要用它，故与样式同源登记在此。 */
-export const TODO_DOCK_WIDTH_PX = 176;
-/** 坞右缘外的保持缓冲：指针在此带内仍算"在坞上"，避免贴边抖动把坞抖没。 */
+/** 坞矩形外的保持缓冲：指针在四周这一带内仍算"在坞上"，避免贴边抖动把坞抖没。 */
 export const TODO_DOCK_HOLD_BUFFER_PX = 16;
 
 /**
@@ -49,8 +47,8 @@ export const TODO_DOCK_HOLD_BUFFER_PX = 16;
  *   不判 sensor 会把键盘重排误判成出坞/换档；恒基线等价于"视作 deltaX=0"。
  * - `holdDock=true` 短路释放：**释放线是相对起手点的位移，而坞画在绝对位置**（来源栏左缘），
  *   两者是两个坐标系。起手点距该左缘近于释放距离时，指针一进坞矩形就已满足释放条件——
- *   坞会在指针够到药丸前自己关掉，坞开着却一个也投不中。调用方按"指针是否落在坞矩形
- *  （含右缘缓冲）内"算出 `holdDock`，把"坞开着时指针在坞内永不释放"补成硬保证。
+ *   坞会在指针够到药丸前自己关掉，坞开着却一个也投不中。调用方按"指针是否落在坞的真实矩形
+ *  （四周含缓冲）内"算出 `holdDock`，把"坞开着时指针在坞内永不释放"补成硬保证。
  *   它只短路释放、不短路进档：否则指针恰好扫过坞矩形就会凭空开坞。
  */
 export function resolveTodoDragLane(
