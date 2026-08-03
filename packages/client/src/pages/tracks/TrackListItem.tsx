@@ -2,19 +2,13 @@ import type { Track, TrackStep } from "@timedata/shared";
 import { useState } from "react";
 import { Link } from "react-router";
 import { formatRelativeTime } from "../../lib/time.js";
+import { BADGE_TONE_CLASSES, type TrackBadgeTone } from "../../lib/trackBadgeTone.js";
 import { lastActivityAt, latestStep, stepSourceText, type TrackBoardSignal } from "../../lib/tracksView.js";
 import { StepComposer, type StepDraft } from "./StepComposer.js";
 
 const STATUS_DOT: Record<string, string> = { active: "bg-accent", concluded: "bg-ink-3", parked: "bg-ink-3" };
 
-export type TrackBadgeTone = "warn" | "agent" | "default";
-
-// agent 在跑使用 Track scoped 信号 tone，其余调度组复用现有状态或动作语义。
-const BADGE_TONE_CLASSES: Record<TrackBadgeTone, string> = {
-  warn: "border-warn/40 bg-warn/10 text-warn",
-  agent: "border-track-agent/40 bg-track-agent/10 text-track-agent",
-  default: "border-accent/30 bg-accent-soft text-accent",
-};
+export type { TrackBadgeTone } from "../../lib/trackBadgeTone.js";
 
 export interface TrackListItemProps {
   track: Track;
