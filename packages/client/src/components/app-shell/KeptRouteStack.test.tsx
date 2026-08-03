@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { createElement, useState } from "react";
-import { type Location, MemoryRouter, useNavigate } from "react-router";
+import { type Location, MemoryRouter, NavigationType, useNavigate } from "react-router";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { click, renderDom, unmount } from "../../test/domHarness.js";
 
@@ -31,7 +31,7 @@ vi.mock("./MobileBottomNav.tsx", () => ({
   MobileBottomNav: () => createElement("nav", { "data-bottom-nav": "" }),
 }));
 
-import { KeptRouteStack, nextStack } from "./KeptRouteStack.tsx";
+import { type KeptLayer, KeptRouteStack, nextStack } from "./KeptRouteStack.tsx";
 
 /** 三个按钮各跳一处，用 domHarness 的 click（已包 act）逐次推进。 */
 function Nav() {
@@ -53,8 +53,49 @@ function Nav() {
   );
 }
 
-function loc(pathname: string, key: string): Location {
-  return { pathname, search: "", hash: "", state: null, key };
+/**
+ * 日记页切日期 / 搜索页改筛选那一类导航：只换 search、走 `{ replace: true }`。
+ * 仓库里 iOS 会走到的 replace 导航有十余处（DiaryPage、SearchPage、DiaryReviewPage、EntryPage…），
+ * 是高频日常操作，故按真实用法建桩。
+ */
+function ReplaceNav() {
+  const navigate = useNavigate();
+  return createElement(
+    "div",
+    null,
+    createElement("button", { type: "button", "data-testid": "to-diary", onClick: () => navigate("/diary") }),
+    createElement("button", {
+      type: "button",
+      "data-testid": "diary-date",
+      onClick: () => navigate("/diary?date=2026-01-02", { replace: true }),
+    }),
+    createElement("button", {
+      type: "button",
+      "data-testid": "diary-date2",
+      onClick: () => navigate("/diary?date=2026-01-03", { replace: true }),
+    }),
+    createElement("button", { type: "button", "data-testid": "replace-back", onClick: () => navigate(-1) }),
+  );
+}
+
+async function renderReplaceCase() {
+  return renderDom(
+    createElement(
+      MemoryRouter,
+      { initialEntries: ["/"] },
+      createElement(KeptRouteStack, {}),
+      createElement(ReplaceNav, null),
+    ),
+  );
+}
+
+function loc(pathname: string, key: string, search = ""): Location {
+  return { pathname, search, hash: "", state: null, key };
+}
+
+/** 栈元素：React 身份（key）与渲染用的 location 是两件事，REPLACE 时只换后者。 */
+function layer(pathname: string, key: string, search = ""): KeptLayer {
+  return { key, location: loc(pathname, key, search) };
 }
 
 beforeEach(() => {
@@ -65,27 +106,163 @@ beforeEach(() => {
 
 describe("nextStack", () => {
   it("同一条历史不重复入栈", () => {
-    const a = loc("/todo", "k1");
+    const a = layer("/todo", "k1");
     const prev = [a];
-    expect(nextStack(prev, loc("/todo", "k1"))).toBe(prev);
+    expect(nextStack(prev, loc("/todo", "k1"), NavigationType.Push)).toBe(prev);
   });
 
   it("超过两层时从头部丢，剩余顺序不变", () => {
-    const a = loc("/todo", "k1");
-    const b = loc("/settings/data", "k2");
+    const a = layer("/todo", "k1");
+    const b = layer("/settings/data", "k2");
     const c = loc("/settings/categories/c1", "k3");
-    const result = nextStack([a, b], c);
+    const result = nextStack([a, b], c, NavigationType.Push);
     expect(result).toHaveLength(2);
     expect(result[0]).toBe(b);
-    expect(result[1]).toBe(c);
+    expect(result[1].location).toBe(c);
   });
 
   it("回到栈里已有的 key 时截断到那一层（复用而非新建）", () => {
-    const a = loc("/todo", "k1");
-    const b = loc("/settings/data", "k2");
-    const result = nextStack([a, b], loc("/todo", "k1"));
+    const a = layer("/todo", "k1");
+    const b = layer("/settings/data", "k2");
+    const result = nextStack([a, b], loc("/todo", "k1"), NavigationType.Pop);
     expect(result).toHaveLength(1);
     expect(result[0]).toBe(a);
+  });
+});
+
+// react-router 的 replace 导航会**生成新的 location.key**，却**不新增历史条目**（换掉当前那条）。
+// 只看 key 就分不清它与 push：会把同一页的新旧两份都塞进栈——当前页重挂、上一页被挤出去，
+// 而 navigate(-1) 落到的却是更早那条历史（露出 A、松手到 B）。故 nextStack 必须吃 navigationType。
+describe("nextStack REPLACE", () => {
+  it("REPLACE 只换渲染用的 location，栈尾的 React key 原样不动", () => {
+    const a = layer("/", "k1");
+    const b = layer("/diary", "k2");
+    const replaced = loc("/diary", "k3", "?date=2026-01-02");
+
+    const result = nextStack([a, b], replaced, NavigationType.Replace);
+
+    expect(result).toHaveLength(2);
+    // 身份不变是这条修复的核心：换了 React key 就等于告诉 React「这是新页面」，整棵树重挂，
+    // 滚动位置与组件 state 全丢——而切日期/改筛选是高频日常操作。
+    expect(result[1].key).toBe("k2");
+    // 但渲染的必须是新地址，否则页面停在旧日期上。
+    expect(result[1].location).toBe(replaced);
+  });
+
+  it("REPLACE 不把上一层挤出栈", () => {
+    const a = layer("/", "k1");
+    const b = layer("/diary", "k2");
+
+    const result = nextStack([a, b], loc("/diary", "k3", "?date=2026-01-02"), NavigationType.Replace);
+
+    expect(result).toHaveLength(2);
+    // 第 0 层还得是 /：replace 不新增历史条目，navigate(-1) 落点仍是 /，
+    // 保留层与落点必须是同一页，否则手势会露出 A 却落到 B。
+    expect(result[0]).toBe(a);
+    expect(result[0].location.pathname).toBe("/");
+  });
+
+  it("连续 REPLACE 仍沿用最初进入该页时的 React key", () => {
+    const a = layer("/", "k1");
+    const b = layer("/diary", "k2");
+
+    const once = nextStack([a, b], loc("/diary", "k3", "?date=2026-01-02"), NavigationType.Replace);
+    const twice = nextStack(once, loc("/diary", "k4", "?date=2026-01-03"), NavigationType.Replace);
+
+    expect(twice).toHaveLength(2);
+    expect(twice[1].key).toBe("k2");
+    expect(twice[1].location.search).toBe("?date=2026-01-03");
+  });
+
+  it("栈为空时 REPLACE 退化为入栈", () => {
+    const l = loc("/diary", "k1");
+    expect(nextStack([], l, NavigationType.Replace)).toEqual([{ key: "k1", location: l }]);
+  });
+
+  it("REPLACE 过的那层，之后回退时按 location.key 找得回来（不是按 React key）", () => {
+    // REPLACE 之后该层的 React key 与其 location.key 已经不同：查栈只能按 location.key（历史条目身份）。
+    // 按 React key 查会找不到、当成新页 append——回来的那页被重挂，栈序还倒过来了。
+    const a = layer("/", "k1");
+    const b = layer("/diary", "k2");
+    const replaced = loc("/diary", "k3", "?date=2026-01-02");
+    const afterReplace = nextStack([a, b], replaced, NavigationType.Replace);
+    const afterPush = nextStack(afterReplace, loc("/settings/data", "k4"), NavigationType.Push);
+
+    const afterBack = nextStack(afterPush, replaced, NavigationType.Pop);
+
+    expect(afterBack).toHaveLength(1);
+    expect(afterBack[0].key).toBe("k2");
+    expect(afterBack[0].location).toBe(replaced);
+  });
+
+  it("同一个 key 撞上不同地址时，栈尾仍是当前 location（不变式 1 兜底）", () => {
+    // 探针实测的反例：两条 location 共用一个 key（history.state 丢 key 的极端场景）时，
+    // 只比 key 会认为「已经是栈尾了」而原样返回——当前页根本不在栈里，渲染的是上一页的内容。
+    const a = layer("/a", "default");
+    const b = loc("/b", "default");
+
+    const result = nextStack([a], b, NavigationType.Push);
+
+    expect(result[result.length - 1].location).toBe(b);
+    expect(result[result.length - 1].key).toBe("default");
+  });
+});
+
+describe("nextStack 不变式 fuzz", () => {
+  it("随机 push/pop/replace 序列下：当前 location 恒为栈尾、React key 不重复、栈长不超 2、幂等", () => {
+    // 固定种子的线性同余，跑得快又可复现；失败时 violations 里带着现场。
+    let seed = 12345;
+    const rnd = () => {
+      seed = (seed * 1103515245 + 12345) & 0x7fffffff;
+      return seed / 0x7fffffff;
+    };
+    const paths = ["/", "/diary", "/todo", "/settings/data", "/settings/categories/c1"];
+    const violations: string[] = [];
+
+    for (let trial = 0; trial < 500; trial += 1) {
+      // 模拟真实浏览器历史：entries 是历史栈，idx 是当前位置。push 截断前向条目、
+      // replace 就地换掉 entries[idx]（不移动 idx）、pop 只挪 idx。
+      let history: Location[] = [loc("/", "default")];
+      let idx = 0;
+      let keyN = 0;
+      let stack: KeptLayer[] = [{ key: history[0].key, location: history[0] }];
+      let navigationType: NavigationType = NavigationType.Pop;
+
+      for (let step = 0; step < 12; step += 1) {
+        const r = rnd();
+        if (r < 0.45) {
+          const l = loc(paths[Math.floor(rnd() * paths.length)], `k${keyN++}`);
+          history = [...history.slice(0, idx + 1), l];
+          idx = history.length - 1;
+          navigationType = NavigationType.Push;
+        } else if (r < 0.7 && idx > 0) {
+          idx -= 1;
+          navigationType = NavigationType.Pop;
+        } else if (r < 0.85) {
+          const l = loc(paths[Math.floor(rnd() * paths.length)], `k${keyN++}`);
+          history = [...history.slice(0, idx), l, ...history.slice(idx + 1)];
+          navigationType = NavigationType.Replace;
+        } else if (idx < history.length - 1) {
+          idx += 1;
+          navigationType = NavigationType.Pop;
+        }
+        // 落到最后一支且没得前进时，location 与 navigationType 都不变——正好顺带压一遍
+        // 「同一条 location 再算一次不该动栈」（组件在渲染期同步纠正，不幂等就是无限渲染）。
+
+        const cur = history[idx];
+        stack = nextStack(stack, cur, navigationType);
+        const where = `trial=${trial} step=${step} type=${navigationType}`;
+        const keys = stack.map((l) => l.key);
+        if (new Set(keys).size !== keys.length) violations.push(`重复 React key ${JSON.stringify(keys)} @${where}`);
+        if (stack[stack.length - 1]?.location?.key !== cur.key) {
+          violations.push(`当前 location 不在栈尾 stack=${JSON.stringify(keys)} cur=${cur.key} @${where}`);
+        }
+        if (stack.length > 2) violations.push(`栈长 ${stack.length} 超限 @${where}`);
+        if (nextStack(stack, cur, navigationType) !== stack) violations.push(`不幂等 @${where}`);
+      }
+    }
+
+    expect(violations.slice(0, 5)).toEqual([]);
   });
 });
 
@@ -164,6 +341,44 @@ describe("KeptRouteStack", () => {
     expect(mountCounts["/todo"]).toBe(1);
     const active = host.querySelector('[data-kept-layer="active"]') as HTMLElement;
     expect(active.querySelector('[data-page="/todo"]')).not.toBeNull();
+    await unmount(root);
+  });
+
+  it("切日期（replace）不把当前页重新挂载", async () => {
+    const { host, root } = await renderReplaceCase();
+    await click(host.querySelector('[data-testid="to-diary"]'));
+    expect(mountCounts["/diary"]).toBe(1);
+
+    await click(host.querySelector('[data-testid="diary-date"]'));
+    await click(host.querySelector('[data-testid="diary-date2"]'));
+
+    // 本方案的全部价值就是「页面不卸载、滚动位置与 state 不丢」。replace 换的是同一条历史条目，
+    // 页面必须原地接着活——涨到 2 就说明每切一次日期都把整页重挂一遍，比不做这套机制还糟。
+    expect(mountCounts["/diary"]).toBe(1);
+    const active = host.querySelector('[data-kept-layer="active"]') as HTMLElement;
+    // 且渲染的确实是新地址那一版（沿用 key 不等于沿用内容）。
+    expect(active.querySelector('[data-page="/diary"]')).not.toBeNull();
+    await unmount(root);
+  });
+
+  it("切日期（replace）不把上一页挤出栈，返回仍落回上一页", async () => {
+    const { host, root } = await renderReplaceCase();
+    await click(host.querySelector('[data-testid="to-diary"]'));
+    await click(host.querySelector('[data-testid="diary-date"]'));
+
+    expect(host.querySelectorAll("[data-kept-layer]")).toHaveLength(2);
+    const kept = host.querySelector('[data-kept-layer="kept"]') as HTMLElement;
+    // replace 不新增历史条目，保留层必须还是 /；变成「同一页的旧副本」时手势会露出 A、松手落到 B。
+    expect(kept.querySelector('[data-page="/"]')).not.toBeNull();
+    expect(kept.querySelector('[data-page="/diary"]')).toBeNull();
+
+    await click(host.querySelector('[data-testid="replace-back"]'));
+
+    // navigate(-1) 的真实落点是 /：保留层与落点必须是同一页，这正是手势松手后要接住的那一层。
+    expect(host.querySelectorAll("[data-kept-layer]")).toHaveLength(1);
+    const active = host.querySelector('[data-kept-layer="active"]') as HTMLElement;
+    expect(active.querySelector('[data-page="/"]')).not.toBeNull();
+    expect(mountCounts["/"]).toBe(1);
     await unmount(root);
   });
 
