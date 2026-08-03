@@ -58,6 +58,9 @@ pub fn parse_config(text: &str) -> DesktopConfig {
     let punch_confirm_hours = raw
         .get("punchConfirmHours")
         .and_then(|v| v.as_f64())
+        // is_finite 是防御性守卫，当前不可达：serde_json 在解析阶段就拒收 1e999 这类
+        // 溢出字面量，JSON Number 里装不下 NaN/Infinity。留着只为上游行为变化时兜底，
+        // 没有测试背书（测试只覆盖 > 0.0 这半边）。
         .filter(|h| h.is_finite() && *h > 0.0)
         .unwrap_or(DEFAULT_PUNCH_CONFIRM_HOURS);
     let hotkeys = raw
@@ -78,6 +81,11 @@ pub fn parse_config(text: &str) -> DesktopConfig {
 }
 
 pub fn serialize_config(config: &DesktopConfig) -> String {
+    // "{}" 兜底当前不可达：DesktopConfig 没有非字符串键的 map，f64 也不会让序列化报错
+    // （serde_json 对非有限数写 null 而非出错，何况上游已把阈值校验成有限正数）。
+    // 不改成 expect 是因为生产壳里 panic 更糟；但要警惕：若某天真走到这里，"{}" 会经
+    // save_config 落盘成一份空配置并返回 Ok——静默清掉用户全部设置。届时应改为让
+    // save_config 返回 Err，而不是把空文件当成功写下去。
     serde_json::to_string_pretty(config).unwrap_or_else(|_| "{}".to_owned())
 }
 
@@ -96,11 +104,17 @@ pub fn load_config(app: &AppHandle) -> DesktopConfig {
 }
 
 pub fn save_config(app: &AppHandle, config: &DesktopConfig) -> Result<(), String> {
-    let path = config_path(app).ok_or_else(|| "无法取得配置目录".to_owned())?;
+    let path = config_path(app).ok_or_else(|| "无法取得配置目录，配置未保存".to_owned())?;
     if let Some(dir) = path.parent() {
-        std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
+        std::fs::create_dir_all(dir).map_err(|e| format!("创建目录 {} 失败: {e}", dir.display()))?;
     }
-    std::fs::write(&path, serialize_config(config)).map_err(|e| e.to_string())
+    // 原子写：先落临时文件再 rename 覆盖（Windows 上 std::fs::rename 会替换既有文件）。
+    // 直接 fs::write 截断重写的话，崩溃/断电落在写中途会留下半截 JSON——下次启动
+    // parse_config 整体回默认，自启意图等设置全被静默清掉。
+    let tmp = path.with_extension("json.tmp");
+    std::fs::write(&tmp, serialize_config(config))
+        .map_err(|e| format!("写入临时文件 {} 失败: {e}", tmp.display()))?;
+    std::fs::rename(&tmp, &path).map_err(|e| format!("替换配置文件 {} 失败: {e}", path.display()))
 }
 
 #[cfg(test)]
@@ -129,7 +143,11 @@ mod tests {
     #[test]
     fn broken_json_falls_back_to_default() {
         let config = parse_config("{ not json");
-        assert_eq!(config, DesktopConfig::default());
+        // 逐字段断言而非与 Default::default() 比——那是自引用比较，Default 怎么改都恒等。
+        // 4.0 用字面量不用常量：这条同时把默认阈值的契约值钉死。
+        assert!(!config.autostart_disabled);
+        assert_eq!(config.punch_confirm_hours, 4.0);
+        assert!(config.hotkeys.is_empty());
     }
 
     #[test]
@@ -137,6 +155,24 @@ mod tests {
         let config = parse_config("{}");
         assert!(!config.autostart_disabled);
         assert_eq!(config.punch_confirm_hours, DEFAULT_PUNCH_CONFIRM_HOURS);
+        assert!(config.hotkeys.is_empty());
+    }
+
+    #[test]
+    fn explicit_autostart_false_parses_as_false() {
+        // 挡「字段在场即 true」的错误实现——真值两端都要有断言（true 端在 parse_normal_config）。
+        assert!(!parse_config(r#"{"autostartDisabled": false}"#).autostart_disabled);
+    }
+
+    #[test]
+    fn non_bool_autostart_values_fall_back_to_false() {
+        assert!(!parse_config(r#"{"autostartDisabled": "true"}"#).autostart_disabled);
+        assert!(!parse_config(r#"{"autostartDisabled": 1}"#).autostart_disabled);
+    }
+
+    #[test]
+    fn non_array_hotkeys_parses_to_empty_list() {
+        let config = parse_config(r#"{"hotkeys": {}}"#);
         assert!(config.hotkeys.is_empty());
     }
 
