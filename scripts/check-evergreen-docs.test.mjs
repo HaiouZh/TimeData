@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 import {
   CliUsageError,
   EVERGREEN_RULES_SUMMARY,
+  classifySizeWarning,
   countSubDocs,
   diffSizeBaseline,
   evaluateDocSync,
@@ -389,4 +390,24 @@ test("countSubDocs never counts the doc itself, even when the path has no .md su
     { filePath: "docs/evergreen/todo/at-hand.md" },
   ];
   assert.equal(countSubDocs("docs/evergreen/todo", docs), 1);
+});
+
+const CAPS = { softChars: 15000, warnChars: 20000, criticalChars: 23000, hardChars: 25000 };
+
+test("classifySizeWarning returns null below soft cap and at the boundary", () => {
+  assert.equal(classifySizeWarning(14999, CAPS), null);
+  assert.equal(classifySizeWarning(15000, CAPS), null);
+});
+
+test("classifySizeWarning escalates across the three bands", () => {
+  assert.equal(classifySizeWarning(15001, CAPS), "notice");
+  assert.equal(classifySizeWarning(20000, CAPS), "notice");
+  assert.equal(classifySizeWarning(20001, CAPS), "warning");
+  assert.equal(classifySizeWarning(23000, CAPS), "warning");
+  assert.equal(classifySizeWarning(23001, CAPS), "critical");
+  assert.equal(classifySizeWarning(25000, CAPS), "critical");
+});
+
+test("classifySizeWarning returns null past hard cap (too-long violation handles it)", () => {
+  assert.equal(classifySizeWarning(25001, CAPS), null);
 });

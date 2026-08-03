@@ -12,7 +12,9 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const EVERGREEN_DIRS = ["docs/evergreen", "docs/adr"];
 const STALE_DAYS = 180;
-const SIZE_CAPS = { softChars: 15000, hardChars: 25000 };
+// 四档阈值：softChars 起软提示，warnChars / criticalChars 逐级加重措辞，hardChars 硬报错。
+// 分级是为了破提示疲劳——长期驻留区间的文档若每次都印同一句，警告等于不存在。
+const SIZE_CAPS = { softChars: 15000, warnChars: 20000, criticalChars: 23000, hardChars: 25000 };
 const SIZE_BASELINE_PATH = "scripts/evergreen-size-baseline.json";
 // 覆盖率检查：这些源根下的新增文件必须被某份 evergreen 文档的 covers 认领。
 const COVERAGE_ROOTS = [
@@ -509,6 +511,17 @@ export function countSubDocs(docPath, allDocs) {
   return allDocs.filter((d) => d.filePath !== docPath && d.filePath.startsWith(dir)).length;
 }
 
+/**
+ * 软提示分级。超 hard cap 的返回 null——那由 too-long 违规硬报错处理，不再叠加软提示。
+ */
+export function classifySizeWarning(chars, caps) {
+  if (chars > caps.hardChars) return null;
+  if (chars > caps.criticalChars) return "critical";
+  if (chars > caps.warnChars) return "warning";
+  if (chars > caps.softChars) return "notice";
+  return null;
+}
+
 function formatSizeViolationKind(kind) {
   switch (kind) {
     case "too-long":
@@ -533,13 +546,22 @@ function modeSize(docs) {
   }
   const res = evaluateSizes(docs, baseline, SIZE_CAPS);
   // soft cap 软提示：接近上限先预警，不失败——给「快到该拆了」一个提前量。
-  const approaching = docs
+  const BAND_HINT = {
+    notice: "过 soft cap，留意是否该拆子文档",
+    warning: "余量不足 5k，规划下一份子文档的切法",
+    critical: "余量不足 2k，下次实质补充就会撞线——现在拆比撞线时拆从容",
+  };
+  const banded = docs
     .filter(isEvergreenDoc)
-    .filter((d) => d.chars > SIZE_CAPS.softChars && d.chars <= SIZE_CAPS.hardChars)
-    .sort((a, b) => b.chars - a.chars);
-  if (approaching.length > 0) {
-    console.log(`ℹ️ 以下文档已过 soft cap（${SIZE_CAPS.softChars} 字符），逼近 hard cap（${SIZE_CAPS.hardChars}），留意是否该拆子文档：`);
-    for (const d of approaching) console.log(`   ${d.filePath}（${d.chars} 字符）`);
+    .map((d) => ({ doc: d, band: classifySizeWarning(d.chars, SIZE_CAPS) }))
+    .filter((x) => x.band !== null)
+    .sort((a, b) => b.doc.chars - a.doc.chars);
+  if (banded.length > 0) {
+    console.log(`ℹ️ 体量提示（hard cap ${SIZE_CAPS.hardChars} 字符，判据见 docs/evergreen/_docs-guide.md §3）：`);
+    for (const { doc, band } of banded) {
+      const mark = band === "critical" ? "🔴" : band === "warning" ? "🟠" : "🟡";
+      console.log(`   ${mark} ${doc.filePath}（${doc.chars} 字符，余量 ${SIZE_CAPS.hardChars - doc.chars}）——${BAND_HINT[band]}`);
+    }
     console.log("");
   }
   if (res.violations.length === 0) {
