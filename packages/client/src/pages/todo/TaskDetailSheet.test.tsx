@@ -1,12 +1,13 @@
 // @vitest-environment jsdom
 import type { Task } from "@timedata/shared";
 import { act, createElement } from "react";
+import { MemoryRouter } from "react-router";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { SyncProvider } from "../../contexts/SyncContext.tsx";
 import { normalizeScheduledDate, placementForTask } from "../../lib/tasks/placement.js";
 import { recurrenceSummary } from "../../lib/tasks/recurrence.js";
 import { grabTaskToHand } from "../../lib/sessions.js";
-import { addTask, createChildTask, setTaskTags, toggleTaskDone } from "../../lib/tasks.js";
+import { addTask, createChildTask, setTaskTags, toggleTaskDone, updateTask } from "../../lib/tasks.js";
 import { addDays, getDateString } from "../../lib/time.js";
 import { db, resetDb } from "../../test/dbReset.js";
 import { renderDom, unmount } from "../../test/domHarness.js";
@@ -28,6 +29,22 @@ async function renderSheet(id: string | null, extraProps: Record<string, unknown
   const onClose = vi.fn();
   const { host, root } = await renderDom(
     createElement(SyncProvider, null, createElement(TaskDetailSheet, { id, onClose, ...extraProps })),
+  );
+  await act(async () => {
+    await new Promise((r) => setTimeout(r, 0));
+  });
+  return { host, root, onClose };
+}
+
+// 「升为轨道」describe 专用：抽屉挂轨道后渲染 Link，需要路由上下文；形态照 renderSheet，仅最外层多裹 MemoryRouter。
+async function renderSheetInRouter(id: string | null, extraProps: Record<string, unknown> = {}) {
+  const onClose = vi.fn();
+  const { host, root } = await renderDom(
+    createElement(
+      MemoryRouter,
+      null,
+      createElement(SyncProvider, null, createElement(TaskDetailSheet, { id, onClose, ...extraProps })),
+    ),
   );
   await act(async () => {
     await new Promise((r) => setTimeout(r, 0));
@@ -689,6 +706,53 @@ describe("TaskDetailSheet 重复规则编辑目标与锚点", () => {
     const healed = await waitForTask(occId, (t) => (t?.recurrence ?? null) === null);
     expect(healed?.recurrence ?? null).toBeNull();
     expect(healed?.ruleId).toBe("rule-gone-2");
+    await unmount(root);
+  });
+});
+
+describe("TaskDetailSheet 升为轨道", () => {
+  it("普通未完成根任务显示「升为轨道」；点击建轨道、refs 指回、按钮变「查看轨道」", async () => {
+    const t = await addTask({ title: "长跑活" });
+    const { host, root } = await renderSheetInRouter(t.id);
+    const promote = (await waitForElement(host, 'button[aria-label="升为轨道"]')) as HTMLButtonElement;
+    await act(async () => {
+      promote.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    await settle();
+    const tracks = await db.tracks.toArray();
+    expect(tracks).toHaveLength(1);
+    expect(tracks[0].title).toBe("长跑活");
+    expect(tracks[0].refs).toEqual([{ kind: "task", id: t.id, label: "长跑活" }]);
+    const view = (await waitForElement(host, 'a[aria-label="查看轨道"]')) as HTMLAnchorElement;
+    expect(view.getAttribute("href")).toBe(`/tracks/${tracks[0].id}`);
+    expect(host.querySelector('button[aria-label="升为轨道"]')).toBeNull();
+    await unmount(root);
+  });
+
+  it("重复任务不显示升格入口", async () => {
+    const t = await addTask({ title: "例行活" });
+    await updateTask(t.id, { recurrence: { freq: "daily", interval: 1, basis: "due" } });
+    const { host, root } = await renderSheetInRouter(t.id);
+    await settle();
+    expect(host.querySelector('button[aria-label="升为轨道"]')).toBeNull();
+    await unmount(root);
+  });
+
+  it("子任务不显示升格入口", async () => {
+    const parent = await addTask({ title: "爹" });
+    const child = await createChildTask(parent.id, "娃");
+    const { host, root } = await renderSheetInRouter(child.id);
+    await settle();
+    expect(host.querySelector('button[aria-label="升为轨道"]')).toBeNull();
+    await unmount(root);
+  });
+
+  it("已完成任务不显示升格入口", async () => {
+    const t = await addTask({ title: "完了" });
+    await toggleTaskDone(t.id);
+    const { host, root } = await renderSheetInRouter(t.id);
+    await settle();
+    expect(host.querySelector('button[aria-label="升为轨道"]')).toBeNull();
     await unmount(root);
   });
 });

@@ -2,6 +2,7 @@ import { HandGrabbing, Trash, X } from "@phosphor-icons/react";
 import { nextDueDate, type Recurrence, type Task } from "@timedata/shared";
 import { useLiveQuery } from "dexie-react-hooks";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { Link } from "react-router";
 import { Icon } from "../../components/Icon.js";
 import { Checkbox } from "../../components/ui/Checkbox.js";
 import { db } from "../../db/index.js";
@@ -18,7 +19,10 @@ import {
   toggleTaskDone,
   updateTask,
 } from "../../lib/tasks.js";
+import { findActiveTrackForTask } from "../../lib/taskTrackIndex.js";
+import { promoteTaskToTrack } from "../../lib/taskTrackPromote.js";
 import { getDateString } from "../../lib/time.js";
+import { listTracks } from "../../lib/tracks.js";
 import { CustomRecurrencePage } from "./CustomRecurrencePage.js";
 import { InlineChildren } from "./InlineChildren.js";
 import { RecurrencePresetSheet } from "./RecurrencePresetSheet.js";
@@ -159,6 +163,15 @@ export function TaskDetailSheet({ id, onClose, onTagsChange, onTimeChanged }: Ta
 
   const inHand = activeSession !== null && task?.sessionId === activeSession.id;
   const canGrab = task ? (task.parentId ?? null) === null && task.recurrence === null && !task.done : false;
+
+  // 已挂 active 轨道 → 入口变「查看轨道」；升格成功后 liveQuery 自动刷新到该态。
+  const linkedTrack = useLiveQuery(
+    async () => (id === null ? null : findActiveTrackForTask(await listTracks("active"), id)),
+    [id],
+    null,
+  );
+  // 可见性与 canGrab 同式：排除子任务、重复任务、已完成任务（design §四的升格边界）。
+  const canPromoteToTrack = task ? (task.parentId ?? null) === null && task.recurrence === null && !task.done : false;
 
   const handleHand = async () => {
     if (!task) return;
@@ -445,6 +458,27 @@ export function TaskDetailSheet({ id, onClose, onTagsChange, onTimeChanged }: Ta
                   <Icon icon={HandGrabbing} size={18} />
                 </button>
               )}
+              {canPromoteToTrack &&
+                (linkedTrack ? (
+                  <Link
+                    to={`/tracks/${encodeURIComponent(linkedTrack.id)}`}
+                    aria-label="查看轨道"
+                    className="flex h-11 items-center justify-center rounded-ctl px-3 td-text-label text-ink-3 hover:bg-surface-elevated hover:text-accent"
+                  >
+                    查看轨道
+                  </Link>
+                ) : (
+                  <button
+                    type="button"
+                    aria-label="升为轨道"
+                    onClick={() => {
+                      if (task) void run(() => promoteTaskToTrack(task));
+                    }}
+                    className="flex h-11 items-center justify-center rounded-ctl px-3 td-text-label text-ink-3 hover:bg-surface-elevated hover:text-accent"
+                  >
+                    升为轨道
+                  </button>
+                ))}
               <button
                 type="button"
                 aria-label="删除任务"
