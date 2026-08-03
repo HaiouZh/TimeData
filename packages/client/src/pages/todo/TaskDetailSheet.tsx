@@ -16,11 +16,10 @@ import {
   applyRecurrenceChoice,
   deleteTaskCascade,
   markOccurrenceSkipped,
-  toggleTaskDone,
   updateTask,
 } from "../../lib/tasks.js";
 import { findActiveTrackForTask } from "../../lib/taskTrackIndex.js";
-import { promoteTaskToTrack } from "../../lib/taskTrackPromote.js";
+import { promoteTaskToTrack, toggleTaskDoneWithTrackConclude } from "../../lib/taskTrackPromote.js";
 import { getDateString } from "../../lib/time.js";
 import { listTracks } from "../../lib/tracks.js";
 import { CustomRecurrencePage } from "./CustomRecurrencePage.js";
@@ -344,7 +343,7 @@ export function TaskDetailSheet({ id, onClose, onTagsChange, onTimeChanged }: Ta
                 ariaLabel={`完成 ${task.title}`}
                 checked={task.recurrence ? false : task.done}
                 onChange={() => {
-                  if (!task.recurrence || ruleCanComplete) void run(() => toggleTaskDone(task.id));
+                  if (!task.recurrence || ruleCanComplete) void run(() => toggleTaskDoneWithTrackConclude(task.id));
                 }}
                 disabled={task.recurrence !== null && !ruleCanComplete}
                 className="mt-1 shrink-0"

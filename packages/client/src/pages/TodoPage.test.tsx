@@ -14,6 +14,7 @@ import { addTask, createChildTask, deleteTaskCascade, scheduleTask, setTaskTags,
 import * as tasksLib from "../lib/tasks.js";
 import { normalizeScheduledDate } from "../lib/tasks/placement.js";
 import { setInboxCollapsed } from "../lib/tasks/workbenchPrefs.js";
+import { promoteTaskToTrack } from "../lib/taskTrackPromote.js";
 import { click, renderDom, unmount } from "../test/domHarness.js";
 import { TodoPage } from "./TodoPage.js";
 
@@ -1684,6 +1685,28 @@ describe("TodoPage", () => {
     await settle();
     expect(hasRemainingOne(zoneText(host))).toBe(true);
     expect(zoneText(host)).not.toContain("刷墙");
+    await unmount(root);
+  });
+
+  it("行内勾掉挂轨道的任务 → 轨道自动归档", async () => {
+    // beforeEach 不清 tracks/trackSteps，本用例开头自清，防上下文残留。
+    await db.tracks.clear();
+    await db.trackSteps.clear();
+    const t = await addTask({ title: "长跑活" });
+    await promoteTaskToTrack(t);
+
+    const { host, root } = await renderPage();
+    await waitForCondition(() => (host.textContent ?? "").includes("长跑活"), "挂轨道的任务行", settle);
+
+    await click(host.querySelector('input[aria-label="完成 长跑活"]'));
+    // 归档链跨多段 IDB 事务（勾选事务 → listTracks → setTrackStatus），轮询等终态。
+    let status: string | undefined;
+    for (let attempt = 0; attempt < 20; attempt++) {
+      status = (await db.tracks.toArray())[0]?.status;
+      if (status === "concluded") break;
+      await settle();
+    }
+    expect(status).toBe("concluded");
     await unmount(root);
   });
 });

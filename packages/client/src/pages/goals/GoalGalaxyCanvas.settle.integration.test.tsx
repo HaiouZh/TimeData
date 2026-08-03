@@ -8,6 +8,7 @@ import { click, renderDom, unmount } from "../../test/domHarness.js";
 const upsertGoalLayoutPinMock = vi.hoisted(() => vi.fn());
 const deleteGoalLayoutPinMock = vi.hoisted(() => vi.fn());
 const toggleTaskDoneMock = vi.hoisted(() => vi.fn());
+const toggleTaskDoneWithTrackConcludeMock = vi.hoisted(() => vi.fn());
 const removeGoalMemberMock = vi.hoisted(() => vi.fn());
 const updateGoalPrerequisitesMock = vi.hoisted(() => vi.fn());
 const addGoalMemberMock = vi.hoisted(() => vi.fn());
@@ -39,6 +40,10 @@ vi.mock("../../lib/goalLayoutPins.js", () => ({
   deleteGoalLayoutPin: deleteGoalLayoutPinMock,
 }));
 vi.mock("../../lib/tasks.js", () => ({ toggleTaskDone: toggleTaskDoneMock }));
+// 完成入口已换线勾选联动归档（taskTrackPromote）；上面 tasks.js 的 mock 保留，继续挡树内间接依赖。
+vi.mock("../../lib/taskTrackPromote.js", () => ({
+  toggleTaskDoneWithTrackConclude: toggleTaskDoneWithTrackConcludeMock,
+}));
 vi.mock("../../lib/goals.js", () => ({
   addGoalMember: addGoalMemberMock,
   addTaskForGoal: addTaskForGoalMock,

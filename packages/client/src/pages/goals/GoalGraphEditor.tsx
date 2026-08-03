@@ -38,7 +38,7 @@ import {
 import { buildGoalOverview } from "../../lib/goalsView.js";
 import { useTrackActionTags } from "../../lib/settings/trackActionTagsSetting.js";
 import { useTodoDefaultDestination } from "../../lib/settings/todoDefaultDestinationSetting.js";
-import { toggleTaskDone } from "../../lib/tasks.js";
+import { toggleTaskDoneWithTrackConclude } from "../../lib/taskTrackPromote.js";
 import { useIsCoarsePointer } from "../../lib/useIsCoarsePointer.js";
 import { useIsWideScreen } from "../../lib/useIsWideScreen.js";
 import { actionsForEdge, actionsForNode, type GoalAction, type GoalActionId } from "./goalGraphActions.js";
@@ -330,7 +330,7 @@ function GoalGraphEditorInner({ goal, tasks, tracks, steps, layoutPins, onNaviga
       return;
     }
     if (actionId === "toggle-complete" && ref?.kind === "task") {
-      await toggleTaskDone(ref.id);
+      await toggleTaskDoneWithTrackConclude(ref.id);
       return;
     }
     if (actionId === "connect") {

@@ -48,9 +48,9 @@ import {
   scheduleTask,
   setTaskTags,
   type TodoBuckets,
-  toggleTaskDone,
   unscheduleTask,
 } from "../lib/tasks.js";
+import { toggleTaskDoneWithTrackConclude } from "../lib/taskTrackPromote.js";
 import { nestTaskUnderParent, promoteTaskToHand } from "../lib/taskNesting.js";
 import { goalBarTaskIds, landsInCollapsedProjectGroup, projectChipIndex } from "../lib/tasks/projectZone.js";
 import { applyOptimisticOrder } from "../lib/tasks/reorderDisplay.js";
@@ -315,7 +315,7 @@ export function TodoPage() {
     hapticToggle();
     // 传写入后的行：勾选重复模板时 toggleTaskDone 返回的是被完成的那一发（另一条任务），
     // 落点要按它判，不能按动作前的 t 判。
-    const next = await toggleTaskDone(t.id);
+    const next = await toggleTaskDoneWithTrackConclude(t.id);
     await revealProjectHome(next);
   };
   const remove = async (t: Task) => {

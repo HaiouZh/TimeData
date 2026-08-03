@@ -9,6 +9,7 @@ import { getReactFlowMock, resetReactFlowMock, setMockNodeGeom } from "./test/re
 const upsertGoalLayoutPinMock = vi.hoisted(() => vi.fn());
 const deleteGoalLayoutPinMock = vi.hoisted(() => vi.fn());
 const toggleTaskDoneMock = vi.hoisted(() => vi.fn());
+const toggleTaskDoneWithTrackConcludeMock = vi.hoisted(() => vi.fn());
 const removeGoalMemberMock = vi.hoisted(() => vi.fn());
 const updateGoalPrerequisitesMock = vi.hoisted(() => vi.fn());
 const addGoalMemberMock = vi.hoisted(() => vi.fn());
@@ -26,6 +27,10 @@ vi.mock("../../lib/goalLayoutPins.js", () => ({
   deleteGoalLayoutPin: deleteGoalLayoutPinMock,
 }));
 vi.mock("../../lib/tasks.js", () => ({ toggleTaskDone: toggleTaskDoneMock }));
+// 完成入口已换线勾选联动归档（taskTrackPromote）；上面 tasks.js 的 mock 保留，继续挡树内间接依赖。
+vi.mock("../../lib/taskTrackPromote.js", () => ({
+  toggleTaskDoneWithTrackConclude: toggleTaskDoneWithTrackConcludeMock,
+}));
 vi.mock("../../lib/goals.js", () => ({
   addGoalMember: addGoalMemberMock,
   addTaskForGoal: addTaskForGoalMock,
@@ -189,6 +194,7 @@ describe("GoalGalaxyCanvas", () => {
     upsertGoalLayoutPinMock.mockReset().mockResolvedValue(undefined);
     deleteGoalLayoutPinMock.mockReset().mockResolvedValue(undefined);
     toggleTaskDoneMock.mockReset().mockResolvedValue(undefined);
+    toggleTaskDoneWithTrackConcludeMock.mockReset().mockResolvedValue(undefined);
     removeGoalMemberMock.mockReset().mockResolvedValue(undefined);
     updateGoalPrerequisitesMock.mockReset().mockResolvedValue(undefined);
     addGoalMemberMock.mockReset().mockResolvedValue(undefined);
@@ -1194,7 +1200,7 @@ describe("GoalGalaxyCanvas", () => {
     await click(buttonByLabel(document.body, "完成 A"));
     await flushPromises();
 
-    expect(toggleTaskDoneMock).toHaveBeenCalledWith("a");
+    expect(toggleTaskDoneWithTrackConcludeMock).toHaveBeenCalledWith("a");
     await unmount(root);
   });
 

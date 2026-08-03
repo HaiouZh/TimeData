@@ -8,6 +8,7 @@ import { normalizeScheduledDate, placementForTask } from "../../lib/tasks/placem
 import { recurrenceSummary } from "../../lib/tasks/recurrence.js";
 import { grabTaskToHand } from "../../lib/sessions.js";
 import { addTask, createChildTask, setTaskTags, toggleTaskDone, updateTask } from "../../lib/tasks.js";
+import { promoteTaskToTrack } from "../../lib/taskTrackPromote.js";
 import { addDays, getDateString } from "../../lib/time.js";
 import { db, resetDb } from "../../test/dbReset.js";
 import { renderDom, unmount } from "../../test/domHarness.js";
@@ -753,6 +754,26 @@ describe("TaskDetailSheet 升为轨道", () => {
     const { host, root } = await renderSheetInRouter(t.id);
     await settle();
     expect(host.querySelector('button[aria-label="升为轨道"]')).toBeNull();
+    await unmount(root);
+  });
+
+  it("抽屉内勾掉挂轨道的任务 → 轨道自动归档", async () => {
+    const t = await addTask({ title: "活" });
+    await promoteTaskToTrack(t);
+    const { host, root } = await renderSheetInRouter(t.id);
+    const checkbox = (await waitForElement(host, '[aria-label="完成 活"]')) as HTMLElement;
+    await act(async () => {
+      checkbox.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    await settle();
+    // 归档链跨多段 IDB 事务（勾选事务 → listTracks → setTrackStatus），单次 settle 可能抢跑，轮询等终态。
+    let status: string | undefined;
+    for (let attempt = 0; attempt < 20; attempt++) {
+      status = (await db.tracks.toArray())[0]?.status;
+      if (status === "concluded") break;
+      await settle();
+    }
+    expect(status).toBe("concluded");
     await unmount(root);
   });
 });

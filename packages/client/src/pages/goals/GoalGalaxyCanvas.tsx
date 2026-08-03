@@ -44,7 +44,7 @@ import {
 import { buildGoalOverview } from "../../lib/goalsView.js";
 import { unassignedTasks, unassignedTracks } from "../../lib/goalUnassigned.js";
 import { useTrackActionTags } from "../../lib/settings/trackActionTagsSetting.js";
-import { toggleTaskDone } from "../../lib/tasks.js";
+import { toggleTaskDoneWithTrackConclude } from "../../lib/taskTrackPromote.js";
 import { useIsCoarsePointer } from "../../lib/useIsCoarsePointer.js";
 import { useIsWideScreen } from "../../lib/useIsWideScreen.js";
 import { buildGalaxySettleInput } from "./buildGalaxySettleInput.js";
@@ -997,7 +997,7 @@ function GoalGalaxyCanvasInner({
       return;
     }
     if (action.id === "toggle-complete" && selectedGraphNode.ref?.kind === "task") {
-      void toggleTaskDone(selectedGraphNode.ref.id);
+      void toggleTaskDoneWithTrackConclude(selectedGraphNode.ref.id);
       return;
     }
     if (action.id === "connect") {
