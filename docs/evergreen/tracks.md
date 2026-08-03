@@ -7,6 +7,9 @@ covers:
   - packages/shared/src/trackBoardSignals.ts
   - packages/client/src/lib/tracks.ts
   - packages/client/src/lib/tracksView.ts
+  - packages/client/src/lib/trackBadgeTone.ts
+  - packages/client/src/lib/taskTrackIndex.ts
+  - packages/client/src/lib/taskTrackPromote.ts
   - packages/client/src/lib/settings/trackActionTagsSetting.ts
   - packages/client/src/pages/settings/SettingsTracksPage.tsx
   - packages/client/src/pages/tracks/**
@@ -16,7 +19,7 @@ covers:
 contracts:
   - packages/shared/src/trackBoardSignals.ts
   - packages/server/src/routes/agent-tracks.ts
-last-reviewed: 2026-08-01
+last-reviewed: 2026-08-03
 ---
 
 # 任务轨道
@@ -82,7 +85,7 @@ agent 续写上下文另有只读 API：`GET /api/agent/tracks/context` 返回 a
 取值/排序/格式化在 `lib/tracksView.ts` 纯函数:`partitionTracks`(active vs 归档)、
 `currentStepId`/`orderedTimeline`(当前步=语义时间最大的开口步置顶高亮;无开口步纯语义时间倒序、不高亮)、
 `trackProgressSummary`/`formatStepDuration`(历时跨天显「N天」)、`isLinkRef`(只有 http(s) 外链可点)、
-`latestBoardSignal`/`boardItemsForTracks`/`collectStatusFacetsFromItems`/`filterBoardItemsByStatusTags`(从已配置看板信号派生顶部 chip 与 OR 筛选)。列表顶部最简新建走 `addTrack`，active 轨道保持扁平列表，归档轨道折叠；详情倒序时间线显示 source、content、历时、tags、refs chip，user 步提供就地编辑/删除，正文编辑后显示“已编辑”。`RefChip` 的 `routeForRef`(kind 白名单)把内部实体 ref 渲染成应用内 `Link`：`task→/todo?taskId=`、`goal→/goals/:id`、`track→/tracks/:id`；未知 kind 保持 inert span，外链仍由 `isLinkRef` 的 http(s) 协议白名单单独放行(不放 `javascript:`/`data:`)。人手侧的 refs 反查/编辑器与「升为轨道」入口仍推迟(见 §8)。
+`latestBoardSignal`/`boardItemsForTracks`/`collectStatusFacetsFromItems`/`filterBoardItemsByStatusTags`(从已配置看板信号派生顶部 chip 与 OR 筛选)。列表顶部最简新建走 `addTrack`，active 轨道保持扁平列表，归档轨道折叠；详情倒序时间线显示 source、content、历时、tags、refs chip，user 步提供就地编辑/删除，正文编辑后显示“已编辑”。`RefChip` 的 `routeForRef`(kind 白名单)把内部实体 ref 渲染成应用内 `Link`：`task→/todo?taskId=`、`goal→/goals/:id`、`track→/tracks/:id`；未知 kind 保持 inert span，外链仍由 `isLinkRef` 的 http(s) 协议白名单单独放行(不放 `javascript:`/`data:`)。`refs` 的 task 反查已接通 todo 侧（`lib/taskTrackIndex.ts` 读侧 + `lib/taskTrackPromote.ts` 写侧复合动作，落在 `tasks.ts`/`tracks.ts` 上层——两者平级互不 import，同 [todo](todo.md) §4.1 `taskNesting.ts` 的依赖方向理由）：`buildTaskTrackIndex` 全表扫 active 轨道（`refs` 无索引）建 `Map<taskId, {track, signal, tone}>`，同任务多轨道取 `updatedAt` 最新；`promoteTaskToTrack` 幂等建轨道（标题复用、`refs` 回指任务、光板不写步，已挂 active 时返回既有）；`toggleTaskDoneWithTrackConclude` 在勾掉任务时附带 `setTrackStatus(concluded)`，**单向 best-effort**——归档失败只 warn 不回滚勾选，取消勾选不重开轨道。客户端 4 个勾选入口消费它，`InlineChildren` 子任务勾选刻意保持直调 `toggleTaskDone`（子任务不给升格入口，不付反查开销）。归档写的系统步不带标签，因此不清 `latestTrackBoardSignal`——徽章消失靠「只认 active 轨道」的反查过滤，不靠信号。refs 自由编辑器仍推迟。
 
 导航「轨道」图标带回手 badge(TK-12):`useTrackAttentionCount` 用 `useLiveQuery` 统计当前看板信号命中「待我处理」约定(=第一个配置的看板信号)的 active 轨道数;经 `TrackAttentionContext`(默认 0,Provider 挂在 `App` 默认导出、db 可用层)下发,桌面侧栏 `NavIconLink` 与移动底栏 `MobileIconLink` 用 `NavBadge` 在 `/tracks` 图标上显示计数。纯统计 `countAttentionTracks` 可单测;无 Provider(如只渲染导航的单测)读默认 0、不触 db、不显 badge。
 
@@ -114,7 +117,7 @@ agent 接力协议：派活时给 agent `trackId` 和当前看板信号词表；
 
 ## 8. 状态卡与调度台（含宽屏 master-detail）
 
-track 定位 = 每条工作流的存档点（状态卡）+ /tracks 调度台；当前帧 = 最新一步的投影（写新步=覆盖当前帧、编辑最新步=修正当前帧），零 schema 改动。/tracks 顶部统计带「等我接 N · agent 在跑 M · 停滞 K」答"此刻几条在并发"；每条 active 轨道一张状态卡（标题+最新步内容 2-3 行+信号徽章+最后动静，计时弱化不显历时/步数；卡上保留行内「写一步」composer——appendUserStep 就地追加），按调度语义分组：判定优先级=等我接（信号命中 actionTags[0]，停滞不豁免、卡上标"N 天没动静"）> 停滞（最后动静>7 天，无步轨道用 createdAt 兜底）> agent在跑（信号命中 agentExecTags）> 推进中；显示序=等我接→agent在跑→推进中→停滞（沉底弱化），组内最后动静倒序，空组不渲染。信号口径=`latestTrackBoardSignal`（最近一个带信号的步，同导航 badge / goals 候选——中途补无信号步不清除信号）。agent 在跑消费独立 Track signal tone；它不是动作色、模块署名色或 Goal 色，本文不复制具体 hex/className（见 [design-language](design-language.md) §1）。纯函数层 `packages/client/src/lib/tracksDispatch.ts`（node 快桶单测）。详情页倒置：顶部当前帧卡（最新步全文+就地编辑/删除，只显示"X 前"）→ StepComposer（写入即成为新当前帧）→ 闭合当前步（次要）→「历史 N 步」默认折叠（hash 锚点命中历史步时自动展开；折叠/中段折叠语义在 TrackTimeline 内不变）。宽屏（≥1024px）`TracksShell`：左列调度台常驻（400px、独立滚动）+ 右栏随路由（/tracks=空态提示、/tracks/:id=详情），选中卡 accent 边框；窄屏壳纯透传。并发甘特（2026-07-08~09）已整体退役：甘特回答"什么时候有动静"、适合规划未来的并发，本场景要的是"此刻横切面"，由调度台分组+统计带承接。
+track 定位 = 每条工作流的存档点（状态卡）+ /tracks 调度台；当前帧 = 最新一步的投影（写新步=覆盖当前帧、编辑最新步=修正当前帧），零 schema 改动。/tracks 顶部统计带「等我接 N · agent 在跑 M · 停滞 K」答"此刻几条在并发"；每条 active 轨道一张状态卡（标题+最新步内容 2-3 行+信号徽章+最后动静，计时弱化不显历时/步数；卡上保留行内「写一步」composer——appendUserStep 就地追加），按调度语义分组：判定优先级=等我接（信号命中 actionTags[0]，停滞不豁免、卡上标"N 天没动静"）> 停滞（最后动静>7 天，无步轨道用 createdAt 兜底）> agent在跑（信号命中 agentExecTags）> 推进中；显示序=等我接→agent在跑→推进中→停滞（沉底弱化），组内最后动静倒序，空组不渲染。信号口径=`latestTrackBoardSignal`（最近一个带信号的步，同导航 badge / goals 候选——中途补无信号步不清除信号）。agent 在跑消费独立 Track signal tone；它不是动作色、模块署名色或 Goal 色，本文不复制具体 hex/className（见 [design-language](design-language.md) §1）。纯函数层 `packages/client/src/lib/tracksDispatch.ts`（node 快桶单测）。详情页倒置：顶部当前帧卡（最新步全文+就地编辑/删除，只显示"X 前"）→ StepComposer（写入即成为新当前帧）→ 闭合当前步（次要）→「历史 N 步」默认折叠（hash 锚点命中历史步时自动展开；折叠/中段折叠语义在 TrackTimeline 内不变）。宽屏（≥1024px）`TracksShell`：左列调度台常驻（400px、独立滚动）+ 右栏随路由（/tracks=空态提示、/tracks/:id=详情），选中卡 accent 边框；窄屏壳纯透传。并发甘特（2026-07-08~09）已整体退役：甘特回答"什么时候有动静"、适合规划未来的并发，本场景要的是"此刻横切面"，由调度台分组+统计带承接。todo 行徽章与勾选联动归档消费同一信号口径与 `setTrackStatus`（入口在 todo 侧，见 [todo](todo.md)）。
 
 ## 9. 后续阶段
 
