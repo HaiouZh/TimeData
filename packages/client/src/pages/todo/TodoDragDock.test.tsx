@@ -25,7 +25,7 @@ describe("TodoDragDock", () => {
   it("拖 inbox 行:按序渲染 今天/手头/项目 药丸,无收件箱", async () => {
     const { host, root } = await renderDom(
       <DndContext>
-        <TodoDragDock dragging activeContainerId="pool:inbox" projects={projects} dropBlocked={false} />
+        <TodoDragDock dragging dockEngaged activeContainerId="pool:inbox" projects={projects} dropBlocked={false} />
       </DndContext>,
     );
     expect(pillIds(host)).toEqual(["dock:pool:today", "dock:hand", "dock:project:g1", "dock:project:g2"]);
@@ -36,7 +36,7 @@ describe("TodoDragDock", () => {
   it("dragging=false 时 aria-hidden 且透明(常驻挂载只切透明度)", async () => {
     const { host, root } = await renderDom(
       <DndContext>
-        <TodoDragDock dragging={false} activeContainerId={null} projects={projects} dropBlocked={null} />
+        <TodoDragDock dragging={false} dockEngaged={false} activeContainerId={null} projects={projects} dropBlocked={null} />
       </DndContext>,
     );
     expect(dock(host).getAttribute("aria-hidden")).toBe("true");
@@ -46,13 +46,62 @@ describe("TodoDragDock", () => {
   it("dropBlocked:项目药丸 data-drop-blocked=true,池/手头药丸不受影响", async () => {
     const { host, root } = await renderDom(
       <DndContext>
-        <TodoDragDock dragging activeContainerId="pool:today" projects={projects} dropBlocked={true} />
+        <TodoDragDock dragging dockEngaged activeContainerId="pool:today" projects={projects} dropBlocked={true} />
       </DndContext>,
     );
     const byId = (id: string) => host.querySelector(`[data-dock-id="${id}"]`);
     expect(byId("dock:project:g1")?.getAttribute("data-drop-blocked")).toBe("true");
     expect(byId("dock:hand")?.getAttribute("data-drop-blocked")).toBe("false");
     expect(byId("dock:pool:inbox")?.getAttribute("data-drop-blocked")).toBe("false");
+    await unmount(root);
+  });
+});
+
+describe("TodoDragDock 三形态", () => {
+  it("拖拽中未进 dock 档:hint 细条形态,药丸 droppable 禁用", async () => {
+    const { host, root } = await renderDom(
+      <DndContext>
+        <TodoDragDock dragging dockEngaged={false} activeContainerId="pool:inbox" projects={projects} dropBlocked={false} />
+      </DndContext>,
+    );
+    expect(dock(host).getAttribute("data-dock-state")).toBe("hint");
+    for (const el of host.querySelectorAll('[data-testid="todo-dock-pill"]')) {
+      expect(el.getAttribute("data-dock-engaged")).toBe("false");
+    }
+    await unmount(root);
+  });
+
+  it("进 dock 档:engaged 完整坞,药丸 droppable 启用", async () => {
+    const { host, root } = await renderDom(
+      <DndContext>
+        <TodoDragDock dragging dockEngaged activeContainerId="pool:inbox" projects={projects} dropBlocked={false} />
+      </DndContext>,
+    );
+    expect(dock(host).getAttribute("data-dock-state")).toBe("engaged");
+    for (const el of host.querySelectorAll('[data-testid="todo-dock-pill"]')) {
+      expect(el.getAttribute("data-dock-engaged")).toBe("true");
+    }
+    await unmount(root);
+  });
+
+  it("手头源拖拽中:空坞连细条都不出(hidden)", async () => {
+    const { host, root } = await renderDom(
+      <DndContext>
+        <TodoDragDock dragging dockEngaged={false} activeContainerId="hand" projects={projects} dropBlocked={false} />
+      </DndContext>,
+    );
+    expect(dock(host).getAttribute("data-dock-state")).toBe("hidden");
+    expect(pillIds(host)).toEqual([]);
+    await unmount(root);
+  });
+
+  it("未拖拽:hidden(常驻挂载只切透明度不变)", async () => {
+    const { host, root } = await renderDom(
+      <DndContext>
+        <TodoDragDock dragging={false} dockEngaged={false} activeContainerId={null} projects={projects} dropBlocked={null} />
+      </DndContext>,
+    );
+    expect(dock(host).getAttribute("data-dock-state")).toBe("hidden");
     await unmount(root);
   });
 });
