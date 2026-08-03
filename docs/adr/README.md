@@ -38,6 +38,7 @@ status: living
 | [0026](0026-content-tint-shared-palette-shape-distinguishes-type.md) | 项目与标签共用一组 tint token，类型区分靠形状不靠颜色 | 2026-07-30 | 用户内容身份色统一走 `--color-tint-1..9`；圆点 = 项目、`#` = 标签，颜色只管同类型内区分个体；旧 `TAG_PALETTE` 裸色退出 allowlist | data palette 部分被 [0027](0027-retire-unused-data-palette-and-scope-track-agent-tone.md) 修订 |
 | [0027](0027-retire-unused-data-palette-and-scope-track-agent-tone.md) | 退役失活 data palette，Track agent tone 归入业务作用域 | 2026-07-31 | 删除无生产消费的 data palette；“agent 在跑”保留原紫色外观并改用 Track scoped token | 修订 [0026](0026-content-tint-shared-palette-shape-distinguishes-type.md) 的 data palette 部分 |
 | [0028](0028-china-geo-from-builtin-ip2region-table.md) | 中国归属地改用内置 ip2region 段表，收敛键加中国省市档 | 2026-08-01 | GeoLite2 免费库对中国运营商段无 city 级数据是结构缺失；中国段改走随镜像发布的内置表（命中即中国、中文省市+运营商），收敛键中国走 `asn\|cn:省[:市]`，国外路径不变；另接可选 geoipupdate 自动更新 GeoLite2 | 修订 [0025](0025-new-ip-alert-scoped-by-asn-and-city.md) 的收敛键地名与数据源部分（仅中国段），其余决策仍有效 |
+| [0029](0029-desktop-shell-embeds-frontend.md) | Windows 桌面壳内嵌前端产物，不加载线上站点 | 2026-08-03 | 三条路线（加载线上/内嵌前端/内嵌服务端）功能等价，区别只在前端从服务器拉还是从磁盘读；内嵌服务端撞账本封闭契约属产品重选，加载线上会让 `AppUpdateProvider` 的 focus→hardRefresh 在热键唤起瞬间清缓存重载；取内嵌前端并吃不注册 SW 的 `mode=mobile` 产物，三壳同构 | 不改 [0011](0011-server-api-as-write-boundary.md) / [0012](0012-sync-ledger-and-domain-registry.md) 的边界 |
 
 ## 按主题速查
 
@@ -47,4 +48,4 @@ status: living
 - **数据建模**：0004（UTC）、0008（Dexie 版本链）、0010（QuickNote 域）、0014（tags vs 字段）
 - **日记编辑器**：0022（列表识别口径）、0023（跨断点重挂）
 - **设计语言**：0026（用户内容身份色共用 tint 色板 + 形状分型）→ 0027（退役 data palette + Track agent scoped tone）
-- **范围决策**：0005、0009、0024（健康子系统退役）
+- **范围决策**：0005、0009、0024（健康子系统退役）、0029（桌面壳内嵌前端）

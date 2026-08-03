@@ -26,7 +26,7 @@ last-reviewed: 2026-08-02
 # 部署 · Android APK 发布
 
 > [deployment](../deployment.md) 的 Android 发布子文档：签名 release APK workflow、release keystore、Capacitor / Gradle 版本、安全配置、APK 更新入口与移动端排错。
-> 不讲服务器镜像、自更新或 Docker 数据卷；这些仍在 [deployment](../deployment.md)。iOS 侧（未签名 IPA、CI 现场生成原生工程）见 [deployment/ios-ipa](ios-ipa.md)。
+> 不讲服务器镜像、自更新或 Docker 数据卷；这些仍在 [deployment](../deployment.md)。iOS 侧（未签名 IPA、CI 现场生成原生工程）见 [deployment/ios-ipa](ios-ipa.md)，Windows 侧（Tauri 壳、NSIS 安装包）见 [deployment/windows-desktop](windows-desktop.md)。
 
 ## 承上启下
 
@@ -46,9 +46,9 @@ last-reviewed: 2026-08-02
 | `TIMEDATA_RELEASE_KEY_ALIAS` | key alias |
 | `TIMEDATA_RELEASE_KEY_PASSWORD` | key 密码 |
 
-版本号由 `prepare` job 单点计算（`scripts/mobile-version.mjs`）：tag 为 `v` + 8 位数字，数字部分 = `yymmdd`（Asia/Shanghai）+ 两位当日序号。序号规则：**取 `v<日期>*` 与 `android-<日期>*` 两种 tag 中的最大序号 +1**——切换期两种前缀并存，只数一种会让新号退到已发布版本之下（客户端 `Number` 比较后判定「没有新版本」，所有人收不到更新）；取最大而非计数——中途删过 tag 时计数会算出已被占用的号。序号上限 99，超过直接报错退出（`printf "%02d" 100` 会吐出 9 位版本号）。**8 位是硬约束，不可涨位**：已分发 APK 的 `mobileUpdate.ts` 用 `\d{8,9}` 解析 release tag（更早的版本只认 `\d{8}`），位数一变它们就解析失败。`prepare` 同时输出 `source_ref`：新发版为 `$GITHUB_SHA`，补包模式为 `refs/tags/<tag>`；`android` / `ios` 两个 job 的 checkout 都消费它——补包用原版本源码构建，而不是运行分支 HEAD。
+版本号由 `prepare` job 单点计算（`scripts/mobile-version.mjs`）：tag 为 `v` + 8 位数字，数字部分 = `yymmdd`（Asia/Shanghai）+ 两位当日序号。序号规则：**取 `v<日期>*` 与 `android-<日期>*` 两种 tag 中的最大序号 +1**——切换期两种前缀并存，只数一种会让新号退到已发布版本之下（客户端 `Number` 比较后判定「没有新版本」，所有人收不到更新）；取最大而非计数——中途删过 tag 时计数会算出已被占用的号。序号上限 99，超过直接报错退出（`printf "%02d" 100` 会吐出 9 位版本号）。**8 位是硬约束，不可涨位**：已分发 APK 的 `mobileUpdate.ts` 用 `\d{8,9}` 解析 release tag（更早的版本只认 `\d{8}`），位数一变它们就解析失败。`prepare` 同时输出 `source_ref`：新发版为 `$GITHUB_SHA`，补包模式为 `refs/tags/<tag>`；`android` / `ios` / `windows` 三个平台 job 的 checkout 都消费它——补包用原版本源码构建，而不是运行分支 HEAD。
 
-latest 规则：`prepare` 创建 Release 时显式 `--latest=false`（`gh` 的 `--latest` 默认是 `automatic`，非 semver tag 按创建时间自动成为 latest——不显式关掉的话 prepare 一创建就把 latest 从上一个带 APK 的 Release 抢走），**`android` job 上传 APK 成功后由 `Mark release as latest` 步骤 `gh release edit --latest` 落位**——该步骤带 `if: ${{ inputs.tag == '' }}`，补包（`inputs.tag` 非空）时整个跳过，iOS 侧不碰。详见 [deployment/ios-ipa](ios-ipa.md) §4。
+latest 规则：`prepare` 创建 Release 时显式 `--latest=false`（`gh` 的 `--latest` 默认是 `automatic`，非 semver tag 按创建时间自动成为 latest——不显式关掉的话 prepare 一创建就把 latest 从上一个带 APK 的 Release 抢走），**`android` job 上传 APK 成功后由 `Mark release as latest` 步骤 `gh release edit --latest` 落位**——该步骤带 `if: ${{ inputs.tag == '' }}`，补包（`inputs.tag` 非空）时整个跳过，iOS 与 Windows 侧都不碰。详见 [deployment/ios-ipa](ios-ipa.md) §4。
 
 workflow 会先检查 `TIMEDATA_RELEASE_KEYSTORE_BASE64` 是否已配置，缺失时在 `Decode release keystore` 步骤明确失败；配置存在后把 keystore 解码到 `packages/mobile/android/timedata-release.keystore`，通过 `ORG_GRADLE_PROJECT_*` 传给 Gradle，并把同一个 versionCode 传给 Gradle 与 Vite（`TIMEDATA_ANDROID_VERSION_CODE`），然后运行 `pnpm build:mobile:release-apk`。构建步骤之后固定执行 `Cleanup release keystore`（`if: always()`），在上传 artifact 或发布 Release 前删除 workspace 内的 `packages/mobile/android/timedata-release.keystore`，即使前面的构建失败也会清理。`packages/mobile` 的 release APK 构建和 `pnpm build:mobile:release-apk` 始终保持一致，文档里的构建步骤以这个脚本为准。产物路径是：
 
@@ -56,7 +56,7 @@ workflow 会先检查 `TIMEDATA_RELEASE_KEYSTORE_BASE64` 是否已配置，缺�
 packages/mobile/android/app/build/outputs/apk/release/app-release.apk
 ```
 
-构建完成后，workflow 先上传 APK artifact，再用 `gh release` 上传到 `v<versionCode>` GitHub Release（Release 本体由 `prepare` 创建，含两个平台的装机说明），并对 GitHub Release API 的临时超时做最多 3 次重试。Release 上传失败不代表 APK 编译失败；排查时先看 `Build signed release APK` 和 `Upload release APK` 两步是否成功，再看 `Publish APK to release` 的 GitHub API 错误。
+构建完成后，workflow 先上传 APK artifact，再用 `gh release` 上传到 `v<versionCode>` GitHub Release（Release 本体由 `prepare` 创建，含三个平台的装机说明），并对 GitHub Release API 的临时超时做最多 3 次重试。Release 上传失败不代表 APK 编译失败；排查时先看 `Build signed release APK` 和 `Upload release APK` 两步是否成功，再看 `Publish APK to release` 的 GitHub API 错误。
 
 设置页的「APK 更新」拉 `GET /releases?per_page=30`（列表按创建时间倒序），取第一个 tag 能解析出 Android versionCode 且带 `.apk` 资产的 Release，发现新版本时打开它的下载链接。**仍不能改用 `/releases/latest`**：`latest` 只由带 APK 的发布步骤打，指向的 Release 必然有 `.apk`，但客户端继续扫列表是为了兼容历史遗留的 `android-*` / `ios-*` Release（`ios-*` tag 解析不出 versionCode、`android-*` 资产结构是旧的）——合并前「iOS 顶掉 latest」的成因已消失，扫列表的理由不再是躲 latest。Android 原生环境优先通过 `@capacitor/app-launcher` 把 APK 直链交给系统 URL 处理，失败时再 fallback 到 `@capacitor/browser` / Web `window.open`。Android 仍会要求用户确认安装，首次从旧 debug 签名包迁移到 release 签名包时不能覆盖安装，需要先备份数据、卸载旧包，再安装 release 包；后续 release 包之间可以覆盖安装。
 

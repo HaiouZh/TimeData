@@ -159,7 +159,7 @@ Dockerfile 构建镜像时先从根 `packageManager` 读取并安装对应 pnpm 
 
 - `ci.yml`：push / PR 的基础 CI，`pnpm/action-setup` 从根 `packageManager` 读取 pnpm 11 版本并安装依赖后，先运行 `pnpm audit --audit-level=high --prod`，生产依赖存在 high/critical advisory 时直接阻断；随后依次运行 `pnpm lint`、`pnpm -r typecheck`、`pnpm -r --parallel test`、`pnpm check:ui`、`pnpm check:design`、`pnpm check:test`、`pnpm test:scripts`、evergreen 文档一致性检查、`pnpm check:docs:size` 和 `pnpm build`，不发布产物。文档一致性检查只在 `pull_request` 事件下运行（main 的 push 不重跑，因为同样的 diff 在 PR 阶段已经查过），按发起人区分：依赖 bot（`dependabot[bot]` / `renovate[bot]`）触发的 PR 走 `pnpm check:docs`（warn，不阻塞），其余走 `pnpm check:docs:strict`。体量棘轮不依赖 PR diff，push 和 PR 都会跑，要求 `scripts/evergreen-size-baseline.json` 覆盖当前所有 evergreen 文档，且字符数 / `covers:` 不超过基线。`ci.yml` 配有 `concurrency`（按 ref 取消被顶掉的旧跑批）。
 - `build.yml`：main 分支发布镜像到 GHCR，自更新机制读取它的成功运行记录。
-- `mobile-release.yml`：一条 workflow 出 Android + iOS 两包——`prepare` 算版本号并建 `v<code>` Release，`android` job 上传签名 APK 并打 latest，`ios` job 上传未签名 IPA（不碰 latest）；`pnpm/action-setup`（v6，自身运行在 Node 24）必须先于 `actions/setup-node`，因为 setup-node v5 的 pnpm 缓存逻辑会在步骤执行时查找 `pnpm`。此 workflow 和 `ci.yml` 都从根 `packageManager` 读取 pnpm 11 版本。细节见子文档 [deployment/android-apk](deployment/android-apk.md) 与 [deployment/ios-ipa](deployment/ios-ipa.md)。
+- `mobile-release.yml`：一条 workflow 出 Android + iOS + Windows 三包——`prepare` 算版本号并建 `v<code>` Release，`android` job 上传签名 APK 并打 latest，`ios` job 上传未签名 IPA、`windows` job 上传 NSIS 安装包（两者都不碰 latest）；`pnpm/action-setup`（v6，自身运行在 Node 24）必须先于 `actions/setup-node`，因为 setup-node v5 的 pnpm 缓存逻辑会在步骤执行时查找 `pnpm`。此 workflow 和 `ci.yml` 都从根 `packageManager` 读取 pnpm 11 版本。细节见子文档 [deployment/android-apk](deployment/android-apk.md)、[deployment/ios-ipa](deployment/ios-ipa.md) 与 [deployment/windows-desktop](deployment/windows-desktop.md)。
 - `secret-scan.yml`：push main / PR 上用 gitleaks 扫全历史找泄漏的密钥；误报白名单维护在根目录 `.gitleaks.toml`（`regexTarget = "match"`）。
 
 依赖升级由 Renovate 承担（配置在根目录 `renovate.json5`，需在 GitHub 安装 Renovate App），替代原 dependabot：原生支持 `pnpm-workspace.yaml` 的 catalog，`rangeStrategy: bump` 保证 spec 与 lockfile 同步（否则 `--frozen-lockfile` 拒绝），`minimumReleaseAge: 7 days` 与 pnpm 11 供应链发布龄闸对齐；Capacitor major 被禁用，升级需人工评估。
@@ -174,6 +174,10 @@ Android 签名 release APK 的 workflow、keystore、Capacitor / Gradle 版本�
 ## 3.2 iOS 未签名 IPA
 
 iOS 原生工程不入库、由 CI 现场生成，产出未签名 IPA 供 SideStore 自签装机，细节在子文档 [deployment/ios-ipa](deployment/ios-ipa.md)。主线上只有一条：**latest 只由含 APK 的发布步骤打**——`prepare` 创建 Release 时显式 `--latest=false`，`android` 上传成功后落位；否则设置页「APK 更新」读到的最新 Release 会变成 Android 装不了的 `.ipa`。
+
+## 3.3 Windows 桌面壳
+
+Tauri 壳内嵌 client 的 `mode=mobile` 产物，产出不签名的 NSIS 安装包，细节在子文档 [deployment/windows-desktop](deployment/windows-desktop.md)。主线上只有两条：`windows` job 与 `ios` 同规矩不碰 latest；桌面壳吃的是 `mode=mobile` 产物（不注册 service worker），选型依据见 [ADR 0029](../adr/0029-desktop-shell-embeds-frontend.md)。
 
 ## 4. 版本检查（`/api/version`）
 
@@ -382,3 +386,4 @@ $env:AUTH_TOKEN='devtoken'; $env:DIARY_VAULT_DIR='D:\OneDrive\Obsidian\Time'; pn
 |---|---|
 | [deployment/android-apk](deployment/android-apk.md) | Android 签名 release APK workflow、release keystore、Capacitor / Gradle 版本、安全配置、APK 更新入口与移动端排错 |
 | [deployment/ios-ipa](deployment/ios-ipa.md) | iOS 未签名 IPA workflow、CI 现场生成原生工程、键盘工具条与状态栏补丁、不标 latest 的 Release 契约、SideStore 装机与数据边界 |
+| [deployment/windows-desktop](deployment/windows-desktop.md) | Tauri 壳构成、托盘与关窗语义、开机自启判定、NSIS 安装包发布链路与版本码 semver 转换、桌面壳数据边界 |
