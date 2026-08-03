@@ -56,7 +56,9 @@ export default function CategoryPicker({ onSelect, selectedId }: CategoryPickerP
 
   return (
     <div className="space-y-3">
-      <div className="flex gap-2 overflow-x-auto pb-1">
+      {/* 真正的横滚容器要显式让路：EdgeSwipeBack 只认这个标记（overflow-x 的计算值会被
+          竖滚祖先污染成 auto，分辨不出谁真的能横滚）。 */}
+      <div data-edge-swipe-block="" className="flex gap-2 overflow-x-auto pb-1">
         {parentCategories.map((parent) => {
           const selected = activeParent?.id === parent.id;
           return (

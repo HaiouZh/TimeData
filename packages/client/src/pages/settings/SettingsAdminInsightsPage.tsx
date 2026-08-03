@@ -284,7 +284,8 @@ function PermissionMatrix() {
 
   return (
     <Section title="权限矩阵">
-      <div className="overflow-x-auto">
+      {/* 横滚表格，给 iOS 边缘返回让路（EdgeSwipeBack 只认这个显式标记）。 */}
+      <div data-edge-swipe-block="" className="overflow-x-auto">
         <table className="min-w-full text-left td-text-caption">
           <thead className="text-ink-3">
             <tr>

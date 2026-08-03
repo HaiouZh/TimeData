@@ -40,6 +40,11 @@ export default function SortableCategoryItem({
         ref={setActivatorNodeRef}
         type="button"
         aria-label={dragLabel}
+        // 这个拖柄出现在 /settings/nav、/settings/stats-layout、/settings/todo-stats-layout、
+        // /settings/categories 及其详情页——全是启用了 iOS 边缘返回的子页，而它的命中盒左沿约 17px，
+        // 与 20px 边缘判定有重叠带。不标记的话，在那条带上长按起拖再右滑会**同时**触发边缘返回
+        // 与 dnd-kit 排序：一次 navigate(-1) 加一次落库。
+        data-edge-swipe-block=""
         className={`shrink-0 cursor-grab touch-none select-none rounded px-2 py-1 text-ink-3 hover:bg-surface-hover hover:text-ink active:cursor-grabbing ${handleClassName}`}
         {...attributes}
         {...listeners}

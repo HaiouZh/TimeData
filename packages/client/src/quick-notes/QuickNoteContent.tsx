@@ -36,8 +36,13 @@ const components = {
       {children}
     </a>
   ),
+  // 代码块与表格能横滚，给 iOS 边缘返回让路（EdgeSwipeBack 只认这个显式标记）。
   pre: ({ node: _node, ...props }) => (
-    <pre {...props} className="my-1 overflow-x-auto rounded-ctl bg-page/70 p-3 td-text-label" />
+    <pre
+      {...props}
+      data-edge-swipe-block=""
+      className="my-1 overflow-x-auto rounded-ctl bg-page/70 p-3 td-text-label"
+    />
   ),
   code: ({ node: _node, children, className, ...props }) => {
     const isBlock = String(children).includes("\n") || /language-/.test(className ?? "");
@@ -52,7 +57,7 @@ const components = {
     );
   },
   table: ({ node: _node, ...props }) => (
-    <div className="my-1 overflow-x-auto">
+    <div data-edge-swipe-block="" className="my-1 overflow-x-auto">
       <table {...props} className="border-collapse td-text-body" />
     </div>
   ),

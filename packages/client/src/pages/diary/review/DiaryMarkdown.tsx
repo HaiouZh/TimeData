@@ -108,8 +108,11 @@ const components = {
     <blockquote className="my-1 border-l-2 border-border-strong pl-3 text-ink-2">{children}</blockquote>
   ),
   hr: () => <hr className="my-2 border-border" />,
+  // 代码块与表格能横滚，给 iOS 边缘返回让路（EdgeSwipeBack 只认这个显式标记）。
   pre: ({ children }) => (
-    <pre className="my-1 overflow-x-auto rounded-ctl bg-page/70 p-3 td-text-caption">{children}</pre>
+    <pre data-edge-swipe-block="" className="my-1 overflow-x-auto rounded-ctl bg-page/70 p-3 td-text-caption">
+      {children}
+    </pre>
   ),
   code: ({ children, className }) => {
     const isBlock = String(children).includes("\n") || /language-/.test(className ?? "");
@@ -120,7 +123,7 @@ const components = {
     );
   },
   table: ({ children }) => (
-    <div className="my-1 overflow-x-auto">
+    <div data-edge-swipe-block="" className="my-1 overflow-x-auto">
       <table className="border-collapse td-text-caption">{children}</table>
     </div>
   ),
