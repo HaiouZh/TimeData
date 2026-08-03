@@ -7,37 +7,78 @@ import { addTrack, listTracks, setTrackStatus } from "./tracks.js";
 const REF_LABEL_MAX = 200;
 
 /**
+ * 按 UTF-16 code unit 截断，但不把 emoji 从中间劈开。
+ * `slice` 切在代理对中间会留一个孤立高代理（0xD800-0xDBFF）——它仍能过 `z.string().max(200)`，
+ * 却在渲染 / JSON 序列化时变成乱码字符，故末位是孤立高代理时再退一格。
+ */
+function sliceWithoutLoneSurrogate(value: string, max: number): string {
+  if (value.length <= max) return value;
+  const cut = value.slice(0, max);
+  const last = cut.charCodeAt(cut.length - 1);
+  return last >= 0xd800 && last <= 0xdbff ? cut.slice(0, -1) : cut;
+}
+
+/**
  * todo 任务一键升格挂轨道：建 active 轨道、标题复用、refs 指回任务；任务本体不动。
  * 幂等：已挂 active 轨道直接返回既有轨道。落点是本文件而不是 tasks.ts / tracks.ts：
  * 两者是平级互不 import 的兄弟，task↔track 复合动作只能放上层（同 taskNesting.ts 先例）。
+ *
+ * 幂等靠「先查后建」，中间隔一次异步 DB 读——同一拍内的重复调用两边都会读到「未挂轨道」。
+ * 这道 check-then-act 由调用方的 in-flight 守卫兜（见 TaskDetailSheet 升格按钮），
+ * 数据层不加锁：跨标签页本来也锁不住，成本收益不划算。
  */
 export async function promoteTaskToTrack(task: Task, now: Date = new Date()): Promise<Track> {
   const existing = findActiveTrackForTask(await listTracks("active"), task.id);
   if (existing !== null) return existing;
   return addTrack({
     title: task.title,
-    refs: [{ kind: "task", id: task.id, label: task.title.slice(0, REF_LABEL_MAX) }],
+    refs: [{ kind: "task", id: task.id, label: sliceWithoutLoneSurrogate(task.title, REF_LABEL_MAX) }],
     now,
   });
+}
+
+export interface ToggleWithTrackConcludeResult {
+  task: Task;
+  /** 本次勾选附带归档的轨道；未归档（没挂 / 非 active / 取消勾选 / 归档失败）恒 null。 */
+  concludedTrack: Track | null;
 }
 
 /**
  * 勾选 + 附带归档：勾掉任务后若其挂载轨道仍 active，自动 setTrackStatus("concluded")
  * （既有机制闭合开口步 + 写「归档」系统步留痕）。单向：取消勾选不重开轨道。
  * 勾选是主动作、归档是附带动作，刻意不进同一事务：归档失败只 warn，勾选不回滚，
- * 轨道留在调度台可手动归档。签名与 toggleTaskDone 一致，调用点可直接替换。
+ * 轨道留在调度台可手动归档。
+ *
+ * 返回值把「有没有真归档」交出去：调用方据 `concludedTrack` 决定要不要给撤销 toast，
+ * 归档静默失败时它恒 null，不会伪装成成功。
  */
 export async function toggleTaskDoneWithTrackConclude(
   id: string,
   options: { now?: Date } = {},
-): Promise<Task> {
-  const next = await toggleTaskDone(id, options);
-  if (!next.done) return next;
+): Promise<ToggleWithTrackConcludeResult> {
+  const task = await toggleTaskDone(id, options);
+  if (!task.done) return { task, concludedTrack: null };
   try {
-    const track = findActiveTrackForTask(await listTracks("active"), next.id);
-    if (track !== null) await setTrackStatus(track.id, "concluded", { now: options.now });
+    const track = findActiveTrackForTask(await listTracks("active"), task.id);
+    if (track === null) return { task, concludedTrack: null };
+    const { track: concluded } = await setTrackStatus(track.id, "concluded", { now: options.now });
+    return { task, concludedTrack: concluded };
   } catch (error) {
     console.warn("[taskTrackPromote] 勾选后归档轨道失败（勾选本身已生效）", error);
+    return { task, concludedTrack: null };
   }
-  return next;
+}
+
+/**
+ * 撤销「勾选附带归档」：取消勾选任务 + 把轨道重开为 active，两件事都回退。
+ * 两步串行、不同事务（同 `toggleTaskDoneWithTrackConclude` 的既有取舍）：中途失败可重试，
+ * 不做补偿回滚——轨道与任务各自都留在能手动收拾的状态。
+ */
+export async function undoToggleWithTrackConclude(
+  taskId: string,
+  trackId: string,
+  options: { now?: Date } = {},
+): Promise<void> {
+  await toggleTaskDone(taskId, options);
+  await setTrackStatus(trackId, "active", { now: options.now });
 }

@@ -4,6 +4,7 @@ import { createElement } from "react";
 import { MemoryRouter } from "react-router";
 import type { Track } from "@timedata/shared";
 import type { TaskTrackInfo } from "../../lib/taskTrackIndex.js";
+import { BADGE_TONE_CLASSES } from "../../lib/trackBadgeTone.js";
 import { renderDom, unmount, click } from "../../test/domHarness.js";
 import { TaskTrackChip } from "./TaskTrackChip.js";
 
@@ -45,6 +46,11 @@ describe("TaskTrackChip", () => {
     expect(chip.textContent).toBe("#agent在做");
     expect(chip.dataset.tone).toBe("agent");
     expect(chip.getAttribute("href")).toBe("/tracks/trk-1");
+    // 颜色是 tone 上提的**目的**，而 data-tone 只是测试属性——不钉真实类名的话，
+    // 把 warn/agent 两行的类名串写反、或误用 .default，data-tone 依旧正确、照样全绿。
+    for (const cls of BADGE_TONE_CLASSES.agent.split(" ")) {
+      expect(chip.className).toContain(cls);
+    }
     await unmount(root);
   });
 

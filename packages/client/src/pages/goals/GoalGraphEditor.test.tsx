@@ -502,6 +502,35 @@ describe("GoalGraphEditor", () => {
     expect((await db.tasks.get("task-1"))?.done).toBe(true);
   });
 
+  // 图内完成走 toggleTaskDoneWithTrackConclude（4 个勾选入口之一）。上一条只断言 done=true——
+  // 新旧两个函数都满足它，把这行换回 toggleTaskDone 照样全绿。这条钉的是换线本身。
+  it("图内完成挂轨道的 Task → 该轨道自动归档", async () => {
+    const goalValue = goal({ members: [{ kind: "task", id: "task-1" }] });
+    const taskValue = task("task-1", { title: "写说明" });
+    const trackValue: Track = {
+      id: "trk-graph-1",
+      title: "写说明",
+      status: "active",
+      refs: [{ kind: "task", id: "task-1", label: "写说明" }],
+      createdAt: now,
+      updatedAt: now,
+    };
+    await seed(goalValue, [taskValue], [trackValue]);
+
+    const { host } = await renderEditor({ goal: goalValue, tasks: [taskValue], tracks: [trackValue] });
+
+    await click(nodeButton(host, "task:task-1"));
+    await click(buttonByLabel(document.body, "完成 写说明"));
+    // 归档跨多段 IDB 事务（勾选 → listTracks → setTrackStatus），轮询等终态。
+    let status: string | undefined;
+    for (let attempt = 0; attempt < 20; attempt++) {
+      status = (await db.tracks.get("trk-graph-1"))?.status;
+      if (status === "concluded") break;
+      await tick();
+    }
+    expect(status).toBe("concluded");
+  });
+
   it("移出成员后轻撤销还原成员和级联删除的前置", async () => {
     const members: GoalMemberRef[] = [
       { kind: "task", id: "task-1" },

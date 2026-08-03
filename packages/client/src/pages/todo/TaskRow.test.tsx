@@ -1190,6 +1190,22 @@ describe("meta 胶囊", () => {
     expect(host.querySelector("[data-testid='probe-chip']")).not.toBeNull();
     await unmount(root);
   });
+
+  // 上一条只断言「有 metaChip → meta 带出现」，从没断言过**缺席**。而宿主侧的组合函数
+  // （TodoPage.taskMetaChips / TodoProjectSection）契约是「两枚 chip 都空时返回 null」——
+  // 若被"简化"成恒返回 fragment，metaChip != null 恒真，每行光板任务都会长出一条空 meta 带、
+  // 整页行高跳变，没有这条断言就无一测试会红。
+  it("metaChip 为 null 且无其它 meta 内容时，meta 带整条不渲染", async () => {
+    const { host, root } = await renderDom(
+      createElement(TaskRow, { task: task(), pool: "inbox", metaChip: null, ...handlers }),
+    );
+    expect(host.querySelector("[data-testid='date-chip']")).toBeNull();
+    expect(host.querySelector("[data-testid='repeat-chip']")).toBeNull();
+    expect(host.querySelector("[data-testid='tag-chip']")).toBeNull();
+    // meta 带自身：容器带 td-text-caption + flex-wrap，光板行不应渲染出这一层。
+    expect(host.querySelector(".flex-wrap.items-center.gap-1\\.5")).toBeNull();
+    await unmount(root);
+  });
 });
 
 describe("TaskRow 多选态", () => {

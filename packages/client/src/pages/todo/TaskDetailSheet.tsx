@@ -4,8 +4,10 @@ import { useLiveQuery } from "dexie-react-hooks";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router";
 import { Icon } from "../../components/Icon.js";
+import { ActionToastBar } from "../../components/ui/ActionToastBar.js";
 import { Checkbox } from "../../components/ui/Checkbox.js";
 import { db } from "../../db/index.js";
+import { useActionToast } from "../../hooks/useActionToast.js";
 import { contentTint } from "../../lib/contentTint.js";
 import { getActiveSession, grabTaskToHand, releaseTaskFromHand } from "../../lib/sessions.js";
 import { normalizeScheduledDate } from "../../lib/tasks/placement.js";
@@ -19,7 +21,11 @@ import {
   updateTask,
 } from "../../lib/tasks.js";
 import { findActiveTrackForTask } from "../../lib/taskTrackIndex.js";
-import { promoteTaskToTrack, toggleTaskDoneWithTrackConclude } from "../../lib/taskTrackPromote.js";
+import {
+  promoteTaskToTrack,
+  toggleTaskDoneWithTrackConclude,
+  undoToggleWithTrackConclude,
+} from "../../lib/taskTrackPromote.js";
 import { getDateString } from "../../lib/time.js";
 import { listTracks } from "../../lib/tracks.js";
 import { CustomRecurrencePage } from "./CustomRecurrencePage.js";
@@ -170,7 +176,34 @@ export function TaskDetailSheet({ id, onClose, onTagsChange, onTimeChanged }: Ta
     null,
   );
   // 可见性与 canGrab 同式：排除子任务、重复任务、已完成任务（design §四的升格边界）。
-  const canPromoteToTrack = task ? (task.parentId ?? null) === null && task.recurrence === null && !task.done : false;
+  // ruleId 非空 = occurrence，它自身的 recurrence 恒为 null（带 recurrence 的是模板），
+  // 故「重复任务不给升格」必须单独判 ruleId——只看 recurrence 的话 pending occurrence 三项全过、照样露入口。
+  const canPromoteToTrack = task
+    ? (task.parentId ?? null) === null &&
+      task.recurrence === null &&
+      (task.ruleId ?? null) === null &&
+      !task.done
+    : false;
+  // 升格是「先查后建」跨一次异步 DB 读的 check-then-act：无守卫时双击会各读到「未挂轨道」、各建一条。
+  // ref 而非 state 才守得住——同一拍内派发的两次 click 共享同一份渲染闭包，state 还没回填。
+  // state 只负责把按钮置灰（给出「点上了」的反馈，本身也是防连点的第一道）。
+  const [promoting, setPromoting] = useState(false);
+  const promotingRef = useRef(false);
+  const { toast: trackToast, showToast: showTrackToast, clearToast: clearTrackToast } = useActionToast();
+
+  /** 勾选附带归档了轨道时给一条带撤销的提示；未归档（含静默失败）不打扰。 */
+  function toggleDone(taskId: string): void {
+    void (async () => {
+      const result = await run(() => toggleTaskDoneWithTrackConclude(taskId));
+      const concludedTrack = result?.concludedTrack ?? null;
+      if (!result || concludedTrack === null) return;
+      const doneTaskId = result.task.id;
+      showTrackToast({
+        message: `已归档轨道「${concludedTrack.title}」`,
+        actions: [{ label: "撤销", onClick: () => void undoToggleWithTrackConclude(doneTaskId, concludedTrack.id) }],
+      });
+    })();
+  }
 
   const handleHand = async () => {
     if (!task) return;
@@ -336,6 +369,8 @@ export function TaskDetailSheet({ id, onClose, onTagsChange, onTimeChanged }: Ta
 
         {error && <p className="px-4 pb-2 td-text-label text-danger">{error}</p>}
 
+        <ActionToastBar toast={trackToast} onDismiss={clearTrackToast} ariaLabel="轨道联动反馈" className="mx-4 mb-2" />
+
         {task && (
           <div className="flex-1 space-y-4 overflow-y-auto px-4 pb-6">
             <div className="flex items-start gap-3">
@@ -343,7 +378,7 @@ export function TaskDetailSheet({ id, onClose, onTagsChange, onTimeChanged }: Ta
                 ariaLabel={`完成 ${task.title}`}
                 checked={task.recurrence ? false : task.done}
                 onChange={() => {
-                  if (!task.recurrence || ruleCanComplete) void run(() => toggleTaskDoneWithTrackConclude(task.id));
+                  if (!task.recurrence || ruleCanComplete) toggleDone(task.id);
                 }}
                 disabled={task.recurrence !== null && !ruleCanComplete}
                 className="mt-1 shrink-0"
@@ -457,27 +492,36 @@ export function TaskDetailSheet({ id, onClose, onTagsChange, onTimeChanged }: Ta
                   <Icon icon={HandGrabbing} size={18} />
                 </button>
               )}
-              {canPromoteToTrack &&
-                (linkedTrack ? (
-                  <Link
-                    to={`/tracks/${encodeURIComponent(linkedTrack.id)}`}
-                    aria-label="查看轨道"
-                    className="flex h-11 items-center justify-center rounded-ctl px-3 td-text-label text-ink-3 hover:bg-surface-elevated hover:text-accent"
-                  >
-                    查看轨道
-                  </Link>
-                ) : (
-                  <button
-                    type="button"
-                    aria-label="升为轨道"
-                    onClick={() => {
-                      if (task) void run(() => promoteTaskToTrack(task));
-                    }}
-                    className="flex h-11 items-center justify-center rounded-ctl px-3 td-text-label text-ink-3 hover:bg-surface-elevated hover:text-accent"
-                  >
-                    升为轨道
-                  </button>
-                ))}
+              {/* 两个闸拆开：「查看轨道」只看挂没挂 active 轨道，不看 parentId / recurrence / done。
+                  任务被缩进成子任务、补加重复规则、或勾完（含轨道被手动重开）时，仍有一条 active 轨道
+                  指着它——若跟着升格闸一起消失，todo 侧就再没有回那条轨道的路。 */}
+              {linkedTrack ? (
+                <Link
+                  to={`/tracks/${encodeURIComponent(linkedTrack.id)}`}
+                  aria-label="查看轨道"
+                  className="flex h-11 items-center justify-center rounded-ctl px-3 td-text-label text-ink-3 hover:bg-surface-elevated hover:text-accent"
+                >
+                  查看轨道
+                </Link>
+              ) : canPromoteToTrack ? (
+                <button
+                  type="button"
+                  aria-label="升为轨道"
+                  disabled={promoting}
+                  onClick={() => {
+                    if (!task || promotingRef.current) return;
+                    promotingRef.current = true;
+                    setPromoting(true);
+                    void run(() => promoteTaskToTrack(task)).finally(() => {
+                      promotingRef.current = false;
+                      setPromoting(false);
+                    });
+                  }}
+                  className="flex h-11 items-center justify-center rounded-ctl px-3 td-text-label text-ink-3 hover:bg-surface-elevated hover:text-accent disabled:opacity-50"
+                >
+                  升为轨道
+                </button>
+              ) : null}
               <button
                 type="button"
                 aria-label="删除任务"

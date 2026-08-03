@@ -32,7 +32,9 @@ function makeStep(overrides: Partial<TrackStep> = {}): TrackStep {
   };
 }
 
-const ACTION = ["待我处理", "agent在做"];
+// ACTION 刻意**不含** EXEC 的词：两者若有包含关系，`[...actionTags, ...agentExecTags]` 的第二段
+// 就零贡献，"词表是两者拼接"这条断言会退化成恒绿（少写一个 spread 也测不出来）。
+const ACTION = ["待我处理"];
 const EXEC = ["agent在做"];
 
 describe("badgeToneForSignal", () => {
@@ -92,5 +94,14 @@ describe("buildTaskTrackIndex", () => {
   it("非 active 轨道不入索引", () => {
     const index = buildTaskTrackIndex([makeTrack({ status: "concluded" })], new Map(), ACTION, EXEC);
     expect(index.size).toBe(0);
+  });
+  // 本函数的仲裁是 findActiveTrackForTask 的第二份实现（两者互不调用），故平局规则要各钉各的：
+  // 只钉一边时，把这边降级成「数组里最后一条赢」不会红，抽屉链接与行徽章会指向两条不同轨道。
+  it("同任务多条 active 轨道取 updatedAt 最新（与 findActiveTrackForTask 同口径）", () => {
+    const newer = makeTrack({ id: "trk-2", updatedAt: "2026-08-03T00:00:00.000Z" });
+    const older = makeTrack({ id: "trk-1", updatedAt: "2026-08-01T00:00:00.000Z" });
+    // 顺序刻意让"最新"排在前面：若实现退化成无条件覆盖，赢的会是数组末尾的 older。
+    const index = buildTaskTrackIndex([newer, older], new Map(), ACTION, EXEC);
+    expect(index.get("task-1")?.track.id).toBe("trk-2");
   });
 });

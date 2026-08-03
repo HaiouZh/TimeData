@@ -14,7 +14,8 @@ import { addTask, createChildTask, deleteTaskCascade, scheduleTask, setTaskTags,
 import * as tasksLib from "../lib/tasks.js";
 import { normalizeScheduledDate } from "../lib/tasks/placement.js";
 import { setInboxCollapsed } from "../lib/tasks/workbenchPrefs.js";
-import { promoteTaskToTrack } from "../lib/taskTrackPromote.js";
+import { promoteTaskToTrack, toggleTaskDoneWithTrackConclude } from "../lib/taskTrackPromote.js";
+import { setTrackStatus } from "../lib/tracks.js";
 import { click, renderDom, unmount } from "../test/domHarness.js";
 import { TodoPage } from "./TodoPage.js";
 
@@ -1698,6 +1699,17 @@ describe("TodoPage", () => {
     const { host, root } = await renderPage();
     await waitForCondition(() => (host.textContent ?? "").includes("长跑活"), "挂轨道的任务行", settle);
 
+    // 读侧整条缝（useTaskTrackIndex → TodoPage.trackChipFor → TaskRow.metaChip → TaskTrackChip）
+    // 唯一的端到端断言：缺了它，trackChipFor 恒 return null、索引键写错、buildTaskTrackIndex 的两个
+    // 同型 readonly string[] 实参对调、乃至删掉收件箱那个传点，都不会有任何测试变红。
+    await waitForCondition(
+      () => host.querySelector('[data-testid="task-track-chip"]') !== null,
+      "行上轨道徽章",
+      settle,
+    );
+    // 光板轨道无步骤 → 无信号 → 中性微标（data-tone="none"）。
+    expect(host.querySelector('[data-testid="task-track-chip"]')?.getAttribute("data-tone")).toBe("none");
+
     await click(host.querySelector('input[aria-label="完成 长跑活"]'));
     // 归档链跨多段 IDB 事务（勾选事务 → listTracks → setTrackStatus），轮询等终态。
     let status: string | undefined;
@@ -1707,6 +1719,57 @@ describe("TodoPage", () => {
       await settle();
     }
     expect(status).toBe("concluded");
+    await unmount(root);
+  });
+
+  it("勾掉挂轨道的任务 → 弹带撤销的提示；点撤销把任务与轨道一起回退", async () => {
+    await db.tracks.clear();
+    await db.trackSteps.clear();
+    const t = await addTask({ title: "手滑勾掉的活" });
+    await promoteTaskToTrack(t);
+
+    const { host, root } = await renderPage();
+    await waitForCondition(() => (host.textContent ?? "").includes("手滑勾掉的活"), "挂轨道的任务行", settle);
+    await click(host.querySelector('input[aria-label="完成 手滑勾掉的活"]'));
+
+    // 归档静默发生的话屏幕上零痕迹——提示是它唯一的可见落点。
+    await waitForCondition(() => (host.textContent ?? "").includes("已归档轨道"), "归档提示", settle);
+    const undo = [...host.querySelectorAll("button")].find((b) => b.textContent === "撤销");
+    expect(undo).toBeDefined();
+
+    await click(undo);
+    // 撤销是完整回退：任务回未完成 + 轨道重开 active。
+    let reverted = false;
+    for (let attempt = 0; attempt < 20; attempt++) {
+      const task = await db.tasks.get(t.id);
+      const track = (await db.tracks.toArray())[0];
+      if (task?.done === false && track?.status === "active") {
+        reverted = true;
+        break;
+      }
+      await settle();
+    }
+    expect(reverted).toBe(true);
+    await unmount(root);
+  });
+
+  it("轨道被手动重开后，已完成任务行仍显示轨道徽章（归档失败/重开态的唯一线索）", async () => {
+    await db.tracks.clear();
+    await db.trackSteps.clear();
+    const t = await addTask({ title: "完了但轨道还开着" });
+    const track = await promoteTaskToTrack(t);
+    await toggleTaskDoneWithTrackConclude(t.id);
+    // 模拟「归档失败」或用户去 /tracks 手动重新推进：任务 done，轨道却是 active。
+    await setTrackStatus(track.id, "active");
+
+    const { host, root } = await renderPage();
+    await waitForCondition(() => (host.textContent ?? "").includes("完了但轨道还开着"), "已完成任务行", settle);
+    // 若 trackChipFor 按 t.done 隐藏，这条唯一线索就没了，用户只能自己去 /tracks 撞见那条活轨道。
+    await waitForCondition(
+      () => host.querySelector('[data-testid="task-track-chip"]') !== null,
+      "已完成行上的轨道徽章",
+      settle,
+    );
     await unmount(root);
   });
 });

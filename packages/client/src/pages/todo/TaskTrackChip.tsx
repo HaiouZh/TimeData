@@ -3,6 +3,13 @@ import type { TaskTrackInfo } from "../../lib/taskTrackIndex.js";
 import { BADGE_TONE_CLASSES } from "../../lib/trackBadgeTone.js";
 import { META_CHIP_CLASS } from "./TaskRow.js";
 
+// 看板信号标签用户可配到 64 字符（sanitizeTrackBoardSignals 上限），不是默认那种 2-5 字短词，
+// 不封顶会把 meta 带整条撑开、挤掉同排的日期与项目 chip。
+const SIGNAL_MAX_WIDTH = "max-w-[8rem]";
+// 药丸本体只有 ~18px 高，远低于本仓触控约定（Checkbox 的 min-h-11=44px）。伪元素向外扩命中区，
+// 视觉尺寸不变——不扩的话移动端指尖偏几像素就落到外层整行，点开的是任务详情而不是轨道。
+const TOUCH_TARGET = "after:absolute after:-inset-2 after:content-['']";
+
 /**
  * 任务行 meta 带上的轨道徽章：有信号显示 #信号文字（tone 与调度台同口径），
  * 无信号显示「轨道」中性微标；点击直达轨道详情。relative z-20 抬过行左拖拽层，
@@ -11,8 +18,8 @@ import { META_CHIP_CLASS } from "./TaskRow.js";
 export function TaskTrackChip({ info }: { info: TaskTrackInfo }) {
   const signal = info.signal;
   const className = signal
-    ? `relative z-20 inline-flex items-center rounded-pill border px-1.5 py-px ${BADGE_TONE_CLASSES[info.tone]}`
-    : `relative z-20 ${META_CHIP_CLASS} text-ink-2 hover:text-ink`;
+    ? `relative z-20 inline-flex items-center ${SIGNAL_MAX_WIDTH} truncate rounded-pill border px-1.5 py-px ${TOUCH_TARGET} ${BADGE_TONE_CLASSES[info.tone]}`
+    : `relative z-20 ${META_CHIP_CLASS} ${TOUCH_TARGET} text-ink-2 hover:text-ink`;
   return (
     <Link
       to={`/tracks/${encodeURIComponent(info.track.id)}`}

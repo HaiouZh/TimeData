@@ -50,7 +50,7 @@ import {
   type TodoBuckets,
   unscheduleTask,
 } from "../lib/tasks.js";
-import { toggleTaskDoneWithTrackConclude } from "../lib/taskTrackPromote.js";
+import { toggleTaskDoneWithTrackConclude, undoToggleWithTrackConclude } from "../lib/taskTrackPromote.js";
 import { nestTaskUnderParent, promoteTaskToHand } from "../lib/taskNesting.js";
 import { goalBarTaskIds, landsInCollapsedProjectGroup, projectChipIndex } from "../lib/tasks/projectZone.js";
 import { applyOptimisticOrder } from "../lib/tasks/reorderDisplay.js";
@@ -315,7 +315,16 @@ export function TodoPage() {
     hapticToggle();
     // 传写入后的行：勾选重复模板时 toggleTaskDone 返回的是被完成的那一发（另一条任务），
     // 落点要按它判，不能按动作前的 t 判。
-    const next = await toggleTaskDoneWithTrackConclude(t.id);
+    const { task: next, concludedTrack } = await toggleTaskDoneWithTrackConclude(t.id);
+    // 归档是勾选的附带动作，不给提示的话它在屏幕上零痕迹。撤销走完整回退（取消勾选 + 轨道重开）。
+    if (concludedTrack !== null) {
+      showActionToast({
+        message: `已归档轨道「${concludedTrack.title}」`,
+        actions: [
+          { label: "撤销", onClick: () => void undoToggleWithTrackConclude(next.id, concludedTrack.id) },
+        ],
+      });
+    }
     await revealProjectHome(next);
   };
   const remove = async (t: Task) => {
@@ -465,7 +474,10 @@ export function TodoPage() {
   const resumeHand = (sessionId: string) => void resumeSession(sessionId);
   const exitProject = (goalId: string, t: Task) => void removeGoalMember(goalId, { kind: "task", id: t.id });
   const trackChipFor = (t: Task): ReactNode => {
-    const trackInfo = t.done ? undefined : taskTrackIndex.get(t.id);
+    // 刻意不按 t.done 隐藏：正常路径下勾选已把轨道归档、索引只收 active，这里本就查不到；
+    // 真会命中的只有分歧态（归档失败 / 轨道被手动重开），而那时「这条已完成任务底下还挂着活轨道」
+    // 正是必须露出来的唯一线索——best-effort 不回滚的前提就是用户能看见它、去调度台手动收拾。
+    const trackInfo = taskTrackIndex.get(t.id);
     return trackInfo !== undefined ? <TaskTrackChip info={trackInfo} /> : null;
   };
 
@@ -1099,6 +1111,9 @@ export function TodoPage() {
   );
 
   const completedFiltered = f(buckets.completed);
+  // 已完成区只挂轨道徽章、不挂项目 chip（项目 chip 按 project-zone 契约只出现在手头/今天/已排期）：
+  // 正常路径下勾选已把轨道归档、索引查不到，这里恒空；真显示出来就意味着「任务完成了、轨道还开着」
+  // ——归档 best-effort 失败或轨道被手动重开，这是该状态在 todo 侧唯一的长期可见落点。
   const completedBlock = completedFiltered.length > 0 && (
     <CollapsibleSection
       title="已完成"
@@ -1109,7 +1124,9 @@ export function TodoPage() {
       <DayGroupedList
         segments={groupCompletedByDay(completedFiltered)}
         stickyBottomOffsetPx={composerAvoidancePx}
-        renderTasks={(tasks) => <TaskList pool="completed" tasks={tasks} {...rowHandlers} />}
+        renderTasks={(tasks) => (
+          <TaskList pool="completed" tasks={tasks} metaChip={trackChipFor} {...rowHandlers} />
+        )}
       />
     </CollapsibleSection>
   );
