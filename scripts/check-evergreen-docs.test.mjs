@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 import {
   CliUsageError,
   EVERGREEN_RULES_SUMMARY,
+  countSubDocs,
   diffSizeBaseline,
   evaluateDocSync,
   evaluateLinks,
@@ -349,4 +350,43 @@ test("diffSizeBaseline 在无变化时四个清单都是空的", () => {
     raised: [],
     lowered: [],
   });
+});
+
+test("countSubDocs counts sibling docs under the topic's own subdirectory", () => {
+  const docs = [
+    { filePath: "docs/evergreen/todo.md" },
+    { filePath: "docs/evergreen/todo/at-hand.md" },
+    { filePath: "docs/evergreen/todo/gravity.md" },
+    { filePath: "docs/evergreen/sync.md" },
+    { filePath: "docs/evergreen/sync/domain-registry.md" },
+  ];
+  assert.equal(countSubDocs("docs/evergreen/todo.md", docs), 2);
+  assert.equal(countSubDocs("docs/evergreen/sync.md", docs), 1);
+});
+
+test("countSubDocs returns 0 for a doc that has no subdirectory", () => {
+  const docs = [
+    { filePath: "docs/evergreen/cli.md" },
+    { filePath: "docs/evergreen/todo/at-hand.md" },
+  ];
+  assert.equal(countSubDocs("docs/evergreen/cli.md", docs), 0);
+});
+
+test("countSubDocs does not count a sub-doc as its own child", () => {
+  const docs = [
+    { filePath: "docs/evergreen/todo/at-hand.md" },
+    { filePath: "docs/evergreen/todo/gravity.md" },
+  ];
+  assert.equal(countSubDocs("docs/evergreen/todo/at-hand.md", docs), 0);
+});
+
+// 上面那条「does not count a sub-doc as its own child」其实测不到 `d.filePath !== docPath` 这道守卫：
+// docPath 以 .md 结尾时，dir 的末位是 `/`、自身末位是 `d`，本来就不可能自匹配。
+// 只有路径不带 .md 后缀（replace 不生效、dir === docPath）时守卫才真正承压。
+test("countSubDocs never counts the doc itself, even when the path has no .md suffix", () => {
+  const docs = [
+    { filePath: "docs/evergreen/todo" },
+    { filePath: "docs/evergreen/todo/at-hand.md" },
+  ];
+  assert.equal(countSubDocs("docs/evergreen/todo", docs), 1);
 });

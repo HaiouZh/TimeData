@@ -273,7 +273,7 @@ last-reviewed: YYYY-MM-DD
 |---|---|---|
 | `check:docs:strict --since=<base>` | **改了契约点 → 同步对应文档** | 改动命中某文档 `contracts`（非 `covers`）但该文档没一起改；见 §1.3 |
 | `check:docs:coverage --since=<base>` | **加了源码 → 必须有文档认领** | 新增 `packages/*/src/**` 文件不匹配任何 covers，且非豁免（测试/`.d.ts`/mock/夹具/story） |
-| `check:docs:size` | **单文档别膨胀到该拆** | 字符数超 hard cap（≈25k，提示拆子文档；字符不做棘轮），或 `covers` 数超基线，或基线漏项/含已删文档 |
+| `check:docs:size` | **单文档别膨胀到该拆** | 字符数超 hard cap（≈25k，报错会指出横切 / 纵切两条出路，见 §3；字符不做棘轮），或 `covers` 数超基线，或基线漏项/含已删文档 |
 | `check:docs:links` | **互链/指针别指向消失的文档** | evergreen 内、以及 `AGENTS.md` / `README.md` 指向 evergreen·ADR 的 `[..](x.md)` 指向不存在的 .md |
 | `check:docs:stale` | **last-reviewed 别过期** | 超 180 天或缺字段 |
 

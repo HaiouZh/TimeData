@@ -500,6 +500,15 @@ function writeSizeBaseline(docs) {
   return 0;
 }
 
+/**
+ * 数某份主题文档名下有几个子文档（`docs/evergreen/todo.md` → `docs/evergreen/todo/*.md`）。
+ * ≥2 时说明横切轴多半已用尽，撞 hard cap 的出路要往纵切找（见 _docs-guide §3.2）。
+ */
+export function countSubDocs(docPath, allDocs) {
+  const dir = docPath.replace(/\.md$/, "/");
+  return allDocs.filter((d) => d.filePath !== docPath && d.filePath.startsWith(dir)).length;
+}
+
 function formatSizeViolationKind(kind) {
   switch (kind) {
     case "too-long":
@@ -543,12 +552,19 @@ function modeSize(docs) {
   for (const v of res.violations) {
     console.log(`| \`${v.filePath}\` | ✗ ${formatSizeViolationKind(v.kind)} | ${v.current} | ${v.limit} |`);
   }
-  if (res.violations.some((v) => v.kind === "too-long")) {
-    console.error(
-      `\n✗ 有文档超过 hard cap（${SIZE_CAPS.hardChars} 字符）。字符数本身不做棘轮（正文可自由增长），` +
-        "但单个文档过长说明该拆了：把一个独立子簇外提成子文档。",
-    );
-    console.error("  怎么判断该不该拆、拆到哪：见 docs/evergreen/_docs-guide.md §3「毕业阈值」。");
+  const tooLong = res.violations.filter((v) => v.kind === "too-long");
+  if (tooLong.length > 0) {
+    console.error(`\n✗ 有文档超过 hard cap（${SIZE_CAPS.hardChars} 字符）。字符数本身不做棘轮，正文可自由增长——过长说明该拆了。`);
+    console.error("  合法动作三条：删过时内容 / 横切外提（功能子域）/ 纵切外提（读者路径）。");
+    console.error("  ⚠️ 压缩措辞、删例子、把句子改短不是合法动作——那是拿可读性换体量，且不可逆。");
+    console.error("  三条都走不通就停下来问人，不要让门禁绿变成目标。");
+    for (const v of tooLong) {
+      const subs = countSubDocs(v.filePath, docs.filter(isEvergreenDoc));
+      if (subs >= 2) {
+        console.error(`  · ${v.filePath} 已有 ${subs} 份子文档，横切多半已用尽——优先看纵切判据。`);
+      }
+    }
+    console.error("  判据：docs/evergreen/_docs-guide.md §3.1（横切三条）/ §3.2（纵切四条）。");
   }
   if (res.violations.some((v) => v.kind !== "too-long")) {
     console.error("\n✗ covers 管辖范围越基线 / 基线缺项或含已删文档：重写基线 `--write-size-baseline` 并在提交信息说明。");
