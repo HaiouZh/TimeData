@@ -72,6 +72,22 @@ pub fn resolve_autostart_action(
     }
 }
 
+#[derive(Debug, PartialEq, Eq)]
+pub enum ToggleAction {
+    Hide,
+    Show,
+}
+
+/// toggleMain 语义：前台可见（未最小化且有焦点）才收起；其余一律带到前面。
+/// "可见但被别的窗口盖住"判 Show——用户按热键是想见到它。
+pub fn resolve_toggle_action(visible: bool, minimized: bool, focused: bool) -> ToggleAction {
+    if visible && !minimized && focused {
+        ToggleAction::Hide
+    } else {
+        ToggleAction::Show
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -191,5 +207,20 @@ mod tests {
             resolve_autostart_action(Some(r"C:\app\TimeData.exe"), r"C:\app\TimeData.exe", true, true),
             AutostartAction::LeaveAlone
         );
+    }
+
+    // ---- toggleMain 真值表：前台可见才收起，其余一律带到前面 ----
+
+    #[test]
+    fn toggle_hides_only_when_visible_and_focused() {
+        assert_eq!(resolve_toggle_action(true, false, true), ToggleAction::Hide);
+    }
+
+    #[test]
+    fn toggle_shows_when_hidden_or_minimized_or_unfocused() {
+        assert_eq!(resolve_toggle_action(false, false, false), ToggleAction::Show);
+        assert_eq!(resolve_toggle_action(true, true, false), ToggleAction::Show);
+        assert_eq!(resolve_toggle_action(true, false, false), ToggleAction::Show); // 被别的窗口盖住 → 提到前面
+        assert_eq!(resolve_toggle_action(false, true, false), ToggleAction::Show);
     }
 }
