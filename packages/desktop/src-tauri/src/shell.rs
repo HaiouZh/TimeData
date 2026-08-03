@@ -78,6 +78,25 @@ pub enum ToggleAction {
     Show,
 }
 
+/// 「本窗口是否在前台」的合成判定，喂给 `resolve_toggle_action` 的 `focused` 位。
+///
+/// 单靠 tao 的 `is_focused()` 不够：实测（2026-08-03）WebView2 子窗口吃走键盘焦点后，
+/// 它会在窗口明明处于最前时稳定报 false，于是 toggleMain 每次都走 Show 分支、**再也收不起来**。
+/// 因此补一路 Win32 事实来源——前台窗口归一到顶层（`GetAncestor(GA_ROOT)`）后与本窗口 HWND 比，
+/// 前台是我们自己的 WebView2 子窗口时也算数。
+///
+/// 两路取**或**，方向是「宁可收起」：误判 Hide 的代价是用户多按一次热键（第二次窗口已隐藏、
+/// 必然 Show，自愈）；误判 Show 的代价是窗口永远收不起来、按多少次都没用——正是本次修的 bug。
+/// 顺带兜住 `hwnd()` 取不到的情形（`self_hwnd` 为 0）：行为退回只看 `is_focused()` 的原样，
+/// 而不是彻底不隐藏。
+///
+/// 句柄 0 = 没有窗口（无前台窗口时 `GetForegroundWindow` 返回 NULL），**不参与相等比较**，
+/// 否则「两边都拿不到」会被当成「前台就是我」，凭空造出一次误 Hide。
+pub fn resolve_is_foreground(is_focused: bool, foreground_root: isize, self_hwnd: isize) -> bool {
+    let foreground_is_ours = self_hwnd != 0 && foreground_root == self_hwnd;
+    is_focused || foreground_is_ours
+}
+
 /// toggleMain 语义：前台可见（未最小化且有焦点）才收起；其余一律带到前面。
 /// "可见但被别的窗口盖住"判 Show——用户按热键是想见到它。
 pub fn resolve_toggle_action(visible: bool, minimized: bool, focused: bool) -> ToggleAction {
@@ -222,5 +241,43 @@ mod tests {
         assert_eq!(resolve_toggle_action(true, true, false), ToggleAction::Show);
         assert_eq!(resolve_toggle_action(true, false, false), ToggleAction::Show); // 被别的窗口盖住 → 提到前面
         assert_eq!(resolve_toggle_action(false, true, false), ToggleAction::Show);
+    }
+
+    // ---- 前台判定真值表：is_focused 与 Win32 前台句柄两路取或 ----
+
+    const SELF_HWND: isize = 0x1234;
+    const OTHER_HWND: isize = 0x9999;
+
+    #[test]
+    fn is_focused_alone_is_enough() {
+        // 老的唯一来源仍然算数：它报 true 就不必再问 Win32。
+        assert!(resolve_is_foreground(true, OTHER_HWND, SELF_HWND));
+        assert!(resolve_is_foreground(true, 0, 0));
+    }
+
+    #[test]
+    fn foreground_hwnd_rescues_stale_is_focused() {
+        // 本次修的那条：WebView2 子窗口吃走焦点，is_focused 报 false，但前台顶层就是本窗口。
+        // 归一后句柄相等 → 判在前台 → toggleMain 才会走 Hide。
+        assert!(resolve_is_foreground(false, SELF_HWND, SELF_HWND));
+    }
+
+    #[test]
+    fn other_app_in_foreground_is_not_ours() {
+        assert!(!resolve_is_foreground(false, OTHER_HWND, SELF_HWND));
+    }
+
+    #[test]
+    fn null_handles_never_match_each_other() {
+        // GetForegroundWindow 无前台窗口时返回 NULL，hwnd() 取不到时也是 0。
+        // 「两边都拿不到」绝不能被当成「前台就是我」——那是凭空一次误 Hide。
+        assert!(!resolve_is_foreground(false, 0, 0));
+    }
+
+    #[test]
+    fn missing_self_hwnd_degrades_to_is_focused_only() {
+        // hwnd() 失败时不瞎猜，行为退回原样（此处 is_focused=false → 不在前台 → Show）。
+        assert!(!resolve_is_foreground(false, OTHER_HWND, 0));
+        assert!(resolve_is_foreground(true, OTHER_HWND, 0));
     }
 }

@@ -74,7 +74,8 @@ NSIS 安装新版本时先卸载旧版本，会一并清掉启动项。该情形
 
 - 壳启动读配置即注册热键，**不等 WebView**——开机第一秒按下就有效。启动时的注册失败无处回显（窗口可能还没起来），设置页打开时会通过 `resume_hotkeys` 重新注册并重报结果。
 - 设置页保存 → Rust 先 `unregister_all` 再按新表逐条注册 → 返回 `[{ shortcut, action, ok, error }]`。单条失败（组合被别的软件占用、格式非法）不影响其余条目，失败原因在设置页对应行以红字回显。
-- 按下时 Rust 记录**按键时刻**（epoch ms）后按动作分流：`toggleMain` 由 Rust 直接办（`resolve_toggle_action`：可见、未最小化且有焦点才 hide，其余一律 show + unminimize + focus——「可见但被别的窗口盖住」按热键是想见到它），不进 WebView，页面卡死也好使；`punch` 带 `{ action, pressedAtMs }` 投递进主窗口 WebView。
+- 按下时 Rust 记录**按键时刻**（epoch ms）后按动作分流：`toggleMain` 由 Rust 直接办（`resolve_toggle_action`：可见、未最小化且**在前台**才 hide，其余一律 show + unminimize + focus——「可见但被别的窗口盖住」按热键是想见到它），不进 WebView，页面卡死也好使；`punch` 带 `{ action, pressedAtMs }` 投递进主窗口 WebView。
+- 「在前台」由 `resolve_is_foreground` 合成，**两路取或**：tao 的 `is_focused()`，或 Win32 `GetForegroundWindow()` 经 `GetAncestor(GA_ROOT)` 归一后等于本窗口 HWND。只信前者不够——WebView2 子窗口吃走键盘焦点后，它在窗口明明处于最前时报 false，toggleMain 于是每次都走 show、**再也收不起来**。归一那步不能省：前台往往正是本应用自己的 WebView2 子窗口。两路取或而非只留 Win32 一路，方向是「宁可收起」：误判 hide 多按一次就自愈，误判 show 是按多少次都出不来的死局。句柄 0（无前台窗口 / `hwnd()` 取不到）不参与相等比较，否则「两边都拿不到」会被当成「前台就是我」。
 - 事件名 `desktop-hotkey` 是 Rust `emit` 与前端 `listen` 之间唯一的约定，两侧都是裸字符串字面量，由配置闸比对（§7）。
 - WebView 未就绪时 punch 事件在 Rust 侧 **FIFO 排队**；前端桥挂好监听后 `invoke("desktop_ready")`，Rust 收到即按序补投。`pressedAtMs` 随事件走，因此**执行晚了不影响封口时刻**——开机第一秒按打点，记录的就是那一秒。`toggleMain` 不排队。
 - 设置页的快捷键录入框进入录入态时先 `suspend_hotkeys`（注销全部），失焦 / 录完再 `resume_hotkeys`。不挂起的话，录一个本应用已注册的组合时按键会被全局热键吃掉、永远录不上；挂起后不恢复则按一次 Esc 全局热键就永久失效。

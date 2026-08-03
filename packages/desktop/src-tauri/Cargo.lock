@@ -3765,6 +3765,7 @@ dependencies = [
  "tauri-plugin-autostart",
  "tauri-plugin-global-shortcut",
  "tauri-plugin-notification",
+ "windows",
 ]
 
 [[package]]

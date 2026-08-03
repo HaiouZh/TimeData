@@ -12,7 +12,7 @@ use tauri_plugin_notification::NotificationExt;
 
 use crate::config::{self, action_id, DesktopConfig, HotkeyAction, HotkeyBinding};
 use crate::hotkeys::{HotkeyDispatcher, HotkeyEventPayload, RegistrationOutcome};
-use crate::shell::{resolve_toggle_action, ToggleAction};
+use crate::shell::{resolve_is_foreground, resolve_toggle_action, ToggleAction};
 
 /// 配置文件写锁：所有 load→modify→save 形态的命令先拿它再动文件。
 /// 没有它，两个并发写命令（如设置页同时改阈值与热键）会交错成
@@ -43,11 +43,42 @@ pub fn show_main_window(app: &AppHandle) {
     }
 }
 
+/// 当前前台窗口归一到顶层后的句柄；没有前台窗口时为 0。
+/// 归一（`GA_ROOT`）这步是关键：前台常常是我们自己的 WebView2 子窗口，不归一就比不上。
+#[cfg(windows)]
+fn foreground_root_hwnd() -> isize {
+    use windows::Win32::UI::WindowsAndMessaging::{GetAncestor, GetForegroundWindow, GA_ROOT};
+    // SAFETY: 两个调用都只读窗口管理器状态、不解引用返回的句柄，NULL 输入也有定义
+    // （GetAncestor 原样返回 NULL），因此无前置条件可违反。
+    unsafe {
+        let foreground = GetForegroundWindow();
+        if foreground.0.is_null() {
+            return 0;
+        }
+        GetAncestor(foreground, GA_ROOT).0 as isize
+    }
+}
+
+/// 非 Windows 平台没有这条事实来源，恒 0 让判定退回只看 `is_focused()`——
+/// 被修的误报是 Windows/WebView2 特有的。
+#[cfg(not(windows))]
+fn foreground_root_hwnd() -> isize {
+    0
+}
+
 fn toggle_main_window(app: &AppHandle) {
     let Some(window) = app.get_webview_window("main") else { return };
     let visible = window.is_visible().unwrap_or(false);
     let minimized = window.is_minimized().unwrap_or(false);
-    let focused = window.is_focused().unwrap_or(false);
+    #[cfg(windows)]
+    let self_hwnd = window.hwnd().map(|h| h.0 as isize).unwrap_or(0);
+    #[cfg(not(windows))]
+    let self_hwnd = 0isize;
+    let focused = resolve_is_foreground(
+        window.is_focused().unwrap_or(false),
+        foreground_root_hwnd(),
+        self_hwnd,
+    );
     match resolve_toggle_action(visible, minimized, focused) {
         ToggleAction::Hide => {
             let _ = window.hide();
