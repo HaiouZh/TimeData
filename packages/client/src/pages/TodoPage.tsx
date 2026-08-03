@@ -93,6 +93,8 @@ import { ResizableSplit } from "./todo/ResizableSplit.js";
 import { TaskColumn } from "./todo/TaskColumn.js";
 import { TaskDetailSheet } from "./todo/TaskDetailSheet.js";
 import { TaskList } from "./todo/TaskList.js";
+import { TaskTrackChip } from "./todo/TaskTrackChip.js";
+import { useTaskTrackIndex } from "./todo/useTaskTrackIndex.js";
 import { TodoComposer } from "./todo/TodoComposer.js";
 import { TodoSelectionBar } from "./todo/TodoSelectionBar.js";
 import { ProjectNameChip, TodoProjectSection } from "./todo/TodoProjectSection.js";
@@ -138,6 +140,7 @@ export function TodoPage() {
   // 项目成员用可点的项目名 chip 表达归属，绿竖条退回只表达 theme 归属——同屏两种说法是重复信号。
   const projectChips = projectChipIndex(buckets.projects, buckets.projectTints);
   const goalLinkedIds = goalBarTaskIds(buckets.goalLinkedIds, projectChips);
+  const taskTrackIndex = useTaskTrackIndex();
   const resumable = useLiveQuery(() => listResumableSessions(), []) ?? [];
   useEffect(() => {
     void healActiveSessions();
@@ -461,9 +464,21 @@ export function TodoPage() {
   const endHand = () => void endActiveSession();
   const resumeHand = (sessionId: string) => void resumeSession(sessionId);
   const exitProject = (goalId: string, t: Task) => void removeGoalMember(goalId, { kind: "task", id: t.id });
-  const projectMetaChip = (t: Task): ReactNode => {
+  const trackChipFor = (t: Task): ReactNode => {
+    const trackInfo = t.done ? undefined : taskTrackIndex.get(t.id);
+    return trackInfo !== undefined ? <TaskTrackChip info={trackInfo} /> : null;
+  };
+
+  const taskMetaChips = (t: Task): ReactNode => {
     const chip = projectChips.get(t.id);
-    return chip ? <ProjectNameChip chip={chip} onOpen={openProject} /> : null;
+    const trackChip = trackChipFor(t);
+    if (chip === undefined && trackChip === null) return null;
+    return (
+      <>
+        {chip !== undefined ? <ProjectNameChip chip={chip} onOpen={openProject} /> : null}
+        {trackChip}
+      </>
+    );
   };
 
   const enterSelection = () => {
@@ -1038,6 +1053,7 @@ export function TodoPage() {
       onRenameGoal={renameProject}
       onOpenGoal={(goalId) => navigate(`/goals/${goalId}`)}
       dropBlocked={dragDropBlocked}
+      trackChipFor={trackChipFor}
       {...rowHandlers}
     />
   );
@@ -1054,7 +1070,7 @@ export function TodoPage() {
       onEdit={openDetail}
       onCopyTitle={rowHandlers.onCopyTitle}
       goalLinkedIds={goalLinkedIds}
-      metaChip={projectMetaChip}
+      metaChip={taskMetaChips}
       onUpdateNote={(note) => {
         const sessionId = buckets.handSession?.id;
         if (sessionId) updateSessionNote(sessionId, note).catch((error) => console.error("场便签保存失败", error));
@@ -1075,7 +1091,7 @@ export function TodoPage() {
       isOverdue={isOverdue}
       sortable
       containerId="pool:today"
-      metaChip={projectMetaChip}
+      metaChip={taskMetaChips}
       indentTargetId={indentTargetId}
       revealChildren={revealChildren}
       {...rowHandlers}
@@ -1165,6 +1181,7 @@ export function TodoPage() {
                 indentTargetId={indentTargetId}
                 revealChildren={revealChildren}
                 goalLinkedIds={goalLinkedIds}
+                metaChip={taskMetaChips}
                 {...selectionProps}
                 {...rowHandlers}
               />
@@ -1329,9 +1346,9 @@ export function TodoPage() {
       ) : (
         <div className="rounded-card p-1.5">
           {scheduledSurface.length > 0 && (
-            <TaskList pool="upcoming" tasks={scheduledSurface} metaChip={projectMetaChip} {...rowHandlers} />
+            <TaskList pool="upcoming" tasks={scheduledSurface} metaChip={taskMetaChips} {...rowHandlers} />
           )}
-          <SunkenScheduledTail sunkenTasks={scheduledSunken} metaChip={projectMetaChip} {...rowHandlers} />
+          <SunkenScheduledTail sunkenTasks={scheduledSunken} metaChip={taskMetaChips} {...rowHandlers} />
         </div>
       )}
     </CollapsibleSection>

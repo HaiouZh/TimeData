@@ -73,6 +73,7 @@ function sectionElement(props: Partial<Parameters<typeof TodoProjectSection>[0]>
         onRenameGoal={props.onRenameGoal ?? vi.fn(async () => undefined)}
         onOpenGoal={props.onOpenGoal ?? vi.fn()}
         dropBlocked={props.dropBlocked ?? null}
+        trackChipFor={props.trackChipFor}
         {...handlers}
         onToHand={props.onToHand}
       />
@@ -435,6 +436,18 @@ describe("TodoProjectSection", () => {
     const chips = host.querySelectorAll('[data-testid="project-member-state"]');
     expect(chips).toHaveLength(1);
     expect(chips[0]?.textContent).toBe("今天");
+    await unmount(root);
+  });
+
+  // 探针模式同 TaskRow.test.tsx 的 metaChip 探针——只验透传与出现，不重测 chip 内部行为。
+  it("trackChipFor 提供时，成员行 meta 带渲染其返回节点", async () => {
+    const { host, root } = await renderSection({
+      groups: [group({ goalId: "g1", tasks: [task({ id: "t1", title: "刷墙" })] })],
+      trackChipFor: () => <span data-testid="probe-track-chip">#agent在做</span>,
+    });
+    // 必须先展开：默认全折叠时组内行不渲染。
+    await click(host.querySelector('[data-testid="project-group-toggle"]'));
+    expect(host.querySelector('[data-testid="probe-track-chip"]')).not.toBeNull();
     await unmount(root);
   });
 

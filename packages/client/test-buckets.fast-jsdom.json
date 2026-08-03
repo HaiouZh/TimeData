@@ -58,6 +58,7 @@
   "src/pages/todo/TaskColumn.test.tsx",
   "src/pages/todo/TaskDetailSheet.test.tsx",
   "src/pages/todo/TaskRow.test.tsx",
+  "src/pages/todo/TaskTrackChip.test.tsx",
   "src/pages/todo/TodoComposer.test.tsx",
   "src/pages/todo/TodoListSections.test.tsx",
   "src/pages/todo/TodoProjectSection.test.tsx",

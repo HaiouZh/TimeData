@@ -67,6 +67,11 @@ export interface TodoProjectSectionProps {
    * 它换掉的是修复前那个「高亮 → 静默吞掉归属」的数据丢失，方向是净改善。
    */
   dropBlocked: boolean | null;
+  /**
+   * 行级轨道徽章插槽：宿主注入 task→track 徽章，与成员状态胶囊同 meta 带并排。
+   * 组件不自己查轨道——反查索引在页面顶层一次订阅（`useTaskTrackIndex`），组件手上没有。
+   */
+  trackChipFor?: (task: Task) => ReactNode;
   onToggle: (task: Task) => void;
   onEdit: (task: Task) => void;
   onDelete: (task: Task) => void;
@@ -492,6 +497,7 @@ export function TodoProjectSection({
   onRenameGoal,
   onOpenGoal,
   dropBlocked,
+  trackChipFor,
   ...rowHandlers
 }: TodoProjectSectionProps) {
   const [overrides, setOverrides] = useState<Map<string, boolean>>(() => new Map());
@@ -589,7 +595,18 @@ export function TodoProjectSection({
                   atHandIds={new Set([...rowActions].filter(([, a]) => a.atHand).map(([id]) => id))}
                   tasks={visibleTasks}
                   childrenModeOverride="static"
-                  metaChip={(task) => memberStateChip(task, handSessionId, now)}
+                  metaChip={(task) => {
+                    // 皆缺必须返回 null：空 fragment 也是非 null 节点，会把 TaskRow 的 hasMeta 闸顶开、凭空画出空 meta 带。
+                    const stateChip = memberStateChip(task, handSessionId, now);
+                    const trackChip = trackChipFor?.(task) ?? null;
+                    if (stateChip === null && trackChip === null) return null;
+                    return (
+                      <>
+                        {stateChip}
+                        {trackChip}
+                      </>
+                    );
+                  }}
                   extraAction={(task) => (
                     <button
                       type="button"
