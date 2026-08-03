@@ -131,6 +131,7 @@
 - 哪个 evergreen 子文档管哪块代码，**去 `architecture.md` §6「模块速查」或各文档 frontmatter 查**。
 - evergreen 大调整保留代码入口 / 路由 / 测试文件路径，便于按文档反查实现。
 - evergreen 该写什么 / 不该写什么（§0）、怎么组织、新增文档放哪、单文档多大该外提，见 [`docs/evergreen/_docs-guide.md`](docs/evergreen/_docs-guide.md)。
+- **文档撞 hard cap（25000 字符）时，合法动作只有三条**：删过时内容 / 横切外提功能子域 / 纵切外提读者路径。**压缩措辞、删例子、把句子改短不是合法动作**——那是拿可读性换体量且不可逆。三条都走不通就停下来问人，不要让门禁绿变成目标。判据见 [_docs-guide](docs/evergreen/_docs-guide.md) §3。
 
 ------
 
