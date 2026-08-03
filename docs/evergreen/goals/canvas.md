@@ -15,7 +15,7 @@ covers:
   - packages/client/src/lib/galaxyEngineMode.ts
   - packages/client/src/lib/goalUnassigned.ts
   - packages/client/src/pages/goals/**
-last-reviewed: 2026-07-27
+last-reviewed: 2026-08-03
 ---
 
 # 目标层 · 星图画布
@@ -27,7 +27,7 @@ last-reviewed: 2026-07-27
 ## 承上启下
 
 - **上游**：`GoalsPage` 按视图偏好分流到 `GoalGalaxyCanvas`（星图）或 `GoalsListPage`（列表）；`GoalDetailPage` 用 live query 给 `GoalGraphEditor` 喂 Goal/Task/Track/Step/布局钉点快照。
-- **下游**：所有结构写入仍只经 `lib/goals.ts`、`lib/tasks.ts` 与 `lib/goalLayoutPins.ts` 的既有 Dexie + `syncLog` 边界（写入经 `recordSyncLog` 自动调度上传），画布自己不碰同步层。
+- **下游**：所有结构写入仍只经 `lib/goals.ts`、`lib/tasks.ts`（Task 完成走上层 `lib/taskTrackPromote.ts`，勾掉挂轨道的任务会附带写 `tracks`/`track_steps` 归档它，见 [tracks](../tracks.md) §5）与 `lib/goalLayoutPins.ts` 的既有 Dexie + `syncLog` 边界（写入经 `recordSyncLog` 自动调度上传），画布自己不碰同步层。
 - **契约**：布局坐标落 `goal_layout_pins`（复合 recordId 与域登记见母文档 [goals](../goals.md) §2）；节点/边模型由 `buildGoalOverview` 派生，画布不新增反向索引表。
 - **邻居**：[goals](../goals.md)（schema / 同步 / roll-up）、[todo](../todo.md)（成员任务资格口径与深链 `/todo?taskId=`）、[tracks](../tracks.md)（Track 状态仍回轨道页处理）、[todo/at-hand](../todo/at-hand.md)（未归类托盘的“手头”组读活跃 Session）、[design-language](../design-language.md)（galaxy scoped token）。
 
