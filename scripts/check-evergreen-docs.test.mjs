@@ -107,6 +107,8 @@ test("EVERGREEN_RULES_SUMMARY points back to the docs guide §0", () => {
   assert.match(text, /没有任何改动发生时也成立/);
   assert.match(text, /只写 grep 不出来的/);
   assert.match(text, /抄了清单就把源文件挂进 contracts/);
+  assert.match(text, /挂不了就改成指针/);
+  assert.match(text, /没有源文件可挂的只能删/);
 });
 
 test("selectChangedEvergreenDocs picks evergreen bodies and excludes ADR/code", () => {

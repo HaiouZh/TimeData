@@ -494,7 +494,7 @@ export const EVERGREEN_RULES_SUMMARY = [
   "  只写「没有任何改动发生时也成立」的现状：机制 / 契约 / 不变量 / 边界。",
   "  决策论证归 docs/adr，对 agent 的指令与授权归 AGENTS.md，改动流水归提交信息，在办事项归 docs_local。",
   "  禁时间性措辞（目前 / 本轮 / 新增了 / 已改为）；只写 grep 不出来的，其余只指路。",
-  "  抄了清单就把源文件挂进 contracts；无源派生汇总只能删，权威导航入口除外。",
+  "  抄了清单就把源文件挂进 contracts；挂不了就改成指针；没有源文件可挂的只能删（权威导航入口除外）。",
 ];
 
 function printRulesSummary(log) {
