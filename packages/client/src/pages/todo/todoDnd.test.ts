@@ -11,6 +11,7 @@ import {
   resolveTodoDockDrop,
   projectContainerId,
   resolveIndentLevel,
+  resolveTodoDragLane,
   resolveTodoDragOperation,
   resolveTodoDragWithIndent,
   TODO_CHILD_INDENT_PX,
@@ -68,6 +69,52 @@ describe("resolveIndentLevel（子任务基线 base=child）", () => {
   it("子任务升级 root 后滞回到 -12 内才回落 child", () => {
     expect(resolveIndentLevel(-(TODO_INDENT_RELEASE_PX + 1), "root", "child")).toBe("root");
     expect(resolveIndentLevel(-TODO_INDENT_RELEASE_PX, "root", "child")).toBe("child");
+  });
+});
+
+describe("resolveTodoDragLane（三档车道）", () => {
+  it("root 起手左拉未达 -28 保持 root", () => {
+    expect(resolveTodoDragLane(-(TODO_CHILD_INDENT_PX - 1), "root")).toBe("root");
+  });
+
+  it("root 起手左拉达到 -28 进 dock", () => {
+    expect(resolveTodoDragLane(-TODO_CHILD_INDENT_PX, "root")).toBe("dock");
+  });
+
+  it("dock 态回撤到 -12 以内才释放回 root（滞回）", () => {
+    expect(resolveTodoDragLane(-(TODO_INDENT_RELEASE_PX + 1), "dock")).toBe("dock");
+    expect(resolveTodoDragLane(-TODO_INDENT_RELEASE_PX, "dock")).toBe("root");
+  });
+
+  it("dock 态一帧横跳到右侧缩进阈值外直接换到 child 档", () => {
+    expect(resolveTodoDragLane(TODO_CHILD_INDENT_PX + 2, "dock")).toBe("child");
+  });
+
+  it("右移与缩进判定与 resolveIndentLevel 逐值一致（root/child 两档不动）", () => {
+    expect(resolveTodoDragLane(TODO_CHILD_INDENT_PX, "root")).toBe("child");
+    expect(resolveTodoDragLane(TODO_INDENT_RELEASE_PX + 1, "child")).toBe("child");
+    expect(resolveTodoDragLane(TODO_INDENT_RELEASE_PX, "child")).toBe("root");
+  });
+
+  it("base=child：-28 只升根，绝不一步进 dock", () => {
+    expect(resolveTodoDragLane(-TODO_CHILD_INDENT_PX, "child", "child")).toBe("root");
+  });
+
+  it("base=child：升根后继续左拉到 -56 才进 dock", () => {
+    expect(resolveTodoDragLane(-(TODO_CHILD_INDENT_PX * 2 - 1), "root", "child")).toBe("root");
+    expect(resolveTodoDragLane(-TODO_CHILD_INDENT_PX * 2, "root", "child")).toBe("dock");
+  });
+
+  it("base=child：dock 态回撤到 -40 释放回 root（升根点左移 12 的滞回）", () => {
+    const release = -(TODO_CHILD_INDENT_PX + TODO_INDENT_RELEASE_PX); // -40
+    expect(resolveTodoDragLane(release - 1, "dock", "child")).toBe("dock");
+    expect(resolveTodoDragLane(release, "dock", "child")).toBe("root");
+  });
+
+  it("键盘拖拽恒基线档：大幅负位移也不进 dock、不换档", () => {
+    expect(resolveTodoDragLane(-300, "root", "root", true)).toBe("root");
+    expect(resolveTodoDragLane(-300, "child", "child", true)).toBe("child");
+    expect(resolveTodoDragLane(300, "root", "root", true)).toBe("root");
   });
 });
 

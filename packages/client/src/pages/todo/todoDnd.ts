@@ -31,6 +31,36 @@ export function resolveIndentLevel(
   return deltaX >= TODO_CHILD_INDENT_PX ? "child" : "root";
 }
 
+/** 拖拽横向车道：在缩进两档（root/child）左侧再加一档 dock（投递坞现身并接投递）。 */
+export type TodoDragLane = TodoIndentLevel | "dock";
+
+/**
+ * 由横向位移判定三档车道，dock 档与缩进档同构叠加：
+ * - `base="root"`（拖根任务）：左拉越过 -28 进 dock，回撤到 -12 内释放回 root。
+ * - `base="child"`（拖子任务）：-28 先升 root（缩进档既有语义），出坞阈值按基线加深一档到 -56，
+ *   释放线随之左移到 -40——升根瞬间绝不同时满足出坞条件，两次越档等距、可分辨。
+ * - root/child 之间的判定原样委托 `resolveIndentLevel`，右移语义一字不变。
+ * - `keyboard=true`（键盘拖拽）恒返回基线档：跨栏键盘移动会产生很大的 delta.x，
+ *   不判 sensor 会把键盘重排误判成出坞/换档；恒基线等价于"视作 deltaX=0"。
+ */
+export function resolveTodoDragLane(
+  deltaX: number,
+  previous: TodoDragLane,
+  base: TodoIndentLevel = "root",
+  keyboard = false,
+): TodoDragLane {
+  if (keyboard) return base;
+  const origin = base === "child" ? -TODO_CHILD_INDENT_PX : 0;
+  const engage = origin - TODO_CHILD_INDENT_PX;
+  const release = origin - TODO_INDENT_RELEASE_PX;
+  if (previous === "dock") {
+    if (deltaX < release) return "dock";
+    return resolveIndentLevel(deltaX, "root", base);
+  }
+  if (deltaX <= engage) return "dock";
+  return resolveIndentLevel(deltaX, previous, base);
+}
+
 /**
  * 拖拽预览横向夹取，避免横向滚动条：
  * - 拖根任务：只允许向右缩进，夹到 `[0, 28]`。
