@@ -31,7 +31,7 @@ size 对 frontmatter 的 `covers:`、`contracts:` 要求 YAML 列表：冒号后
 
 ## 2. 本地与 CI
 
-CI 运行 strict、warn、size、coverage 和 links；它不运行 stale。开发时 `pnpm check:docs` 是本地 warn 入口，帮助发现可能受影响文档；它不替代 CI 的 strict。`pnpm check:docs:stale` 是本地单独检查复查日期，`pnpm check:docs:size`、`:links` 可在文档重组后立即运行。
+CI 对非 bot PR 运行 `pnpm check:docs:strict --since=<base>` 与 `pnpm check:docs:coverage --since=<base>`；dependabot / renovate PR 运行 warn `pnpm check:docs --since=<base>`。`pnpm check:docs:size` 与 `pnpm check:docs:links` 在 CI 都跑；`pnpm check:docs:stale` 不在 CI。开发时 `pnpm check:docs` 是本地 warn 入口，帮助发现可能受影响文档；它不替代 CI 的 strict。`pnpm check:docs:stale` 是本地单独检查复查日期，`pnpm check:docs:size`、`:links` 可在文档重组后立即运行。
 
 带改动集的模式必须给可靠 base。无参时脚本使用 `--since=HEAD`；提交干净后 diff 为空，会出现假通过。因此自测一律显式使用 `--since=main`，例如：
 

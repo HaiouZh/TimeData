@@ -611,8 +611,8 @@ function isEvergreenDoc(d) {
   return d.filePath.startsWith("docs/evergreen/");
 }
 
-// size 不再对字符数做「只降不升」棘轮——正文随便写、随便加长都放行。
-// 只守两件事：① 单文档字符数超 hard cap（膨胀 → 提示拆子文档）；② covers 管辖范围只增不减要过基线（防悄悄扩管辖）。
+// size 不再对正文字符数做「只降不升」棘轮——正文可增长，但硬上限与结构闸仍会拦。
+// 它同时检查 frontmatter 形状、covers/contracts 双空 no-gate、hard cap、covers baseline 增长，以及 baseline 漏项 / 保留已删除文档。
 export function evaluateSizes(docs, baseline, caps) {
   const hardChars = caps?.hardChars ?? SIZE_CAPS.hardChars;
   const violations = [];
