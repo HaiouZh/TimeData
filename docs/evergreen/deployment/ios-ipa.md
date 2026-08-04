@@ -61,7 +61,7 @@ last-reviewed: 2026-08-02
 
 ### 3.3 Keyboard resize 模式
 
-`packages/mobile/capacitor.config.ts` 的 `plugins.Keyboard.resize` 设为 `KeyboardResize.None`（`@capacitor/keyboard` 插件，两平台共用配置，`capacitor.config.ts` 整体归属见 [deployment/android-apk](android-apk.md) §2；这条不经过 §3 开头的 `patch-ios.rb` 补丁管线，是构建时随 Capacitor 配置生效的插件设置）：webview 不因键盘弹起自动 reflow。选 `none` 而不是让 webview 自己 resize，是为了与网页层 JS 计算避让保持一致——§3.1 已经移除了系统键盘工具条，贴底输入条与内容留白改由网页层读键盘高度手动抬起（键盘高度单一来源与底部避让量单一合成见 [design-language](../design-language.md#design-language-s4) 第 12 条）；若 webview 自己 reflow，会与这条 JS 避让重复叠加。
+`packages/mobile/capacitor.config.ts` 的 `plugins.Keyboard.resize` 设为 `KeyboardResize.None`（`@capacitor/keyboard` 插件，两平台共用配置，`capacitor.config.ts` 整体归属见 [deployment/android-apk](android-apk.md#deployment-android-apk-s2)；这条不经过**本文** §3 开头的 `patch-ios.rb` 补丁管线，是构建时随 Capacitor 配置生效的插件设置）：webview 不因键盘弹起自动 reflow。选 `none` 而不是让 webview 自己 resize，是为了与网页层 JS 计算避让保持一致——§3.1 已经移除了系统键盘工具条，贴底输入条与内容留白改由网页层读键盘高度手动抬起（键盘高度单一来源与底部避让量单一合成见 [design-language](../design-language.md#design-language-s4) 第 12 条）；若 webview 自己 reflow，会与这条 JS 避让重复叠加。
 
 <a id="deployment-ios-ipa-s4"></a>
 

@@ -151,14 +151,14 @@ SettingsDiaryPage 保存模板
 | `pages/settings/SettingsDiaryPage.tsx` | 设置页：显示 enabled 状态、编辑并保存路径模板、400 错误展示服务器中文 message |
 | `lib/diary/diaryDate.ts` | `resolveDiaryDate`：显式/跟随两种日期模式的唯一裁决点（§3.1） |
 | `lib/diary/diaryApi.ts` | 客户端 API 封装：`fetchDiaryConfig`/`saveDiaryTemplate`/`fetchDiary`/`saveDiary`，`DiaryConflictError` |
-| `lib/diary/textareaEdit.ts` | 程序化编辑唯一出口：`applyEdit` 走 `execCommand` 保住原生撤销栈，`runEditAction` 统一落地 `EditAction`（[diary/editor](diary/editor.md) §1/5/6/7） |
+| `lib/diary/textareaEdit.ts` | 程序化编辑唯一出口：`applyEdit` 走 `execCommand` 保住原生撤销栈，`runEditAction` 统一落地 `EditAction`（[diary/editor](diary/editor.md) §1、§5、§6、§7） |
 | `lib/diary/orderedList.ts` | 有序列表回车整段重排纯函数（[diary/editor](diary/editor.md#diary-editor-s2)） |
-| `lib/diary/listModel.ts` | 共享行模型与有序列表重排原语（供回车重排与 Tab 缩进复用，见 [diary/editor](diary/editor.md) §2、§3） |
+| `lib/diary/listModel.ts` | 共享行模型与有序列表重排原语（供回车重排与 Tab 缩进复用，见 [diary/editor §2](diary/editor.md#diary-editor-s2) 与 [§3](diary/editor.md#diary-editor-s3)） |
 | `lib/diary/indent.ts` | Tab/Shift+Tab 缩进出层纯函数，带父行约束与顶层逃生口（[diary/editor](diary/editor.md#diary-editor-s3)） |
 | `lib/diary/link.ts` | Ctrl+K 补 markdown 链接纯函数，四态返回（null/noop/select/replace）+ 围栏豁免，七 case（[diary/editor](diary/editor.md#diary-editor-s4)） |
 | `lib/diary/eol.ts` | 行尾保护：探测原文件主导行尾（CRLF/LF），`DiaryPage` 保存时据此还原，避免打开 CRLF 文件后静默改写成 LF（[diary/editor](diary/editor.md#diary-editor-s8)） |
 | `lib/diary/diaryRefPrefs.ts` | 参考栏折叠偏好：「今天」三块的展开/折叠状态存取（[diary/reference-panel](diary/reference-panel.md#diary-reference-panel-s2)） |
-| `lib/diary/diaryRefEntries.ts` | 打点当天窗口查询 `listEntriesOverlappingDay` + 日界裁剪 `clipEntriesToDay`，二者共用 `diaryRefDayWindow`（[diary/reference-panel](diary/reference-panel.md) §2、§4） |
+| `lib/diary/diaryRefEntries.ts` | 打点当天窗口查询 `listEntriesOverlappingDay` + 日界裁剪 `clipEntriesToDay`，二者共用 `diaryRefDayWindow`（[diary/reference-panel §2](diary/reference-panel.md#diary-reference-panel-s2) 与 [§4](diary/reference-panel.md#diary-reference-panel-s4)） |
 | `lib/diary/diaryRefTasks.ts` | 完成待办过滤：`selectTasksCompletedOn` 三条硬性口径（[diary/reference-panel](diary/reference-panel.md#diary-reference-panel-s2)） |
 | `pages/diary/**` | 参考栏五个组件：`DiaryReferencePanel`（挂载、两个分区、每块各一层 `ErrorBoundary`）、`DiaryRefPunches`、`DiaryRefDoneTasks`、`DiaryRefQuickNotes`、`DiaryRefLookback`（[diary/reference-panel](diary/reference-panel.md)） |
 | 编辑器三键位 / EditAction 四态 / onChange 红线 / dirty 记账 / 行尾保护 | → [diary/editor](diary/editor.md) |

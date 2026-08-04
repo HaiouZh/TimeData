@@ -55,6 +55,8 @@ last-reviewed: 2026-07-27
 
 因此 `DiaryReferencePanel` 里**每块各围一层** `components/ErrorBoundary.tsx`（`RefBlock`，`fallback` 只渲染一行 `{块名}读取失败`）。逐块围而不是整栏围一层，是为了兑现 [diary](../diary.md#diary-s2) 契约 15 的字面：一块挂了，另外三块照常显示。回看块也围——它自己的 `catch` 只接住 `fetchDiary` 的 rejection，接不住渲染期抛出的错。
 
+<a id="diary-reference-panel-s4"></a>
+
 ## 4 参考栏的四块口径都各自查，不借用页面级 hook
 
 打点块**不走** `hooks/useEntries(date)`，走 `lib/diary/diaryRefEntries.ts:listEntriesOverlappingDay`。两条理由：
