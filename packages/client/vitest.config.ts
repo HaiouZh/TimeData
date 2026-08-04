@@ -7,6 +7,11 @@ import { resolveCleanBucket, resolveFastJsdomBucket } from "./test-buckets.mjs";
 const sharedSrc = fileURLToPath(new URL("../shared/src/index.ts", import.meta.url));
 const pwaRegisterMock = fileURLToPath(new URL("./src/test/pwaRegisterMock.ts", import.meta.url));
 const clientRoot = fileURLToPath(new URL(".", import.meta.url));
+// @phosphor-icons/react 是全量图标 barrel，vitest 里冷加载实测 11.94s，且 112 个测试文件可达它
+// （isolate:true 下每文件重付一遍）——是 import 耗时的最大单点。测试一律换成只含在用图标的替身。
+// 走 alias 而非各文件 vi.mock：既不给测试文件添脏标记（不挡快桶准入），也无 mock 跨文件泄漏问题。
+// e2e project 不挂，保留真实图标。
+const phosphorStub = fileURLToPath(new URL("./src/test/stubs/phosphorIcons.tsx", import.meta.url));
 
 // 干净桶成员（lib/quick-notes 的纯逻辑测试，node 环境、不碰 db/DOM）。唯一事实源在 ./test-buckets.mjs，
 // check:test 的 dirty-file-in-clean-bucket 棘轮用同一判定守边界，防新脏文件混入。
@@ -23,6 +28,7 @@ const makeDefine = () => ({
 const makeUnitAlias = () => ({
   "@timedata/shared": sharedSrc,
   "virtual:pwa-register/react": pwaRegisterMock,
+  "@phosphor-icons/react": phosphorStub,
 });
 
 export default defineConfig({
