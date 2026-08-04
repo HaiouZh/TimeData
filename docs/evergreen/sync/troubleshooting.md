@@ -3,11 +3,15 @@ type: evergreen
 title: 同步 · 观测与排障
 covers:
 contracts:
+  - packages/client/src/components/SyncTimingsPanel.tsx
+  - packages/client/src/db/index.ts
+  - packages/client/src/lib/storageKeys.ts
   - packages/client/src/sync/engine.ts
   - packages/client/src/sync/phaseTimings.ts
   - packages/client/src/sync/scheduler.ts
   - packages/client/src/sync/transport.ts
   - packages/client/src/hooks/useSync.ts
+  - packages/server/src/routes/admin/sync.ts
   - packages/server/src/routes/sync.ts
   - packages/server/src/routes/syncLog.ts
 last-reviewed: 2026-08-04
