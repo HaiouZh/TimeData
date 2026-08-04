@@ -35,7 +35,7 @@ last-reviewed: 2026-08-05
 ## 承上启下
 
 - **上游**：用户在 `QuickNotesPage` 自记/编辑/置顶/删除；授权 agent 经 `POST /api/quick-notes` 投递 `source="agent"`；CLI `timedata notes` 只读查询。
-- **下游**：本地 mutation 经 `syncLog(tableName="quick_notes")` → [sync](sync.md) 推送 → 服务端通用 LWW 域 + `sync_seq` → 其他设备拉取。独立备份格式 `timedata.quick-notes.backup`（见 [backup](backup.md)）。
+- **下游**：本地 mutation 经 `syncLog(tableName="quick_notes")` → [sync](sync.md) 推送 → 服务端通用 LWW 域 + `sync_seq` → 其他设备拉取。备份有两条路径（见 [backup](backup.md)）：速记随 `backup: "bundled"` 角色进完整备份 `timedata.backup`，同时保留独立格式 `timedata.quick-notes.backup`；完整备份是它的超集，不是替代。
 - **契约**：`QuickNote` 字段 schema 见本文 §2，定义在 `entitySchemas.ts:QuickNoteSchema`（`schemas.ts` re-export）；跨域约定见 [data-model](data-model.md)。
 - **邻居**：[todo](todo.md)（composer「存待办」调 `addTask`）、[tracks](tracks.md)（TrackStep 复用 `source/sourceLabel` 的人/agent 来源口径）、[timeline](timeline.md)（composer「打点」建 time_entry，分类来自 [categories-settings](categories-settings.md) 的打点分类设置）、[sync](sync.md)。
 
@@ -48,7 +48,7 @@ last-reviewed: 2026-08-05
 - **新增** `addQuickNote(text)`：生成 UUID，`normalizeText` trim 后非空，`occurredAt` 缺省 = `createdAt` = now；不设 `source/sourceLabel/pinned`（用户自记 source 缺省等同 user）。
 - **编辑** `updateQuickNote(id, {text})`：只改 `text/occurredAt/updatedAt`，**保留** existing 的 `source/sourceLabel/pinned`（不清空 agent 速记标记）。
 - **置顶** `setQuickNotePinned(id, pinned)`：只改 `pinned/updatedAt`。
-- **删除** `deleteQuickNote` / `deleteQuickNotesByRange` / `deleteQuickNotesByIds`：同事务 `bulkDelete` + 逐条 `recordSyncLog("delete")`；`deleteQuickNotesByRange` 只清普通速记，跳过 `pinned === true`，返回 `{deleted}` 仅计实际删除数。
+- **删除** `deleteQuickNote` / `deleteQuickNotesByRange` / `deleteQuickNotesByIds`：都在同事务里删行 + 逐条 `recordSyncLog("delete")`——单条走 `db.quickNotes.delete(id)`，两个批量入口才走 `bulkDelete`；`deleteQuickNotesByRange` 只清普通速记，跳过 `pinned === true`，返回 `{deleted}` 仅计实际删除数。
 - **JSON 合并导入**：入口在设置 → 数据页（`SettingsDataPage.tsx`，**不在速记页**）→ `importQuickNotes`（`quick-notes/importQuickNotes.ts`）按 `QuickNotesFileSchema` 校验，按 id 合并：不存在则 add，`incoming.updatedAt > existing.updatedAt` 则 update，否则 kept，返回 `{inserted, updated, kept}`。
 - **导出**：`exportQuickNotes` 产 JSON（独立备份格式 `timedata.quick-notes.backup`，`quick-notes/schema.ts`，`timeFormat:"utc"`，与主 `timedata.backup` 是两套契约）或 Markdown（同分钟/间隔 ≤5min `MARKDOWN_TIME_GAP_MS` 不重复 `## HH:mm` 时间标题）。速记页按当前 `viewingDate`（「眼前正在看的那天」）导出——注意它**不只在显式跳转时更新**：停止滚动 1.2 秒后的一次扫描会把粘在顶上那条日期写进去，所以它跟随滚动自动漂移；显式写入点是退出搜索 / 回到最新 / 日历跳转 / 搜索结果定位。空日只提示不生成文件，Markdown 成功提示带条数；下载经 `fileDownload.ts`（Blob / 原生 Filesystem+Share）。
 
@@ -73,7 +73,7 @@ last-reviewed: 2026-08-05
 
 ### 1.4 捕捉中心角色
 
-速记页兼「轻量捕捉入口」：底部 composer 按草稿状态切换动作，空草稿时左侧按钮打开既有搜索态、右侧按钮执行「打点」；有草稿时左侧按钮把文本存为 `tasks` 池任务（调 `addTask`，落点由 `todo.defaultDestination.v1` 决定，见 [todo](todo.md)）、右侧按钮保存速记；编辑中左侧取消、右侧保存。打点建一条普通 `time_entry`（分类来自 `punch.categoryId.v1`，见 [timeline](timeline.md) 的 `punch.ts`）；未配置或分类失效时提示用户到 `设置 → 记录偏好 → 打点分类` 选择。**这些只是现有域的现有写入路径，不新增写入通道，也不让 quick_notes 拥有时间记录/分类契约**。交互按钮统一经 Phosphor `Icon` 包装，不使用 emoji/Unicode 字符按钮；反馈内嵌在底部 composer，不作浮层。composer 的 fixed bottom 只在窄屏且底部 Tab 可见时避让移动底栏，宽屏不预留移动底栏空隙；「存为待办」提交期间用 pending guard 拦截连点，避免同一草稿生成重复任务。
+速记页兼「轻量捕捉入口」：底部 composer 按草稿状态切换动作，空草稿时左侧按钮打开既有搜索态、右侧按钮执行「打点」；有草稿时左侧按钮把文本存为 `tasks` 池任务（调 `addTask`，落点由 `todo.defaultDestination.v1` 决定，见 [todo](todo.md)）、右侧按钮保存速记；编辑中左侧取消、右侧保存。打点建一条普通 `time_entry`（分类来自 `punch.categoryId.v1`，见 [timeline](timeline.md) 的 `punch.ts`）；未配置或分类失效时提示用户到 `设置 → 记录偏好 → 打点分类` 选择。**这些只是现有域的现有写入路径，不新增写入通道，也不让 quick_notes 拥有时间记录/分类契约**。交互按钮统一经 Phosphor `Icon` 包装，不使用 emoji/Unicode 字符按钮；带撤销的动作反馈（`ActionToastBar`）内嵌在底部 composer 内，通用 `status` / `error` 提示仍是浮在底部的 fixed 元素（导出、复制、删除、草稿恢复走 `showStatus` 这条）。composer 的 fixed bottom 只在窄屏且底部 Tab 可见时避让移动底栏，宽屏不预留移动底栏空隙；「存为待办」提交期间用 pending guard 拦截连点，避免同一草稿生成重复任务。
 
 ## 2. Schema / 契约（字段级）
 
@@ -110,7 +110,7 @@ last-reviewed: 2026-08-05
 
 `quick_notes` 域：`conflictPolicy:"lww"`、**`countsInStatus:true`**（只决定是否计入 `/api/sync/status` 响应里的具名 counts 字段；`contentHash` 与 `lastUpdatedAt` 无条件遍历全部域，不看这个标志）、upsert/deletePriority 40。客户端登记在 `clientDomains.ts`。
 
-客户端启动时的 schema 归一 pass 会按这份登记簿遍历 `quickNotes`：只清理本地 IndexedDB 形状（补默认/剥孤儿，坏行保留并 warn），不写 `syncLog`，不改变 quick_notes 的 LWW 同步语义。
+客户端启动时的 schema 归一 pass 遍历 `quickNotes` 用的是**客户端登记簿** `CLIENT_SYNC_DOMAINS`（`clientDomains.ts` 的 `storeName + schema`），不是本节这份 shared 登记簿：只清理本地 IndexedDB 形状（补默认/剥孤儿，坏行保留并 warn），不写 `syncLog`，不改变 quick_notes 的 LWW 同步语义。
 
 TrackStep 也有 `source: "user" | "agent"` 与 `sourceLabel?`，但那只是复用来源展示口径；轨道步骤不进入 quick notes 独立备份，也不改变 `quick_notes` 的 agent 投递端点。
 
@@ -155,7 +155,7 @@ TrackStep 也有 `source: "user" | "agent"` 与 `sourceLabel?`，但那只是复
 
 ### 4.3 测试
 
-**client**：`pages/QuickNotesPage.test.tsx`、`lib/quickNotes.test.ts`、`lib/quickNoteDisplay.test.ts`、`quick-notes/{clipboard,currentDate,dayGroups,deleteQuickNotesByIds,deleteQuickNotesRange,highlightMatches,HighlightedText,jumpDateLabel,jumpToLatest,looksLikeMarkdown,NoteBubble,NoteMeta,QuickNoteActionMenu,QuickNoteContent,searchQuickNotes,searchTerms,useQuickNoteTimeline,useUnsyncedQuickNoteIds}.test.{ts,tsx}`（导入导出测试见子文档）
+**client**：`pages/QuickNotesPage.test.tsx`、`lib/quickNotes.test.ts`、`lib/quickNoteDisplay.test.ts`、`quick-notes/{clipboard,currentDate,dayGroups,deleteQuickNotesByIds,deleteQuickNotesRange,highlightMatches,HighlightedText,jumpDateLabel,jumpToLatest,looksLikeMarkdown,NoteBubble,NoteMeta,QuickNoteActionMenu,QuickNoteContent,searchQuickNotes,searchTerms,useQuickNoteTimeline,useUnsyncedQuickNoteIds}.test.{ts,tsx}`；导入导出测试与被测代码同目录（`quick-notes/importQuickNotes.test.ts`、`quick-notes/exportQuickNotes.test.ts`），覆盖 `timedata.quick-notes.backup` 校验、JSON merge 与 Markdown 导出
 **server**：`routes/quick-notes.test.ts`、`routes/sync.test.ts`、`sync/*.test.ts`、`db/*.test.ts`
 **shared**：`schemas.test.ts`（QuickNoteSchema 专项） ｜ **cli**：`commands/notes.test.ts` ｜ **e2e**：`__tests__/e2e/sync-roundtrip.e2e.test.ts`
 

@@ -104,11 +104,11 @@ CLI 写时间记录见 [cli](cli.md) 与 [timeline](timeline.md)；agent 投递�
 1. 创建 Hono app。
 2. 装安全响应头、CORS、body limit。
 3. 暴露 `/api/health` 与 `/api/version`。
-4. 先挂 `/api/health` 与 `/api/version` 公开标记，再挂 `/api/*` request audit 与 scoped auth / Bearer auth；未配置 `AUTH_TOKEN` 默认 fail-closed。
+4. `/api/*` 的 request audit 先注册，之后才给 `/api/health` 与 `/api/version` 打 `tokenTier: "public"` 标记——两个公开端点同样进审计；再挂 scoped agent auth 与 Bearer auth，未配置 `AUTH_TOKEN` 默认 fail-closed。
 5. 装 sync/admin rate limit。
 6. 注册业务路由：agent 任务回写、agent 轨道 ingest、categories、entries、quick-notes、tasks、sync、export、update、data、diary、admin（含 sync logs / request logs）。
 7. 服务静态前端产物与 SPA fallback。
-8. `initializeDatabase()` 建表、补列、播种默认分类、处理一次性迁移。
+8. `initializeDatabase()` 建表、补列、播种默认分类、处理一次性迁移；随后 `reconcileInterruptedUpdate()` 收拾上一次自更新留下的锁与状态（失败只 warn，不阻断启动），再 `runUtcResetIfNeeded()` 跑一次性 UTC 归零闸。
 9. 清理旧 server backup，按需跑每日备份并注册每日备份定时器。
 10. 监听 `PORT`。
 
@@ -121,7 +121,7 @@ CLI 写时间记录见 [cli](cli.md) 与 [timeline](timeline.md)；agent 投递�
 1. 检查 `#root` 挂载点并先渲染 React 根。
 2. `<AppUpdateProvider>`、`ErrorBoundary`、`RouterProvider`、`SyncProvider`、`BottomNavProvider`、`TrackAttentionProvider`、`AppShell` 依次包裹（`TrackAttentionProvider` 用 `useTrackAttentionCount` 把轨道「待我处理」回手计数下发给导航 badge，见 [tracks](tracks.md#tracks-s5)；默认 0，只渲染导航壳的单测不触 db）。
 3. `runStartupTasks()` 在后台串行执行 `seedDefaultCategories()`、`migrateLocalSettingsToDexie()`、`runSchemaNormalizationIfNeeded()` 与 occurrence materialization；失败只记录到控制台，不卸载已经渲染的应用。
-4. 应用根用 `createBrowserRouter` + `RouterProvider`（data router，`useBlocker` 的硬前提），单条 `path: "*"` 的 splat route 承载 `SyncProvider → BottomNavProvider → TrackAttentionProvider → AppShell` 这层包裹，路由声明仍全部活在 `AppRoutes` 的 `<Routes>` 子树里；有未保存修改的页面用 `hooks/useUnsavedChangesGuard`（`useBlocker` 拦站内换页 + `beforeunload` 拦关页/刷新）统一拦截离开。该 splat route 还挂了 `errorElement: <RouteErrorFallback />`——RR 对根路由（`index === 0`）总会包一层内部 boundary，不给 `errorElement` 会落回 RR 自带的未翻译兜底页且这层在 `App()` 里 `<ErrorBoundary>` 之下、页面渲染错误冒不上去；`RouteErrorFallback`（`components/ErrorBoundary.tsx`）与类组件 `ErrorBoundary` 共用同一套兜底 UI，保证行为不因迁到 data router 而倒退。Router 注册时间轴、速记、待办、轨道、目标、时间统计、设置、记录编辑及搜索（`/search`，时间记录搜索，见 [timeline](timeline.md#timeline-s11)）路由；AppShell 按 `1024px` viewport 断点分流：窄屏 / APK 渲染底部纯图标导航并继续使用 `nav.visibleTabs.v1`，数组内入口显示在底栏，数组外入口由 `/settings/more` 动态承接，不保留移动端三点菜单；宽屏渲染左侧固定纯图标侧栏并使用 `nav.desktopSidebar.v1` 的排序 / 更多收纳配置。导航配置只保存 route / placement，不保存颜色。两套主导航按钮都必须有 `aria-label`，active 形态只用 `accent` / `surface` / `border` token。`/goals` 先进入目标页宽窄分流壳：宽屏默认全局星图只读总览，窄屏默认列表，并允许手动切换；`/tracks` 与 `/tracks/:id` 包在 `TracksShell` 布局路由里（宽屏调度台常驻左列的 master-detail，右栏随路由出空态/详情；窄屏纯透传，见 [tracks](tracks.md#tracks-s8)）。目标详情 `/goals/:id` 与轨道详情 `/tracks/:id` 在窄屏隐藏底部导航，宽屏仍保留桌面侧栏。设置子路由包含更多功能、导航、轨道行动标签、统计布局、服务端/数据/管理等入口，具体归属见各主题文档。
+4. 应用根用 `createBrowserRouter` + `RouterProvider`（data router，`useBlocker` 的硬前提），单条 `path: "*"` 的 splat route 承载 `SyncProvider → BottomNavProvider → TrackAttentionProvider → AppShell` 这层包裹，路由声明仍全部活在 `AppRoutes` 的 `<Routes>` 子树里；有未保存修改的页面用 `hooks/useUnsavedChangesGuard`（`useBlocker` 拦站内换页 + `beforeunload` 拦关页/刷新）统一拦截离开。该 splat route 还挂了 `errorElement: <RouteErrorFallback />`——RR 对根路由（`index === 0`）总会包一层内部 boundary，不给 `errorElement` 会落回 RR 自带的未翻译兜底页且这层在 `App()` 里 `<ErrorBoundary>` 之下、页面渲染错误冒不上去；`RouteErrorFallback`（`components/ErrorBoundary.tsx`）与类组件 `ErrorBoundary` 共用同一套兜底 UI，保证行为不因迁到 data router 而倒退。Router 注册时间轴、速记、待办、轨道、目标、时间统计、设置、记录编辑及搜索（`/search`，时间记录搜索，见 [timeline](timeline.md#timeline-s11)）路由；AppShell 按 `1024px` viewport 断点分流：窄屏 / APK 渲染底部纯图标导航并继续使用 `nav.visibleTabs.v1`，数组内入口显示在底栏，数组外入口由 `/settings/more` 动态承接，不保留移动端三点菜单；宽屏渲染左侧固定侧栏（图标 + `td-text-caption` 文字标签，不是纯图标）并使用 `nav.desktopSidebar.v1` 的排序 / 更多收纳配置。导航配置只保存 route / placement，不保存颜色。两套主导航按钮都必须有 `aria-label`，active 形态只用 `accent` / `surface` / `border` token。`/goals` 先进入目标页宽窄分流壳：宽屏默认全局星图只读总览，窄屏默认列表，并允许手动切换；`/tracks` 与 `/tracks/:id` 包在 `TracksShell` 布局路由里（宽屏调度台常驻左列的 master-detail，右栏随路由出空态/详情；窄屏纯透传，见 [tracks](tracks.md#tracks-s8)）。目标详情 `/goals/:id` 与轨道详情 `/tracks/:id` 在窄屏隐藏底部导航，宽屏仍保留桌面侧栏。设置子路由包含更多功能、导航、轨道行动标签、统计布局、服务端/数据/管理等入口，具体归属见各主题文档。
 5. `SyncProvider` 在云同步开启且配置完整时维护 SSE 连接，并向模块级 `syncScheduler` 注册 executor；写入、SSE bump、回前台、隐藏前 flush、重连成功、失败退避与 60 秒兜底等触发统一经调度器驱动普通同步。成功热路径仍保持 300ms 防抖、2s max-wait 和无插队时单 push 请求；失败（含 pull-only）按上限指数退避，生命周期预检与 executor/SSE run 都按 generation 隔离。详见 [sync/realtime-and-scheduler](sync/realtime-and-scheduler.md)。
 
 ### 4.3 CLI

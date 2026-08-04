@@ -46,7 +46,8 @@ last-reviewed: 2026-08-05
 | 分类 / `Category` | `categories` | `categories` | [categories-settings](categories-settings.md) §Schema |
 | 时间记录 / `TimeEntry` | `time_entries` | `timeEntries` | [timeline](timeline.md) §Schema |
 | 速记 / `QuickNote` | `quick_notes` | `quickNotes` | [quick-notes](quick-notes.md) §Schema |
-| 待办 / `Task`、`Recurrence` | `tasks` | `tasks` | [todo](todo.md) §Schema |
+| 待办 / `Task` | `tasks` | `tasks` | [todo](todo.md) §Schema |
+| 重复规则 / `Recurrence` | （随 `tasks.recurrence` JSON 列） | 同左 | [todo/recurrence](todo/recurrence.md) |
 | 任务轨道 / `Track`、`TrackStep` | `tracks` / `track_steps` | `tracks` / `trackSteps` | [tracks](tracks.md) §Schema |
 | 目标 / `Goal` | `goals` | `goals` | [goals](goals.md) §Schema |
 | 目标布局钉点 / `GoalLayoutPin` | `goal_layout_pins` | `goalLayoutPins` | [goals](goals.md) §存储与同步 |
@@ -91,11 +92,13 @@ last-reviewed: 2026-08-05
 |---|---|
 | `sleep.categoryId` | [stats-insights](stats-insights.md)、[categories-settings](categories-settings.md) |
 | `punch.categoryId.v1` | [categories-settings](categories-settings.md)、[timeline](timeline.md) |
-| `nav.visibleTabs.v1` | [architecture](architecture.md) 启动/导航概览，具体实现看代码 |
+| `nav.visibleTabs.v1`、`nav.desktopSidebar.v1` | [architecture](architecture.md) 启动/导航概览，具体实现看代码 |
 | `stats.layout.v1` | [stats-insights](stats-insights.md) |
 | `stats.module.trend.v1` | [stats-insights](stats-insights.md) |
+| `stats.todo.layout.v1` | [stats-insights](stats-insights.md) |
 | `todo.defaultDestination.v1` | [todo](todo.md) |
-| `todo.gravity.v1` | [todo](todo.md) |
+| `todo.gravity.v1`、`todo.gravity.review.v1` | [todo](todo.md) |
+| `track.actionTags.v2`、`track.agentExecTags.v1` | [categories-settings/settings-catalog](categories-settings/settings-catalog.md) |
 
 ## 3. SyncLogEntry
 
@@ -229,6 +232,8 @@ SQL 使用 `snake_case`，JS 使用 `camelCase`。没有 ORM，跨边界时手�
 
 **语义窄于列名**：`track_steps.edited_at` 映射为 `TrackStep.editedAt?`，只表示 user 步正文被编辑过，不参与索引。
 
+**列名不同名**（规则推不出，逐个记）：`health_charts.sort_order` → `HealthChartConfig.order`（`lib/chartRows.ts` 读写两侧都做这层改名），其余表的 `sort_order` 照常映射 `sortOrder`。
+
 `tasks.goal_id` / `tracks.goal_id` 不存在——目标归属改由 `Goal.members` 解引用，启动迁移幂等删除旧库残留列。
 
 ## 10. Dexie schema
@@ -257,7 +262,7 @@ db.version(16).stores({
 });
 ```
 
-版本历史：v1 初始；v2 `settings`；v3 `quickNotes`；v4 健康表；v5 `tasks`；v6 `tasks.scheduledAt`；v7 `healthCharts`；v8 `tasks.parentId`（子任务=独立 Task，纯 schema 升级无 upgrade 函数）；v9 `tracks` / `trackSteps`（任务轨道数据地基，新表为空，不需要历史归一迁移）；v10 `goals` + 旧 `tasks.goalId` / `tracks.goalId` 索引；v11 移除旧目标归属索引，目标成员关系改由 `Goal.members` JSON 字段承载；v12 `goalLayoutPins`，用 `[goalId+nodeKind+nodeId]` 复合主键保存目标图钉点；v13 `tasks.weight`（想法重力引擎，upgrade hook 给旧 tasks 补 `weight=0`）；v14 `tasks.ruleId` / `tasks.skipped`（occurrence 实体化地基，`ruleId` 建索引，upgrade hook 给旧 tasks 补 `ruleId=null`、`skipped=false`）；v15 物理删除 `autoBackups`（设备端自动快照整层退役，`autoBackups: null`，见 [ADR 0015](../adr/0015-remove-client-auto-snapshots.md)）；v16 `sessions` 表 + `tasks.sessionId` 索引（手头软会话地基，upgrade hook 给旧 tasks 补 `sessionId=null`，见 [todo/at-hand](todo/at-hand.md)）。
+版本历史：v1 初始；v2 `settings`；v3 `quickNotes`；v4 健康表；v5 `tasks`；v6 `tasks.scheduledAt`；v7 `healthCharts`；v8 `tasks.parentId`（子任务=独立 Task，纯 schema 升级无 upgrade 函数）；v9 `tracks` / `trackSteps`（任务轨道数据地基，新表为空，不需要历史归一迁移）；v10 `goals` + 旧 `tasks.goalId` / `tracks.goalId` 索引；v11 移除旧目标归属索引，目标成员关系改由 `Goal.members` JSON 字段承载；v12 `goalLayoutPins`，用 `[goalId+nodeKind+nodeId]` 复合主键保存目标图钉点；v13 `tasks.weight`（想法重力引擎，**只加 upgrade hook 给旧 tasks 补 `weight=0`，`.stores()` 与 v12 逐行相同、没建索引**）；v14 `tasks.ruleId` / `tasks.skipped`（occurrence 实体化地基，`ruleId` 建索引，upgrade hook 给旧 tasks 补 `ruleId=null`、`skipped=false`）；v15 物理删除 `autoBackups`（设备端自动快照整层退役，`autoBackups: null`，见 [ADR 0015](../adr/0015-remove-client-auto-snapshots.md)）；v16 `sessions` 表 + `tasks.sessionId` 索引（手头软会话地基，upgrade hook 给旧 tasks 补 `sessionId=null`，见 [todo/at-hand](todo/at-hand.md)）。
 
 ## 11. SQLite schema 迁移边界
 
