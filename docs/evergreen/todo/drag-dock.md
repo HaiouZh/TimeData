@@ -26,7 +26,7 @@ last-reviewed: 2026-08-03
 坞只是**既有落点的快捷方式**，不新增任何一种数据操作：
 
 - `dock:pool:today` / `dock:pool:inbox` / `dock:project:<goalId>` 折算成对应容器 id 后走 `resolveTodoDragOperation`，与把行拖到那个池/项目卡逐字同义。
-- `dock:hand` 是坞独有分支：对 root 源 = `grabTaskToHand`；对 child 源 = `promote-to-hand`（先升根再抓，`grabTaskToHand` 对子任务的硬拒因此不被这条路径触发，见 [todo/at-hand](at-hand.md) §7.2）。
+- `dock:hand` 是坞独有分支：对 root 源 = `grabTaskToHand`；对 child 源 = `promote-to-hand`（先升根再抓，`grabTaskToHand` 对子任务的硬拒因此不被这条路径触发，见 [todo/at-hand](at-hand.md#at-hand-grab-hard-reject)）。
 - **坞永不产生 reorder**：坞没有位置语义，`resolveTodoDockDrop` 一律拦成 `invalid`。正常也不可达（当前池的药丸不渲染），这道拦截是隐藏规则漏了时的兜底。
 - 药丸集合由 `todoDockTargets` 决定：被拖行**所在池**的药丸不显示；**拖子任务时「手头」药丸照常显示**；手头源（含"父在手头"的子任务）返回空数组——手头区整区不出坞，移出手头走 × 按钮。
 - 子任务投项目药丸的拒绝口径与项目卡一致（`projectAssignBlockMessage("subtask", …)`），不因为换了入口就放宽。

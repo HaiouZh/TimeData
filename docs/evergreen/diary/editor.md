@@ -98,7 +98,7 @@ last-reviewed: 2026-07-27
 | select | 不置 | 用户一个字没改，不该变脏 |
 | noop | 不置 | 同上 |
 
-置脏的两个出口只有 `onChange` 与 `runEditAction` 的降级分支，二者都调 `markDirty()`（序号 +1 再 `setDirty(true)`），不许裸调 `setDirty(true)`；`select`/`noop` 两条路径刻意什么都不调。序号是"保存在途中有没有继续打字"的唯一判据（[diary](../diary.md) §2.8）。**清除**只有两个出口：保存成功且序号未变、加载/重载成功。
+置脏的两个出口只有 `onChange` 与 `runEditAction` 的降级分支，二者都调 `markDirty()`（序号 +1 再 `setDirty(true)`），不许裸调 `setDirty(true)`；`select`/`noop` 两条路径刻意什么都不调。序号是"保存在途中有没有继续打字"的唯一判据（[diary](../diary.md#diary-save-revision)）。**清除**只有两个出口：保存成功且序号未变、加载/重载成功。
 
 ## 8 行尾保护
 
