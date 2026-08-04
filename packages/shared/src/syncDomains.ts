@@ -30,7 +30,7 @@ export interface SyncDomainConfig {
   /** push 批内 delete 的应用顺序（大者后），保证 category delete 最后 */
   deletePriority: number;
   conflictPolicy: SyncConflictPolicy;
-  /** 是否计入 /api/sync/status 的 counts 与 contentHash 行数摘要 */
+  /** 是否计入 /api/sync/status 响应的具名 counts 字段（categoryCount/entryCount/quickNoteCount）；contentHash 与 lastUpdatedAt 无条件遍历全部域，不看此标志 */
   countsInStatus: boolean;
 }
 

@@ -31,7 +31,7 @@ contracts:
   - packages/shared/src/chartSchemas.ts
   - packages/server/src/db/schema.ts
   - packages/client/src/db/index.ts
-last-reviewed: 2026-08-04
+last-reviewed: 2026-08-05
 ---
 
 # 数据模型与契约

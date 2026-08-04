@@ -22,7 +22,7 @@ contracts:
   - packages/shared/src/types.ts:SyncChange
   - packages/server/src/sync/domains.ts
   - packages/client/src/sync/clientDomains.ts
-last-reviewed: 2026-08-04
+last-reviewed: 2026-08-05
 ---
 
 # 同步 · 域登记簿

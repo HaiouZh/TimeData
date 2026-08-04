@@ -53,7 +53,7 @@ contracts:
   - packages/server/src/db/utcReset.ts
   - packages/server/src/routes/data.ts
   - packages/server/src/sync/domains.ts
-last-reviewed: 2026-08-04
+last-reviewed: 2026-08-05
 ---
 
 # 同步机制
