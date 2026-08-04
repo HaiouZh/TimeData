@@ -48,16 +48,18 @@ SettingsDiaryPage 保存模板
 
 `enabled` 由服务端 `DIARY_VAULT_DIR` 环境变量是否配置决定（非 server_config 存储项）；`template` 与周记模板 `weeklyTemplate` 都存在 `server_config` 表（key 分别是 `diary.pathTemplate.v1` 与 `diary.weeklyPathTemplate.v1`，走 `lib/serverConfig.ts` 的 `getServerConfig`/`setServerConfig` 通用 KV，同表其他配置项 key 独立）。`PUT /config` 按传入字段分别写入，两者互不牵连。
 
+<a id="diary-s2"></a>
+
 ## 2. 关键契约 / 不变量
 
 1. **路径模板占位符**只认 `{yyyy}` `{MM}` `{dd}`，其余占位符（含未知花括号）在展开时报错「未知占位符」。
 2. **模板安全校验**（`expandDiaryTemplate`）：不能含反斜杠、不能是绝对路径（`/` 开头或 `X:` 盘符开头）、不能含 `..` 段；展开后的绝对路径必须仍在 `vaultDir` 内（`resolveDiaryFile` 二次校验，防止模板拼接后越权）。
 3. **mtime 并发守卫**：`PUT /:date` 非 `force` 请求时，服务器当前文件 mtime 必须等于客户端携带的 `baseMtime`（文件不存在时 `baseMtime` 应为 `null`），否则 409 冲突并回传服务器当前 mtime；`force:true` 无条件覆盖。mtime 精度为 `Math.floor(mtimeMs)`（毫秒截断）。
 4. **`enabled=false`（vault 未挂载）时**页面仍可加载/展示，但视为不可用状态提示用户，不阻断路由本身；`template=""`（未配置模板）在 `DiaryPage` 单独提示并链接到 `/settings/diary`。
-5. **有序列表回车重排**（`orderedList.ts:applyEnterInOrderedList`）不是逐行 +1，是把光标所在项到块尾整段拉直编号（`listModel.ts:renumberBlock`）；IME 组合态回车（`event.nativeEvent.isComposing`）不触发；光标前是空列表项且行内光标后无余文时不续号，**有缩进先退一层、退到顶层再按一次才清行**（逐级出层）。附属行/围栏豁免/单项块护栏/光标落点公式等完整语义见 [diary/editor](diary/editor.md) §2。
+5. **有序列表回车重排**（`orderedList.ts:applyEnterInOrderedList`）不是逐行 +1，是把光标所在项到块尾整段拉直编号（`listModel.ts:renumberBlock`）；IME 组合态回车（`event.nativeEvent.isComposing`）不触发；光标前是空列表项且行内光标后无余文时不续号，**有缩进先退一层、退到顶层再按一次才清行**（逐级出层）。附属行/围栏豁免/单项块护栏/光标落点公式等完整语义见 [diary/editor](diary/editor.md#diary-editor-s2)。
 6. **离开/重载确认走 `useConfirm`**（自绘 `ConfirmSheet`），不用裸 `window.confirm`（表单控件棘轮闸 `check:ui` 强制）。
 7. **未保存修改的离开守卫**统一走 `hooks/useUnsavedChangesGuard`（`useBlocker` + `beforeunload`），覆盖桌面侧栏 / 底栏 / `<Link>` / `navigate()` / 浏览器后退 / 安卓返回键；页面**不再**自管 `beforeunload`，返回按钮也不自己弹确认（否则会连弹两次）。页内「刷新重载」的确认不归它管，仍走 `useConfirm`。**已知缺口**：`appUpdate.tsx` 检测到新构建时会在 `visibilitychange`/`focus` 上程序化调用 `window.location.reload()`（无用户激活的硬刷新），浏览器对此类 reload 普遍抑制 `beforeunload` 提示，且 Android WebView 本就不显示 `beforeunload` 对话框；这条路径既不过 `useBlocker`（不是路由内导航）也不过 `beforeunload`（被抑制/不支持），日记正文又不进任何本地存储或同步域，因此是离开守卫覆盖不到的出口。
-8. <a id="diary-save-revision"></a>**保存在途中的编辑不丢**：`handleSave` 发起时记下编辑序号（`editRevisionRef`，每次 `markDirty` +1），请求回来只在序号未变（= 这一发上传的就是当前内容）时清脏；用户在请求在途中继续打字时保持脏态。无条件清脏会连 §2.7 的离开守卫一起关掉，换页即静默丢那段从未上传的内容。判据用序号不用内容比对，原因见 [diary/editor](diary/editor.md) §8 行尾保护。
+8. <a id="diary-save-revision"></a>**保存在途中的编辑不丢**：`handleSave` 发起时记下编辑序号（`editRevisionRef`，每次 `markDirty` +1），请求回来只在序号未变（= 这一发上传的就是当前内容）时清脏；用户在请求在途中继续打字时保持脏态。无条件清脏会连 §2.7 的离开守卫一起关掉，换页即静默丢那段从未上传的内容。判据用序号不用内容比对，原因见 [diary/editor](diary/editor.md#diary-editor-s8) 行尾保护。
 9. **`handleReload` 失败只出条状错误提示**（`setError`），不进 `loadFailed` 全屏态、不清冲突条：正文还在编辑器里、用户还能接着编辑保存，全屏失败态反而会把这份没上传的内容从屏幕上抹掉。
 10. **vault 写权限**：生产镜像 entrypoint 在降权到 UID/GID 1000 前，只创建并递归校正固定挂载根 `/app/vault` 的所有权；`DIARY_VAULT_DIR` 子目录由应用按需创建，误配到挂载根外或含 `.` / `..` 路径段时只告警。文件系统拒绝改权时启动继续但输出 warning，日记写接口把 `EACCES` / `EPERM` / `EROFS` 收敛为 503 `diary-vault-not-writable`，不再暴露通用 500。
 11. **日期口径**：日记的「今天」恒用 `getDateString`（`lib/time.ts`，固定 `Asia/Shanghai`），**禁止** import 待办域的 `localDateString`（设备本地日界）。服务端对 `:date` 是纯字符串透传、自己从不求「今天」（`diary-path.ts` 只做占位符替换与日历有效性校验），**文件名日期 100% 由客户端口径决定**，选错就是文件名整体错一天且服务端不会纠偏。由 `pnpm check:diary`（`scripts/check-diary-date.mjs`，CI 必跑）静态守：日记域源码出现 `localDateString` 即红——单测锁不住（本机与 CI 时区同为 UTC+8，两套日界恒等）。
@@ -110,6 +112,8 @@ SettingsDiaryPage 保存模板
 
 `useUnsavedChangesGuard` 的 `shouldBlock` 只比 `pathname`，`?date=` 变化 pathname 不变 → **它一概拦不到**。所以切日期 / 点提示条时必须页面自己 `await confirm(...)`；不弹就是静默丢数据。反过来说也不会出现双弹层。文案单独写（并没有「离开」页面），不复用守卫默认的「离开后当前修改将丢失」。
 
+<a id="diary-s3-5"></a>
+
 ### 3.5 在途响应的三道闸（正交，不可互相替代）
 
 加载 effect 有 `cancelled` 守卫；`handleSave` / `handleReload` 各自需要：
@@ -148,14 +152,14 @@ SettingsDiaryPage 保存模板
 | `lib/diary/diaryDate.ts` | `resolveDiaryDate`：显式/跟随两种日期模式的唯一裁决点（§3.1） |
 | `lib/diary/diaryApi.ts` | 客户端 API 封装：`fetchDiaryConfig`/`saveDiaryTemplate`/`fetchDiary`/`saveDiary`，`DiaryConflictError` |
 | `lib/diary/textareaEdit.ts` | 程序化编辑唯一出口：`applyEdit` 走 `execCommand` 保住原生撤销栈，`runEditAction` 统一落地 `EditAction`（[diary/editor](diary/editor.md) §1/5/6/7） |
-| `lib/diary/orderedList.ts` | 有序列表回车整段重排纯函数（[diary/editor](diary/editor.md) §2） |
+| `lib/diary/orderedList.ts` | 有序列表回车整段重排纯函数（[diary/editor](diary/editor.md#diary-editor-s2)） |
 | `lib/diary/listModel.ts` | 共享行模型与有序列表重排原语（供回车重排与 Tab 缩进复用，见 [diary/editor](diary/editor.md) §2、§3） |
-| `lib/diary/indent.ts` | Tab/Shift+Tab 缩进出层纯函数，带父行约束与顶层逃生口（[diary/editor](diary/editor.md) §3） |
-| `lib/diary/link.ts` | Ctrl+K 补 markdown 链接纯函数，四态返回（null/noop/select/replace）+ 围栏豁免，七 case（[diary/editor](diary/editor.md) §4） |
-| `lib/diary/eol.ts` | 行尾保护：探测原文件主导行尾（CRLF/LF），`DiaryPage` 保存时据此还原，避免打开 CRLF 文件后静默改写成 LF（[diary/editor](diary/editor.md) §8） |
-| `lib/diary/diaryRefPrefs.ts` | 参考栏折叠偏好：「今天」三块的展开/折叠状态存取（[diary/reference-panel](diary/reference-panel.md) §2） |
+| `lib/diary/indent.ts` | Tab/Shift+Tab 缩进出层纯函数，带父行约束与顶层逃生口（[diary/editor](diary/editor.md#diary-editor-s3)） |
+| `lib/diary/link.ts` | Ctrl+K 补 markdown 链接纯函数，四态返回（null/noop/select/replace）+ 围栏豁免，七 case（[diary/editor](diary/editor.md#diary-editor-s4)） |
+| `lib/diary/eol.ts` | 行尾保护：探测原文件主导行尾（CRLF/LF），`DiaryPage` 保存时据此还原，避免打开 CRLF 文件后静默改写成 LF（[diary/editor](diary/editor.md#diary-editor-s8)） |
+| `lib/diary/diaryRefPrefs.ts` | 参考栏折叠偏好：「今天」三块的展开/折叠状态存取（[diary/reference-panel](diary/reference-panel.md#diary-reference-panel-s2)） |
 | `lib/diary/diaryRefEntries.ts` | 打点当天窗口查询 `listEntriesOverlappingDay` + 日界裁剪 `clipEntriesToDay`，二者共用 `diaryRefDayWindow`（[diary/reference-panel](diary/reference-panel.md) §2、§4） |
-| `lib/diary/diaryRefTasks.ts` | 完成待办过滤：`selectTasksCompletedOn` 三条硬性口径（[diary/reference-panel](diary/reference-panel.md) §2） |
+| `lib/diary/diaryRefTasks.ts` | 完成待办过滤：`selectTasksCompletedOn` 三条硬性口径（[diary/reference-panel](diary/reference-panel.md#diary-reference-panel-s2)） |
 | `pages/diary/**` | 参考栏五个组件：`DiaryReferencePanel`（挂载、两个分区、每块各一层 `ErrorBoundary`）、`DiaryRefPunches`、`DiaryRefDoneTasks`、`DiaryRefQuickNotes`、`DiaryRefLookback`（[diary/reference-panel](diary/reference-panel.md)） |
 | 编辑器三键位 / EditAction 四态 / onChange 红线 / dirty 记账 / 行尾保护 | → [diary/editor](diary/editor.md) |
 | 参考栏布局挂载 / 四块数据口径 / 错误围栏 / 回看两道闸 | → [diary/reference-panel](diary/reference-panel.md) |

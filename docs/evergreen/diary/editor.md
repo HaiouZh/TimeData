@@ -25,6 +25,8 @@ last-reviewed: 2026-07-27
 
 > 三个键位在 `DiaryPage.tsx` 的 `handleKeyDown` 里统一分派：先过 IME 组合态守卫（`event.nativeEvent.isComposing` 提前 return，三键位共用同一处判断，不在各自纯函数里重复判断），再按 `event.key` 依次尝试 `applyEnterInOrderedList` / `applyIndent` / `applyLinkShortcut`，命中的纯函数返回一个 `EditAction`，交给 `runEditAction`（`textareaEdit.ts`）统一落地。三个纯函数与 `listModel.ts` 共享同一份行模型（行定位 `splitLines`/`lineIndexAt`、保护位扫描 `scanProtected`、分块 `assignBlocks`、重排 `renumberBlock`）——这是本阶段唯一准用的一份实现，两处各写一套曾被判定为最大架构风险。
 
+<a id="diary-editor-s1"></a>
+
 ## 1 EditAction 四态契约
 
 | 返回值 | 语义 | `handleKeyDown` 动作 | 是否置 dirty |
@@ -35,6 +37,8 @@ last-reviewed: 2026-07-27
 | `{ kind: "replace" }` | 替换 `[start,end)` 为 `text`，落点 `[selStart,selEnd)` | `preventDefault`，走 `applyEdit`（execCommand） | 见 §7 |
 
 `null` 与 `{ kind: "noop" }` 都不碰 `setValue`/`markDirty`，差别只在按键要不要交还浏览器继续处理（唯有 `null` 不 `preventDefault`）；这条区分是 `handleKeyDown` 一层的判断，`runEditAction` 内部只处理非 `null` 的三态。
+
+<a id="diary-editor-s2"></a>
 
 ## 2 回车：有序列表整段重排
 
@@ -53,6 +57,8 @@ last-reviewed: 2026-07-27
 - **光标落点**：不能用"旧光标 + 增量"算——编号位数变化（如 9→10）可能发生在光标上方；必须用 `blockStart + 新块内新行之前所有行长度和 + 新行重排后的 markerLen`。
 - **最小编辑区间**：`trimEditSpan` 做前后缀字节级裁剪，编号本来就对时自然塌成插入点，上下文一个字节不动。
 
+<a id="diary-editor-s3"></a>
+
 ## 3 Tab / Shift+Tab：缩进出层
 
 判定"这一行算不算列表行"看整行本身，与光标在行内哪一列无关（缩进区/marker 中间/行尾/空列表项都算）——这与回车不同，回车看的是"光标是否在 marker 之后"。
@@ -63,6 +69,8 @@ last-reviewed: 2026-07-27
 - **缩进不带子树**（已知行为，非 bug）：只动目标行的 `indent`，子项原样留在原深度；带子树要引入"子树"概念与额外用户预期，多行选中一起缩已经用行级操作覆盖了这个需求。
 - **缩进字符固定 `\t`**（`INDENT` 常量），不做设置项；且是**前置** Tab（`INDENT + indent`）不是后置——保证 `visualCol("\t" + s) === visualCol(s) + TAB_COLUMNS` 恒成立，这个等式只在前置时成立，后置只在原列宽恰好是 4 的倍数时碰巧对，否则会漂移，还会让 Shift+Tab 的 `removableIndentLen` 认不出刚加的 Tab，Tab→Shift+Tab 就不再互逆。
 - **替换区间是行级收窄**（改动首行到末行整行替换），不是回车用的字节级前后缀裁剪——Tab 是"这一整行往里/往外挪"的行级操作，回车是"在光标处拆一行"的插入点操作，两者口径不同是有意的。
+
+<a id="diary-editor-s4"></a>
 
 ## 4 Ctrl+K：补 markdown 链接
 
@@ -99,6 +107,8 @@ last-reviewed: 2026-07-27
 | noop | 不置 | 同上 |
 
 置脏的两个出口只有 `onChange` 与 `runEditAction` 的降级分支，二者都调 `markDirty()`（序号 +1 再 `setDirty(true)`），不许裸调 `setDirty(true)`；`select`/`noop` 两条路径刻意什么都不调。序号是"保存在途中有没有继续打字"的唯一判据（[diary](../diary.md#diary-save-revision)）。**清除**只有两个出口：保存成功且序号未变、加载/重载成功。
+
+<a id="diary-editor-s8"></a>
 
 ## 8 行尾保护
 

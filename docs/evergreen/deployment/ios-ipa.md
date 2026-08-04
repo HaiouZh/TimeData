@@ -57,9 +57,13 @@ last-reviewed: 2026-08-02
 
 `MainViewController` 覆写 `preferredStatusBarStyle` 返回 `.lightContent`——app 底色 `--color-page`（#0e1320）是深色，默认黑字读不出来。它随同一个 Swift 文件走 §3 开头那三步管线，无需额外步骤；`cap add ios` 生成的 `Info.plist` 自带 `UIViewControllerBasedStatusBarAppearance=true`，状态栏样式统一由 VC 决定，不需要 plist 补丁。同批把 `capacitor.config.ts` 的 `ios.backgroundColor`（Android 侧同步）从 `#0f172a` 对齐到 `#0e1320`，消除启动 / 旋转 / 滚动越界时露出原生背景的色差带。
 
+<a id="deployment-ios-ipa-s3-3"></a>
+
 ### 3.3 Keyboard resize 模式
 
-`packages/mobile/capacitor.config.ts` 的 `plugins.Keyboard.resize` 设为 `KeyboardResize.None`（`@capacitor/keyboard` 插件，两平台共用配置，`capacitor.config.ts` 整体归属见 [deployment/android-apk](android-apk.md) §2；这条不经过 §3 开头的 `patch-ios.rb` 补丁管线，是构建时随 Capacitor 配置生效的插件设置）：webview 不因键盘弹起自动 reflow。选 `none` 而不是让 webview 自己 resize，是为了与网页层 JS 计算避让保持一致——§3.1 已经移除了系统键盘工具条，贴底输入条与内容留白改由网页层读键盘高度手动抬起（键盘高度单一来源与底部避让量单一合成见 [design-language](../design-language.md) §4 第 12 条）；若 webview 自己 reflow，会与这条 JS 避让重复叠加。
+`packages/mobile/capacitor.config.ts` 的 `plugins.Keyboard.resize` 设为 `KeyboardResize.None`（`@capacitor/keyboard` 插件，两平台共用配置，`capacitor.config.ts` 整体归属见 [deployment/android-apk](android-apk.md) §2；这条不经过 §3 开头的 `patch-ios.rb` 补丁管线，是构建时随 Capacitor 配置生效的插件设置）：webview 不因键盘弹起自动 reflow。选 `none` 而不是让 webview 自己 resize，是为了与网页层 JS 计算避让保持一致——§3.1 已经移除了系统键盘工具条，贴底输入条与内容留白改由网页层读键盘高度手动抬起（键盘高度单一来源与底部避让量单一合成见 [design-language](../design-language.md#design-language-s4) 第 12 条）；若 webview 自己 reflow，会与这条 JS 避让重复叠加。
+
+<a id="deployment-ios-ipa-s4"></a>
 
 ## 4. Release 契约：latest 只由带 APK 的发布步骤打
 
@@ -68,6 +72,8 @@ iOS、Android 与 Windows 共用一个 `v<code>` tag 与同一个 Release（`mob
 因此：**latest 只由含 APK 的发布步骤打**——`prepare` 创建 Release 时显式 `--latest=false`（`gh` 的 `--latest` 默认是 `automatic`，非 semver tag 按创建时间自动成为 latest，不显式关掉的话 prepare 一创建就把 latest 从上一个带 APK 的 Release 抢走，Android 构建失败时更会永久停在没 APK 的 Release 上）；`android` job 上传 APK 成功后，由单独的 `Mark release as latest` 步骤 `gh release edit --latest` 落位——该步骤带 `if: ${{ inputs.tag == '' }}` 条件，补包（`inputs.tag` 非空，即 workflow_dispatch 填了 `tag` 输入）时整个跳过。**除 `android` 外的平台 job 一律不碰这个标记**——iOS 与 Windows 侧同此规矩。合并后早期走 `/releases/latest` 的客户端一并被修复——从此 latest 指向的 Release 必然带 apk。
 
 产物同时上传为 workflow artifact（`timedata-unsigned-ipa`），Release 发布失败时仍可从 run 页面取包；发布步骤对 GitHub API 临时超时做最多 3 次重试，与 Android 侧同构。
+
+<a id="deployment-ios-ipa-s5"></a>
 
 ## 5. 装机与数据边界
 

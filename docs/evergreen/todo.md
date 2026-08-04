@@ -56,6 +56,8 @@ last-reviewed: 2026-08-03
 
 ## 1. 数据流（本域端到端，跨包）
 
+<a id="todo-s1-1"></a>
+
 ### 1.1 Web 端写入
 
 ```text
@@ -97,13 +99,19 @@ agent / CLI (task-done/task-tag)
 
 `AGENT_TOKEN` 只在 `/api/agent/*` 生效，泄露影响面限于任务完成/备注/tags，不授予 sync、force-push、admin、export、reset。CLI 的 `task-*` 是该受控 API 的简化封装。
 
+<a id="todo-s1-3"></a>
+
 ### 1.3 只读查询 + 排期写端点（第三条写入通道）
 
 - `GET /api/tasks?kind=pool|recurring&done=0|1`（`routes/tasks.ts`）：严格 querySchema，SQL 层只取 `parent_id IS NULL` 的 root tasks，`ORDER BY sort_order, created_at, id`，`rowToTask` 映射后按 kind/done 过滤；受 `AUTH_TOKEN` 保护。
 - `POST /api/tasks/:id/schedule { scheduledDate: "YYYY-MM-DD" | null }`（`routes/tasks.ts`）：CLI `task-schedule`/`task-unschedule` 调用，受 `AUTH_TOKEN` 保护；重复模板 409 `TASK_RECURRING_USE_RULE`，occurrence（重复规则的这一发）409 `TASK_OCCURRENCE_NOT_SCHEDULABLE`——两个不同 code，让调用方区分「模板」与「这一发」。
   - **红线**：这条端点仍直接 `UPDATE tasks SET scheduled_at, updated_at`，不走 `applyChange`/LWW 域，因此绕过 LWW 的 schema 校验/冲突路径；但业务 UPDATE 与 `recordSeqWithDb` 已在同一个 SQLite transaction 内，记账失败会整体回滚，提交后再广播 SSE bump。它是 tasks 的第三条 server 写入通道（受控、AUTH_TOKEN、server 权威写），三条通道机制各不相同（并列见 [todo/invariants](todo/invariants.md) 第 3 条）。
 
+<a id="todo-s2"></a>
+
 ## 2. Schema / 契约（字段级）
+
+<a id="todo-s2-1"></a>
 
 ### 2.1 `Task`（`entitySchemas.ts:TaskSchema`）
 
@@ -132,6 +140,8 @@ agent / CLI (task-done/task-tag)
 
 时间字段一律 `UtcIsoStringSchema`：正则 `^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$` 且 `new Date(v).toISOString()===v`。
 
+<a id="todo-s2-2"></a>
+
 ### 2.2 父子关系（`parentId`，一层约束）
 
 子任务**就是普通 `Task` 行**，靠 `parentId` 指向 root，没有独立表、没有内嵌数组。
@@ -143,7 +153,7 @@ agent / CLI (task-done/task-tag)
   - child **不进 `placement`/`listTasks` 任何桶**（含 `recurring`），过滤写在 `listTasks` 循环最顶部 `if (t.parentId !== null) continue`；children 由 `useTaskChildren(parentId)` 按需单独 query。
   - UI 不渲染 child 的高级控件入口（`recurrence`/`tags`/`scheduledAt`）。
 - **child 的 `sortOrder`** 仅在所属 parent 作用域内相对有效（与 root 共享全局空间，绝对值无意义）。
-- **删除级联**：`deleteTaskCascade` 单事务删 root + 所有 direct children，每条写 `tasks/delete` syncLog（一层约束保证无 grandchildren）。对重复模板还连清其名下活跃 pending occurrence 及 children（done/skipped 历史发保留）；对模板子任务还连清活跃发里的确定性 id 镜像子任务（见 [recurrence](todo/recurrence.md) §3 删除级联）。`TodoPage.remove` 非 occurrence 行统一走它（occurrence 走删·跳）。
+- **删除级联**：`deleteTaskCascade` 单事务删 root + 所有 direct children，每条写 `tasks/delete` syncLog（一层约束保证无 grandchildren）。对重复模板还连清其名下活跃 pending occurrence 及 children（done/skipped 历史发保留）；对模板子任务还连清活跃发里的确定性 id 镜像子任务（见 [recurrence](todo/recurrence.md#todo-recurrence-s3) 删除级联）。`TodoPage.remove` 非 occurrence 行统一走它（occurrence 走删·跳）。
 
 ### 2.3 SQL `tasks` ↔ JS 映射（`server/src/db/schema.ts`）
 

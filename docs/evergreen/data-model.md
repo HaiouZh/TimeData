@@ -56,6 +56,8 @@ last-reviewed: 2026-07-30
 | 健康原始数据（数据层，无 UI 消费） | `health_heart_rate` / `health_hrv` / `health_sleep` / `health_stress` / `runs` | `healthHeartRate` / `healthHrv` / `healthSleep` / `healthStress` / `runs` | `shared/src/healthSchemas.ts`；本文 §1.1 |
 | 健康图表配置（数据层，无 UI 消费） | `health_charts` | `healthCharts` | `shared/src/chartSchemas.ts`；本文 §1.1 |
 
+<a id="data-model-s1-1"></a>
+
 ### 1.1 健康域：只剩数据层
 
 健康子系统**只有数据层**：没有健康统计页、图表配置面板、佳明设置页、指标/块引擎，也没有服务端抓取管线；体征/跑步数据由独立项目 run-track 采集。这是有意的退役，决策、回溯点与被否决的替代方案见 [ADR 0024](../adr/0024-retire-health-subsystem.md)。

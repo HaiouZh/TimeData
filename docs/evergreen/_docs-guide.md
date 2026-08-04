@@ -14,6 +14,8 @@ last-reviewed: 2026-08-04
 > 这份文档讲 evergreen 文档**该写什么 / 不该写什么**（§0）、怎么组织（§1）和主题骨架（§2）。拆分 / 体量见 [_docs-guide/splitting.md](_docs-guide/splitting.md)，检查闭环见 [_docs-guide/checks.md](_docs-guide/checks.md)。
 > 它不承载业务域细节；具体代码入口和数据流仍回到各域文档。
 
+<a id="docs-guide-s0"></a>
+
 ## 0. 内容边界与写作粒度：evergreen 只写「现在是什么」
 
 **evergreen 是让人和 agent 都不用瞎找的那份东西**：告诉他该去哪，以及到了那儿也看不出来的事；写多细看有没有闸（§0.5b），装不下按 [拆分与体量](_docs-guide/splitting.md) 往下开一层。
@@ -51,7 +53,7 @@ last-reviewed: 2026-08-04
 
 **判据一句话**：一句话若**在没有任何改动发生时也成立**，它描述现状 → 进 evergreen；若它只在「有人正要改代码」时才有意义（指令、授权、当时的取舍） → 不进 evergreen。
 
-**一个有意的例外——领域自带的准入流程留在领域文档里**：像「新增颜色层级必须用户拍板」（[design-language](design-language.md) §1）、「新增同步域要走登记簿 checklist」（[sync/domain-registry](sync/domain-registry.md)）这类授权，虽是祈使语气，但强绑定该领域机制、且改这块的人一定在读这份文档——放这里比放 AGENTS.md 更可能被读到。判据：**它是这个领域特有的准入步骤（留下）**，还是**跨领域通用的动作纪律（归 AGENTS.md）**。「已排期区不接 dnd 系统」这种是排期决定，两者都不是，归 backlog。
+**一个有意的例外——领域自带的准入流程留在领域文档里**：像「新增颜色层级必须用户拍板」（[design-language](design-language.md#design-language-s1)）、「新增同步域要走登记簿 checklist」（[sync/domain-registry](sync/domain-registry.md)）这类授权，虽是祈使语气，但强绑定该领域机制、且改这块的人一定在读这份文档——放这里比放 AGENTS.md 更可能被读到。判据：**它是这个领域特有的准入步骤（留下）**，还是**跨领域通用的动作纪律（归 AGENTS.md）**。「已排期区不接 dnd 系统」这种是排期决定，两者都不是，归 backlog。
 
 **「不做什么」有两种，别混**：「本域不引用分类表」是**当前边界**（进 evergreen）；「项目级重力一律不做」是**排期决定**（进 backlog）。前者描述系统形状，后者描述人的打算。
 
@@ -142,6 +144,8 @@ architecture.md（地图）               只索引根主题
 - **地图（architecture）**：只列根主题与横切文档登记簿，不索引子文档、不展开域字段细节。
 - **主题文档**：主题的稳定入口，承上启下，承载核心契约 / 不变量，并索引自己的子文档；目标控制在 ~15k 字符以内。
 - **子文档**：母文档是 `docs/evergreen/<路径>/<母>.md` 时，子文档放在同名子目录的 `docs/evergreen/<路径>/<母>/<子>.md`；根主题只是 `<路径>` 为空的特例。它是完整 evergreen：`type` / `last-reviewed` 必填，顶部以 `../<母>.md` 回链当前母文档，并由当前母文档索引；横切 / 纵切 / 升格判据与动作见 [拆分与体量](_docs-guide/splitting.md)。
+
+<a id="docs-guide-s1-2"></a>
 
 ## 1.2 `covers`：主题归属可以多对多
 

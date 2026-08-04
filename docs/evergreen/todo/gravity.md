@@ -21,7 +21,7 @@ last-reviewed: 2026-07-08
 
 - **上游**：`TodoPage` 用 `listTasks()` 出桶后的 inbox 作为输入；用户在翻牌区/水下尾部点 `↑ 顶一下` 调 `bumpTaskWeight`（`lib/tasks.ts`）。
 - **下游**：`Task.weight` 与已过目记忆（settings key）经 [sync](../sync.md) LWW 跨设备同步。
-- **契约**：`Task.weight`（int，默认 0，翻牌"顶一下"累加）见 [todo](../todo.md) §2.1；settings key `todo.gravity.v1`（参数）与 `todo.gravity.review.v1`（已过目表）见本文 §2。
+- **契约**：`Task.weight`（int，默认 0，翻牌"顶一下"累加）见 [todo](../todo.md#todo-s2-1)；settings key `todo.gravity.v1`（参数）与 `todo.gravity.review.v1`（已过目表）见本文 §2。
 - **邻居**：[todo](../todo.md)（inbox 分桶、DnD）、[categories-settings/settings-catalog](../categories-settings/settings-catalog.md)（settings 键值同步机制）。
 
 ## 1. 机制

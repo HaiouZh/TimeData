@@ -23,7 +23,7 @@ last-reviewed: 2026-07-28
 ## 承上启下
 
 - **上游**：用户在 `TaskDetailSheet` 经重复预设门设置规则（UI 文件 `pages/todo/RecurrencePresetSheet.tsx`/`RecurrencePresetList.tsx`/`CustomRecurrencePage.tsx` 由 [todo](../todo.md) 的 `pages/todo/**` covers 管辖，本文只描述其行为）。
-- **下游**：`Recurrence` 作为 `Task.recurrence` 字段随 `tasks` 域同步（见 [todo](../todo.md) §2、[sync](../sync.md)）。
+- **下游**：`Recurrence` 作为 `Task.recurrence` 字段随 `tasks` 域同步（见 [todo](../todo.md#todo-s2)、[sync](../sync.md)）。
 - **邻居**：[todo](../todo.md)（主题）。
 
 ## 1. `Recurrence` schema（`entitySchemas.ts:RecurrenceSchema`）
@@ -54,6 +54,8 @@ last-reviewed: 2026-07-28
 - **`isDueNow` 用系统本地日序号**（`shared/src/recurrence.ts` / `placement.ts`），基于系统本地时区，**不是 `APP_TIME_ZONE`**——让“今天待做”跟用户本地日历一致，不受 UTC 日期切换影响。
 - 一次性任务的 `scheduledAt` 也用系统本地 `getFullYear/Month/Date` 解析（`tasks.ts`），刻意不用 `APP_TIME_ZONE` 的 `getDateString`，避免跨夜边界非确定性顺序。
 - 工具：`isDueNow` / `currentDueDateString` / `currentDueDayFor` / `recurrenceSummary` / `isRecurrenceFinishedAfter`（均在 `shared/src/recurrence.ts`）。
+
+<a id="todo-recurrence-s3"></a>
 
 ## 3. 终止条件与代理式完成（`shared/src/occurrence.ts` + `lib/tasks.ts`）
 

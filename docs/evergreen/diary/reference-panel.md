@@ -19,7 +19,7 @@ last-reviewed: 2026-07-27
 
 - **上游**：`DiaryPage.tsx` 宽屏时把 textarea 包进 `ResizableSplit`，右栏挂 `DiaryReferencePanel`；窄屏整个不渲染。
 - **下游**：四块各自读 Dexie（打点/完成待办/速记）或走网络（回看），**只读，不向正文写一个字节**。
-- **契约**：只读、失败不污染主编辑区、窄屏不渲染——三条正本在 [diary](../diary.md) §2 契约 14–16。
+- **契约**：只读、失败不污染主编辑区、窄屏不渲染——三条正本在 [diary](../diary.md#diary-s2) 契约 14–16。
 - **邻居**：[diary](../diary.md)（主文档）、[diary/editor](editor.md)（同主题子文档）、[timeline](../timeline.md) / [todo](../todo.md) / [quick-notes](../quick-notes.md)（三个数据来源，参考栏只在 UI 层临时组装，不引用它们的数据层）。
 
 ## 1 布局与挂载
@@ -29,6 +29,8 @@ last-reviewed: 2026-07-27
 挂载点是内容三元的最后一支：`loading ? … : loadFailed ? … : !enabled ? … : template === "" ? … : (wide ? <ResizableSplit …/> : editor)`。三个 className 缺一不可——`className="min-h-0 flex-1"` + `leftClassName="flex flex-col min-h-0"` + `rightClassName="min-h-0 overflow-y-auto"`；漏掉右栏那条，内容一长会撑穿 `h-dvh` 且 `overflow-y-auto` 永不触发，textarea 的 `flex-1` 也会失效塌成内容高。**这条靠人工冒烟验证，jsdom 不算布局、自动化测不出。**
 
 `<header>` 与跨天提示条保持在分栏**之上**、横跨两栏：页面真正的滚动容器是 App 的 `<main>`，把 header 塞进左栏内部会让 sticky 失效。
+
+<a id="diary-reference-panel-s2"></a>
 
 ## 2 四块的数据口径
 
@@ -47,11 +49,11 @@ last-reviewed: 2026-07-27
 
 ## 3 本地三块的错误通道：必须自己围 ErrorBoundary
 
-本地三块走 `useLiveQuery`，正常路径只有 loading / empty 两态；它由 Dexie 托管订阅生命周期，**天然免掉手写「切日取消在途」的一整类竞态 bug**——参考栏在这类 bug 上返工过两次（见 [diary](../diary.md) §3.5）。本地 Dexie 读失败在实践中罕见，为它造一套 retry UI 是 YAGNI，所以三块**没有 retry 入口**，error/retry 只有走网络的「回看」块有。
+本地三块走 `useLiveQuery`，正常路径只有 loading / empty 两态；它由 Dexie 托管订阅生命周期，**天然免掉手写「切日取消在途」的一整类竞态 bug**——参考栏在这类 bug 上返工过两次（见 [diary](../diary.md#diary-s3-5)）。本地 Dexie 读失败在实践中罕见，为它造一套 retry UI 是 YAGNI，所以三块**没有 retry 入口**，error/retry 只有走网络的「回看」块有。
 
 **但「没有 retry 入口」不等于「没有 error 通道」**。`useLiveQuery` 的 error 通道就是**在 render 里 throw**（`dexie-react-hooks/dist/dexie-react-hooks.js`：`// Throw if observable has emitted error so that an ErrorBoundrary can catch it` / `if (monitor.current.error) throw monitor.current.error;`）。不自己围，离参考栏最近的边界是根路由的 `errorElement`（`App.tsx`），它会把**整个 app shell** 换成「应用出错了」；而日记正文只活在 `DiaryPage` 的 React state（不进 Dexie、不进同步域、不进备份），整页一掀就永久没了。
 
-因此 `DiaryReferencePanel` 里**每块各围一层** `components/ErrorBoundary.tsx`（`RefBlock`，`fallback` 只渲染一行 `{块名}读取失败`）。逐块围而不是整栏围一层，是为了兑现 [diary](../diary.md) §2 契约 15 的字面：一块挂了，另外三块照常显示。回看块也围——它自己的 `catch` 只接住 `fetchDiary` 的 rejection，接不住渲染期抛出的错。
+因此 `DiaryReferencePanel` 里**每块各围一层** `components/ErrorBoundary.tsx`（`RefBlock`，`fallback` 只渲染一行 `{块名}读取失败`）。逐块围而不是整栏围一层，是为了兑现 [diary](../diary.md#diary-s2) 契约 15 的字面：一块挂了，另外三块照常显示。回看块也围——它自己的 `catch` 只接住 `fetchDiary` 的 rejection，接不住渲染期抛出的错。
 
 ## 4 参考栏的四块口径都各自查，不借用页面级 hook
 
@@ -69,7 +71,7 @@ last-reviewed: 2026-07-27
 1. **世代号，不是日期比较**。`date` 变了要作废在途响应，判据用**单调递增**的 `epochRef`。用日期字符串比较会在 `A→B→A` 序列下失效（值又相等、闸不生效），这就是 ABA 问题。
 2. **`await` 之后一律读活 `ref`**。React 函数组件里闭包捕获的 state 在调用开始那一刻就冻结了；`await` 之后拿它做判断，与函数入口处的同款判断**永远同值**，是「看着在防、结构上永不生效」的假闸。`epochRef.current = epoch` 写在组件体顶层每次渲染同步赋值，异步回调只读它。
 
-> 这两条是两轮返工换来的（[diary](../diary.md) §3.5 同源），对本页所有异步分支都成立。
+> 这两条是两轮返工换来的（[diary](../diary.md#diary-s3-5) 同源），对本页所有异步分支都成立。
 
 **这两道闸在生产路径上的实际作用面比字面小**（如实记账：它们不是主力防线）：`DiaryPage` 的内容三元里 `loading` 排第一支，而正文加载 effect 在 `date` 变化时**无条件** `setLoading(true)`——所以生产环境每次切日期，整个参考栏是被**卸载重挂**的，不是「同一实例换 props」。真正拦住「旧正文配新标签」的是那次卸载；两道 epoch 闸只在「面板不卸载而 `date` 变」的极短窗口内起作用（测试里 `root.render(...)` 直接换 props 就是这个窗口）。闸仍应保留：它是防御性的，且那条窗口不是不可能出现（比如以后有人把 `loading` 支挪到参考栏之外、或给面板加 `key` 复用）。
 

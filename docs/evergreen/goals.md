@@ -62,6 +62,8 @@ last-reviewed: 2026-07-25
 
 `prerequisites` 是目标内部成员之间的 typed 有向边：`blocker` 必须先完成，`blocked` 才算可推进。shared schema 拒绝重复成员、前置边引用非成员、自环、重复边和环；UI roll-up 对历史坏数据仍宽容，会忽略缺失成员和指向非有效成员的前置边并保留低调提示。
 
+<a id="goals-s2"></a>
+
 ## 2. 存储与同步
 
 `goals` 是一等同步域，`conflictPolicy:"lww"`、`countsInStatus:false`、priority 72。服务端走通用 LWW，SQLite `goals.members` 与 `goals.prerequisites` 都存 JSON 字符串；`tasks` / `tracks` 不再有 `goal_id` 归属列，新库不建，旧库启动时幂等 drop。`Goal` 实体本身不保存坐标或布局字段。
@@ -82,7 +84,9 @@ last-reviewed: 2026-07-25
 - `momentum` 固定用 7 天窗口：统计近 7 天有活动的成员数和 `lastActivityAt`，Project / Theme 都会计算。Track 活跃时间取 track `updatedAt` 与 steps 时间中的最新值。
 - 缺失成员不参与 ready/blocked/completed、Project total、Theme momentum；指向非有效成员的前置边忽略。
 
-UI 复用三行主显：动量、前线、完成计数。`/goals` 列表项显示同一口径；Project 不显示百分号和进度条，只保留低对比总数。`/goals/:id` 是 Adaptive Goal Graph Editor，把 `buildGoalOverview` 转成局部图模型（壳层加载门与图语义见 [goals/canvas](goals/canvas.md) §2）。详情页内快建 ToDo 仍由 `addTaskForGoal` 在同一 Dexie transaction 内创建普通根 Task、append `{kind:"task",id}` 到 `Goal.members`，并写 `tasks/create` 与 `goals/update` 两条 `syncLog`；归档 Goal 不允许快建任务，但仍允许整理成员和前置关系。
+UI 复用三行主显：动量、前线、完成计数。`/goals` 列表项显示同一口径；Project 不显示百分号和进度条，只保留低对比总数。`/goals/:id` 是 Adaptive Goal Graph Editor，把 `buildGoalOverview` 转成局部图模型（壳层加载门与图语义见 [goals/canvas](goals/canvas.md#goals-canvas-s2)）。详情页内快建 ToDo 仍由 `addTaskForGoal` 在同一 Dexie transaction 内创建普通根 Task、append `{kind:"task",id}` 到 `Goal.members`，并写 `tasks/create` 与 `goals/update` 两条 `syncLog`；归档 Goal 不允许快建任务，但仍允许整理成员和前置关系。
+
+<a id="goals-s4"></a>
 
 ## 4. 不做
 
@@ -90,7 +94,7 @@ UI 复用三行主显：动量、前线、完成计数。`/goals` 列表项显�
 - 不自动展开 `Track.refs`；只有显式写入 `Goal.members` 的 Task/Track 参与 roll-up。
 - 不新增 agent 写 Goal 的端点；agent 仍通过受控 task / track API 写各自领域。
 
-画布侧的“不做”（跨 Goal 依赖编辑、自由便签、多层目标 / 软顺序）见 [goals/canvas](goals/canvas.md) §3。
+画布侧的“不做”（跨 Goal 依赖编辑、自由便签、多层目标 / 软顺序）见 [goals/canvas](goals/canvas.md#goals-canvas-s3)。
 
 ## 5. 模块速查
 
@@ -105,4 +109,4 @@ UI 复用三行主显：动量、前线、完成计数。`/goals` 列表项显�
 | `client/src/lib/goalLayoutPins.ts` | Goal 图钉点 CRUD / 全量读取，写业务表与 `syncLog` |
 | `client/src/lib/goalsView.ts` | `Goal.members` 解引用、ready/blocked/completed、project/theme roll-up、momentum |
 
-画布纯函数（`goalGraph*` / `goalGalaxy*` / `galaxyEngineMode` / `goalUnassigned`）与 `pages/goals/**` 组件的速查在 [goals/canvas](goals/canvas.md) §4。
+画布纯函数（`goalGraph*` / `goalGalaxy*` / `galaxyEngineMode` / `goalUnassigned`）与 `pages/goals/**` 组件的速查在 [goals/canvas](goals/canvas.md#goals-canvas-s4)。

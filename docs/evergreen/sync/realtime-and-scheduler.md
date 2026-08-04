@@ -39,6 +39,8 @@ last-reviewed: 2026-08-03
 
 通知器与 force-push token 一样是单进程内存状态；`SERVER_REPLICAS>1` 时启动告警，真正多实例前需要 Redis pub/sub 等跨实例转发。
 
+<a id="sync-realtime-and-scheduler-s2"></a>
+
 ## 2. 客户端调度器
 
 所有触发 `regularSync()` 的路径统一收口到模块级单例 `syncScheduler`（`packages/client/src/sync/scheduler.ts`）。它不依赖 React，`SyncContext` 挂载时经 `setExecutor()` 注册一个包装了 `useSync().sync` 的 executor，卸载或云同步关闭时注销（`setExecutor(null)`）。

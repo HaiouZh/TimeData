@@ -52,7 +52,7 @@ last-reviewed: 2026-08-03
 - **JSON 合并导入**：入口在设置 → 数据页（`SettingsDataPage.tsx`，**不在速记页**）→ `importQuickNotes`（`quick-notes/importQuickNotes.ts`）按 `QuickNotesFileSchema` 校验，按 id 合并：不存在则 add，`incoming.updatedAt > existing.updatedAt` 则 update，否则 kept，返回 `{inserted, updated, kept}`。
 - **导出**：`exportQuickNotes` 产 JSON（独立备份格式 `timedata.quick-notes.backup`，`quick-notes/schema.ts`，`timeFormat:"utc"`，与主 `timedata.backup` 是两套契约）或 Markdown（同分钟/间隔 ≤5min `MARKDOWN_TIME_GAP_MS` 不重复 `## HH:mm` 时间标题）。速记页按当前 `viewingDate`（「眼前正在看的那天」）导出——注意它**不只在显式跳转时更新**：停止滚动 1.2 秒后的一次扫描会把粘在顶上那条日期写进去，所以它跟随滚动自动漂移；显式写入点是退出搜索 / 回到最新 / 日历跳转 / 搜索结果定位。空日只提示不生成文件，Markdown 成功提示带条数；下载经 `fileDownload.ts`（Blob / 原生 Filesystem+Share）。
 
-写入经 `recordSyncLog` 自动调度上传（`syncScheduler.notifyWrite()`，见 [sync/realtime-and-scheduler](sync/realtime-and-scheduler.md) §2），无需页面显式触发同步。服务端 `quick_notes` 走**通用 LWW 路径**（`sync/domains.ts`），**无自定义 validate/apply/crossValidate**——只有 `QuickNoteSchema` 运行时校验，没有重叠/分类业务校验。
+写入经 `recordSyncLog` 自动调度上传（`syncScheduler.notifyWrite()`，见 [sync/realtime-and-scheduler](sync/realtime-and-scheduler.md#sync-realtime-and-scheduler-s2)），无需页面显式触发同步。服务端 `quick_notes` 走**通用 LWW 路径**（`sync/domains.ts`），**无自定义 validate/apply/crossValidate**——只有 `QuickNoteSchema` 运行时校验，没有重叠/分类业务校验。
 
 ### 1.2 agent 投递（服务端受控写入）
 

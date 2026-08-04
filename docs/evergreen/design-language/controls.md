@@ -28,6 +28,8 @@ last-reviewed: 2026-08-02
 - **契约**：控件是“原生控件的受控封装”；新增可交互控件须加进 `components/ui/` 并由棘轮豁免。
 - **邻居**：[design-language](../design-language.md)（主题）。
 
+<a id="design-language-controls-s1"></a>
+
 ## 1. 自绘控件词汇表（`components/ui/**`）
 
 每个原子件替代一类原生控件（替代关系即 `check:ui` 棘轮的禁用映射）：
@@ -51,13 +53,13 @@ last-reviewed: 2026-08-02
 
 面板的入场动画与 88vh 限高一并由 `index.css` 的 `.sheet-panel` 承载（顶层规则，优先级高于 utilities）：调用方传进来的 `className` 改不动限高，要调只能改那条 CSS。
 
-`Sheet` / `TaskDetailSheet` 的面板底部内衬 `paddingBottom: var(--safe-bottom-sheet)`——底部弹层是安全区让位的唯一例外，底部 chrome 走的 `--safe-bottom` 固定为 `0px`（安全区变量机制见 [design-language](../design-language.md) §1）；`Sheet` 没有 px 偏移项，直接消费变量而非 calc 组成式。
+`Sheet` / `TaskDetailSheet` 的面板底部内衬 `paddingBottom: var(--safe-bottom-sheet)`——底部弹层是安全区让位的唯一例外，底部 chrome 走的 `--safe-bottom` 固定为 `0px`（安全区变量机制见 [design-language](../design-language.md#design-language-s1)）；`Sheet` 没有 px 偏移项，直接消费变量而非 calc 组成式。
 
 `MonthCalendar` 的月历面板使用 `rounded-card`，日期格与导航按钮使用 `rounded-ctl`；圆角只表达控件与面板角色，不改变日期选择行为。
 
 ### 控件排版档
 
-控件内文字一律用 `.td-text-*` 语义类，不写裸字号（由 `bare-text-size` 棘轮守，见 [design-language](../design-language.md) §3）。档位分工：
+控件内文字一律用 `.td-text-*` 语义类，不写裸字号（由 `bare-text-size` 棘轮守，见 [design-language](../design-language.md#design-language-s3)）。档位分工：
 
 | 用途 | 档 |
 |---|---|
@@ -92,7 +94,7 @@ last-reviewed: 2026-08-02
 - **豁免**：`components/ui/**`（原子件本身）与 `*.test.*` 测试文件。
 - **CI**：`.github/workflows/ci.yml` 有 `pnpm check:ui` 步骤（与 `check:design`、`check:test` 并列）。这道闸锁住表单控件不回退到原生。
 
-> 注意：`check:ui` 只管**原生控件**。裸色、退役模块色、散装交互图标和业务 `font-mono` 由 [design-language](../design-language.md) §3 的 `check:design` 棘轮检查；遗留旧债必须登记在 allowlist，并随 P1/P3/P4 迁移逐步删除。
+> 注意：`check:ui` 只管**原生控件**。裸色、退役模块色、散装交互图标和业务 `font-mono` 由 [design-language](../design-language.md#design-language-s3) 的 `check:design` 棘轮检查；遗留旧债必须登记在 allowlist，并随 P1/P3/P4 迁移逐步删除。
 
 ## 5. 关键不变量 / 坑 / 红线
 

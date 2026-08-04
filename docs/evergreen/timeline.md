@@ -207,7 +207,7 @@ entry.endTime > 当天 00:00:00 对应的 UTC 边界
 
 `TimeRangeWheelPicker` 的滚轮选择行为已抽到共享 `packages/client/src/components/Wheel.tsx`；时间记录页面仍通过 `TimeRangeWheelPicker` 组合时、分两列并保留原有解析规则，共享组件只复用滚动索引、吸附与无框滚轮交互，不改变新增/编辑记录的时间语义。选择器、日期导航、月历、补记空档、`EntryForm` 表面和操作按钮消费 `page/surface/border/ink/accent/danger` token；日期、时钟、时长、日号使用 `td-time` / `td-duration` / `td-num`。`DateNav`、`TimeSlot` 和相邻合并按钮的箭头/加号均经 Phosphor `Icon` 包装，不使用字符箭头或文字加号伪图标。
 
-`useEntryMutations` 是客户端本地写入 `timeEntries` 和 `syncLog` 的边界。`addEntry` 和 `updateEntry` 在写入 IndexedDB 前会再次校验 `endTime > startTime` 且 `endTime` 不晚于当前本地时间，防止绕过表单的未来记录进入本地待同步队列并被同步反复重试。`addEntry` / `updateEntry` / `deleteEntry` 的业务表写入与 `syncLog` 追写同处一个 Dexie transaction；同步日志写入失败时，记录新增、编辑或删除都会整体回滚。新增/编辑记录页如果检测到可自动处理的重叠记录，会在用户确认后调用事务级保存入口：旧记录截断或删除、目标记录写入、对应 `syncLog` 追写都在同一个 Dexie transaction 里完成；如果目标记录保存失败，重叠调整和同步日志一起回滚。记录保存或删除成功后，`syncLog` 写入经 `recordSyncLog` 自动通知模块级调度器 `syncScheduler`（防抖+max-wait 合并触发），无需页面显式调用同步函数；调度器语义见 [sync/realtime-and-scheduler](sync/realtime-and-scheduler.md) §2。
+`useEntryMutations` 是客户端本地写入 `timeEntries` 和 `syncLog` 的边界。`addEntry` 和 `updateEntry` 在写入 IndexedDB 前会再次校验 `endTime > startTime` 且 `endTime` 不晚于当前本地时间，防止绕过表单的未来记录进入本地待同步队列并被同步反复重试。`addEntry` / `updateEntry` / `deleteEntry` 的业务表写入与 `syncLog` 追写同处一个 Dexie transaction；同步日志写入失败时，记录新增、编辑或删除都会整体回滚。新增/编辑记录页如果检测到可自动处理的重叠记录，会在用户确认后调用事务级保存入口：旧记录截断或删除、目标记录写入、对应 `syncLog` 追写都在同一个 Dexie transaction 里完成；如果目标记录保存失败，重叠调整和同步日志一起回滚。记录保存或删除成功后，`syncLog` 写入经 `recordSyncLog` 自动通知模块级调度器 `syncScheduler`（防抖+max-wait 合并触发），无需页面显式调用同步函数；调度器语义见 [sync/realtime-and-scheduler](sync/realtime-and-scheduler.md#sync-realtime-and-scheduler-s2)。
 
 ## 10. 相邻记录合并
 
@@ -219,9 +219,11 @@ entry.endTime > 当天 00:00:00 对应的 UTC 边界
 
 如果旧版本或设备时钟偏移已经把未来结束记录写进本地 IndexedDB，当前客户端不再提供单条本地未来记录修复入口。用户应先校准设备时间；若异常记录导致同步持续失败，可在 `设置 → 数据设置 → 高级 · 数据恢复` 中运行同步诊断，并在确认云端数据正确时使用“将本地数据替换为云端数据”恢复本地数据。
 
+<a id="timeline-s11"></a>
+
 ## 11. 时间记录搜索页
 
-时间轴首页 `DateNav` 右侧放大镜进入 `/search` → `SearchPage`（路由懒加载，注册在 `AppRoutes`）；这是全站唯一入口。`DateNav` 本身保持零路由依赖，只收可选回调 `onSearch?: () => void`，由 `TimelinePage` 注入 `() => navigate("/search")`——这是刻意设计：`DateNav.test.tsx` 裸挂载无 Router，若组件内部直接引入 `<Link>` 会让它全部既有用例报错。搜索页不进主导航（`nav.visibleTabs.v1` / `nav.desktopSidebar.v1` 的可配置 tab 列表都不含 `/search`）。Android 返回键对 `/search` 走 `{ type: "back", fallbackTo: "/" }`（用 back 而非 navigate，让“时间轴 → 搜索 → 记录编辑 → 返回”能正确落回搜索页，筛选状态随浏览器历史一起恢复，见 [architecture](architecture.md) §4.2）。
+时间轴首页 `DateNav` 右侧放大镜进入 `/search` → `SearchPage`（路由懒加载，注册在 `AppRoutes`）；这是全站唯一入口。`DateNav` 本身保持零路由依赖，只收可选回调 `onSearch?: () => void`，由 `TimelinePage` 注入 `() => navigate("/search")`——这是刻意设计：`DateNav.test.tsx` 裸挂载无 Router，若组件内部直接引入 `<Link>` 会让它全部既有用例报错。搜索页不进主导航（`nav.visibleTabs.v1` / `nav.desktopSidebar.v1` 的可配置 tab 列表都不含 `/search`）。Android 返回键对 `/search` 走 `{ type: "back", fallbackTo: "/" }`（用 back 而非 navigate，让“时间轴 → 搜索 → 记录编辑 → 返回”能正确落回搜索页，筛选状态随浏览器历史一起恢复，见 [architecture](architecture.md#architecture-s4-2)）。
 
 **三个 AND 筛子**（同时满足才命中）：
 

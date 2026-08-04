@@ -41,6 +41,8 @@ last-reviewed: 2026-08-01
 - `/settings/stats-layout` → `SettingsStatsLayoutPage`（模块显隐/可拖拽排序/重置）。
 - `/settings/insights` → `SettingsInsightsPage`（**历史路由名保留，显示名为“记录偏好”**：含待办默认落点（[todo](todo.md)）+ 打点分类（[categories-settings](categories-settings.md)）+ 睡眠分类（本域消费）三块，仅睡眠分类属本域）。
 
+<a id="stats-insights-s1-2"></a>
+
 ### 1.2 TimeStatsPage 周期/日期/总时长上下文 + 共享取数（`TimeStatsPage.tsx`）
 
 - 周期状态：`mode`（day/week/month）、`anchor`、`today`（60s 轮询 + window focus + visibilitychange 刷新）。
@@ -54,7 +56,7 @@ last-reviewed: 2026-08-01
 - `TimeStatsPage` 页面壳、周期切换、日期导航、总时长卡片和空态消费 [design-language](design-language.md) 的 `page/surface/border/ink/accent` token；`mod-time` 已退役，不再作为时间统计署名色。不使用页面级渐变或 `sky-*` 展示型 chrome。周期导航图标经 Phosphor `Icon` 包装，按钮语义仍由 `aria-label` 承载。
 - **P3 已收口（`P3-stat-health` allowlist 归零）**：`pages/stats/modules/**`、`pages/stats/InsightCharts.tsx`、`TimeStatsPage` 全部消费 [design-language](design-language.md) 的 `page/surface/border/ink/accent` 与 `ok/warn/danger` token，不留裸 `slate-*`/状态裸色。边界已分清：
   - **UI chrome**（卡片/边框/文字/选中态）用中性 + accent + 状态 token；
-  - **数据图表色与 chrome 分离**——`InsightCharts` 的 axis/grid/tooltip/legend/cursor 用 `CHART_CHROME` 镜像（出自 `pages/stats/chartColors.ts`，recharts 不解析 `var()`，见 [design-language](design-language.md) §4），数据序列用**用户分类色**；
+  - **数据图表色与 chrome 分离**——`InsightCharts` 的 axis/grid/tooltip/legend/cursor 用 `CHART_CHROME` 镜像（出自 `pages/stats/chartColors.ts`，recharts 不解析 `var()`，见 [design-language](design-language.md#design-language-s4)），数据序列用**用户分类色**；
   - **用户分类色属用户内容色**，允许用于数据表达（图例、堆叠条、饼图）；无色分类回退到 `UNCATEGORIZED_COLOR`（`@timedata/shared` 常量，冷中性灰）。
 
 ### 1.3 STATS_MODULES 注册表（`pages/stats/modules/statsModules.ts`）

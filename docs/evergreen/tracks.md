@@ -34,7 +34,7 @@ last-reviewed: 2026-08-03
 - **上游**：客户端数据层 `lib/tracks.ts` 可本地写入；授权 agent 只能经服务端 `/api/agent/tracks*` 受控端点写入。
 - **下游**：`tracks` / `track_steps` 走普通 [sync](sync.md) push/pull、完整 [backup](backup.md)，未来监控面读取它们渲染状态线；[goals](goals.md) 可通过 `Goal.members` typed 引用把轨道收编为目标成员。
 - **契约**：字段 schema 在 `packages/shared/src/entitySchemas.ts`；跨域表名、时间、ID 与 Dexie/SQLite 映射见 [data-model](data-model.md)。
-- **邻居**：[todo](todo.md) 是操作台，轨道只是用 `refs` 指过去；[goals](goals.md) 只读轨道状态与步骤活动做目标 roll-up；[timeline](timeline.md) 是真实时间记录域，轨道步骤的历时不写入 `time_entries`；`runs` 等健康表数据也只被 `refs` 指向（健康表只有数据层、无 UI，见 [data-model](data-model.md) §1.1）。
+- **邻居**：[todo](todo.md) 是操作台，轨道只是用 `refs` 指过去；[goals](goals.md) 只读轨道状态与步骤活动做目标 roll-up；[timeline](timeline.md) 是真实时间记录域，轨道步骤的历时不写入 `time_entries`；`runs` 等健康表数据也只被 `refs` 指向（健康表只有数据层、无 UI，见 [data-model](data-model.md#data-model-s1-1)）。
 
 ## 1. 数据模型
 
@@ -82,6 +82,8 @@ last-reviewed: 2026-08-03
 
 agent 续写上下文另有只读 API：`GET /api/agent/tracks/context` 返回 active tracks、每条最近 3 步、`stepCount`、`latestBoardSignal` 与当前 `boardSignals`；`GET /api/agent/tracks/:id/context` 返回单条 active track 的全量 steps（`startedAt ASC, seq ASC, id ASC`）、`stepCount`、`latestBoardSignal` 与 `boardSignals`。两个端点只读，不写 `sync_seq`、不触发 `notifySyncChange()`，也不返回 `bestMatch` / `score` / recommendation。缺失 track 返回 404；非 active track 详情返回 409 `TRACK_NOT_ACTIVE`。
 
+<a id="tracks-s5"></a>
+
 ## 5. 监控面(T3)
 
 `/tracks` 列表与 `/tracks/:id` 详情是轨道的独立看板面(不进今天视图),页面用 `useLiveQuery` 读取、吃 sync 后变化。
@@ -98,7 +100,7 @@ agent 续写上下文另有只读 API：`GET /api/agent/tracks/context` 返回 a
 
 `决策 / 批注 / 提醒` 是普通快捷标签，不驱动特殊底色或“决策步”徽标。开口语义只留给“真在做一段事”的步骤：步骤历时不再作为设计卖点(见 §8)，随手批注/提醒因此走 `instant`，避免截断 agent 的开口段、也避免点记自己挂成“进行中 N 天”。看板信号单选、检索标签多选，三组并存不互斥(`StepComposer`)。
 
-另有 `closeCurrentStep`(闭合全部开口步、不前进;无开口步报错)与 `setTrackStatus`(切 active/concluded/parked;`concluded` 顺手闭合全部开口步,镜像 T2 的 `PATCH`)。`setTrackStatus` 在状态**真正改变**时写一条 instant 系统步(`source="user"`、`endedAt=startedAt`、content 为 `归档`/`重新推进`/`搁置`)留痕(TK-18),让归档/重新推进在时间线可查;状态未变则不写。这些都只写 Dexie + `syncLog`,写入经 `recordSyncLog` 自动调度上传(见 [sync/realtime-and-scheduler](sync/realtime-and-scheduler.md) §2),不需要 UI 手动触发;数据层不按状态拦写入,改由详情页只对 `active` 显示加步/闭合入口。
+另有 `closeCurrentStep`(闭合全部开口步、不前进;无开口步报错)与 `setTrackStatus`(切 active/concluded/parked;`concluded` 顺手闭合全部开口步,镜像 T2 的 `PATCH`)。`setTrackStatus` 在状态**真正改变**时写一条 instant 系统步(`source="user"`、`endedAt=startedAt`、content 为 `归档`/`重新推进`/`搁置`)留痕(TK-18),让归档/重新推进在时间线可查;状态未变则不写。这些都只写 Dexie + `syncLog`,写入经 `recordSyncLog` 自动调度上传(见 [sync/realtime-and-scheduler](sync/realtime-and-scheduler.md#sync-realtime-and-scheduler-s2)),不需要 UI 手动触发;数据层不按状态拦写入,改由详情页只对 `active` 显示加步/闭合入口。
 
 产品生命周期收敛为 `推进中 / 已归档`：active 显示 `推进中` 和 `归档` 按钮；归档写底层 `concluded` 并闭合开口步；旧数据里的 `parked` 只兼容读取为 `已归档`，非 active 统一显示 `重新推进`。user 步可就地编辑正文或删除，agent 步只读；轨道本身可从详情页二次确认后删除，删除时显式写每条步骤 tombstone。批注串联到具体步(`ref{kind:"track_step"}`)、自由 refs/tags 编辑器仍推迟。
 
@@ -118,9 +120,11 @@ agent 接力协议：派活时给 agent `trackId` 和当前看板信号词表；
 
 本地续写协议的单一事实源是 `.claude/skills/track-step/SKILL.md`（平台无关，任何能跑 shell/Node 的 agent 通用；技术契约见同目录 `references/api.md`，执行器 `scripts/td-track.mjs`）。该目录是本地 AI state，被 `.gitignore` 忽略；evergreen 只记录指针和端点契约，不复制协议正文。协议要求 agent 被用户显式召回后先读 context、保守匹配已有 active track、命中后写 step、未命中时回报建议新建标题，且写入或未写入都必须给回执。
 
+<a id="tracks-s8"></a>
+
 ## 8. 状态卡与调度台（含宽屏 master-detail）
 
-track 定位 = 每条工作流的存档点（状态卡）+ /tracks 调度台；当前帧 = 最新一步的投影（写新步=覆盖当前帧、编辑最新步=修正当前帧），零 schema 改动。/tracks 顶部统计带「等我接 N · agent 在跑 M · 停滞 K」答"此刻几条在并发"；每条 active 轨道一张状态卡（标题+最新步内容 2-3 行+信号徽章+最后动静，计时弱化不显历时/步数；卡上保留行内「写一步」composer——appendUserStep 就地追加），按调度语义分组：判定优先级=等我接（信号命中 actionTags[0]，停滞不豁免、卡上标"N 天没动静"）> 停滞（最后动静>7 天，无步轨道用 createdAt 兜底）> agent在跑（信号命中 agentExecTags）> 推进中；显示序=等我接→agent在跑→推进中→停滞（沉底弱化），组内最后动静倒序，空组不渲染。信号口径=`latestTrackBoardSignal`（最近一个带信号的步，同导航 badge / goals 候选——中途补无信号步不清除信号）。agent 在跑消费独立 Track signal tone；它不是动作色、模块署名色或 Goal 色，本文不复制具体 hex/className（见 [design-language](design-language.md) §1）。纯函数层 `packages/client/src/lib/tracksDispatch.ts`（node 快桶单测）。详情页倒置：顶部当前帧卡（最新步全文+就地编辑/删除，只显示"X 前"）→ StepComposer（写入即成为新当前帧）→ 闭合当前步（次要）→「历史 N 步」默认折叠（hash 锚点命中历史步时自动展开；折叠/中段折叠语义在 TrackTimeline 内不变）。宽屏（≥1024px）`TracksShell`：左列调度台常驻（400px、独立滚动）+ 右栏随路由（/tracks=空态提示、/tracks/:id=详情），选中卡 accent 边框；窄屏壳纯透传。并发甘特（2026-07-08~09）已整体退役：甘特回答"什么时候有动静"、适合规划未来的并发，本场景要的是"此刻横切面"，由调度台分组+统计带承接。todo 行徽章与勾选联动归档消费同一信号口径与 `setTrackStatus`（入口在 todo 侧，见 [todo](todo.md)）。
+track 定位 = 每条工作流的存档点（状态卡）+ /tracks 调度台；当前帧 = 最新一步的投影（写新步=覆盖当前帧、编辑最新步=修正当前帧），零 schema 改动。/tracks 顶部统计带「等我接 N · agent 在跑 M · 停滞 K」答"此刻几条在并发"；每条 active 轨道一张状态卡（标题+最新步内容 2-3 行+信号徽章+最后动静，计时弱化不显历时/步数；卡上保留行内「写一步」composer——appendUserStep 就地追加），按调度语义分组：判定优先级=等我接（信号命中 actionTags[0]，停滞不豁免、卡上标"N 天没动静"）> 停滞（最后动静>7 天，无步轨道用 createdAt 兜底）> agent在跑（信号命中 agentExecTags）> 推进中；显示序=等我接→agent在跑→推进中→停滞（沉底弱化），组内最后动静倒序，空组不渲染。信号口径=`latestTrackBoardSignal`（最近一个带信号的步，同导航 badge / goals 候选——中途补无信号步不清除信号）。agent 在跑消费独立 Track signal tone；它不是动作色、模块署名色或 Goal 色，本文不复制具体 hex/className（见 [design-language](design-language.md#design-language-s1)）。纯函数层 `packages/client/src/lib/tracksDispatch.ts`（node 快桶单测）。详情页倒置：顶部当前帧卡（最新步全文+就地编辑/删除，只显示"X 前"）→ StepComposer（写入即成为新当前帧）→ 闭合当前步（次要）→「历史 N 步」默认折叠（hash 锚点命中历史步时自动展开；折叠/中段折叠语义在 TrackTimeline 内不变）。宽屏（≥1024px）`TracksShell`：左列调度台常驻（400px、独立滚动）+ 右栏随路由（/tracks=空态提示、/tracks/:id=详情），选中卡 accent 边框；窄屏壳纯透传。并发甘特（2026-07-08~09）已整体退役：甘特回答"什么时候有动静"、适合规划未来的并发，本场景要的是"此刻横切面"，由调度台分组+统计带承接。todo 行徽章与勾选联动归档消费同一信号口径与 `setTrackStatus`（入口在 todo 侧，见 [todo](todo.md)）。
 
 ## 9. 后续阶段
 
