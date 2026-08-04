@@ -49,7 +49,11 @@ last-reviewed: 2026-08-04
 
 控件本身在棘轮豁免目录内（它们是对原生元素的合法封装），可以内部使用原生元素。
 
-`Sheet` 的 `portal?: boolean` 决定弹层挂在原地还是 `document.body`，默认 `false`（就地渲染）。`DateField` / `TimeField` 同样透传 `portal`。`DateField` 另有 `hideIcon?: boolean`（默认 `false`），供紧凑场景（速记滚动日期气泡）去掉日历图标只留文字。
+`Sheet` 的 `portal?: boolean` 决定弹层挂在原地还是 `document.body`，默认 `false`（就地渲染）。`DateField` / `TimeField` 同样透传 `portal`。`DateField` 另有两个紧凑场景开关，默认都是 `false`：`hideIcon?: boolean` 去掉日历图标只留文字；`bare?: boolean` 让触发钮**只留行为不带字段外观**（不套 `min-h-11` / `rounded-row` / 边框 / 底色 / 内距 / `td-time` / 文字色），整套观感交给 `className`。
+
+**`bare` 不能用「在 `className` 里覆盖」代替**：Tailwind 工具类之间没有先后之分——同层同特异性时谁生效取决于**生成的 CSS 里谁在后面**，不是 class 字符串里谁写在后面。所以给基础类追加 `min-h-0 rounded-pill` 是赌运气，且实测赌输过（速记日期条被撑成 44px 高的方角块）。速记日期气泡是当前唯一承重点，三个开关一起用。
+
+除表单替代件外，`components/ui/` 还有一组**页面壳与状态原子件**，不替代任何原生控件、也不进棘轮禁用映射：`PageHeader`（sticky 顶栏，**背景色只走 `background` prop 不走 `className`**——两个 `bg-*` 并存时胜负同样由编译产物顺序决定）、`PageBackButton`（统一返回钮，44px 热区 `hotarea-lg`；传 `to` 渲染路由 `Link`、否则渲染 `button`）、`StatusBanner`（`info`/`warn`/`danger` 三态提示条）、`EmptyState`（空态，`card`/`inline` 两形态）、`LoadingState`（加载态一行字）。
 
 面板的入场动画与 88vh 限高一并由 `index.css` 的 `.sheet-panel` 承载（顶层规则，优先级高于 utilities）：调用方传进来的 `className` 改不动限高，要调只能改那条 CSS。
 
@@ -79,12 +83,27 @@ last-reviewed: 2026-08-04
 - 全站图标走 `@phosphor-icons/react`，统一经 `components/Icon.tsx` 包装。
 - `Icon.tsx` 导出 `IconProps` 与 `resolveIconWeight(size, weight?)`：按尺寸解析图标 weight（小尺寸用更重的字重保证可读）。
 - 红线：不用 emoji 或散装图标库；新图标从 Phosphor 取，经 `Icon` 渲染。
+- **`check:design` 的 `interactive-text-icon` 只认一份字符白名单**（`x × ✕ ✓ ✔ › ‹ ← → ↑ ↓ ⋯ …` 与对应 HTML 实体），白名单外的符号当图标用它一律放行。已知漏网：`TaskDetailSheet` 的放大/还原钮用 `▢` / `⤢` 当可见图标，闸不报。**这道闸是辅助不是保证**——写图标时按红线自觉走 Phosphor，别拿"闸绿了"当合规证据。
 
-## 3. 确认弹层（`hooks/useConfirm.tsx`）
+## 3. 交互 hooks（`useConfirm` / `useActionToast` / `useLongPress`）
+
+**`hooks/useConfirm.tsx`**
 
 - `useConfirm` 替代 `window.confirm`：返回 Promise 的应用内确认（配 `ConfirmSheet`），便于本地化与 Android WebView 体验统一。
 - 重复性提示一律走 `useConfirm` / `ConfirmSheet`，不直接调 `window.confirm/alert`。
 - **`pending` 是单槽，新请求会顶替旧请求**：被顶替的那次**必须**解析为 `false`（视作取消），绝不能让它的 Promise 悬空。调用方常在 `await confirm(...)` 之后才做收尾动作（如 `useUnsavedChangesGuard` 要据结果调 `blocker.proceed()`/`reset()`），Promise 悬空会让那步永远不执行——路由守卫场景下的后果是 blocker 永久停在 blocked、全站无法导航，只能整页刷新恢复。
+
+**`hooks/useActionToast.ts`**（配 `ActionToastBar`）
+
+- 返回 `{ toast, showToast, clearToast }`，`ACTION_TOAST_DISMISS_MS = 6000` 是默认自动消失时长，可由参数覆盖。
+- **再次 `showToast` 重置计时**（先 `clearTimeout` 再重新计），不是排队也不是叠加——后一条提示接管，前一条的倒计时作废。
+- 卸载时 effect 清 timer；`clearToast` 同时清 timer 与内容，供"用户点了动作按钮，提示该立刻收"的路径调用。
+
+**`hooks/useLongPress.ts`**
+
+- 默认 `durationMs: 500` / `moveTolerancePx: 10`：按下起计时，任一轴位移超过容差即取消（`onPointerMove`），抬起或离开也取消。
+- **`onContextMenu` 立即触发并 `preventDefault()`**：桌面右键与移动端系统长按菜单都走这条，先掐掉原生菜单再发同一个 `onTrigger`，所以两种输入方式落到同一个回调。
+- `useLongPress` 用 ref 锁住 handlers **只在首次渲染建一次**，`onTrigger` 走 `triggerRef` 现读——所以传进去的回调可以每次渲染换新，不会让 handlers 重建、也不会读到旧闭包；但 `options` 只在首次生效，**运行中改 `durationMs` 不起作用**。纯函数 `createLongPressHandlers` 单独导出供直接测试。
 
 ## 4. CI 棘轮（`scripts/check-no-native-controls.mjs` → `pnpm check:ui`）
 
@@ -110,8 +129,11 @@ last-reviewed: 2026-08-04
 |---|---|
 | `components/ui/{Checkbox,Switch,SegmentedControl,SelectSheet,ConfirmSheet,Sheet}.tsx` | 自绘控件词汇表 |
 | `components/ui/{MonthCalendar,DateField,TimeField}.tsx` | 日期/时间自绘控件 |
+| `components/ui/{PageHeader,PageBackButton,StatusBanner,EmptyState,LoadingState}.tsx` | 页面壳与状态原子件（非原生控件替代件，不进棘轮映射） |
 | `components/Icon.tsx` | Phosphor 图标包装 + `resolveIconWeight` |
 | `hooks/useConfirm.tsx` | 应用内确认弹层（替代 window.confirm） |
+| `hooks/useActionToast.ts` | 带自动消失的操作反馈 toast 状态机（配 `ActionToastBar`） |
+| `hooks/useLongPress.ts` | 长按/右键手势 handlers，纯函数 `createLongPressHandlers` 可直测 |
 | `scripts/check-no-native-controls.mjs` | 无原生控件棘轮（`check:ui`，CI 强制） |
 
-**测试**：`components/ui/{Checkbox,Switch,SegmentedControl,SelectSheet,ConfirmSheet,Sheet,MonthCalendar,DateField,TimeField}.test.tsx`、`components/Icon.test.tsx`。
+**测试**：`components/ui/{Checkbox,Switch,SegmentedControl,SelectSheet,ConfirmSheet,Sheet,MonthCalendar,DateField,TimeField,ActionToastBar,PageHeader,PageBackButton,StatusBanner,EmptyState,LoadingState}.test.tsx`、`components/Icon.test.tsx`、`hooks/{useConfirm.test.tsx,useLongPress.test.ts}`（`useActionToast` 无独立测试，靠消费方页面测试覆盖）。

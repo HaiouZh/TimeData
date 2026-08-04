@@ -38,7 +38,9 @@ last-reviewed: 2026-08-04
 
 - `/stats` → `StatsPage` 仅 `<Navigate to="/stats/time" replace />`。
 - `/stats/time` → `TimeStatsPage`。
+- `/stats/todo` → `TodoStatsPage`（待办统计，入口在时间统计页头部；本文只登记入口与文件面，模块口径未展开，见 §4.1 末）。
 - `/settings/stats-layout` → `SettingsStatsLayoutPage`（模块显隐/可拖拽排序/重置）。
+- `/settings/todo-stats-layout` → `SettingsTodoStatsLayoutPage`（待办统计的同款布局设置，与上一条各管一套注册表）。
 - `/settings/insights` → `SettingsInsightsPage`（**历史路由名保留，显示名为“记录偏好”**：含待办默认落点（[todo](todo.md)）+ 打点分类（[categories-settings](categories-settings.md)）+ 睡眠分类（本域消费）三块，仅睡眠分类属本域）。
 
 <a id="stats-insights-s1-2"></a>
@@ -102,7 +104,7 @@ last-reviewed: 2026-08-04
 | `cache.ts` | 指纹 `${length}:${maxUpdatedAt}` + 单槽 memo + 日桶缓存 | 5 模块 memo 导出；`getCachedDailyRollups` 按 `${from}~${to}`+指纹 Map 缓存；跨 React 卸载存活 |
 | `dailyRollup.ts` | `(entries,categories,from,to)` → `DailyRollup[]` | 本地日桶预聚合；跨午夜按本地午夜裁剪；防御上限 400 天；二分定桶 |
 | `overview.ts` | `OverviewInput` → `OverviewInsights` | totalRecordedHours/coverageRawPct/coverageDisplayPct(clamp≤100)/parents；有睡眠分类时 `awakeMin=periodMin-sleepMin`，否则不扣睡眠 |
-| `routine.ts` | `RoutineInput` → `RoutineInsights` | 主睡眠段 `durationMin≥180` 才作锚点；样本≥7 按中位入睡/起床外扩 60min 得 `sleepWindow(source:"samples")`，否则回退 23:00~07:00(`source:"fallback"`)；规律度 stdev≤60 stable / ≥120 variable |
+| `routine.ts` | `RoutineInput` → `RoutineInsights` | 主睡眠段 `durationMin≥180` 才作锚点；样本≥7 按中位入睡/起床外扩 60min 得 `sleepWindow(source:"samples")`，否则回退 23:00~07:00(`source:"fallback"`)；规律度**只有二分**：入睡/起床/时长三个 stdev 取最大，`≤60` 为 stable，其余一律 variable（`routineVolatileStdevMin: 120` 定义了但无消费方，没有中间态） |
 | `baseline.ts` | `baselineEntries` → 阈值 | `overlongThresholdMin=max(P95,180)`；`longGapThresholdMin` 清醒空档样本≥10 取 P90 否则 90 |
 | `anomalies.ts` | `DetectAnomaliesInput` → `Anomaly[]` | 5 型 overlong/overnight/sleepTimeActivity/longGap/unrecordedDay；阈值来自 baseline；**只对当前周期 `inRange(date)` 产出**；`sleepTimeActivity` 仅以 startTime 判定 |
 | `trends.ts` | `TrendInput` → `TrendResult` | 本期 + 等长上一窗口；上期数据天数≥3 才 `prevComparable`；上期 <30min 不算百分比改判 new；TopN=3 |
@@ -142,11 +144,15 @@ last-reviewed: 2026-08-04
 | `lib/statsLayoutSetting.ts` / `lib/statsModuleTrendSetting.ts` | 布局 / 趋势设置存取 + sanitize |
 | `pages/settings/SettingsInsightsPage.tsx` | “记录偏好”设置页（历史路由 `/settings/insights` 的跨域宿主）：待办默认落点 + 打点分类 + 睡眠分类（仅睡眠属本域） |
 | `pages/settings/SettingsStatsLayoutPage.tsx` | 统计模块显隐/可拖拽排序/重置 |
+| `pages/TodoStatsPage.tsx` · `pages/stats/todo/**` · `lib/todoStats/**` · `pages/settings/SettingsTodoStatsLayoutPage.tsx` | **待办统计整片**：`todoStatsModules.ts` 注册表 + `modules/` 下 10 个 Section（总览 / 年龄分布 / 完成与创建分布 / 完成热力 / 周期指标 / 维度 / 节奏 / 已删除洞察）+ `lib/todoStats/` 9 个纯逻辑（`age` `cycle` `deletedStats` `dimension` `distribution` `events` `heatmap` `overview` `rhythm`）+ 同款布局设置页 |
+
+> **待办统计只有这一行登记，正文不展开它的口径与不变量**。上面 §1~§3 讲的全是时间统计。covers 认领了待办统计的全部文件（改它们会被 coverage 闸认作已归属），但机制细节没有落点——要改待办统计的算法口径，读代码与测试是唯一真相源。补齐它需要单独的子文档，不是往本文追加小节（本文的域已是「时间统计 + 洞察引擎」）。
 
 ### 4.2 测试
 
 **页面/组件**：`pages/{StatsPage,TimeStatsPage}.test.tsx`、`pages/stats/InsightCharts.test.tsx`、`pages/stats/modules/{statsModules,OverviewSection,RoutineSection,AnomaliesSection,TrendSection,StructureSection,ui}.test.{ts,tsx}`、`pages/settings/{SettingsStatsLayoutPage,SettingsInsightsPage}.test.tsx`
 **纯逻辑**：`lib/stats.test.ts`、`lib/statsLayoutSetting.test.ts`、`lib/statsModuleTrendSetting.test.ts`、`lib/insights/{cache,dailyRollup,sessions,overview,routine,baseline,anomalies,trends,structure}.test.ts`
+**待办统计**：`pages/TodoStatsPage.test.tsx`、`pages/stats/todo/todoStatsModules.test.ts`、`pages/stats/todo/modules/DeletedInsightsSection.test.tsx`、`pages/settings/SettingsTodoStatsLayoutPage.test.tsx`、`lib/todoStats/{age,cycle,deletedStats,dimension,distribution,events,heatmap,overview,rhythm}.test.ts`（10 个 Section 里只有 `DeletedInsightsSection` 有组件测试，其余靠 9 个纯逻辑测试兜）
 
 ## 深水细节
 

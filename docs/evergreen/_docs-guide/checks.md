@@ -18,12 +18,14 @@ last-reviewed: 2026-08-04
 | 命令 | 守什么 | 失败条件 |
 |---|---|---|
 | `check:docs:strict --since=<base>` | 改了契约点就同步对应文档 | 改动命中文档 `contracts`，而该文档没有一起改。`covers` 不触发 strict |
-| `check:docs:coverage --since=<base>` | 新源码必须有文档认领 | 新增 `packages/*/src/**` 不匹配任何 covers，且不属于测试、`.d.ts`、mock、夹具、story 或 `src/test/` 这类测试基建目录豁免 |
+| `check:docs:coverage --since=<base>` | 新源码必须有文档认领 | 新增文件落在 `COVERAGE_ROOTS` 下却不匹配任何 covers，且不属于测试、`.d.ts`、mock、夹具、story 或 `src/test/` 这类测试基建目录豁免 |
 | `check:docs:size` | frontmatter 有效、单文档别膨胀到该拆 | frontmatter 形状错误、`covers`/`contracts` 双空、字符数超 hard cap、covers 数超基线，或基线漏项、保留已删除文档。拆分处置见 [拆分与体量](splitting.md) |
-| `check:docs:links` | 互链和指针不指向消失目标 | evergreen 以及 `AGENTS.md` / `README.md` 指向 evergreen、ADR 的 Markdown `.md` 链接不存在；目标 `.md#id` 缺独立 `<a id="..."></a>` 显式锚点；独立锚点行畸形；不同文档重名锚点 |
+| `check:docs:links` | 互链和指针不指向消失目标 | 链接源（`docs/evergreen` + `docs/adr` 全部文档，外加 `AGENTS.md` / `README.md`）里的 Markdown `.md` 链接不存在；目标 `.md#id` 缺独立 `<a id="..."></a>` 显式锚点；独立锚点行畸形；锚点 ID 重复 |
 | `check:docs:stale` | `last-reviewed` 不过期 | 缺字段或超过 180 天 |
 
-links 不校验同页 fragment、Markdown 标题自动锚点或 prose `§x.y`；拆分后这类引用按 [拆分与体量](splitting.md) 的四类手动扫描。锚点名必须是严格配对的 `<a id="..."></a>`，避免同名目标和格式畸形让链接看似有效却无稳定落点。
+links 不校验同页 fragment、Markdown 标题自动锚点或 prose `§x.y`；拆分后这类引用按 [拆分与体量](splitting.md) 的四类手动扫描。锚点名必须是严格配对的 `<a id="..."></a>`，避免同名目标和格式畸形让链接看似有效却无稳定落点。**锚点 ID 要求全局唯一**：`findDuplicateAnchors` 拿一张跨全部长期文档的表判重，同一份文档内重复也照报——所以 ID 用 `<文档 slug>-<节号>` 前缀，不要只写 `s2`。
+
+`COVERAGE_ROOTS` 是**硬编码的四个源根**（`packages/{client,server,shared,cli}/src/`），不是 `packages/*/src/**` 通配。当前 `desktop` / `mobile` 两个 package 没有 `src/` 目录，所以两种写法恰好等价；**将来任一个建了 `src/`，coverage 不会自动纳入它**，要手动改脚本的 `COVERAGE_ROOTS`。
 
 新增 coverage 豁免前必须打开目标文件确认它只是测试基建 / mock / fixture / 类型声明等辅助面，或纯转发 shim / 通用技术 helper，且没有 grep 不出来的契约、状态机、不变量或跨模块联动。逐文件判定出的 helper 只用精确路径豁免，不能加目录通配；否则要由 evergreen `covers` 明确认领。
 
