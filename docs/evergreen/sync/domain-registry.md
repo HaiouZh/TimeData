@@ -41,9 +41,9 @@ last-reviewed: 2026-07-29
 
 | 层 | 文件 | 内容 |
 |---|---|---|
-| shared | `packages/shared/src/syncDomains.ts` | `SYNC_DOMAINS`：每域的 `table`、`dataSchema`（zod）、`upsertPriority` / `deletePriority`、`conflictPolicy`（`lww` / `manual`）、`countsInStatus`。`SyncChangeSchema` 运行时校验由它生成；`tasks` upsert 特判允许可选完成语义 `op`，非 tasks 域仍剥离 `op`。 |
-| server | `packages/server/src/sync/domains.ts` | `SERVER_SYNC_DOMAINS`：每域可选钩子 `validate` / `crossValidate` / `apply` + 必选 `readRecord`；无 `apply` 钩子的域走通用 LWW 路径（`lww: { idColumn, toRow, guardedColumns? }`）。 |
-| client | `packages/client/src/sync/clientDomains.ts` | `CLIENT_SYNC_DOMAINS`：每域的 server table、Dexie store、schema、pull 应用分支、`backup` 角色（`core` / `bundled` / `excluded`）。 |
+| shared | `packages/shared/src/syncDomains.ts` | `SYNC_DOMAINS`：每域的 `table`、`dataSchema`（zod）、`upsertPriority` / `deletePriority`、`conflictPolicy`（`lww` / `manual`）、`countsInStatus`。`SyncChangeSchema` 运行时校验由它生成；`tasks` 与 `tracks` 的 upsert 各自允许可选语义 `op`（`TaskCompletionOp` / `TrackStatusOp`），其余域剥离 `op`。 |
+| server | `packages/server/src/sync/domains.ts` | `SERVER_SYNC_DOMAINS`：每域可选钩子 `validate` / `crossValidate` / `guard`（写前守卫，返回非 null 即拒收不落库）/ `apply` / `identity`（复合键域算 recordId）+ 必选 `readRecord`；无 `apply` 钩子的域走通用 LWW 路径（`lww: { idColumn, toRow, guardedColumns?, archiveDelete? }`）。 |
+| client | `packages/client/src/sync/clientDomains.ts` | `CLIENT_SYNC_DOMAINS`：每域的 server table、Dexie store、schema、pull 应用分支、`backup` 角色（`core` / `bundled` / `separate` / `excluded`，**缺省即 `excluded`**）。 |
 
 客户端登记簿的 `backup` 角色驱动完整备份的导出 / 校验 / 恢复，那是 Backup 的关注点，详见 [backup](../backup.md)，不改变同步语义。同一份 `storeName + schema` 还驱动客户端本地 schema 归一 pass：启动时清理 IndexedDB 中不符合当前 shared schema 的本地形状，归一保留 `updatedAt`、不写 `syncLog`、不改同步语义。`taskNeedsApply` 用 `TaskSchema` 投影后深比较，本地孤儿字段不再触发多余 apply。
 
@@ -55,11 +55,11 @@ last-reviewed: 2026-07-29
 |---|---|---|
 | `categories` | manual | 钩子承载层级校验与级联删除 |
 | `time_entries` | manual | 钩子承载未来时间拒绝、重叠覆盖 |
-| `settings` | lww | 零钩子，`countsInStatus=false`，承载睡眠分类、打点分类、导航可见入口等 UI 偏好 |
-| `quick_notes` | lww | 零钩子 |
-| `tasks` | lww | 零钩子，`countsInStatus=false`；服务端配置完成语义 `guardedColumns`，无 `op` 的 upsert 撞现存行时不覆盖 `done` / `completed_at` / `skipped` / `last_done_at` / `completed_count` |
+| `settings` | lww | 服务端零钩子（客户端有 `needsApply`），`countsInStatus=false`，承载睡眠分类、打点分类、导航可见入口等 UI 偏好 |
+| `quick_notes` | lww | 服务端零钩子（客户端有 `needsApply`） |
+| `tasks` | lww | `countsInStatus=false`；服务端配置完成语义 `guardedColumns`，无 `op` 的 upsert 撞现存行时不覆盖 `done` / `completed_at` / `skipped` / `last_done_at` / `completed_count`；delete 前走 `lww.archiveDelete` 把整行快照写进 `deleted_tasks_archive` |
 | `tracks` | lww | `countsInStatus=false`；服务端配置状态语义 `guardedColumns`，无 `op` 的 upsert 撞现存行时不覆盖 `status` |
-| `track_steps` | lww | `countsInStatus=false` |
+| `track_steps` | lww | `countsInStatus=false`；服务端 `guard: guardTrackStepHost`——非 delete 写入找不到宿主 track 时拒收（`orphan_step_rejected`） |
 | `goals` | lww | `countsInStatus=false`，目标层 |
 | `goal_layout_pins` | lww | `countsInStatus=false`，目标图用户钉点，复合键域 |
 | `health_charts` | lww | 健康图表视图块配置；**无 UI 消费方**（见下） |
