@@ -35,7 +35,7 @@ covers:
   - packages/mobile/android/app/src/main/AndroidManifest.xml
 contracts:
   - packages/client/src/components/app-shell/AppRoutes.tsx
-last-reviewed: 2026-08-03
+last-reviewed: 2026-08-04
 ---
 
 # 架构总览

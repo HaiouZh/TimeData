@@ -21,7 +21,7 @@ covers:
 contracts:
   - .github/workflows/mobile-release.yml
   - packages/mobile/capacitor.config.ts
-last-reviewed: 2026-08-02
+last-reviewed: 2026-08-04
 ---
 
 # 部署 · Android APK 发布

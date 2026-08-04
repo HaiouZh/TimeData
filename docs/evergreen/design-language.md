@@ -24,7 +24,7 @@ contracts:
   - scripts/check-design-language.mjs
   - scripts/design-language-allowlist.json
   - packages/client/src/lib/navigation/navRegistry.ts
-last-reviewed: 2026-08-02
+last-reviewed: 2026-08-04
 ---
 
 # 设计语言

@@ -11,7 +11,7 @@ contracts:
   - packages/desktop/src-tauri/tauri.conf.json
   - .github/workflows/mobile-release.yml
   - packages/desktop/src-tauri/src/config.rs
-last-reviewed: 2026-08-03
+last-reviewed: 2026-08-04
 ---
 
 # 部署 · Windows 桌面壳

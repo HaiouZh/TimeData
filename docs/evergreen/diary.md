@@ -12,7 +12,7 @@ covers:
 contracts:
   - packages/server/src/routes/diary.ts
   - packages/server/src/lib/diary-path.ts
-last-reviewed: 2026-08-01
+last-reviewed: 2026-08-04
 ---
 
 # 日记

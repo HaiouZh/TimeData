@@ -12,7 +12,7 @@ covers:
   - packages/client/src/lib/backNavigation.ts
   - packages/mobile/README.md
   - packages/mobile/capacitor.config.ts
-last-reviewed: 2026-07-26
+last-reviewed: 2026-08-04
 ---
 
 # 本地开发指南

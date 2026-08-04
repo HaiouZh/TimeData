@@ -22,7 +22,7 @@ covers:
 contracts:
   - packages/shared/src/trackBoardSignals.ts
   - packages/server/src/routes/agent-tracks.ts
-last-reviewed: 2026-08-03
+last-reviewed: 2026-08-04
 ---
 
 # 任务轨道

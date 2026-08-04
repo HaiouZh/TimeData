@@ -12,7 +12,7 @@ covers:
   - packages/client/src/pages/settings/SettingsMorePage.tsx
 contracts:
   - packages/client/src/lib/settings/index.ts
-last-reviewed: 2026-07-31
+last-reviewed: 2026-08-04
 ---
 
 # 设置 · 同步键值表

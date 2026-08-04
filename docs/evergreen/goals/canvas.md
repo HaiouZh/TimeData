@@ -17,7 +17,7 @@ covers:
   - packages/client/src/lib/galaxyEngineMode.ts
   - packages/client/src/lib/goalUnassigned.ts
   - packages/client/src/pages/goals/**
-last-reviewed: 2026-08-03
+last-reviewed: 2026-08-04
 ---
 
 # 目标层 · 星图画布

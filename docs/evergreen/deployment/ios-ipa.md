@@ -8,7 +8,7 @@ covers:
   - packages/mobile/ios-assets/**
 contracts:
   - .github/workflows/mobile-release.yml
-last-reviewed: 2026-08-02
+last-reviewed: 2026-08-04
 ---
 
 # 部署 · iOS 未签名 IPA

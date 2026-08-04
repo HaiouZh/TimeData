@@ -7,7 +7,7 @@ covers:
   - packages/server/src/lib/session-rows.ts
 contracts:
   - packages/client/src/lib/sessions.ts
-last-reviewed: 2026-08-03
+last-reviewed: 2026-08-04
 ---
 
 # 待办 · 手头

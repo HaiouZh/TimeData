@@ -8,7 +8,7 @@ covers:
   - packages/client/src/lib/diary/indent.ts
   - packages/client/src/lib/diary/link.ts
   - packages/client/src/lib/diary/eol.ts
-last-reviewed: 2026-07-27
+last-reviewed: 2026-08-04
 ---
 
 # 日记 · 编辑器语义

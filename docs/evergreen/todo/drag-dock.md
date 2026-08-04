@@ -5,7 +5,7 @@ covers:
   - packages/client/src/pages/todo/TodoDragDock.tsx
   - packages/client/src/pages/todo/todoDnd.ts
   - packages/client/src/pages/todo/todoDockDrop.ts
-last-reviewed: 2026-08-03
+last-reviewed: 2026-08-04
 ---
 
 # 待办 · 拖拽投递坞

@@ -7,7 +7,7 @@ covers:
   - packages/client/src/lib/diary/diaryRefEntriesQuery.ts
   - packages/client/src/lib/diary/diaryRefTasks.ts
   - packages/client/src/lib/diary/diaryRefPrefs.ts
-last-reviewed: 2026-07-27
+last-reviewed: 2026-08-04
 ---
 
 # 日记 · 参考栏（只读）

@@ -12,7 +12,7 @@ covers:
   - docs/TimeData-CLI-AI.md
 contracts:
   - docs/TimeData-CLI-AI.md
-last-reviewed: 2026-07-10
+last-reviewed: 2026-08-04
 ---
 
 # CLI（受控 API 客户端）
