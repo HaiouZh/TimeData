@@ -55,4 +55,4 @@ last-reviewed: 2026-08-03
 
 **client**：`pages/TodoPage.test.tsx`、`pages/todo/{TaskRow,TaskList,TaskColumn,TaskDetailSheet,DayGroupedList,SunkenInboxTail,TagFilterPanel,TodoProjectSection,ResizableSplit,TodoComposer,TodoSelectionBar,InlineChildren,CollapsibleSection,TodoListSections}.test.{ts,tsx}`、`pages/todo/todoDnd.test.ts`（二元缩进、三档车道、横向预览夹取、落点矩阵、投递坞 id 域与落点解析）、`pages/todo/TodoDragDock.test.tsx`（药丸集合/三形态/aria；坞相关见 [drag-dock](drag-dock.md)）、`lib/tasks.test.ts`、`sync/clientDomains.test.ts`、`lib/tasks/{inboxGrouping,taskTimeLabel,workbenchPrefs,taskRowZone,taskSort,turnTags,placement,subtasks}.test.ts`（重力相关见 [gravity](gravity.md)；手头相关见 [at-hand](at-hand.md)）
 **server**：`routes/tasks.test.ts`（GET + POST schedule）、`routes/agent.test.ts`（POST status）、`sync/tasks-domain.test.ts`、`sync/domains.test.ts`、`db/schema.test.ts`、`lib/db-rows.test.ts`
-**shared**：`entitySchemas.test.ts`、`schemas.test.ts`、`taskCompletion.test.ts`、`recurrence.test.ts` ｜ **cli**：`commands/tasks.test.ts`
+**shared**：`entitySchemas.test.ts`、`schemas.test.ts`、`recurrence.test.ts` ｜ **cli**：`commands/tasks.test.ts`

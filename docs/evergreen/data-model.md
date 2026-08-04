@@ -121,7 +121,7 @@ type SyncChange =
   | { tableName: T; action: "delete"; recordId: string; data: null; timestamp: string };
 ```
 
-`tasks` upsert 成员额外允许可选 `op?: TaskCompletionOp`，其余域的 `op` 仍由运行时 schema 剥离。`TaskCompletionOp` 是完成语义授权标志（`complete` / `reopen` / `skip` / `amend`），只控制服务器是否允许这次 tasks 快照覆盖完成字段；不改变 Task 实体 schema 或业务表结构。详见 [sync](sync.md) §2.2.1 与 [ADR 0018](../adr/0018-tasks-completion-op.md)。
+`tasks` upsert 成员额外允许可选 `op?: TaskCompletionOp`，其余域的 `op` 仍由运行时 schema 剥离。`TaskCompletionOp` 是完成语义授权标志（`complete` / `reopen` / `skip` / `amend`），只控制服务器是否允许这次 tasks 快照覆盖完成字段；不改变 Task 实体 schema 或业务表结构。详见 [sync tasks / tracks op](sync.md#sync-tasks-tracks-op) 与 [ADR 0018](../adr/0018-tasks-completion-op.md)。
 
 服务端对每条 change 输出一个 `SyncPushOutcome`：
 

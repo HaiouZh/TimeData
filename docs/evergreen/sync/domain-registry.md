@@ -137,5 +137,5 @@ LWW 只定义“同一记录发生并发修改时如何自动收敛”，字段�
 - [ ] 若实体 schema 新增默认字段或退役字段，升 `SCHEMA_NORMALIZATION_VERSION`，并按 [data-model](../data-model.md) 的时序处理 `ensure*Columns()` / `dropColumnsIfExist()`。
 - [ ] 选择 backup 角色（`core` / `bundled` / `excluded`），并明确 force-push 是否纳入当前格式契约。
 - [ ] 普通域参照 `fake-domain.e2e.test.ts`；复合键域参照 `goal-layout-pins-domain.e2e.test.ts`。
-- [ ] 更新 [sync](../sync.md) 第 0 节摘要、[data-model](../data-model.md)、[backup](../backup.md) 与对应业务域文档。
+- [ ] 更新 [sync 账本模型与域登记簿](../sync.md#sync-ledger-registry) 摘要、[data-model](../data-model.md)、[backup](../backup.md) 与对应业务域文档。
 - [ ] 不让运行时登记簿、静态 `SyncChange` 联合和客户端域登记簿分叉。

@@ -80,6 +80,9 @@
   "docs/evergreen/sync/realtime-and-scheduler.md": {
     "covers": 7
   },
+  "docs/evergreen/sync/troubleshooting.md": {
+    "covers": 0
+  },
   "docs/evergreen/timeline.md": {
     "covers": 19
   },

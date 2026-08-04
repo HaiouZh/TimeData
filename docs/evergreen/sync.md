@@ -35,16 +35,26 @@ covers:
   - packages/shared/src/types.ts:SyncForcePushResponse
   - packages/shared/src/types.ts:SyncHealthReport
 contracts:
+  - packages/shared/src/syncDomains.ts
   - packages/shared/src/schemas.ts
+  - packages/shared/src/taskCompletion.ts
+  - packages/shared/src/types.ts:TaskCompletionOp
   - packages/shared/src/types.ts:SyncPushOutcome
+  - packages/shared/src/types.ts:SyncPushReasonCode
+  - packages/client/src/sync/reason.ts
   - packages/server/src/db/schema.ts
-last-reviewed: 2026-08-01
+  - packages/server/src/db/reset.ts
+  - packages/server/src/routes/data.ts
+  - packages/server/src/sync/domains.ts
+last-reviewed: 2026-08-04
 ---
 
 # 同步机制
 
 > 同步是这个项目最复杂的部分。这份文档讲：账本模型、域登记簿、流程、冲突解决规则、`SyncPushReasonCode` 含义、关键约束。
 > Backup 是另一回事，见 [`backup.md`](./backup.md)。架构决策见 [`ADR 0012`](../adr/0012-sync-ledger-and-domain-registry.md)。
+
+<a id="sync-ledger-registry"></a>
 
 ## 0. 账本模型与域登记簿
 
@@ -59,6 +69,8 @@ last-reviewed: 2026-08-01
 **登记簿是封闭契约**：新增域必须同步 shared 配置、server 钩子/映射、客户端 Dexie 表与 pull 分支、静态 `SyncChange` 类型、backup 角色和文档，不能让运行时登记簿、静态判别联合、客户端登记簿三者分叉。
 
 实体字段演进不等于新增同步域：例如 `Task.weight` 是既有 `tasks` LWW 域的结构化字段，随 `TaskSchema`、Dexie/SQLite 映射、backup/force-push 和 sync pull/push 载荷一起演进，不增加运行时域数量，也不扩展 `SyncPushReasonCode`。
+
+<a id="sync-overall-flow"></a>
 
 ## 1. 整体流程
 
@@ -82,7 +94,7 @@ last-reviewed: 2026-08-01
 
 no-op 判定只比较账本读数，不算哈希、不数行数、不拉快照。`contentHash` 只是诊断工具：`getSyncHealth()`（设置页同步健康诊断）仍用它做本地与云端的深度体检。
 
-客户端请求统一走 `apiFetch()`（`packages/client/src/lib/api.ts`）：它负责拼接 API 根地址、附带 Bearer Token、保留 API 错误响应 JSON，并默认在 15 秒后中止网络请求；全量拉取可在调用处设置 `timeoutMs: 30_000`。调用方传入的 `AbortSignal` 会和内部超时信号合并；Web `fetch` 的成功响应体如果不是合法 JSON，会抛出包含 URL 与响应片段的人类可读错误；原生响应由 Capacitor 解码后再由 status/pull schema 校验；204 / 空 body 视为 `undefined`。
+客户端请求统一走 `apiFetch()`（`packages/client/src/lib/api.ts`）：它负责拼接 API 根地址、附带 Bearer Token、保留 API 错误响应 JSON、合并调用方 `AbortSignal` 与内部超时信号；全量拉取可在调用处显式给更长 timeout。Web `fetch` 的成功响应体如果不是合法 JSON，会抛出包含 URL 与响应片段的人类可读错误；原生响应由 Capacitor 解码后再由 status/pull schema 校验；204 / 空 body 视为 `undefined`。
 
 Android 原生同步通道是显式、窄范围的 transport 选择：只有 `Capacitor.getPlatform() === "android"` 且调度原因是 `resume` 时，普通同步的 `/api/sync/status` 与 `sinceSeq > 0` 的增量 `/api/sync/pull` 才使用 `native-android`；Web/PWA 以及启动、写入、重连、定时兜底等原因继续使用 Web `fetch`。原生适配调用 Capacitor 7 内置 `CapacitorHttp`（Android `HttpURLConnection`），复用 URL、Bearer、`Content-Type`、`X-TimeData-Client-Build` 和 TOTP headers，并继续由客户端做 pull schema 校验与分页游标推进。`sinceSeq: 0` 全量拉取、push、force-push、健康诊断、管理/日记/备份 API 和 SSE 均保持 Web `fetch`；不启用全局 `CapacitorHttp` fetch/XHR patch。
 
@@ -101,7 +113,11 @@ Android 原生同步通道是显式、窄范围的 transport 选择：只有 `Ca
 
 「什么时候同步」整簇在子文档 [sync/realtime-and-scheduler](sync/realtime-and-scheduler.md)：服务端 SSE 通知通道（`GET /api/sync/stream`、`notifySyncChange`、带 changes 的 bump 及其退化规则）、客户端连接与重连退避、以及所有触发路径收口的模块级 `syncScheduler`（防抖 300ms / max-wait 2s / 失败退避 / 60s 兜底 / 生命周期接线）。
 
+<a id="sync-push-flow"></a>
+
 ## 2. Push 流程详解
+
+<a id="sync-client-push"></a>
 
 ### 2.1 客户端做了什么（`syncPush`）
 
@@ -113,9 +129,11 @@ Android 原生同步通道是显式、窄范围的 transport 选择：只有 `Ca
 6. 服务器 200 返回后按 `SyncPushOutcome.reasonCode` 分类处理本地 syncLog：`applied`、`client_bug` 和 `stale_rejected` 类标已同步；`user_actionable` / `conflict` / `unknown` 保留。HTTP 409 表示整批原子拒绝，accepted outcome 的 reasonCode 为 `validated`、只代表"通过校验"、不能确认日志；客户端把被拒项按类归置（client_bug/stale 标 synced=1，其余隔离为 `synced=2` 死信）后立即重试合法子批，只有重试 200 后才确认。`stale_change_rejected` 会进入 `pushIssues`，但客户端放弃本地主张，随后回声 pull 落地服务器权威版本。
 7. `pushIssues` / `clientBugIssues` / `userActionableIssues` 暴露给 UI / 诊断。
 
+<a id="sync-server-push"></a>
+
 ### 2.2 服务端做了什么（`/api/sync/push`）
 
-1. `orderPushChanges`（登记簿优先级驱动）：**categories upsert（组内父子拓扑排序）→ time_entries → settings → quick_notes → tasks → 健康域 → health_charts → tracks → track_steps → goals → goal_layout_pins → sessions**，delete 也按各域 `deletePriority` 进入同一排序。保证 entry 引用的分类先到位、轨道步骤父先建子先删、目标钉点晚于目标主表。
+1. `orderPushChanges`（登记簿优先级驱动）：upsert 按 `SYNC_DOMAINS.upsertPriority`，delete 按 `deletePriority`；categories upsert 组内再做父子拓扑排序。关键依赖是不对称的：entry 引用分类，所以分类 upsert 先于 entry；轨道步骤依赖轨道，所以 track upsert 先于 step、step delete 先于 track；目标钉点依赖目标，所以 pin 晚于目标。完整顺序以 [sync/domain-registry](sync/domain-registry.md) 的登记簿为准，不在主流程手抄。
 2. `validateSyncChanges`（登记簿驱动，规则见 [sync/domain-registry](sync/domain-registry.md)）。
 3. **任意一条 invalid 就整体拒绝**：返回 409 + 全部 outcomes，不写业务表、`sync_seq`、tombstone 或 SSE；accepted outcome 的 reasonCode 为 `validated`（不是 `applied`），表述 passed validation。
 4. 根据 `baseSeq` 与 change 的**完整影响集合**分析：分类删除展开后代分类/关联 entries，时间记录 upsert 展开预计被覆盖的 overlap IDs。普通快进 / 非重叠合并不创建服务端备份；`unknown_base` / `local_wins_non_fast_forward` / 隐式删除会在 apply 前创建受保护备份。备份完成后再次比对 `latestSeq`；期间账本前进则 409 让客户端重试，不用过时分析继续 apply。
@@ -124,6 +142,8 @@ Android 原生同步通道是显式、窄范围的 transport 选择：只有 `Ca
 7. 响应带 `latestSeq`（apply 后账本最新号）与 `appliedCount`（本批记账数 = apply 事务前后 `getLatestSeq()` 之差）；客户端据 `latestSeq − baseSeq === appliedCount` 判定无插队、跳过回声 pull（见 [ADR 0016](../adr/0016-push-latestseq-and-pull-pagination.md)）。rejected 的 409 响应同样带这两字段（`appliedCount: 0`）。
 
 登记簿的校验、通用 LWW、复合键 LWW 和 manual 域钩子细节统一维护在 [sync/domain-registry](sync/domain-registry.md)，避免新增域时主流程文档和登记簿文档分叉。
+
+<a id="sync-tasks-tracks-op"></a>
 
 ### 2.2.1 tasks / tracks 语义 op
 
@@ -150,6 +170,8 @@ Android 原生同步通道是显式、窄范围的 transport 选择：只有 `Ca
 
 只有 `status === "applied"` 的变更才追加 `sync_seq`；skipped 不占 seq。所有写入路径的 `updated_at` / `deleted_at` 都由服务端当前时间 `serverNow` 分配，不取 `change.timestamp`。
 
+<a id="sync-pull-flow"></a>
+
 ## 3. Pull 流程详解（严格 seq 补差）
 
 `/api/sync/pull` 行为：
@@ -166,16 +188,18 @@ Android 原生同步通道是显式、窄范围的 transport 选择：只有 `Ca
 
 - 本地不存在 → 直接写入；delete tombstone 对本地不存在的记录是 no-op。
 - 本地存在 + `updatedAt` 相同 → 幂等跳过。
-- 本地存在 + `updatedAt` 不同 + 有未同步本地修改 → **manual 域**（categories / time_entries）挂起为 `SyncConflict`；**lww 域**（settings / quick_notes / tasks）跳过远端，本地待推送版本获胜，不进冲突 UI。
+- 本地存在 + `updatedAt` 不同 + 有未同步本地修改 → **manual 域**（categories / time_entries）挂起为 `SyncConflict`；**lww 域**（完整清单见 [sync/domain-registry](sync/domain-registry.md)）跳过远端，本地待推送版本获胜，不进冲突 UI。
 - 本地存在 + `updatedAt` 不同 + 无本地修改 → 直接覆盖（自己 push 后回拉的服务器分配时间戳也走这条，幂等无害）。
 - 远端 delete + 本地同 record（或分类级联影响范围内）有未同步 `syncLog` → 挂起为 `SyncConflict { remote: null, remoteAction: 'delete', sourceLogIds }`，不删本地；分类整树作为一个冲突单元，保护集合跨 pull 分页保持，后代墓碑不能先删一半。
 - 远端 delete + 本地无 pending → 直接删除；分类删除级联后代分类和关联 entries。
 
-**被跳过的远端 change 不会有第二次机会**：上面第 3 条的「lww 域跳过远端」是**静默丢弃**——游标照常推进到 `nextSinceSeq`，该条 change 不会重发，只有等这条记录下次在服务端再被改动才会重新下行。且这条跳过不产生 `SyncConflict`、不进 `pushIssues`、不写任何日志，线上完全不可观测。它与 §5 第 8 条的整行 push 合起来构成双向丢失窗口。
+**被跳过的远端 change 不会有第二次机会**：上面第 3 条的「lww 域跳过远端」是**静默丢弃**——游标照常推进到 `nextSinceSeq`，该条 change 不会重发，只有等这条记录下次在服务端再被改动才会重新下行。且这条跳过不产生 `SyncConflict`、不进 `pushIssues`、不写任何日志，线上完全不可观测。它与 [整行粒度](#sync-row-granularity) 的 push 合起来构成双向丢失窗口。
 
 `syncPull({mode:'repair'})` 是修复模式：`sinceSeq: 0` 全量；仍有 pending 的同记录或分类级联整组不覆盖/不删除，已完整且本地更新的 entry 继续保留。repair 不生成冲突 UI，但不能吞掉尚未同步的本地主张。
 
 **tombstone 保留约束**（沿用 [ADR 0006](../adr/0006-sync-tombstone-retention.md)）：`sync_tombstones` 与 `sync_seq` 都不按 TTL 自动清理。长期离线客户端持有旧读数，提前清账会导致已删除记录被当作本地独有数据重新 push。安全清理必须同时满足：知道所有活跃客户端水位、有全量修复兜底、有人工确认。
+
+<a id="sync-full-fallback"></a>
 
 ## 3.5 全量同步兜底
 
@@ -191,7 +215,7 @@ force-push 是**五个覆盖域的差异替换**：shared schema/跨记录业务
 
 客户端 force-push 在同一只读 Dexie transaction 内捕获五域快照和当时的 pending 日志 ID；成功后只确认这组 ID。请求期间新增日志和非覆盖域日志必须保留。该路径是用户确认的低频冷路径，允许为差异计算扫描五个覆盖表；普通增量热路径不增加扫描或网络往返。完整决策见 [ADR 0019](../adr/0019-destructive-sync-operations-preserve-ledger.md)。
 
-`POST /api/data/reset` 与一次性 UTC reset 同样不再清空账本：单事务删除全部 15 个同步域，为旧记录写 tombstone + delete seq，再重建默认分类并写 create/update seq；手动 reset 备份期间若账本前进则 409，成功后发 SSE。根分类 delete seq 先于其级联后代，便于分页客户端从第一页建立整树保护。
+`POST /api/data/reset` 与一次性 UTC reset 同样不再清空账本：单事务删除登记簿覆盖的全部同步域，为旧记录写 tombstone + delete seq，再重建默认分类并写 create/update seq；`reset.ts` 启动时断言 reset 域集合与 `SYNC_DOMAINS` 对齐。手动 reset 备份期间若账本前进则 409，成功后发 SSE。根分类 delete seq 先于其级联后代，便于分页客户端从第一页建立整树保护。
 
 五重保护（诊断、短时 token、确认短语、最终确认、服务端备份）与设置页流程不变。客户端连续非网络同步失败达 3 次只提示进入诊断，不自动全量。
 
@@ -207,19 +231,23 @@ UI 拿到 `SyncConflict[]` 后调 `resolveConflicts(conflicts, resolution)`：
 
 UI 挂起冲突只发生在 manual 域（categories / time_entries）。lww 域（settings / quick_notes / tasks / tracks / track_steps / goals / goal_layout_pins / sessions 等）通常后写赢；但在 push 的 `baseSeq` 重叠或 unknown-base 路径上，服务端 staleGuard 会拒收过期来包，客户端把拒收项列入同步问题并通过回声 pull 接受服务器版本。
 
+<a id="sync-invariants"></a>
+
 ## 5. 不变量与约束
 
 1. **客户端写业务表必须同时写 `syncLog`**（同一 Dexie 事务），否则数据丢同步。
 2. **服务端任何业务写入必须记账**：写表与 `recordSeq` 同事务。绕过账本的写入对所有设备不可见（e2e helper 播种数据也要遵守）。
 3. **服务端 `sync_push` 是原子事务**：要么整批写入，要么完全不动；409 outcomes 不代表任何记录已应用。普通安全 push 不拍服务端备份，seq 冲突和隐式删除这类危险 push 在事务前创建受保护备份并做备份后账本版本校验。
-4. **push 应用顺序由登记簿优先级决定**：categories upsert → time_entries → settings → quick_notes → tasks → categories delete。新域的优先级要考虑外键依赖。
+4. **push 应用顺序由登记簿优先级决定**：由登记簿的 `upsertPriority` / `deletePriority` 决定（见 [服务端 push](#sync-server-push) 与 [sync/domain-registry](sync/domain-registry.md)）。关键依赖示例包括分类父子、entry 引用分类、track 与 step、goal 与 pin；新域的优先级要显式考虑外键依赖。
 5. **`updated_at` 由服务器分配**：客户端提交的时间戳不会原样落库；展示"业务发生时间"用业务字段（如 `occurredAt` / `startTime`），不用 `updatedAt`。
 6. **服务端 commit hash 必须随写路径失效或刷新**：`recordSeqWithDb` 在同一事务内标 dirty，`/api/sync/status` 惰性重算；reset 完成时立即刷新。它现在只服务诊断，但仍要保持正确。
 7. **server 是冲突仲裁者**：用 `baseSeq` 判断快进 / 非重叠合并 / 重叠冲突 / unknown-base；重叠记录按时间戳 staleGuard 拒收过期来包，并用受保护备份记录危险 push 场景。
-8. **同步的粒度是「整行」，不是「改动的字段」**——本条是 §2.1 与 §3 两条规则相乘的后果，写代码前必须知道。`syncLog` 只记「哪一行变了」（`SyncLogEntry` 无列信息，`recordSyncLog` 签名里也没有位置放），push 时按 recordId 回读**当前整行**（`engine.ts` 的 `db.table(storeName).get(...)`），服务端 `ON CONFLICT DO UPDATE SET` **除主键 / `created_at` / 无 `op` 时的 `guardedColumns` 外的全部列**。由此产生两个后果：
-   - **双向丢失窗口**：设备 A 改了某行并同步成功，设备 B 尚未拉到就对同一行发生任何写入（哪怕只想改一个字段），B 的整行 push 会用它手上的旧值覆盖 A 的改动；同时 §3 的「lww 域本地有未推送日志则跳过远端」会让 B 也永远收不到 A 的那次改动。风险列 = 非 `guardedColumns` 的全部（`tasks` 即 `title` / `tags` / `scheduled_at` / `sort_order` / `parent_id` / `session_id` / `weight`）。
-   - **版本错位会清空新列**：旧客户端不认识新加的字段，push 的 payload 里缺这一项，服务端 zod 的 `.default(null)` 会把它补成 null，再经全列 SET 抹掉服务器现值（如 `TaskSchema.sessionId` 的 `.default(null)` + `taskToRow` 的 `?? null`）。这是 §3.5 结尾「server / Web / APK 必须同版本发布」在**上行方向**的具体机理，也是 [ADR 0012](../adr/0012-sync-ledger-and-domain-registry.md) 那条部署纪律不能松的原因。
-   缓解手段只有既有的两件：`guardedColumns`（黑名单，仅 `tasks` 5 列 + `tracks.status`）与 `op`（布尔授权闸，见 §2.2.1）。**它们都是窄解法，不是通用防线。**最小闸已落地（2026-07-28）：`routes/sync.test.ts` 的「§5.8 回归钉」用「缺新字段的旧 payload」把本条机理钉成可执行文档（缺席字段被 zod 默认值覆盖 = 现状，变红即有人实现了字段级保护，需同步改写本条）；客户端所有 `apiFetch` 请求带 `X-TimeData-Client-Build` 头（值 = `CURRENT_BUILD_ID`），服务端**只记录不拦截**——push 的 `sync_logs` detail 记 `clientBuild`（缺头记 null），供排查覆盖出自哪个构建。
+<a id="sync-row-granularity"></a>
+
+8. **同步的粒度是「整行」，不是「改动的字段」**——本条是 [客户端 push](#sync-client-push) 与 [pull](#sync-pull-flow) 两条规则相乘的后果，写代码前必须知道。`syncLog` 只记「哪一行变了」（`SyncLogEntry` 无列信息，`recordSyncLog` 签名里也没有位置放），push 时按 recordId 回读**当前整行**（`engine.ts` 的 `db.table(storeName).get(...)`），服务端 `ON CONFLICT DO UPDATE SET` **除主键 / `created_at` / 无 `op` 时的 `guardedColumns` 外的全部列**。由此产生两个后果：
+   - **双向丢失窗口**：设备 A 改了某行并同步成功，设备 B 尚未拉到就对同一行发生任何写入（哪怕只想改一个字段），B 的整行 push 会用它手上的旧值覆盖 A 的改动；同时 [pull](#sync-pull-flow) 的「lww 域本地有未推送日志则跳过远端」会让 B 也永远收不到 A 的那次改动。风险列是非 `guardedColumns` 的全部；具体字段以对应 row mapper 为准。
+   - **版本错位会清空新列**：旧客户端不认识新加的字段，push 的 payload 里缺这一项，服务端 zod 默认值会补齐，再经全列 SET 抹掉服务器现值。这是 [全量同步兜底](#sync-full-fallback) 结尾「server / Web / APK 必须同版本发布」在**上行方向**的具体机理，也是 [ADR 0012](../adr/0012-sync-ledger-and-domain-registry.md) 那条部署纪律不能松的原因。
+   缓解手段只有既有的两件：`guardedColumns`（黑名单，仅 tasks 完成语义列与 `tracks.status`）与 `op`（布尔授权闸，见 [tasks / tracks 语义 op](#sync-tasks-tracks-op)）。**它们都是窄解法，不是通用防线。**服务端 `routes/sync.test.ts` 用「缺新字段的旧 payload」把本条机理钉成回归测试；客户端所有 `apiFetch` 请求带 `X-TimeData-Client-Build` 头，服务端**只记录不拦截**，供排查覆盖出自哪个构建。
 
 ## 6. 错误码处理（客户端侧）
 
@@ -239,48 +267,14 @@ UI 挂起冲突只发生在 manual 域（categories / time_entries）。lww 域�
 
 `SyncPushReasonCode` 是封闭枚举；新增值必须同步更新 shared schema、server validation / resolver 映射、`classifyReasonCode()`、客户端测试和本文档表。**域登记簿同样封闭**：新增域必须同步 shared 配置、server 钩子/映射、客户端 Dexie 表与 pull 分支、静态 `SyncChange` 类型、文档。
 
-## 7. 同步日志
+<a id="sync-observability"></a>
 
-两套独立的"同步日志"：
+## 7. 观测与排障（已外提）
 
-| 表 | 在哪 | 作用 |
-|---|---|---|
-| Dexie `syncLog` | 客户端 IndexedDB | 待同步队列；`synced=0/1/2`（0=待上传，1=已同步/已放弃，2=死信隔离）；仅 synced=0 会被 push |
-| SQLite `sync_logs` | 服务端 | 运维审计；记录每次 push/pull 的摘要 |
+同步日志、分段耗时和慢同步取证路径在纵切子文档 [sync/troubleshooting](sync/troubleshooting.md)。母文只保留两条边界：
 
-客户端每轮有实际动作的 `regularSync`（补差或 push+pull）发一次 `reportToServer`——fire-and-forget，不 await、不阻塞同步返回，函数自身吞掉一切错误；POST 到 `/api/admin/sync-logs`，因此走 admin 鉴权、admin 限流和 `X-Confirm` 清空确认所在的同一管理命名空间。主路径动作名：`push`、`pull_since_seq`、`pull_seq_catchup`（无待上传时的补差）、`conflict`。`/api/admin/sync` 读取最近 50 条服务端 `sync_logs`。客户端 cursor key 集中在 `packages/client/src/db/index.ts`（`LAST_SYNCED_SEQ_KEY`），`resetSyncCursors()` 清理读数并顺手清理遗留 key `timedata_last_synced` / `timedata_legacy_snapshot_sync`。
-
-**syncLog 卫生**：未同步查询统一走索引（`where("synced").equals(0)` 或 `[tableName+synced]`），不做全表 `.filter()` 扫描——`synced` 用数字（`0|1|2`）正是为可索引而设。synced=1/2 历史行由每轮成功同步收尾的 `pruneSyncedLogs()` 按 7 天窗口清理，防止无界膨胀；no-op 早退分支不清理，保持零写入。两处收尾调用都是 `void pruneSyncedLogs().catch(() => undefined)`——fire-and-forget，清理失败不再算作整轮同步失败，也不占同步窗口。
-
-### 分段耗时观测
-
-`useSync.sync()` 每轮用 `createPhaseRecorder()`（`packages/client/src/sync/phaseTimings.ts`，默认单调时钟 `performance.now`，与 `totalMs` 同源）给 status/push/pull 三个阶段计时——写后路径只有 push/pull，补差路径只有 status/pull；无论成功还是失败，收尾都会落一条 `SyncTimingEntry` 到 localStorage `timedata_sync_phase_timings` 环形缓冲（最多 20 条，最新在前）。`getSyncTimings()` 读取时做逐元素 shape 校验，坏元素丢弃；`phases` 允许携带未知阶段键（值须为有限 number），带 health/backup/report 等旧阶段键的存量数据仍合法、无需迁移。
-
-`SyncTimingEntry` 额外携带四个可选诊断字段，均来自调度器 `SyncExecutorMeta`、SSE 连接态与本轮实际请求：`waitMs`（executor 触发前在调度器里排队的时长，见 [sync/realtime-and-scheduler](sync/realtime-and-scheduler.md) §2）、`reason`（`SyncRequestReason` 字符串，本轮由谁触发）、`connection`（触发时的 `SyncStreamState`）和 `transport`（`web`、`native-android` 或 `mixed`；pending 路径的 Web push + 原生 pull、或 native status + 游标为 0 的 Web 全量 pull 记为 `mixed`）。SSE stash 就地应用只有 `bumpApply` 阶段、没有网络请求时不落 transport。四者都做类型校验，缺失时按可选字段处理，不影响存量数据兼容性；原生 transport 不强行写入可能陈旧的 `PerformanceResourceTiming.nextHopProtocol`。设置页同步卡片的 `SyncTimingsPanel` 展示最近一次各阶段耗时、p50/p95，以及最新一条的 `waitMs`/`reason`/`connection`/`transport`。带 push 或补差的那一轮，`reportToServer` 写给服务端的日志会多带一条 `action: "phase_timings"`（detail 是各阶段 ms 的 JSON；report 本身 fire-and-forget，不再计时）。服务端侧，push/pull 各自在 `sync_logs` 的 detail 里记 `timings` 首字段：`push_received` 含 `parseMs`/`validateMs`/`analyzeBackupMs`/`applyMs`/`totalMs`（真实增量，非累计），`push_rejected` 含 `parseMs`/`validateMs`，`pull_returned` 含 `readMs`/`totalMs`。这套观测纯附加，不改变任何同步判定或行为。
-
-### 同步慢排查入口
-
-同步指示灯开始闪只说明客户端进入了同步轮次，不能据此判断慢在调度器、网络还是服务端。排查先固定一条完整时间线（触发动作、指示灯开始、最新数据可见），再按以下顺序对同一轮数据取证：
-
-1. **先看 `reason` 与 `waitMs`**：回前台问题应看到 `reason=resume`。`waitMs` 本身已接近用户感知的延迟时，慢点在 executor 之前，优先查上一轮单飞、scheduler 防抖/退避和生命周期接线，入口是 [sync/realtime-and-scheduler](sync/realtime-and-scheduler.md) §2；改 HTTP transport 不会缩短这段等待。
-2. **再看客户端阶段**：`waitMs` 很小而 `status` / `pull` 很大，说明同步已及时启动，长尾在请求阶段。Android resume 的增量补差应记录 `transport=native-android`；有 Web push 后再原生 pull、或 native status 后退到 `sinceSeq=0` Web 全量 pull 时是 `mixed`。出现 `transport=web` 时先核对触发原因、平台、插件可用性和是否走全量拉取，不要直接归因服务器。
-3. **客户端与服务端对表**：把设置页阶段耗时与服务端 `sync_logs.timings`、请求审计的到达时间/次数放在同一时间窗。客户端阶段长而服务端 `totalMs` 只有毫秒级，瓶颈在请求到达服务端之前或响应返回客户端之后，继续查 WebView/原生连接、DNS、VPN/TUN、代理、TLS、CORS 预检；两边同时长才优先查 server/SQLite。服务端完全没有对应请求时，也不能把等待归因于数据库。
-4. **最后按平台做对照**：同一服务端、同一网络下比较 Web/PWA 与 Android APK，并重复采样看 p50/p95，不用单次秒表下结论。Android 原生 HTTP 只绕过浏览器 CORS enforcement 和 WebView 连接栈，不绕过系统 DNS、VPN、代理、TLS 或服务端链路；相关边界见 [deployment](deployment.md) §2 与 [deployment/android-apk](deployment/android-apk.md)。
-
-取证最小集是：客户端最近一条 `waitMs/reason/connection/transport` 与 status/push/pull 分段、服务端同时间窗的 sync/request logs、APK build id、Android 当时的 VPN/代理状态。先完成这组对表，再决定改 scheduler、transport、CORS/网络还是 server；不要从“安卓慢”直接跳到全局启用 CapacitorHttp，也不要在请求可能已经发出后盲目换 transport 重发写请求。
-
-## 8. 改这块代码前的清单
-
-- [ ] 先跑 `packages/server/src/sync/` 全部测试与 `packages/client/src/sync/engine.test.ts`，覆盖很全。
-- [ ] 跨 client/server 改动后跑 `pnpm --filter @timedata/client test:e2e`（`sync-roundtrip.e2e.test.ts`）。
-- [ ] **加新域**：按 [sync/domain-registry](sync/domain-registry.md) 的 checklist 同步 shared/server/client 登记簿、静态 `SyncChange`、backup 角色、force-push 取舍、对应域文档和全链路测试。
-- [ ] 改 `SyncPushReasonCode`：shared schema、server validation/resolver、`classifyReasonCode()`、本文档第 6 节、`data-model.md`。
-- [ ] **加任何写入路径前先问：这次写入是用户在直接编辑这条记录吗？** 若否（元数据刷新、批量 touch、级联副作用），它同样会把**整行**推上去并触发 §5 第 8 条的覆盖窗口，且爆炸半径 = 这一次写了多少行。已有的这类写入：`persistTaskOrder`（拖拽排序批量改 `sortOrder`）、`touchTasksInCurrentTransaction`（目标归属变更刷 `updatedAt`，见 [todo/project-zone](todo/project-zone.md) §4）。
-- [ ] 改 `regularSync` 主路径：先测 seq no-op、pull-only 补差、push + pull 三条路径。
-- [ ] 改服务端写路径：确认写表与 `recordSeq` 同事务、commit hash 标 dirty、事务后 `notifySyncChange`。
-- [ ] 改 shared 实体 schema：客户端按需升 `SCHEMA_NORMALIZATION_VERSION` 清洗老数据；服务端按需 `ensure*Columns()` 或 `dropColumnsIfExist()`；加字段 server 先行、减字段 shared 先行物理删列最后。归一不写 `syncLog`，也不替代服务端权威校验。
-- [ ] 验 full sync fallback：`/api/health` → 带鉴权 `/api/sync/status` → 测试库走同步健康诊断和 force-push prepare；最终覆盖只在测试库执行。
-- [ ] 真实数据回放：把 `timedata.backup` 放到 `docs_local/fixtures/` 后跑 `packages/server/src/__tests__/e2e/real-data-replay.test.ts`。
+- Dexie `syncLog` 是客户端待上传队列；`synced=0` 才参与 push，`synced=2` 是死信隔离。
+- SQLite `sync_logs` 是服务端运维审计；客户端上报是 best-effort，不能阻塞同步主路径。
 
 ## 子文档索引
 
@@ -288,3 +282,4 @@ UI 挂起冲突只发生在 manual 域（categories / time_entries）。lww 域�
 |---|---|
 | [sync/domain-registry](sync/domain-registry.md) | shared/server/client 三端同步域登记簿、当前运行时域、新增 LWW / 复合键域 checklist、登记簿测试入口 |
 | [sync/realtime-and-scheduler](sync/realtime-and-scheduler.md) | 服务端 SSE 通知通道与 bump 载荷、客户端连接/重连退避、模块级 `syncScheduler` 的触发原因·防抖·退避·生命周期接线 |
+| [sync/troubleshooting](sync/troubleshooting.md) | Dexie / SQLite 两套同步日志、分段耗时、慢同步排查入口和取证最小集 |

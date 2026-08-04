@@ -64,7 +64,7 @@ Inbox `DayGroupedList` 展开链条尾部的找回入口，**不是新平级模�
 
 1. **展示层特性**：重力不改变任何数据落点——`listTasks()` 分桶、DnD、tag/search 不感知；翻牌区与水下尾部都不注册 DnD。
 2. **展示即标记，不碰 Task**：翻牌记忆只写 settings，不写 Task 行、不刷新 `updatedAt`（否则展示本身会把任务顶回水面，机制自毁）。
-3. **`weight` 只经 `bumpTaskWeight` 递增**，不建 Dexie 索引；它是 `tasks` LWW 域的普通结构化字段，不新增同步域（见 [sync](../sync.md) §0）。
+3. **`weight` 只经 `bumpTaskWeight` 递增**，不建 Dexie 索引；它是 `tasks` LWW 域的普通结构化字段，不新增同步域（见 [sync](../sync.md#sync-ledger-registry)）。
 
 ## 4. 模块速查
 
