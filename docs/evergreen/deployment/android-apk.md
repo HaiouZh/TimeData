@@ -16,6 +16,7 @@ covers:
   - packages/mobile/android/capacitor.settings.gradle
   - packages/mobile/android/app/src/main/AndroidManifest.xml
   - packages/mobile/android/app/src/main/java/app/timedata/mobile/MainActivity.java
+  - packages/client/src/lib/mobileUpdate.ts
   - scripts/mobile-version.mjs
 contracts:
   - .github/workflows/mobile-release.yml

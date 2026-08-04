@@ -7,7 +7,9 @@ covers:
   - packages/client/src/lib/syncStream.ts
   - packages/client/src/sync/scheduler.ts
   - packages/client/src/hooks/useSync.ts
+  - packages/client/src/hooks/useAppResumeRefresh.ts
   - packages/client/src/hooks/useAppHideFlush.ts
+  - packages/client/src/lib/cloudSyncSetting.ts
   - packages/client/src/contexts/SyncContext.tsx
 contracts:
   - packages/server/src/routes/sync.ts
@@ -49,6 +51,6 @@ last-reviewed: 2026-08-03
 
 **失败与兜底**：任意执行失败（包括纯 pull）保留 retry-needed，按 1s/2s/4s 指数退避、封顶 60s；429 优先尊重响应 body 或真实 `ApiError.headers` 中的 `Retry-After`。成功、关闭云同步或 executor 换代会清掉旧重试状态。60 秒 fallback 仍只做低频保险：有本地 pending 或 retry-needed 才调度，不在成功路径空转。hidden/pagehide flush 会检查真实 outbox/retry 状态，退避中允许一次隐藏前立即尝试；并发的 outbox 预检单飞且绑定 executor generation，连续 hidden/pagehide 不重复发两轮，旧 generation 的迟到查询也不能给新 executor 排任务。没有 executor 时触发只记脏标记，重新注册时再兑现。
 
-**生命周期接线**（`SyncContext.tsx`）：`useAppResumeRefresh` 回前台时 `requestSync("resume")`；`useSync.sync(meta)` 用 `Capacitor.getPlatform()` 与该 reason 选择 transport，只有 Android `resume` 把普通同步的 status/增量 pull 交给显式原生 HTTP，其余 reason 保持 Web，完整网络边界见 [母文档](../sync.md#sync-overall-flow)。`useAppHideFlush`（`hooks/useAppHideFlush.ts`，监听 `visibilitychange` hidden、`pagehide`、Capacitor 原生 `appStateChange` 的 `!isActive`）在应用隐藏前调 `flushNow()` 尝试立即推送——这是一次普通 fire-and-forget 的 `sync()`，不使用 `navigator.sendBeacon` / fetch keepalive（keepalive 请求体有 64KB 上限，同步 payload 可能超限，取舍是尽力而为而非保证送达）。`useAppResumeRefresh` 的唯一消费方是 `SyncContext`，页面不各自接线回前台刷新。
+**生命周期接线**（`SyncContext.tsx`）：云同步启用且服务器配置完整时，`useAppResumeRefresh` 回前台触发 `requestSync("resume")`；关闭云同步会注销 executor 且不建立 SSE。`useSync.sync(meta)` 用 `Capacitor.getPlatform()` 与该 reason 选择 transport，只有 Android `resume` 把普通同步的 status/增量 pull 交给显式原生 HTTP，其余 reason 保持 Web，完整网络边界见 [母文档](../sync.md#sync-overall-flow)。`useAppHideFlush`（`hooks/useAppHideFlush.ts`，监听 `visibilitychange` hidden、`pagehide`、Capacitor 原生 `appStateChange` 的 `!isActive`）在应用隐藏前调 `flushNow()` 尝试立即推送——这是一次普通 fire-and-forget 的 `sync()`，不使用 `navigator.sendBeacon` / fetch keepalive（keepalive 请求体有 64KB 上限，同步 payload 可能超限，取舍是尽力而为而非保证送达）。页面可复用 `useAppResumeRefresh` 刷新当前时间或默认值，但同步触发只由 `SyncContext` 接线。
 
 **与手动同步的关系**：设置页手动"立即同步"按钮直调 `sync()`，不经过 `syncScheduler`；`engine.ts` 的 `regularSyncInFlight` 单飞去重仍然生效，手动触发和调度器触发并发时不会重复跑两轮同步。

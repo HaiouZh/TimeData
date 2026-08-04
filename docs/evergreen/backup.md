@@ -12,6 +12,8 @@ covers:
   - packages/server/src/sync/backup.ts
   - packages/server/src/sync/domains.ts
   - packages/server/src/sync/dailyBackup.ts
+  - packages/server/src/lib/timezone.ts
+  - packages/server/src/routes/export.ts
   - packages/server/src/routes/admin/backups.ts
   - packages/server/src/routes/admin/_helpers.ts
   - packages/server/src/routes/admin/backupConfig.ts
@@ -36,6 +38,8 @@ TimeData 现有三种备份/可恢复文件：
 | Backup JSON 手动导出 | 客户端 | 用户在设置页主动点 | 用户下载到本机 |
 | Quick Notes 独立备份 JSON | 客户端 | 用户在速记页或设置页主动点 | 用户下载到本机 |
 | Server backup `.db` | 服务端 | seq 冲突、重叠删除、force-push、手动按钮、每日定时 | `data/backups/<id>.db` |
+
+`GET /api/export` 是普通只读导出，不是可恢复 Backup：默认 JSONL、`format=csv` 时输出 CSV，只包含 categories 与 time_entries；CSV 单元格会转义并给 `= + - @` 开头值加前导 `'` 防公式注入。它受 TOTP 危险操作锁保护，但导出的文件不能被 Backup 恢复入口导入。
 
 设备端第四层"自动滚动备份"（Dexie `autoBackups` 表）已于 2026-07-02 整层退役，见 §5 与 [ADR 0015](../adr/0015-remove-client-auto-snapshots.md)。
 

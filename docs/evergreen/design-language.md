@@ -4,6 +4,7 @@ title: 设计语言
 covers:
   - packages/client/src/index.css
   - packages/client/src/lib/navigation/navRegistry.ts
+  - packages/client/src/lib/navigation/routeFavicon.ts
   - packages/client/src/components/app-shell/DesktopSidebar.tsx
   - packages/client/src/components/app-shell/MobileBottomNav.tsx
   - packages/client/src/pages/settings/SettingsDetailPage.tsx
@@ -15,6 +16,7 @@ covers:
   - packages/client/src/hooks/useKeyboardHeight.ts
   - packages/client/src/lib/bottomInset.ts
   - packages/client/src/lib/haptics.ts
+  - packages/client/src/lib/messages.ts
   - scripts/check-design-language.mjs
   - scripts/design-language-allowlist.json
 contracts:

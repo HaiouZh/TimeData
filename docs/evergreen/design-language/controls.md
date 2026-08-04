@@ -4,7 +4,10 @@ title: 设计语言 · 控件库
 covers:
   - packages/client/src/components/ui/**
   - packages/client/src/components/Icon.tsx
+  - packages/client/src/lib/calendar.ts
+  - packages/client/src/hooks/useActionToast.ts
   - packages/client/src/hooks/useConfirm.tsx
+  - packages/client/src/hooks/useLongPress.ts
   - scripts/check-no-native-controls.mjs
   - scripts/check-design-language.mjs
 contracts:

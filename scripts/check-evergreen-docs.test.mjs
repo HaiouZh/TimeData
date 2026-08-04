@@ -582,6 +582,24 @@ test("selectUncovered exempts test scaffolding under src/test/", () => {
   assert.deepEqual(uncovered, ["packages/client/src/lib/realFeature.ts"]);
 });
 
+test("selectUncovered only exempts approved helper files by exact path", () => {
+  const files = [
+    "packages/client/src/hooks/useDebouncedValue.ts",
+    "packages/client/src/hooks/useInView.ts",
+    "packages/client/src/components/MonthCalendar.tsx",
+    "packages/client/src/lib/serverHealth.ts",
+    "packages/client/src/hooks/useDebouncedValueExtra.ts",
+  ];
+  const docs = [{ filePath: "docs/evergreen/x.md", covers: [] }];
+
+  const uncovered = docsCheck.selectUncovered(files, docs, {
+    roots: ["packages/client/src/"],
+    exempts: docsCheck.COVERAGE_EXEMPTS,
+  });
+
+  assert.deepEqual(uncovered, ["packages/client/src/hooks/useDebouncedValueExtra.ts"]);
+});
+
 test("evaluateLinks flags a link to a missing doc", () => {
   const docs = [{ filePath: "docs/evergreen/a.md", links: [{ target: "missing.md", anchor: null }] }];
 

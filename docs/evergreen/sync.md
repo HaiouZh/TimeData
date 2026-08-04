@@ -10,7 +10,10 @@ covers:
   - packages/server/src/sync/seq.ts
   - packages/server/src/sync/state.ts
   - packages/server/src/sync/validation.ts
+  - packages/server/src/db/backfillSeq.ts
+  - packages/server/src/db/utcReset.ts
   - packages/server/src/db/schema.ts
+  - packages/server/src/routes/data.ts
   - packages/server/src/routes/sync.ts
   - packages/server/src/routes/syncLog.ts
   - packages/client/src/sync/changes.ts
@@ -22,6 +25,7 @@ covers:
   - packages/client/src/lib/api.ts
   - packages/shared/src/schemas.ts
   - packages/shared/src/taskCompletion.ts
+  - packages/shared/src/trackStatusOp.ts
   - packages/shared/src/types.ts:SyncPushOutcome
   - packages/shared/src/types.ts:SyncPushReasonCode
   - packages/shared/src/types.ts:SyncReasonCategory
@@ -38,12 +42,15 @@ contracts:
   - packages/shared/src/syncDomains.ts
   - packages/shared/src/schemas.ts
   - packages/shared/src/taskCompletion.ts
+  - packages/shared/src/trackStatusOp.ts
   - packages/shared/src/types.ts:TaskCompletionOp
   - packages/shared/src/types.ts:SyncPushOutcome
   - packages/shared/src/types.ts:SyncPushReasonCode
   - packages/client/src/sync/reason.ts
   - packages/server/src/db/schema.ts
   - packages/server/src/db/reset.ts
+  - packages/server/src/db/backfillSeq.ts
+  - packages/server/src/db/utcReset.ts
   - packages/server/src/routes/data.ts
   - packages/server/src/sync/domains.ts
 last-reviewed: 2026-08-04

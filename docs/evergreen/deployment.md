@@ -14,7 +14,10 @@ covers:
   - packages/server/src/middleware/cors.ts
   - packages/client/vite.config.ts
   - packages/client/src/appUpdate.tsx
+  - packages/client/src/appUpdate.mobile.ts
+  - packages/client/src/components/AppUpdatePrompt.tsx
   - packages/client/src/lib/frontendUpdate.ts
+  - packages/client/src/lib/serverVersion.ts
   - packages/client/src/pages/SettingsPage.tsx
   - .env.example
   - .github/workflows/ci.yml

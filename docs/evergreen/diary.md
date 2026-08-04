@@ -4,6 +4,7 @@ title: 日记
 covers:
   - packages/client/src/pages/DiaryPage.tsx
   - packages/client/src/pages/settings/SettingsDiaryPage.tsx
+  - packages/client/src/components/DateNav.tsx
   - packages/client/src/lib/diary/diaryApi.ts
   - packages/client/src/lib/diary/diaryDate.ts
   - packages/server/src/routes/diary.ts
@@ -18,14 +19,14 @@ last-reviewed: 2026-08-01
 
 > 日记域：每天一条纯文本文件，直接写在用户挂载的本地 vault 目录里（Obsidian 风格），不进 SQLite/Dexie、不进同步账本、不进备份格式。
 > 讲什么：路径模板展开与安全校验、mtime 并发守卫、关键契约与不变量、日期与跨零点、设置页模板配置。
-> 不讲什么：编辑器三键位语义与撤销栈约束（见子文档 [diary/editor](diary/editor.md)）、宽屏只读参考栏（见子文档 [diary/reference-panel](diary/reference-panel.md)）；QuickNote/待办/时间记录等结构化域的存储与同步（见 [quick-notes](quick-notes.md)/[todo](todo.md)/[timeline](timeline.md)）、通用同步账本（见 [sync](sync.md)）。
+> 不讲什么：编辑器三键位语义与撤销栈约束（见子文档 [diary/editor](diary/editor.md)）、宽屏只读参考栏（见子文档 [diary/reference-panel](diary/reference-panel.md)）、日记回顾页（见子文档 [diary/review](diary/review.md)）；QuickNote/待办/时间记录等结构化域的存储与同步（见 [quick-notes](quick-notes.md)/[todo](todo.md)/[timeline](timeline.md)）、通用同步账本（见 [sync](sync.md)）。
 
 ## 承上启下
 
 - **上游**：用户在 `/diary`（`DiaryPage.tsx`）编辑当天日记；在 `/settings/diary`（`SettingsDiaryPage.tsx`）配置路径模板。
 - **下游**：内容直接写入服务器本机文件系统（`DIARY_VAULT_DIR` 挂载的目录），不落库、不同步、不进独立备份。
 - **契约**：`routes/diary.ts` 的四个端点（`GET/PUT /config`、`GET/PUT /:date`）与 `lib/diary-path.ts` 的模板展开/安全校验规则，见本文 §2。
-- **邻居**：[diary/editor](diary/editor.md) 与 [diary/reference-panel](diary/reference-panel.md)（同主题子文档）；[quick-notes](quick-notes.md)（QuickNotesPage 提供跳转 `/diary` 的入口，二者是并列的记录方式，互不引用数据）。
+- **邻居**：[diary/editor](diary/editor.md)、[diary/reference-panel](diary/reference-panel.md) 与 [diary/review](diary/review.md)（同主题子文档）；[quick-notes](quick-notes.md)（QuickNotesPage 提供跳转 `/diary` 的入口，二者是并列的记录方式，互不引用数据）。
 
 ## 1. 数据流
 
@@ -158,6 +159,7 @@ SettingsDiaryPage 保存模板
 | `pages/diary/**` | 参考栏五个组件：`DiaryReferencePanel`（挂载、两个分区、每块各一层 `ErrorBoundary`）、`DiaryRefPunches`、`DiaryRefDoneTasks`、`DiaryRefQuickNotes`、`DiaryRefLookback`（[diary/reference-panel](diary/reference-panel.md)） |
 | 编辑器三键位 / EditAction 四态 / onChange 红线 / dirty 记账 / 行尾保护 | → [diary/editor](diary/editor.md) |
 | 参考栏布局挂载 / 四块数据口径 / 错误围栏 / 回看两道闸 | → [diary/reference-panel](diary/reference-panel.md) |
+| 回顾页模式 / 周记列 / markdown 附件渲染 | → [diary/review](diary/review.md) |
 | `server/routes/diary.ts` | 四端点：`GET/PUT /config`、`GET/PUT /:date` |
 | `server/lib/diary-path.ts` | 模板展开 + 路径安全校验纯函数 |
 

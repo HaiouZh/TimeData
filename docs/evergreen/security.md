@@ -3,6 +3,7 @@ type: evergreen
 title: 安全与凭据处理
 covers:
   - packages/client/src/pages/settings/SettingsServerPage.tsx
+  - packages/client/src/lib/safeStorage.ts
   - packages/client/src/lib/storageKeys.ts
   - packages/client/vite.config.ts
   - packages/server/src/middleware/auth.ts
@@ -11,6 +12,7 @@ covers:
   - packages/server/src/middleware/bodyLimit.ts
   - packages/server/src/lib/requestLog.ts
   - packages/server/src/lib/requestMeta.ts
+  - packages/server/src/lib/confirm-token.ts
   - packages/server/src/routes/sync.ts
   - packages/server/src/routes/syncLog.ts
   - packages/server/src/routes/admin/index.ts
@@ -85,6 +87,8 @@ Android 原生环境保持 HTTPS-only：`packages/mobile/capacitor.config.ts` �
 ## force-push 临时 Token
 
 `/api/sync/force-push/prepare` 发放 5 分钟有效的内存确认 token。`/api/sync/force-push` 会先用 shared runtime schema 校验核心同步表请求形状（categories、timeEntries、quickNotes、tasks，以及可选 settings；quickNotes 可携带 `source` / `sourceLabel` 展示元数据和 `pinned` 置顶状态；tasks 不携带目标归属字段），畸形 JSON 或字段类型错误直接返回 `invalid_request`，不会进入确认 token 消费；健康原始数据、`health_charts`、任务轨道、`goals` 与 `goal_layout_pins` 当前不在 force-push 请求范围内。确认覆盖只把五个覆盖域的快照转成差异应用，非覆盖域业务行、tombstone 与 seq 保持原样；这不引入新的请求字段或权限。请求形状合法后才校验确认短语和一次性 token：成功消费后立即失效，过期、缺失或复用都会被拒绝。
+
+`lib/confirm-token.ts` 提供内存短时 token store：32 字节 base64url token、TTL 到期剪枝、consume 后立即删除。它用于数据重置这类危险操作的二次确认；多实例部署前不能把这种 token store 当成跨实例共享状态。
 
 服务端会把 force-push token 的 prepare、过期拒绝、普通拒绝和最终应用写入 `sync_logs`，用于追踪高风险覆盖操作。最终应用经正常 resolver 追加只增 `sync_seq` 并让 `sync_state` commit hash 失效待重算，但不会把确认 token 或请求 token 写入状态摘要。当前 token store 仍是单进程内存结构，多实例部署前必须迁移到 SQLite 或外部存储。
 

@@ -6,20 +6,30 @@ covers:
   - pnpm-workspace.yaml
   - packages/shared/src/index.ts
   - packages/client/src/main.tsx
+  - packages/client/src/startup.ts
   - packages/client/src/App.tsx
   - packages/client/src/components/app-shell/AppRoutes.tsx
   - packages/client/src/components/app-shell/DesktopSidebar.tsx
   - packages/client/src/components/app-shell/MobileBottomNav.tsx
   - packages/client/src/components/app-shell/KeptRouteStack.tsx
   - packages/client/src/components/app-shell/keptLayerActive.ts
+  - packages/client/src/components/AndroidBackButtonHandler.tsx
   - packages/client/src/components/ErrorBoundary.tsx
   - packages/client/src/components/EdgeSwipeBack.tsx
   - packages/client/src/contexts/BottomNavContext.tsx
   - packages/client/src/contexts/SyncContext.tsx
   - packages/client/src/lib/backNavigation.ts
   - packages/client/src/lib/edgeSwipe.ts
+  - packages/client/src/lib/navScroll.ts
+  - packages/client/src/lib/navigation/documentTitle.ts
+  - packages/client/src/lib/useIsWideScreen.ts
+  - packages/client/src/hooks/useDocumentTitle.ts
+  - packages/client/src/hooks/useFavicon.ts
+  - packages/client/src/hooks/useHideBottomNavOnScroll.ts
+  - packages/client/src/hooks/useNowMinute.ts
   - packages/client/src/hooks/useUnsavedChangesGuard.ts
   - packages/server/src/index.ts
+  - packages/server/src/lib/errors.ts
   - packages/cli/src/index.ts
   - packages/mobile/capacitor.config.ts
   - packages/mobile/android/app/src/main/AndroidManifest.xml
@@ -105,13 +115,11 @@ CLI 写时间记录见 [cli](cli.md) 与 [timeline](timeline.md)；agent 投递�
 
 `packages/client/src/main.tsx`：
 
-1. `seedDefaultCategories()` 在本地分类为空时播种默认分类。
-2. `migrateLocalSettingsToDexie()` 把旧 localStorage 设置迁入 Dexie settings。
-3. `runSchemaNormalizationIfNeeded()` 按 shared schema 做 IndexedDB 本地卫生归一（补默认、剥孤儿、坏行保留并 warn），成功后推进本地版本闸。
-4. 检查 `#root` 挂载点。
-5. `<AppUpdateProvider>`、`ErrorBoundary`、`RouterProvider`、`SyncProvider`、`BottomNavProvider`、`TrackAttentionProvider`、`AppShell` 依次包裹（`TrackAttentionProvider` 用 `useTrackAttentionCount` 把轨道「待我处理」回手计数下发给导航 badge，见 [tracks](tracks.md) §5；默认 0，只渲染导航壳的单测不触 db）。
-6. 应用根用 `createBrowserRouter` + `RouterProvider`（data router，`useBlocker` 的硬前提），单条 `path: "*"` 的 splat route 承载 `SyncProvider → BottomNavProvider → TrackAttentionProvider → AppShell` 这层包裹，路由声明仍全部活在 `AppRoutes` 的 `<Routes>` 子树里；有未保存修改的页面用 `hooks/useUnsavedChangesGuard`（`useBlocker` 拦站内换页 + `beforeunload` 拦关页/刷新）统一拦截离开。该 splat route 还挂了 `errorElement: <RouteErrorFallback />`——RR 对根路由（`index === 0`）总会包一层内部 boundary，不给 `errorElement` 会落回 RR 自带的未翻译兜底页且这层在 `App()` 里 `<ErrorBoundary>` 之下、页面渲染错误冒不上去；`RouteErrorFallback`（`components/ErrorBoundary.tsx`）与类组件 `ErrorBoundary` 共用同一套兜底 UI，保证行为不因迁到 data router 而倒退。Router 注册时间轴、速记、待办、轨道、目标、时间统计、设置、记录编辑及搜索（`/search`，时间记录搜索，见 [timeline](timeline.md) §11）路由；AppShell 按 `1024px` viewport 断点分流：窄屏 / APK 渲染底部纯图标导航并继续使用 `nav.visibleTabs.v1`，数组内入口显示在底栏，数组外入口由 `/settings/more` 动态承接，不保留移动端三点菜单；宽屏渲染左侧固定纯图标侧栏并使用 `nav.desktopSidebar.v1` 的排序 / 更多收纳配置。导航配置只保存 route / placement，不保存颜色。两套主导航按钮都必须有 `aria-label`，active 形态只用 `accent` / `surface` / `border` token。`/goals` 先进入目标页宽窄分流壳：宽屏默认全局星图只读总览，窄屏默认列表，并允许手动切换；`/tracks` 与 `/tracks/:id` 包在 `TracksShell` 布局路由里（宽屏调度台常驻左列的 master-detail，右栏随路由出空态/详情；窄屏纯透传，见 [tracks](tracks.md) §8）。目标详情 `/goals/:id` 与轨道详情 `/tracks/:id` 在窄屏隐藏底部导航，宽屏仍保留桌面侧栏。设置子路由包含更多功能、导航、轨道行动标签、统计布局、服务端/数据/管理等入口，具体归属见各主题文档。
-7. `SyncProvider` 在云同步开启且配置完整时维护 SSE 连接，并向模块级 `syncScheduler` 注册 executor；写入、SSE bump、回前台、隐藏前 flush、重连成功、失败退避与 60 秒兜底等触发统一经调度器驱动普通同步。成功热路径仍保持 300ms 防抖、2s max-wait 和无插队时单 push 请求；失败（含 pull-only）按上限指数退避，生命周期预检与 executor/SSE run 都按 generation 隔离。详见 [sync/realtime-and-scheduler](sync/realtime-and-scheduler.md)。
+1. 检查 `#root` 挂载点并先渲染 React 根。
+2. `<AppUpdateProvider>`、`ErrorBoundary`、`RouterProvider`、`SyncProvider`、`BottomNavProvider`、`TrackAttentionProvider`、`AppShell` 依次包裹（`TrackAttentionProvider` 用 `useTrackAttentionCount` 把轨道「待我处理」回手计数下发给导航 badge，见 [tracks](tracks.md) §5；默认 0，只渲染导航壳的单测不触 db）。
+3. `runStartupTasks()` 在后台串行执行 `seedDefaultCategories()`、`migrateLocalSettingsToDexie()`、`runSchemaNormalizationIfNeeded()` 与 occurrence materialization；失败只记录到控制台，不卸载已经渲染的应用。
+4. 应用根用 `createBrowserRouter` + `RouterProvider`（data router，`useBlocker` 的硬前提），单条 `path: "*"` 的 splat route 承载 `SyncProvider → BottomNavProvider → TrackAttentionProvider → AppShell` 这层包裹，路由声明仍全部活在 `AppRoutes` 的 `<Routes>` 子树里；有未保存修改的页面用 `hooks/useUnsavedChangesGuard`（`useBlocker` 拦站内换页 + `beforeunload` 拦关页/刷新）统一拦截离开。该 splat route 还挂了 `errorElement: <RouteErrorFallback />`——RR 对根路由（`index === 0`）总会包一层内部 boundary，不给 `errorElement` 会落回 RR 自带的未翻译兜底页且这层在 `App()` 里 `<ErrorBoundary>` 之下、页面渲染错误冒不上去；`RouteErrorFallback`（`components/ErrorBoundary.tsx`）与类组件 `ErrorBoundary` 共用同一套兜底 UI，保证行为不因迁到 data router 而倒退。Router 注册时间轴、速记、待办、轨道、目标、时间统计、设置、记录编辑及搜索（`/search`，时间记录搜索，见 [timeline](timeline.md) §11）路由；AppShell 按 `1024px` viewport 断点分流：窄屏 / APK 渲染底部纯图标导航并继续使用 `nav.visibleTabs.v1`，数组内入口显示在底栏，数组外入口由 `/settings/more` 动态承接，不保留移动端三点菜单；宽屏渲染左侧固定纯图标侧栏并使用 `nav.desktopSidebar.v1` 的排序 / 更多收纳配置。导航配置只保存 route / placement，不保存颜色。两套主导航按钮都必须有 `aria-label`，active 形态只用 `accent` / `surface` / `border` token。`/goals` 先进入目标页宽窄分流壳：宽屏默认全局星图只读总览，窄屏默认列表，并允许手动切换；`/tracks` 与 `/tracks/:id` 包在 `TracksShell` 布局路由里（宽屏调度台常驻左列的 master-detail，右栏随路由出空态/详情；窄屏纯透传，见 [tracks](tracks.md) §8）。目标详情 `/goals/:id` 与轨道详情 `/tracks/:id` 在窄屏隐藏底部导航，宽屏仍保留桌面侧栏。设置子路由包含更多功能、导航、轨道行动标签、统计布局、服务端/数据/管理等入口，具体归属见各主题文档。
+5. `SyncProvider` 在云同步开启且配置完整时维护 SSE 连接，并向模块级 `syncScheduler` 注册 executor；写入、SSE bump、回前台、隐藏前 flush、重连成功、失败退避与 60 秒兜底等触发统一经调度器驱动普通同步。成功热路径仍保持 300ms 防抖、2s max-wait 和无插队时单 push 请求；失败（含 pull-only）按上限指数退避，生命周期预检与 executor/SSE run 都按 generation 隔离。详见 [sync/realtime-and-scheduler](sync/realtime-and-scheduler.md)。
 
 ### 4.3 CLI
 
@@ -196,6 +204,7 @@ iOS 原生工程不入库，构建链路与原生补丁见 [deployment/ios-ipa](
 | [tracks](tracks.md) | 域 | 任务轨道、轨道步骤、状态线数据地基、agent ingest |
 | [goals](goals.md) | 域 | 目标层、Task/Track 成员引用、项目完成度、主题 7 天活跃度、前置关系 |
 | [stats-insights](stats-insights.md) | 域 | 时间统计、洞察模块、统计布局和趋势设置 |
+| [admin](admin.md) | 运维 | `/settings/admin-insights` 只读管理洞察 API、健康检查、异常筛选和基础分析 |
 | [categories-settings](categories-settings.md) | 域 | 分类 schema、分类管理、排序/颜色/删除、sleep/punch 分类设置 |
 | [design-language](design-language.md) | 设计 | 语义颜色 token、字体与排版角色、圆角/边框/阴影、自绘控件库、Phosphor 图标、设计语言棘轮 |
 

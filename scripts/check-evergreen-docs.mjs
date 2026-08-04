@@ -24,7 +24,8 @@ const COVERAGE_ROOTS = [
   "packages/shared/src/",
   "packages/cli/src/",
 ];
-// 豁免：测试 / 类型声明 / mock / 夹具 / story / 测试基建目录不要求文档归属。
+// 豁免：测试 / 类型声明 / mock / 夹具 / story / 测试基建目录不要求文档归属；
+// 逐文件判定后的纯转发 shim / 通用技术 helper 只能用精确路径放行。
 export const COVERAGE_EXEMPTS = [
   /\.test\.[jt]sx?$/,
   /\.test-d\.ts$/,
@@ -35,6 +36,10 @@ export const COVERAGE_EXEMPTS = [
   /(^|\/)test-utils?\//,
   /(^|\/)test\//,
   /\.stories\.[jt]sx?$/,
+  /^packages\/client\/src\/components\/MonthCalendar\.tsx$/,
+  /^packages\/client\/src\/hooks\/useDebouncedValue\.ts$/,
+  /^packages\/client\/src\/hooks\/useInView\.ts$/,
+  /^packages\/client\/src\/lib\/serverHealth\.ts$/,
 ];
 const REGEXP_SPECIAL_CHARS = new Set([".", "+", "^", "$", "{", "}", "(", ")", "|", "[", "]", "\\"]);
 export const FRONTMATTER_KEYS = {

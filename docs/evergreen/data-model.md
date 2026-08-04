@@ -4,6 +4,7 @@ title: 数据模型与契约
 covers:
   - packages/shared/src/types.ts
   - packages/shared/src/schemas.ts
+  - packages/shared/src/time.ts
   - packages/shared/src/entitySchemas.ts
   - packages/shared/src/taskCompletion.ts
   - packages/shared/src/syncDomains.ts
@@ -22,6 +23,7 @@ covers:
 contracts:
   - packages/shared/src/types.ts
   - packages/shared/src/schemas.ts
+  - packages/shared/src/time.ts
   - packages/shared/src/entitySchemas.ts
   - packages/shared/src/syncDomains.ts
   - packages/shared/src/constants.ts
@@ -188,7 +190,7 @@ type SyncChange =
 
 ## 7. 时间字段约定
 
-所有时间字段一律使用 UTC ISO 字符串（带 `Z`）存储和传输，展示时再转本地时区。
+所有时间字段一律使用 UTC ISO 字符串（带 `Z`）存储和传输，展示时再转本地时区。共享 `time.ts` 固定应用时区为 `Asia/Shanghai`，并提供本地挂钟时间与 UTC `.sssZ` 字符串之间的转换；服务端、CLI 与客户端表单不得各自发明时区转换。
 
 - **存字符串、比较靠字典序**：固定宽度的 UTC ISO 串其字典序等同时间先后，所以 SQLite/Dexie 直接对字符串字段排序/范围查询即可，无需时间类型。
 - Dexie / SQLite 的 `*_at` 字段使用 `new Date().toISOString()`。

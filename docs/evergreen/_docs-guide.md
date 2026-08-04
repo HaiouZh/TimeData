@@ -170,6 +170,8 @@ frontmatter 里两个字段分工不同，别混用：
 
 每份 evergreen 的 `covers` / `contracts` 至少有一个非空，这是 no-gate：纵切且没有代码时用 `contracts`，纯代码入口地图用精确 `covers`。一份文档可以没有 `contracts`（如 development、stats-insights）——说明它没有「改某文件必错」的硬契约点，strict 对它天然是 no-op，这是诚实状态，不是漏配。共享契约文件（`syncDomains.ts`、`entitySchemas.ts` 等）可同时进多份文档的 `contracts`，等价于「改它 → 复查所有把它当契约的文档」，有意为之。
 
+coverage 豁免不是第三种归属。只有打开文件确认它没有 grep 不出来的契约、状态机、不变量或跨模块联动时，才能走测试基建 / mock / fixture / 精确路径 helper 豁免；否则必须由某份 evergreen 的 `covers` 明确认领。
+
 ## 2. 主题文档骨架
 
 新建主题文档默认使用这个稳定头（数据域用“数据流/Schema”，设计语言/模块主题可把 §1/§2 换成“规范/构成”等更贴切的小节名，但「承上启下」必留）。**逐节填之前先过 §0 内容边界**：每段都要能通过「没有改动发生时也成立」这一问。

@@ -2,6 +2,7 @@
 type: evergreen
 title: 同步 · 观测与排障
 covers:
+  - packages/client/src/components/SyncTimingsPanel.tsx
 contracts:
   - packages/client/src/components/SyncTimingsPanel.tsx
   - packages/client/src/db/index.ts

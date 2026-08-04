@@ -58,6 +58,8 @@ last-reviewed: 2026-07-31
 
 `health.range.presets` 不在上表：健康统计页与 `healthRangeSetting.ts` 随健康子系统一起退役（见 [ADR 0024](../../adr/0024-retire-health-subsystem.md)），没有任何代码读写这个 key。老设备 `settings` 表里可能留有这条历史键值，无消费方，不清理也无副作用。
 
+localStorage 偏好不在 `settings` 同步表，不随设备同步：`timedata_cloud_sync_enabled` 属 [sync/realtime-and-scheduler](../sync/realtime-and-scheduler.md)，`timedata_merge_overnight` 属 [timeline](../timeline.md)。这类 key 由消费域文档拥有，本表只说明它们不属于 Dexie `settings`。
+
 > 本子文档 covers 只含通用基础设施 `lib/settings/index.ts` + 四个本域归属的包装：`desktopSidebarSetting.ts`、`navVisibleTabsSetting.ts`、`punchCategorySetting.ts`、`sleepCategorySetting.ts`（在 `lib/` 非 `lib/settings/` 目录）。其余包装（stats-layout / stats-trend / todo-dest）的 covers 归各自消费域文档，本表只导航。
 
 ## 3. 关键不变量 / 坑 / 红线

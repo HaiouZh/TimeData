@@ -113,7 +113,7 @@ last-reviewed: YYYY-MM-DD
 `pnpm check:docs:size` 先守 frontmatter 形状，再守体量与管辖；字符数不做棘轮，正文增长只在单文档真的膨胀到上限时才拦。
 
 - **frontmatter 形状是硬闸**：evergreen 只接受 `type`、`title`、`last-reviewed` 三个必填标量，以及 `covers`、`contracts` 两个可选列表；未知键、缺必填键、列表写成标量都会失败。ADR 不参与这条形状校验。
-- **机检闸存在是 no-gate**：evergreen 不能 `covers` 与 `contracts` 双空。横切文档至少有 `covers`；纯代码入口地图列精确 `covers`；零 covers 的纵切文档必须有 `contracts`。
+- **机检闸存在是 no-gate**：evergreen 不能 `covers` 与 `contracts` 双空。横切文档至少有 `covers`；纯代码入口地图列精确 `covers`；零 covers 的纵切文档必须有 `contracts`。coverage 豁免只给测试基建、mock/fixture、纯转发 shim 或无隐藏契约的通用 helper，不能当成“暂不归属”的安置方式。
 - **字符数是绝对上限，不是基线棘轮**：超过 hard cap（约 25000 字符）才报错，含义是「这篇太长了，该拆」。合法动作仍只有四个：删过时 / 越界内容（先按母文档 §0.4 补落点再 trim）、横切、纵切、升格；压缩措辞、删例子、把句子改短不是合法动作，四条都走不通就停下询问。超过 soft cap（约 15000 字符）只软提示，提示在超过 15000、20000、23000 字符时依次升级，边界是严格大于。
 - **`covers` 数是棘轮**：`scripts/evergreen-size-baseline.json` 只记每篇文档的 `covers` 数与存在性。数目比基线大即报错，防止悄悄扩大管辖；字符数不记入基线。
 - 基线必须覆盖当前全部 evergreen 文档；新增、删除或重命名 evergreen 文档而未更新基线都会失败。

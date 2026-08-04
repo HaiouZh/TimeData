@@ -7,13 +7,20 @@ covers:
   - packages/shared/src/schemas.ts
   - packages/client/src/pages/TimelinePage.tsx
   - packages/client/src/pages/EntryPage.tsx
+  - packages/client/src/components/CategoryPicker.tsx
+  - packages/client/src/components/DateNav.tsx
   - packages/client/src/components/EntryForm.tsx
   - packages/client/src/components/Timeline.tsx
   - packages/client/src/components/CircularTimeline.tsx
+  - packages/client/src/components/SyncIndicator.tsx
+  - packages/client/src/components/TimeSlot.tsx
   - packages/client/src/components/TimeRangeWheelPicker.tsx
+  - packages/client/src/hooks/useAppResumeRefresh.ts
   - packages/client/src/hooks/useEntries.ts
+  - packages/client/src/hooks/useMidnightTick.ts
   - packages/client/src/lib/punch.ts
   - packages/client/src/lib/time.ts
+  - packages/client/src/lib/overnightDisplaySetting.ts
   - packages/server/src/routes/entries.ts
   - packages/server/src/lib/entry-service.ts
   - packages/server/src/sync/domains.ts
@@ -109,6 +116,8 @@ entry.endTime > 当天 00:00:00 对应的 UTC 边界
 
 1. **前一天视角**：记录从当天开始、延续到次日时，在当天时间轴上显示到 `24:00`，槽位标记为 `displayMode: "truncated"`。
 2. **后一天视角**：上一条记录从前一天跨到当天，并且当天启用跨夜合并时，时间轴顶部直接显示完整记录，槽位标记为 `displayMode: "merged"`。
+
+跨夜合并显示由 localStorage key `timedata_merge_overnight` 控制，默认开启，只有存值为 `"false"` 时关闭。它只改变时间轴展示，不改变统计页按自然日裁剪的聚合口径。
 
 时间轴槽位格式化时间范围时：
 

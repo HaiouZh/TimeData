@@ -8,11 +8,14 @@
   "docs/evergreen/_docs-guide/splitting.md": {
     "covers": 0
   },
+  "docs/evergreen/admin.md": {
+    "covers": 12
+  },
   "docs/evergreen/architecture.md": {
-    "covers": 21
+    "covers": 31
   },
   "docs/evergreen/backup.md": {
-    "covers": 16
+    "covers": 18
   },
   "docs/evergreen/categories-settings.md": {
     "covers": 12
@@ -24,13 +27,13 @@
     "covers": 8
   },
   "docs/evergreen/data-model.md": {
-    "covers": 17
+    "covers": 18
   },
   "docs/evergreen/deployment.md": {
-    "covers": 20
+    "covers": 23
   },
   "docs/evergreen/deployment/android-apk.md": {
-    "covers": 15
+    "covers": 16
   },
   "docs/evergreen/deployment/ios-ipa.md": {
     "covers": 4
@@ -39,22 +42,25 @@
     "covers": 5
   },
   "docs/evergreen/design-language.md": {
-    "covers": 15
+    "covers": 17
   },
   "docs/evergreen/design-language/controls.md": {
-    "covers": 5
+    "covers": 8
   },
   "docs/evergreen/development.md": {
     "covers": 10
   },
   "docs/evergreen/diary.md": {
-    "covers": 6
+    "covers": 7
   },
   "docs/evergreen/diary/editor.md": {
     "covers": 6
   },
   "docs/evergreen/diary/reference-panel.md": {
     "covers": 5
+  },
+  "docs/evergreen/diary/review.md": {
+    "covers": 7
   },
   "docs/evergreen/goals.md": {
     "covers": 9
@@ -69,25 +75,25 @@
     "covers": 16
   },
   "docs/evergreen/security.md": {
-    "covers": 27
+    "covers": 29
   },
   "docs/evergreen/stats-insights.md": {
     "covers": 14
   },
   "docs/evergreen/sync.md": {
-    "covers": 32
+    "covers": 36
   },
   "docs/evergreen/sync/domain-registry.md": {
     "covers": 14
   },
   "docs/evergreen/sync/realtime-and-scheduler.md": {
-    "covers": 7
+    "covers": 9
   },
   "docs/evergreen/sync/troubleshooting.md": {
-    "covers": 0
+    "covers": 1
   },
   "docs/evergreen/timeline.md": {
-    "covers": 19
+    "covers": 26
   },
   "docs/evergreen/todo.md": {
     "covers": 27
