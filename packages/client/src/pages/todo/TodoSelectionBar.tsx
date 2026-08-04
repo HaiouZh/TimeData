@@ -93,7 +93,7 @@ export function TodoSelectionBar({
               event.preventDefault();
               submitCreate();
             }}
-            className="min-w-0 flex-1 rounded-ctl bg-surface-elevated px-2 py-1 td-text-body text-ink outline-none placeholder:text-ink-3"
+            className="min-w-0 flex-1 rounded-ctl bg-surface-elevated px-2 py-1 text-ink outline-none placeholder:text-ink-3"
           />
           <button
             type="button"

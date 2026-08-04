@@ -70,7 +70,7 @@ last-reviewed: 2026-08-02
 
 错误提示归 `label` 而不是 `body`：它是控件的附属反馈，跟同一行的标签/按钮文字同档才不会比自己所属的行标题还大；独立成段的说明卡片与空状态才用 `body`。面板标题不落 `title`：页面标题已占 `title`(20px)，面板标题再落同档会让原本 24/16px 的两级层级塌成一档。
 
-**`input` / `textarea` / `select` 上不加任何字号类**：`index.css` 顶层的 `input,select,textarea { font-size: 16px }` 是 iOS 聚焦防缩放兜底（字号 <16px 时 Safari 会自动放大视口）。它是元素选择器，而 `.td-text-*` 是类选择器、特异性更高，加上去会盖掉兜底并让聚焦时整页放大回归。这类元素上的字号声明本就不生效，正确做法是不写。
+**`input` / `textarea` / `select` 上不加任何字号类**：`index.css` 顶层的 `input,select,textarea { font-size: 16px }` 是 iOS 聚焦防缩放兜底（字号 <16px 时 Safari 会自动放大视口）。它是元素选择器，而 `.td-text-*` 是类选择器、特异性更高——加上去**会真的盖掉兜底**（三档 caption/label/body 分别是 12/13/15px，全在 16px 以下），聚焦放大随之回归。`check:design` 的 `input-font-size-override` 规则守着这条：命中即报，规则跨行认标签，落在普通元素上的字号类不受影响。
 
 ## 2. 图标（`components/Icon.tsx` → Phosphor）
 

@@ -108,7 +108,7 @@ export function SettingsTracksPage() {
             onChange={(e) => setExecDraft(e.target.value)}
             placeholder="如:agent在做"
             aria-label="新增 agent 执行信号"
-            className="min-h-10 flex-1 rounded-ctl border border-border bg-surface px-3 td-text-body text-ink placeholder:text-ink-3 focus:outline-none focus:ring-1 focus:ring-accent"
+            className="min-h-10 flex-1 rounded-ctl border border-border bg-surface px-3 text-ink placeholder:text-ink-3 focus:outline-none focus:ring-1 focus:ring-accent"
           />
           <button
             type="submit"

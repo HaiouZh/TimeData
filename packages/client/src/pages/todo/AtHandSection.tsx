@@ -78,7 +78,7 @@ function AtHandHeading({
             autoFocus
             maxLength={200}
             defaultValue={note ?? ""}
-            className="min-w-0 flex-1 rounded-ctl bg-surface px-1 td-text-label font-medium text-ink outline-none"
+            className="min-w-0 flex-1 rounded-ctl bg-surface px-1 font-medium text-ink outline-none"
             onKeyDown={(event) => {
               // IME 组合态的 Enter 是在确认候选词，不是保存指令。
               if (event.nativeEvent.isComposing) return;

@@ -321,7 +321,7 @@ function ProjectGroupCard({
                   void submitRename();
                 }
               }}
-              className="min-w-0 flex-1 rounded-ctl bg-surface-elevated px-2 py-1 td-text-label text-ink outline-none"
+              className="min-w-0 flex-1 rounded-ctl bg-surface-elevated px-2 py-1 text-ink outline-none"
             />
           </form>
         ) : (
@@ -458,7 +458,7 @@ function ProjectGroupCard({
                     event.preventDefault();
                     void submitCreate();
                   }}
-                  className="min-w-0 flex-1 bg-transparent py-0.5 td-text-body text-ink outline-none placeholder:text-ink-3"
+                  className="min-w-0 flex-1 bg-transparent py-0.5 text-ink outline-none placeholder:text-ink-3"
                 />
                 <button
                   type="button"

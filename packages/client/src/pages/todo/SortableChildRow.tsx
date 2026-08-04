@@ -197,7 +197,7 @@ function ChildRowBody({
               commitEdit();
             }}
             onKeyDown={handleEditKey}
-            className={`min-w-0 flex-1 resize-none break-words bg-transparent px-1 py-1 td-text-body outline-none focus:bg-surface-hover ${
+            className={`min-w-0 flex-1 resize-none break-words bg-transparent px-1 py-1 outline-none focus:bg-surface-hover ${
               effectiveDone ? "text-ink-3 line-through" : "text-ink"
             }`}
           />
@@ -382,7 +382,7 @@ export function NewChildRow({ onResolve }: NewChildRowProps) {
           }}
           onBlur={() => onResolve(draft, "blur")}
           onKeyDown={handleKey}
-          className="min-h-8 min-w-0 flex-1 resize-none break-words bg-transparent px-1 py-1 td-text-body text-ink outline-none"
+          className="min-h-8 min-w-0 flex-1 resize-none break-words bg-transparent px-1 py-1 text-ink outline-none"
         />
         <button
           type="button"

@@ -123,7 +123,7 @@ export function TrackStepRow({
             value={draft}
             onChange={(event) => setDraft(event.target.value)}
             rows={4}
-            className="w-full resize-y rounded-ctl border border-border bg-surface-elevated px-3 py-2 td-text-body text-ink focus:outline-none focus:ring-1 focus:ring-accent"
+            className="w-full resize-y rounded-ctl border border-border bg-surface-elevated px-3 py-2 text-ink focus:outline-none focus:ring-1 focus:ring-accent"
           />
           <div className="flex justify-end gap-2">
             <button

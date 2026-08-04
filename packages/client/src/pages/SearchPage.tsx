@@ -154,7 +154,7 @@ export default function SearchPage() {
             onChange={(event) => setQueryInput(event.target.value)}
             placeholder="搜索备注"
             aria-label="搜索备注"
-            className="mx-3 mb-2 mt-0 min-h-11 w-[calc(100%-1.5rem)] rounded-row border border-border bg-surface-elevated px-3 td-text-body text-ink outline-none focus-visible:ring-2 focus-visible:ring-accent sm:mx-4 sm:w-[calc(100%-2rem)]"
+            className="mx-3 mb-2 mt-0 min-h-11 w-[calc(100%-1.5rem)] rounded-row border border-border bg-surface-elevated px-3 text-ink outline-none focus-visible:ring-2 focus-visible:ring-accent sm:mx-4 sm:w-[calc(100%-2rem)]"
           />
         )}
 

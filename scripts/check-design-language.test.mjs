@@ -248,6 +248,51 @@ test("flags text icons in multiline interactive content", () => {
   assert.equal(result.violations.some((violation) => violation.rule === "interactive-text-icon"), true);
 });
 
+test("flags td-text-* on input controls", () => {
+  // index.css 把 input/textarea/select 兜底到 16px 消除 iOS 聚焦缩放，
+  // 而 td-text-* 三档都小于 16px；类选择器优先级更高，加上去就把兜底顶掉了。
+  const result = collectViolations({
+    files: [
+      {
+        file: "x.tsx",
+        content: `<input
+  type="text"
+  onChange={(e) => setValue(e.target.value)}
+  className="rounded-ctl px-2 td-text-body text-ink"
+/>`,
+      },
+      {
+        file: "y.tsx",
+        content: `<textarea className="min-h-16 td-text-caption text-ink" />`,
+      },
+    ],
+    allowlist: loadAllowlist({ entries: [] }),
+  });
+
+  const hits = result.violations.filter((violation) => violation.rule === "input-font-size-override");
+  assert.equal(hits.length, 2);
+});
+
+test("does not flag td-text-* outside input controls", () => {
+  const result = collectViolations({
+    files: [
+      { file: "x.tsx", content: `<span className="td-text-body">正文</span>` },
+      {
+        file: "y.tsx",
+        // 标签已闭合，后面这行的字号类不属于输入控件
+        content: `<input type="text" className="px-2" />
+<p className="td-text-caption">说明文字</p>`,
+      },
+    ],
+    allowlist: loadAllowlist({ entries: [] }),
+  });
+
+  assert.equal(
+    result.violations.some((violation) => violation.rule === "input-font-size-override"),
+    false,
+  );
+});
+
 test("does not flag token classes", () => {
   assert.equal(classifyLine("x.tsx", 'className="bg-accent text-ink border-border"').length, 0);
 });

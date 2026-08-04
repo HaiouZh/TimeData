@@ -108,7 +108,7 @@ export function GoalUnassignedTray({
           value={searchQuery}
           onChange={(event) => setSearchQuery(event.target.value)}
           placeholder="搜索未归类项"
-          className="min-h-11 w-full rounded-row border border-border bg-surface px-3 td-text-body text-ink outline-none placeholder:text-ink-3 focus:border-accent"
+          className="min-h-11 w-full rounded-row border border-border bg-surface px-3 text-ink outline-none placeholder:text-ink-3 focus:border-accent"
         />
         {tab === "tasks" && (
           <TagFilterPanel

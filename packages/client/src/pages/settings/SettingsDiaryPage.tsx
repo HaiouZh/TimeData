@@ -97,7 +97,7 @@ export default function SettingsDiaryPage() {
                 value={template}
                 onChange={(e) => setTemplate(e.target.value)}
                 rows={3}
-                className="mt-1 block w-full resize-none rounded-row border border-border bg-surface px-3 py-2 td-text-body text-ink placeholder-ink-3 focus:border-accent focus:outline-none"
+                className="mt-1 block w-full resize-none rounded-row border border-border bg-surface px-3 py-2 text-ink placeholder-ink-3 focus:border-accent focus:outline-none"
                 placeholder={TEMPLATE_EXAMPLE}
               />
             </label>
@@ -130,7 +130,7 @@ export default function SettingsDiaryPage() {
                 value={weeklyTemplate}
                 onChange={(e) => setWeeklyTemplate(e.target.value)}
                 rows={3}
-                className="mt-1 block w-full resize-none rounded-row border border-border bg-surface px-3 py-2 td-text-body text-ink placeholder-ink-3 focus:border-accent focus:outline-none"
+                className="mt-1 block w-full resize-none rounded-row border border-border bg-surface px-3 py-2 text-ink placeholder-ink-3 focus:border-accent focus:outline-none"
                 placeholder={WEEKLY_TEMPLATE_EXAMPLE}
               />
             </label>

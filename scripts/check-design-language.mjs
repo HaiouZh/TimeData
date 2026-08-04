@@ -163,6 +163,31 @@ const RULES = [
 for (const rule of RULES) {
   LEGAL_RULE_IDS.add(rule.id);
 }
+// 跨行才判得了（td-text-* 落在普通元素上完全合法），不进 RULES；id 在此登记以便 allowlist 校验。
+LEGAL_RULE_IDS.add("input-font-size-override");
+
+const INPUT_TAG_RE = /<(?:input|textarea|select)\b[\s\S]*?\/?>/g;
+const TD_TEXT_CLASS_RE = new RegExp(TD_TEXT_STEP);
+// key 用 lines 数组本身：每次读文件都是新数组，天然隔离不同文件与不同调用。
+const inputTagLinesCache = new WeakMap();
+
+/** 落在 input / textarea / select 开标签内部的行号集合（1-based）。 */
+function inputTagLines(lines) {
+  const cached = inputTagLinesCache.get(lines);
+  if (cached) return cached;
+  // JSX 属性里的箭头函数 => 含 >，会把标签匹配截断，扫描前先换成替身。
+  const src = lines.join("\n").replace(/=>/g, "=»");
+  const covered = new Set();
+  INPUT_TAG_RE.lastIndex = 0;
+  let match;
+  while ((match = INPUT_TAG_RE.exec(src)) !== null) {
+    const start = src.slice(0, match.index).split("\n").length;
+    const end = start + match[0].split("\n").length - 1;
+    for (let line = start; line <= end; line++) covered.add(line);
+  }
+  inputTagLinesCache.set(lines, covered);
+  return covered;
+}
 
 function normalizePath(file) {
   return file.replace(/\\/g, "/");
@@ -318,6 +343,13 @@ export function collectViolations({ src = SRC, root = ROOT, allowlist = loadAllo
 
 function classifyLineWithContext(file, line, lines, index) {
   const violations = classifyLine(file, line);
+  if (TD_TEXT_CLASS_RE.test(line) && inputTagLines(lines).has(index + 1)) {
+    violations.push({
+      rule: "input-font-size-override",
+      message:
+        "输入控件不写字号类：index.css 已把 input/textarea/select 兜底到 16px 消除 iOS 聚焦缩放，td-text-* 三档都小于 16px，类选择器优先级更高会把兜底顶掉",
+    });
+  }
   if (violations.some((violation) => violation.rule === "interactive-text-icon")) return violations;
   if (!INTERACTIVE_TEXT_ICON_RE.test(line)) return violations;
 
@@ -351,7 +383,7 @@ function main() {
     );
     process.exit(1);
   }
-  console.log("✓ 设计语言：无未豁免违规（裸色/退役色/退役 token/黑白命名色/裸字号/裸圆角/裸 z-index/裸任意值/散装图标/业务 font-mono）");
+  console.log("✓ 设计语言：无未豁免违规（裸色/退役色/退役 token/黑白命名色/裸字号/输入控件字号/裸圆角/裸 z-index/裸任意值/散装图标/业务 font-mono）");
 }
 
 if (resolve(process.argv[1] ?? "") === fileURLToPath(import.meta.url)) {

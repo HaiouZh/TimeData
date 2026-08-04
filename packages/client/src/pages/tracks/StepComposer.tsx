@@ -104,7 +104,7 @@ export function StepComposer({
         aria-label="步骤内容"
         rows={2}
         disabled={disabled}
-        className="min-h-16 w-full resize-none rounded-ctl border border-border bg-surface-elevated px-3 py-2 td-text-body text-ink placeholder:text-ink-3 focus:outline-none focus:ring-1 focus:ring-accent"
+        className="min-h-16 w-full resize-none rounded-ctl border border-border bg-surface-elevated px-3 py-2 text-ink placeholder:text-ink-3 focus:outline-none focus:ring-1 focus:ring-accent"
       />
       <div className="mt-2 flex flex-wrap items-center gap-2">
         {normalizedStatusTags.length > 0 && (
@@ -145,7 +145,7 @@ export function StepComposer({
           placeholder="自定义标签"
           aria-label="自定义步骤标签"
           disabled={disabled}
-          className="min-h-8 w-28 rounded-ctl border border-border bg-surface-elevated px-2 td-text-caption text-ink placeholder:text-ink-3 focus:outline-none focus:ring-1 focus:ring-accent"
+          className="min-h-8 w-28 rounded-ctl border border-border bg-surface-elevated px-2 text-ink placeholder:text-ink-3 focus:outline-none focus:ring-1 focus:ring-accent"
         />
         <button
           type="submit"

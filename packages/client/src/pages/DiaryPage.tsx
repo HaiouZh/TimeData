@@ -448,7 +448,7 @@ export default function DiaryPage() {
         markDirty();
       }}
       onKeyDown={handleKeyDown}
-      className="min-h-0 flex-1 resize-none bg-surface px-4 py-4 td-text-body text-ink outline-none"
+      className="min-h-0 flex-1 resize-none bg-surface px-4 py-4 text-ink outline-none"
     />
   );
 

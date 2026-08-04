@@ -212,7 +212,7 @@ export default function DiaryReviewPage() {
                 max={YEAR_RANGE_MAX}
                 value={yearRange}
                 onChange={(event) => handleYearRangeChange(Number(event.target.value))}
-                className="w-12 bg-transparent td-text-caption text-ink focus:outline-none"
+                className="w-12 bg-transparent text-ink focus:outline-none"
               />
             </label>
           )}

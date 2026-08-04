@@ -67,7 +67,7 @@ export function TotpPromptDialog() {
           placeholder={messages.totp.promptPlaceholder}
           value={code}
           onChange={(e) => setCode(e.target.value)}
-          className="w-full rounded-ctl border border-border bg-surface-elevated px-3 py-2 td-text-body text-ink"
+          className="w-full rounded-ctl border border-border bg-surface-elevated px-3 py-2 text-ink"
         />
         <div className="flex justify-end gap-2">
           <button

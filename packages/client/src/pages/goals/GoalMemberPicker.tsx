@@ -112,7 +112,7 @@ export function GoalMemberPicker({
           value={searchQuery}
           onChange={(event) => setSearchQuery(event.target.value)}
           placeholder="搜索成员"
-          className="min-h-11 w-full rounded-row border border-border bg-surface px-3 td-text-body text-ink outline-none placeholder:text-ink-3 focus:border-accent"
+          className="min-h-11 w-full rounded-row border border-border bg-surface px-3 text-ink outline-none placeholder:text-ink-3 focus:border-accent"
         />
         {tab === "tasks" && (
           <TagFilterPanel
@@ -150,7 +150,7 @@ export function GoalMemberPicker({
             aria-label="新建任务并加入"
             value={quickTitle}
             onChange={(event) => setQuickTitle(event.target.value)}
-            className="min-h-11 min-w-0 flex-1 rounded-row border border-border bg-surface px-3 td-text-body text-ink outline-none placeholder:text-ink-3 focus:border-accent"
+            className="min-h-11 min-w-0 flex-1 rounded-row border border-border bg-surface px-3 text-ink outline-none placeholder:text-ink-3 focus:border-accent"
             placeholder="新建任务并加入"
           />
           <button type="submit" className="min-h-11 rounded-ctl bg-accent px-4 td-text-body font-medium text-page hover:bg-accent-strong">
