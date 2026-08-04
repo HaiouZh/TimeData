@@ -17,7 +17,7 @@ last-reviewed: 2026-08-04
 
 # 日记
 
-> 日记域：每天一条纯文本文件，直接写在用户挂载的本地 vault 目录里（Obsidian 风格），不进 SQLite/Dexie、不进同步账本、不进备份格式。
+> 日记域：正文日记每天一条纯文本文件，另有可选的周记（每周一条，回顾页用）；都直接写在用户挂载的本地 vault 目录里（Obsidian 风格），不进 SQLite/Dexie、不进同步账本、不进备份格式。
 > 讲什么：路径模板展开与安全校验、mtime 并发守卫、关键契约与不变量、日期与跨零点、设置页模板配置。
 > 不讲什么：编辑器三键位语义与撤销栈约束（见子文档 [diary/editor](diary/editor.md)）、宽屏只读参考栏（见子文档 [diary/reference-panel](diary/reference-panel.md)）、日记回顾页（见子文档 [diary/review](diary/review.md)）；QuickNote/待办/时间记录等结构化域的存储与同步（见 [quick-notes](quick-notes.md)/[todo](todo.md)/[timeline](timeline.md)）、通用同步账本（见 [sync](sync.md)）。
 
@@ -42,18 +42,18 @@ DiaryPage 保存
   → 前端捕获 vault 权限错误，提示检查 DIARY_VAULT_HOST_DIR 挂载目录所有权
 
 SettingsDiaryPage 保存模板
-  → PUT /api/diary/config { template }
-  → server 用固定日期 2026-01-01 校验模板语法，非法 → 400 { error: 中文原因 }
+  → PUT /api/diary/config { template? , weeklyTemplate? }（两个字段至少给一个，否则 400）
+  → server 用固定日期 2026-01-01 / 固定周号 2026-W01 校验对应模板语法，非法 → 400 { error: 中文原因 }
 ```
 
-`enabled` 由服务端 `DIARY_VAULT_DIR` 环境变量是否配置决定（非 server_config 存储项）；`template` 与周记模板 `weeklyTemplate` 都存在 `server_config` 表（key 分别是 `diary.pathTemplate.v1` 与 `diary.weeklyPathTemplate.v1`，走 `lib/serverConfig.ts` 的 `getServerConfig`/`setServerConfig` 通用 KV，同表其他配置项 key 独立）。`PUT /config` 按传入字段分别写入，两者互不牵连。
+`enabled` 由服务端 `DIARY_VAULT_DIR` 环境变量是否配置决定（非 server_config 存储项）；`template` 与周记模板 `weeklyTemplate` 都存在 `server_config` 表（key 分别是 `diary.pathTemplate.v1` 与 `diary.weeklyPathTemplate.v1`，走 `lib/serverConfig.ts` 的 `getServerConfig`/`setServerConfig` 通用 KV，同表其他配置项 key 独立）。`PUT /config` 按传入字段分别写入，两者互不牵连。**但对空串不对称**：`template: ""` 照走语法校验、被「模板不能为空」拦成 400；`weeklyTemplate: ""` 显式跳过校验直接落库，等于**清除周记配置**（兑现设置页「留空 = 回顾页周览不显示周记」）。
 
 <a id="diary-s2"></a>
 
 ## 2. 关键契约 / 不变量
 
-1. **路径模板占位符**只认 `{yyyy}` `{MM}` `{dd}`，其余占位符（含未知花括号）在展开时报错「未知占位符」。
-2. **模板安全校验**（`expandDiaryTemplate`）：不能含反斜杠、不能是绝对路径（`/` 开头或 `X:` 盘符开头）、不能含 `..` 段；展开后的绝对路径必须仍在 `vaultDir` 内（`resolveDiaryFile` 二次校验，防止模板拼接后越权）。
+1. **路径模板占位符分两套且互不通用**：日模板（`expandDiaryTemplate`，日期形态 `YYYY-MM-DD`）只认 `{yyyy}` `{MM}` `{dd}`，周记模板（`expandWeeklyTemplate`，周号形态 `YYYY-Www`）只认 `{gggg}` `{ww}`；两边都对其余占位符（含未知花括号）在展开时报错「未知占位符」。
+2. **模板安全校验两套共用**（`validateTemplateShape`，两个 expand 各自先调它）：不能为空、不能含反斜杠、不能是绝对路径（`/` 开头或 `X:` 盘符开头）、不能含 `..` 段；展开后的绝对路径必须仍在 `vaultDir` 内（`resolveDiaryFile` / `resolveWeeklyFile` 都走 `resolveInsideVault` 二次校验，防止模板拼接后越权）。
 3. **mtime 并发守卫**：`PUT /:date` 非 `force` 请求时，服务器当前文件 mtime 必须等于客户端携带的 `baseMtime`（文件不存在时 `baseMtime` 应为 `null`），否则 409 冲突并回传服务器当前 mtime；`force:true` 无条件覆盖。mtime 精度为 `Math.floor(mtimeMs)`（毫秒截断）。
 4. **`enabled=false`（vault 未挂载）时**页面仍可加载/展示，但视为不可用状态提示用户，不阻断路由本身；`template=""`（未配置模板）在 `DiaryPage` 单独提示并链接到 `/settings/diary`。
 5. **有序列表回车重排**（`orderedList.ts:applyEnterInOrderedList`）不是逐行 +1，是把光标所在项到块尾整段拉直编号（`listModel.ts:renumberBlock`）；IME 组合态回车（`event.nativeEvent.isComposing`）不触发；光标前是空列表项且行内光标后无余文时不续号，**有缩进先退一层、退到顶层再按一次才清行**（逐级出层）。附属行/围栏豁免/单项块护栏/光标落点公式等完整语义见 [diary/editor](diary/editor.md#diary-editor-s2)。
@@ -150,7 +150,7 @@ SettingsDiaryPage 保存模板
 | `pages/DiaryPage.tsx` | 编辑页：加载当天内容、`handleKeyDown` 分派三键位、脏态提示离开、mtime 冲突 UI（见 [diary/editor](diary/editor.md)）、日期驱动与跨零点提示（§3） |
 | `pages/settings/SettingsDiaryPage.tsx` | 设置页：显示 enabled 状态、编辑并保存路径模板、400 错误展示服务器中文 message |
 | `lib/diary/diaryDate.ts` | `resolveDiaryDate`：显式/跟随两种日期模式的唯一裁决点（§3.1） |
-| `lib/diary/diaryApi.ts` | 客户端 API 封装：`fetchDiaryConfig`/`saveDiaryTemplate`/`fetchDiary`/`saveDiary`，`DiaryConflictError` |
+| `lib/diary/diaryApi.ts` | 客户端 API 封装：`fetchDiaryConfig`/`saveDiaryTemplate`/`saveDiaryWeeklyTemplate`/`fetchDiary`/`saveDiary`/`fetchDiaryBatch`，`DiaryConflictError` |
 | `lib/diary/textareaEdit.ts` | 程序化编辑唯一出口：`applyEdit` 走 `execCommand` 保住原生撤销栈，`runEditAction` 统一落地 `EditAction`（[diary/editor](diary/editor.md) §1、§5、§6、§7） |
 | `lib/diary/orderedList.ts` | 有序列表回车整段重排纯函数（[diary/editor](diary/editor.md#diary-editor-s2)） |
 | `lib/diary/listModel.ts` | 共享行模型与有序列表重排原语（供回车重排与 Tab 缩进复用，见 [diary/editor §2](diary/editor.md#diary-editor-s2) 与 [§3](diary/editor.md#diary-editor-s3)） |
@@ -158,14 +158,15 @@ SettingsDiaryPage 保存模板
 | `lib/diary/link.ts` | Ctrl+K 补 markdown 链接纯函数，四态返回（null/noop/select/replace）+ 围栏豁免，七 case（[diary/editor](diary/editor.md#diary-editor-s4)） |
 | `lib/diary/eol.ts` | 行尾保护：探测原文件主导行尾（CRLF/LF），`DiaryPage` 保存时据此还原，避免打开 CRLF 文件后静默改写成 LF（[diary/editor](diary/editor.md#diary-editor-s8)） |
 | `lib/diary/diaryRefPrefs.ts` | 参考栏折叠偏好：「今天」三块的展开/折叠状态存取（[diary/reference-panel](diary/reference-panel.md#diary-reference-panel-s2)） |
-| `lib/diary/diaryRefEntries.ts` | 打点当天窗口查询 `listEntriesOverlappingDay` + 日界裁剪 `clipEntriesToDay`，二者共用 `diaryRefDayWindow`（[diary/reference-panel §2](diary/reference-panel.md#diary-reference-panel-s2) 与 [§4](diary/reference-panel.md#diary-reference-panel-s4)） |
+| `lib/diary/diaryRefEntries.ts` | 日界裁剪 `clipEntriesToDay` + 窗口原语 `diaryRefDayWindow`。**纯函数，模块图里不得出现 db**——它的测试跑 node 干净桶（零 DOM、零 db），import 一次 db 就整桶报废（[diary/reference-panel §4](diary/reference-panel.md#diary-reference-panel-s4)） |
+| `lib/diary/diaryRefEntriesQuery.ts` | 上一行拆出来的那半：打点当天窗口查询 `listEntriesOverlappingDay`，碰 db，共用 `diaryRefDayWindow`（[diary/reference-panel §2](diary/reference-panel.md#diary-reference-panel-s2)） |
 | `lib/diary/diaryRefTasks.ts` | 完成待办过滤：`selectTasksCompletedOn` 三条硬性口径（[diary/reference-panel](diary/reference-panel.md#diary-reference-panel-s2)） |
-| `pages/diary/**` | 参考栏五个组件：`DiaryReferencePanel`（挂载、两个分区、每块各一层 `ErrorBoundary`）、`DiaryRefPunches`、`DiaryRefDoneTasks`、`DiaryRefQuickNotes`、`DiaryRefLookback`（[diary/reference-panel](diary/reference-panel.md)） |
+| `pages/diary/DiaryReferencePanel.tsx` + `pages/diary/DiaryRef*.tsx` | 参考栏五个组件：`DiaryReferencePanel`（挂载、两个分区、每块各一层 `ErrorBoundary`）、`DiaryRefPunches`、`DiaryRefDoneTasks`、`DiaryRefQuickNotes`、`DiaryRefLookback`（[diary/reference-panel](diary/reference-panel.md)） |
 | 编辑器三键位 / EditAction 四态 / onChange 红线 / dirty 记账 / 行尾保护 | → [diary/editor](diary/editor.md) |
 | 参考栏布局挂载 / 四块数据口径 / 错误围栏 / 回看两道闸 | → [diary/reference-panel](diary/reference-panel.md) |
-| 回顾页模式 / 周记列 / markdown 附件渲染 | → [diary/review](diary/review.md) |
-| `server/routes/diary.ts` | 四端点：`GET/PUT /config`、`GET/PUT /:date` |
-| `server/lib/diary-path.ts` | 模板展开 + 路径安全校验纯函数 |
+| 回顾页模式 / 周记列 / markdown 附件渲染（`pages/diary/review/**`、`lib/diary/review*.ts`） | → [diary/review](diary/review.md) |
+| `server/routes/diary.ts` | 六端点：编辑页用 `GET/PUT /config`、`GET/PUT /:date`；回顾页另用 `POST /batch`、`GET /asset`。**`GET /asset` 必须注册在 `GET /:date` 之前**，否则被 `:date` 参数路由吞掉（`POST /batch` 与只注册了 GET/PUT 的 `/:date` 天然不冲突，顺序对它无风险） |
+| `server/lib/diary-path.ts` | 日模板与周记模板的展开 + 路径安全校验纯函数（`expandDiaryTemplate` / `expandWeeklyTemplate` / `resolve*File`） |
 
-**client**：`pages/DiaryPage.test.tsx`、`pages/DiaryPage.successPath.test.tsx`、`pages/DiaryPage.wide.test.tsx`、`pages/settings/SettingsDiaryPage.test.tsx`、`lib/diary/{diaryApi,diaryDate,orderedList,listModel,indent,link,eol,diaryRefPrefs,diaryRefEntries,diaryRefTasks}.test.ts`、`lib/diary/textareaEdit.test.tsx`、`pages/diary/DiaryReferencePanel.test.tsx`（分栏底座本身的用例在 `pages/todo/ResizableSplit.test.tsx`）
+**client**：`pages/DiaryPage.test.tsx`、`pages/DiaryPage.successPath.test.tsx`、`pages/DiaryPage.wide.test.tsx`、`pages/settings/SettingsDiaryPage.test.tsx`、`lib/diary/{diaryApi,diaryDate,orderedList,listModel,indent,link,eol,diaryRefPrefs,diaryRefEntries,diaryRefTasks,reviewDates,reviewMarkdown,reviewPrefs}.test.ts`、`lib/diary/textareaEdit.test.tsx`、`pages/diary/DiaryReferencePanel.test.tsx`、`pages/diary/review/{DiaryReviewPage,DiaryReviewPage.narrow,DiaryMarkdown}.test.tsx`（分栏底座本身的用例在 `pages/todo/ResizableSplit.test.tsx`）
 **server**：`routes/diary.test.ts`、`lib/diary-path.test.ts`

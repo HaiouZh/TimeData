@@ -83,7 +83,8 @@ last-reviewed: 2026-08-05
    - `time_entries.validate`：`endTime` 不能晚于当前 UTC（`invalid_time_range`）；分类必须存在（`missing_category`）且未归档（`archived_category`）。
    - `categories.validate`：不能自引用、只支持两级（`invalid_shape`）；父分类必须存在（`missing_category`，同批 push 的算存在）。
    - `goal_layout_pins.validate`：delete 时也必须能 decode 复合 `recordId`。
-   - `settings` / `quick_notes` / `tasks` / `tracks` / `track_steps` / `goals` / `sessions`：无钩子，通用校验即全部。
+   - `settings` / `quick_notes` / `tasks` / `tracks` / `goals` / `sessions`：无钩子，通用校验即全部。
+   - `track_steps`：无 `validate` / `crossValidate`，但有写前 `guard: guardTrackStepHost`——非 delete 写入找不到宿主 track 时不落库、回 `orphan_step_rejected`（§2）。**`guard` 与「走通用 LWW 路径」不冲突**：前者管收不收，后者管怎么写。
 
 `applyChange` 按登记簿分发：有 `apply` 钩子走钩子，否则走通用 LWW 路径。**所有路径的 `updated_at` / `deleted_at` 都取服务器当前时间 `serverNow`，不取 `change.timestamp`**。push 路由对 `baseSeq` 重叠或 unknown-base 记录启用的 staleGuard 是登记簿分发前的通用守卫，不改变任何域的 `validate` / `apply` 钩子归属。
 
@@ -100,7 +101,7 @@ last-reviewed: 2026-08-05
 LWW 只定义“同一记录发生并发修改时如何自动收敛”，字段退役和自动补齐靠 schema 演进卫生层配合：
 
 - **客户端自动补齐 / 剥离**：`runSchemaNormalizationIfNeeded()` 启动时遍历 `CLIENT_SYNC_DOMAINS` 的 `storeName + schema`，用 shared schema 给缺字段补 `.default(...)`、剥掉 retired / orphan 字段。它保留 `updatedAt`、不写 `syncLog`，整轮成功才推进 `SCHEMA_NORMALIZATION_VERSION`。
-- **客户端远端应用前 parse**：pull 收到远端数据后先走对应域 schema；无效 payload 丢弃并 warn。`tasks` 额外用 `TaskSchema` 投影后深比较，避免本地孤儿字段让 `taskNeedsApply()` 误以为远端需要重放。
+- **客户端远端应用前 parse**：pull 收到远端数据后先走对应域 schema；无效 payload 丢弃并 warn。**三个域另有 `needsApply` 钩子决定要不要真写本地**：`settings` 比 `updatedAt` + `value`；`quick_notes` 比 `updatedAt` + `text` + `occurredAt` + `pinned`（远端只改置顶也照样 apply）；`tasks` 用 `TaskSchema` 投影后深比较，避免本地孤儿字段让 `taskNeedsApply()` 误以为远端需要重放。**其余域没有这道钩子，一律照写**。
 - **服务端列补齐 / 退役**：新增字段先走 `ensure*Columns()` / `ADD COLUMN` 和 `toRow()` / `rowTo*()` 映射；退役字段先从 shared schema 与 row 映射停读写，再用 `dropColumnsIfExist()` 幂等删物理列。`applyLwwChange()` 只写 `toRow(change.data)` 产出的列，因此退役字段不会继续从同步 payload 搬进 SQLite。
 
 这套机制是 LWW 域能低成本演进的前提，但不替代服务端权威校验，也不会自动把本地卫生变化当作用户修改同步出去。
@@ -135,7 +136,7 @@ LWW 只定义“同一记录发生并发修改时如何自动收敛”，字段�
 - [ ] server `domains.ts` 写 `lww` 映射 + `readRecord`；复杂域加 `validate` / `crossValidate` / `apply`。
 - [ ] client Dexie 表 + `CLIENT_SYNC_DOMAINS` + engine pull 分支。
 - [ ] 若实体 schema 新增默认字段或退役字段，升 `SCHEMA_NORMALIZATION_VERSION`，并按 [data-model](../data-model.md) 的时序处理 `ensure*Columns()` / `dropColumnsIfExist()`。
-- [ ] 选择 backup 角色（`core` / `bundled` / `excluded`），并明确 force-push 是否纳入当前格式契约。
+- [ ] 选择 backup 角色（`core` / `bundled` / `separate` / `excluded`，**漏标即缺省 `excluded`，静默不进备份且无闸会报**），并明确 force-push 是否纳入当前格式契约。
 - [ ] 普通域参照 `fake-domain.e2e.test.ts`；复合键域参照 `goal-layout-pins-domain.e2e.test.ts`。
 - [ ] 更新 [sync 账本模型与域登记簿](../sync.md#sync-ledger-registry) 摘要、[data-model](../data-model.md)、[backup](../backup.md) 与对应业务域文档。
 - [ ] 不让运行时登记簿、静态 `SyncChange` 联合和客户端域登记簿分叉。
