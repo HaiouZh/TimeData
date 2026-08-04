@@ -659,9 +659,32 @@ test("findMalformedAnchors reports only malformed standalone anchor lines", () =
   ].join("\n");
 
   assert.deepEqual(docsCheck.findMalformedAnchors(docsCheck.stripCode(content)), [
-    { line: 2, text: '<a id="unclosed">' },
-    { line: 3, text: '<a id="self-closing" />' },
+    { line: 2, text: '<a id="unclosed">', reason: "shape" },
+    { line: 3, text: '<a id="self-closing" />', reason: "shape" },
   ]);
+});
+
+test("findMalformedAnchors reports a standalone anchor glued to the previous line", () => {
+  // 配对锚点走行内 HTML，紧贴正文会被并进上一段——锚点落到上一节，跳转差一节。
+  const content = ["7. 上一条。", '<a id="absorbed"></a>', "", "8. 本条才是锚点要标记的。"].join("\n");
+
+  assert.deepEqual(docsCheck.findMalformedAnchors(docsCheck.stripCode(content)), [
+    { line: 2, text: '<a id="absorbed"></a>', reason: "absorbed", prev: "7. 上一条。" },
+  ]);
+});
+
+test("findMalformedAnchors accepts a standalone anchor after a blank line or at line 1", () => {
+  const content = ["上一段。", "", '<a id="spaced"></a>', "", "## 标题"].join("\n");
+
+  assert.deepEqual(docsCheck.findMalformedAnchors(docsCheck.stripCode(content)), []);
+  assert.deepEqual(docsCheck.findMalformedAnchors('<a id="first-line"></a>'), []);
+});
+
+test("findMalformedAnchors accepts an anchor inlined at the head of a list item", () => {
+  // 列表里不能靠空行隔开锚点（会把列表切成两段），唯一正确写法是嵌进条目内容行首。
+  const content = ["7. 上一条。", '8. <a id="in-item"></a>本条。', '- <a id="bullet"></a>无序条。'].join("\n");
+
+  assert.deepEqual(docsCheck.findMalformedAnchors(docsCheck.stripCode(content)), []);
 });
 
 test("findMalformedAnchors ignores attributes whose names or values merely contain id", () => {

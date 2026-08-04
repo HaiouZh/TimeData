@@ -23,7 +23,9 @@ last-reviewed: 2026-08-04
 | `check:docs:links` | 互链和指针不指向消失目标 | evergreen 以及 `AGENTS.md` / `README.md` 指向 evergreen、ADR 的 Markdown `.md` 链接不存在；目标 `.md#id` 缺独立 `<a id="..."></a>` 显式锚点；独立锚点行畸形；不同文档重名锚点 |
 | `check:docs:stale` | `last-reviewed` 不过期 | 缺字段或超过 180 天 |
 
-links 不校验同页 fragment、Markdown 标题自动锚点或 prose `§x.y`；拆分后这类引用按 [拆分与体量](splitting.md) 的四类手动扫描。锚点名必须是独立成行的 `<a id="..."></a>`，避免同名目标和格式畸形让链接看似有效却无稳定落点。
+links 不校验同页 fragment、Markdown 标题自动锚点或 prose `§x.y`；拆分后这类引用按 [拆分与体量](splitting.md) 的四类手动扫描。锚点名必须是严格配对的 `<a id="..."></a>`，避免同名目标和格式畸形让链接看似有效却无稳定落点。
+
+锚点有两种合法落点，都由 links 守：**独占一行时上一行必须留空**；**列表条目内嵌在内容行首**（`8. <a id="x"></a>正文`）。配对锚点不满足 CommonMark HTML block 的起始条件（开标签后跟的是闭标签而非空白），只能走行内 HTML——紧贴上一行正文会被并进上一段，锚点落到上一节，跳转差一节而 diff 看不出来。列表里也不能改用空行隔开：那会把一个列表切成两段 `<ol>`。
 
 size 对 frontmatter 的 `covers:`、`contracts:` 要求 YAML 列表：冒号后必须留空再换行列 `- item`。`[]`、行尾注释或其他字符会把它解析为标量并报 `bad-type`。纯纵切文档可以 `covers:` 空、以 `contracts` 作为唯一闸；双空是 no-gate 失败。hard cap、soft cap 和 covers baseline 的详情见 [拆分与体量](splitting.md)。
 

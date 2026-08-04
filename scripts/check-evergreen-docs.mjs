@@ -296,7 +296,16 @@ export function findMalformedAnchors(content) {
     const attributes = opening?.slice(2, -1).replace(/"[^"]*"|'[^']*'/g, "") ?? "";
     if (!opening || !/(?:^|\s)id\s*=/i.test(attributes)) continue;
     if (!/^<a\s+id="[^"]+"\s*>\s*<\/a\s*>$/.test(text)) {
-      malformed.push({ line: index + 1, text });
+      malformed.push({ line: index + 1, text, reason: "shape" });
+      continue;
+    }
+    // 形态合格，再看落点。配对锚点不满足 CommonMark HTML block 的起始条件（开标签后不是
+    // 空白而是闭标签），永远走行内 HTML；紧贴上一行正文时会被并进上一个段落，锚点于是落到
+    // 上一节，跳转差一节且 diff 里看不出来。列表项内的锚点写在条目内容行首（`8. <a id></a>正文`），
+    // 上面的 opening 匹配不到行首，不会走到这里。
+    const prev = index > 0 ? lines[index - 1].trim() : "";
+    if (index > 0 && prev !== "") {
+      malformed.push({ line: index + 1, text, reason: "absorbed", prev });
     }
   }
   return malformed;
@@ -871,10 +880,23 @@ export function modeLinks(docs) {
     }
     console.error("\n文档重命名/移动后请更新引用；带 # 的链接必须指向目标文档中的显式锚点。");
   }
-  if (malformed.length > 0) {
+  const badShape = malformed.filter((anchor) => (anchor.reason ?? "shape") === "shape");
+  const absorbed = malformed.filter((anchor) => anchor.reason === "absorbed");
+  if (badShape.length > 0) {
     console.error("\n✗ 发现畸形的显式锚点：\n");
-    for (const anchor of malformed) console.error(`  ${anchor.filePath}:${anchor.line ?? 0} → ${anchor.text}`);
+    for (const anchor of badShape) console.error(`  ${anchor.filePath}:${anchor.line ?? 0} → ${anchor.text}`);
     console.error('\n显式锚点必须独立成行并严格配对，例如 <a id="example"></a>；不接受未闭合或自闭合。');
+  }
+  if (absorbed.length > 0) {
+    console.error("\n✗ 以下显式锚点紧贴上一行正文，会被上一段吸收（锚点落到上一节，跳转差一节）：\n");
+    for (const anchor of absorbed) {
+      console.error(`  ${anchor.filePath}:${anchor.line ?? 0} → ${anchor.text}`);
+      console.error(`      上一行：${anchor.prev}`);
+    }
+    console.error(
+      "\n锚点独占一行时，上一行必须留空。" +
+        "有序 / 无序列表里不能靠空行隔开（那会把列表切成两段），改写进条目内容行首：`8. <a id=\"x\"></a>正文`。",
+    );
   }
   if (duplicates.length > 0) {
     console.error("\n✗ 发现重复的显式锚点 ID：\n");
