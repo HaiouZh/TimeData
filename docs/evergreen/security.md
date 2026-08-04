@@ -67,13 +67,13 @@ Android 原生环境保持 HTTPS-only：`packages/mobile/capacitor.config.ts` �
 
 未设置 `AUTH_TOKEN` 时，所有受保护的普通 `/api/*` 请求默认返回 HTTP 500；`/api/health` 和 `/api/version` 仍保持公开。只有显式设置 `ALLOW_UNAUTHENTICATED_DEV=1` 时，开发环境才会放行未带 token 的 `/api/*` 请求，并且每个进程只打印一次警告。生产部署必须设置 `AUTH_TOKEN`，不再依赖 `NODE_ENV=production` 才 fail-closed。
 
-`AGENT_TOKEN` 是可选窄域令牌，只被 `/api/agent/*` 的 `scopedAuthMiddleware` 接受。该作用域同时接受 master `AUTH_TOKEN` 和 `AGENT_TOKEN`；当前用于 `POST /api/agent/tasks/:id/status` 任务状态、备注（创建独立子任务 child `Task`）和 tags 回写，以及 `/api/agent/tracks*` 任务轨道 ingest（建轨道、append 步骤、闭合当前步、改轨道状态/元信息）。`AGENT_TOKEN` 不能访问 sync、force-push、admin、export、data reset 或 update。`AUTH_TOKEN` 与 `AGENT_TOKEN` 都缺失且未显式开发旁路时，scoped auth 同样 fail-closed。
+`AGENT_TOKEN` 是可选窄域令牌，只被 `/api/agent/*` 的 `scopedAuthMiddleware` 接受。该作用域同时接受 master `AUTH_TOKEN` 和 `AGENT_TOKEN`；该作用域覆盖 `POST /api/agent/tasks/:id/status` 任务状态、备注（创建独立子任务 child `Task`）和 tags 回写，`/api/agent/tracks*` 任务轨道 ingest（建轨道、append 步骤、闭合当前步、改轨道状态/元信息），以及 `GET /api/agent/tracks/context` 与 `/api/agent/tracks/:id/context` 的**只读上下文拉取**（active tracks、track、steps、recentSteps、boardSignals）——它不只是写入通道。`AGENT_TOKEN` 不能访问 sync、force-push、admin、export、data reset 或 update。`AUTH_TOKEN` 与 `AGENT_TOKEN` 都缺失且未显式开发旁路时，scoped auth 同样 fail-closed。
 
 服务端在 `/api/*` 上挂载 best-effort 请求审计中间件，写入 SQLite 运维表 `api_request_logs`。审计记录只保存 timestamp、method、去 query 的 path、HTTP status、结果分类、token tier、IP、User-Agent、`X-TimeData-Client` 归一值、粗略设备标签和耗时；不保存 body、Authorization header 或完整 query string。成功的 `/api/health` 探活整段跳过审计（既不写行也不触发裁剪）——容器健康检查每 30 秒一次，记录下来只会挤占保留窗口；`/api/health` 返回 4xx/5xx 时仍照常记录。认证中间件只把本次请求的 `tokenTier` 放入 Hono context：公开端点为 `public`，master token 为 `master`，agent token 为 `agent`，开发旁路为 `dev_bypass`，缺失/错误 token 分别为 `missing` / `invalid`。
 
 `GET /api/admin/request-logs` 是 master-only 只读接口，复用 admin 限流，支持按 `status`、`outcome`、`tokenTier`、`clientHint` 和 `limit` 筛选。设置页的「服务端数据洞察」会展示请求审计和权限矩阵，`AGENT_TOKEN` 不可访问该接口。IP 只用于展示和人工排查；如果反向代理没有先清洗 `X-Forwarded-For` / `X-Real-IP`，审计里的 IP 不能作为安全裁判。
 
-`GET /api/sync/stream` 是受保护的只读 SSE 通道，也挂在同一 `/api/*` Bearer 鉴权之后。客户端不用原生 `EventSource`，而是通过 fetch 读取 `ReadableStream`，因此 token 仍放在 `Authorization` header 中，不会进入 URL、反向代理访问日志或浏览器地址栏。流内容只包含 `hello` / `bump` 的 `latestSeq` 游标和注释心跳，不包含时间记录、速记文本、分类名称或设置值。
+`GET /api/sync/stream` 是受保护的只读 SSE 通道，也挂在同一 `/api/*` Bearer 鉴权之后。客户端不用原生 `EventSource`，而是通过 fetch 读取 `ReadableStream`，因此 token 仍放在 `Authorization` header 中，不会进入 URL、反向代理访问日志或浏览器地址栏。`bump` 事件在条数与字节上限内直接携带 `fromSeq + changes` 快路径载荷，**其中就是业务记录正文**（时间记录、速记文本、分类名称都可能在内）；超过任一上限才退化成只带 `latestSeq` 游标。这条通道的机密性完全靠 Bearer 鉴权兜住，不能因为"只是游标"而放宽。
 
 ## 速率限制与请求体上限
 
