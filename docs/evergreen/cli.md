@@ -41,7 +41,7 @@ last-reviewed: 2026-07-10
 
 **任何不在这里的 CLI 功能 = 不存在**。新增命令必须先在本地-only 的 `docs_local/plans/` 下放计划再实现；新增 CLI 写入命令还必须先补受控 server API，并在落地后更新公开长期文档。若新需求本身是授权 agent 集成，也可只新增受控 server API，不强制同步增加 CLI 命令。扩 `update` / `delete` / `category-add` / `import` 的决定见 [`adr/0005-cli-surface-expansion-deferred.md`](../adr/0005-cli-surface-expansion-deferred.md)。
 
-输出格式：`--format=json|human` 显式选择，未指定时根据 stdout 是否 TTY 自动判断（管道默认 JSON、终端默认 human）。所有命令的失败响应仍是 `{ ok: false, error: { code, message } }` JSON。
+输出格式：`--format=json|human` 显式选择，未指定时根据 stdout 是否 TTY 自动判断（管道默认 JSON、终端默认 human）。**成功写 stdout、失败写 stderr**，退出码随之 0 / 1。失败对象本身是 `{ ok: false, error: { code, message } }`，但那是 `--format=json` 下的形态——human 格式会把它渲染成 `Error [CODE]: …` 文本行。`doctor` 是形态例外：失败返回 `{ ok: false, checks: [...] }`，没有顶层 `error`，human 格式按检查项逐条渲染。
 
 `timedata categories` 输出未归档分类及路径，并在 CLI 端稳定排序：先按所属顶层分类的 `sortOrder`、顶层分类 `id` 分组，再按当前项的 `sortOrder`、`name`、`id` 排序。即使服务器返回顺序变化，脚本看到的分类列表顺序也保持稳定。
 
