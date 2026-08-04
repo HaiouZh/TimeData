@@ -5,7 +5,7 @@
 ## 1. 规则卡片
 
 - **写入 TimeData 数据只能通过服务端受控 API；CLI 是其中一个客户端。**
-- **当前 CLI 允许 AI/脚本写入的日常命令是 `timedata log`（时间记录）和 `task-done/task-tag`（任务完成与 tags 回写）。**
+- **当前 CLI 允许 AI/脚本写入的日常命令是 `timedata log`（时间记录）、`task-done`/`task-tag`（任务完成与 tags 回写）、`task-schedule`/`task-unschedule`（任务排期与取消排期）。**
 - **授权 agent 可直连 `POST /api/quick-notes` 投递速记；CLI `notes` 仍只读。**
 - **授权 agent 可直连 `/api/agent/tracks*` 写任务轨道（建轨道 / append 步骤 / 闭合当前步 / 改状态）；CLI 暂未提供轨道命令。端点契约与示例见 §6.7。**
 - 写入前先用 `timedata categories` 确认分类路径；必要时用 `timedata list --date YYYY-MM-DD` 查看当天已有记录。
@@ -28,6 +28,8 @@
 | `timedata tasks [--kind pool\|recurring] [--done 0\|1]` | 否 | 读取任务。 |
 | `timedata task-done --id ID` | 是 | 标记任务完成。 |
 | `timedata task-tag --id ID --tags agent,idea` | 是 | 覆盖任务自由 tags。 |
+| `timedata task-schedule --id ID --date YYYY-MM-DD` | 是 | 给任务排期到某天。重复模板报 `TASK_RECURRING_USE_RULE`、规则的「这一发」报 `TASK_OCCURRENCE_NOT_SCHEDULABLE`（都是 409），两种都不能直接改期。 |
+| `timedata task-unschedule --id ID` | 是 | 取消任务排期。 |
 
 ## 3. AI 任务决策树
 
@@ -56,7 +58,8 @@
 - 如果是授权 agent 回写任务完成或 tags，优先使用 `AGENT_TOKEN` 调 `timedata task-done` / `task-tag`；这些命令只命中 `/api/agent/*` 的封闭动作集合。
 - 授权 agent 记录长周期工作状态，可用 `AGENT_TOKEN` 调 `/api/agent/tracks*`：建轨道、append agent 步骤、闭合当前步、改轨道状态。请求体可带 `requestId` 防重发重复写入；完整端点、请求体字段与 curl 示例见 §6.7。仍不代表 AI 可直接写 DB。
 - 如果不是已明确授权的 agent 集成，CLI 不能写入速记；用户可以用 Web UI，或先新增受控 server API / CLI 命令后再使用。
-- 修改、删除、批量导入或从备份回灌仍不是日常 AI 写入能力。
+- **改任务排期是支持的**，别把它归进本节的「修改」：用 `timedata task-schedule --id ID --date YYYY-MM-DD` 排期、`task-unschedule --id ID` 取消。只有重复模板与规则的「这一发」不能直接改期（409，排期由重复规则自己管）。
+- 修改（排期以外）、删除、批量导入或从备份回灌仍不是日常 AI 写入能力。
 
 无论哪种情况，AI 都必须遵守：
 
