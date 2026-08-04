@@ -115,7 +115,7 @@ SQL `categories`（`db/schema.ts`）：`parent_id` FK → categories(id)，`is_a
 5. **归档 ≠ 删除**：归档软删（行保留、`isArchived=true`、列表隐藏）；直接删除真删 + 级联 + tombstone。
 6. **重名是 client 体验约束、server 不校验**：`addCategory`/`renameCategory` 在 client 拒同层级未归档重名；`validateCategoryChange` 不查重名，server 接受同层级重名 upsert。
 7. **分类整树是一个冲突单元**：服务端根 delete seq 先于级联后代；客户端 pull 跨分页保留整树保护集合。树内任一记录有 pending 时，不得先删后代、最后才发现祖先冲突。
-8. **`useCategories` 缓存**：`categoryById`/`childrenByParentId` Map；`getCategoryPath`（“父名 · 子名”，未找到“未知”）/`getCategoryColor`（未找到 `#808080`）/`getChildren` O(1)。
+8. **`useCategories` 缓存**：`categoryById`/`childrenByParentId` Map；`getCategoryPath`（“父名 · 子名”，未找到“未知”）/`getCategoryColor`（未找到回退 shared 的 `UNCATEGORIZED_COLOR` = `#8b94a8`，**不是** SQL 列默认的 `#808080`——后者是服务端 `categories.color` 建表默认值，两者各管一处别混）/`getChildren` O(1)。
 9. **`punch.ts` 不归本域**：打点动作 `punchNow` 写 `time_entries`（归 [timeline](timeline.md)）；本域/子文档只拥有其分类设置 `punchCategorySetting.ts`。
 10. **目标层不改变 Category 语义**：Goal 新增 shared schema / sync 登记簿分支会命中本域 covers，但分类两级树、排序、归档、级联删除都不变；底部导航新增 `/goals` 的 settings key 取值见 [settings-catalog](categories-settings/settings-catalog.md)。
 

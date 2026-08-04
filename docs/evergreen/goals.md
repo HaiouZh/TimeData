@@ -68,7 +68,7 @@ last-reviewed: 2026-08-05
 
 `goals` 是一等同步域，`conflictPolicy:"lww"`、`countsInStatus:false`、priority 72。服务端走通用 LWW，SQLite `goals.members` 与 `goals.prerequisites` 都存 JSON 字符串；`tasks` / `tracks` 不再有 `goal_id` 归属列，新库不建，旧库启动时幂等 drop。`Goal` 实体本身不保存坐标或布局字段。
 
-客户端 Dexie v12 保留 `goals: "id, kind, status, updatedAt"`，并新增 `goalLayoutPins: "[goalId+nodeKind+nodeId], goalId, nodeKind, nodeId, updatedAt"`；v11 已移除 `tasks` / `tracks` 的旧 `goalId` 索引。`lib/goals.ts` 是本地写入边界：Goal CRUD、添加/移出成员、前置边更新、删除 Goal 和 goal 内快建 ToDo 都必须在 Dexie transaction 内写业务表与 `syncLog`。添加已有成员会先校验对应 Task/Track 当前存在；重复添加同一 typed ref 是 no-op。
+客户端 Dexie 保留 `goals: "id, kind, status, updatedAt"`，并自 v12 起有 `goalLayoutPins: "[goalId+nodeKind+nodeId], goalId, nodeKind, nodeId, updatedAt"`；v11 已移除 `tasks` / `tracks` 的旧 `goalId` 索引。**当前库版本与完整 `stores()` 见 [data-model §10](data-model.md)**，这里的版本号只标该索引是哪一版引入的。`lib/goals.ts` 是本地写入边界：Goal CRUD、添加/移出成员、前置边更新、删除 Goal 和 goal 内快建 ToDo 都必须在 Dexie transaction 内写业务表与 `syncLog`。添加已有成员会先校验对应 Task/Track 当前存在；重复添加同一 typed ref 是 no-op。
 
 普通同步和 Backup JSON 都必须保存完整 `Goal.members` 与 typed `prerequisites`。server sync 只强校验 Goal 自身结构，不做跨表存在性强校验，避免历史失效引用阻断同步。force-push 仍不包含 `goals` / `goal_layout_pins` payload，也不再从 tasks/tracks 携带目标归属；覆盖服务器时只应用五个覆盖域的差异，目标与布局钉点的业务行、tombstone 和 seq 均保持原样。
 

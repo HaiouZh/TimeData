@@ -139,7 +139,7 @@ entry.endTime > 当天 00:00:00 对应的 UTC 边界
 
 **几何**：外半径 104、内半径 62（比例 0.6），内圈不再画底色圆，选中段的分类色作为指针填色暗示；每段都是两个同心圆之间的闭合 SVG 环形扇区，段首段尾由径向直线切分，不用圆头粗线描边。
 
-**段配色**：所有段一律 100% 不透明。`slot.kind === "entry"` 用分类色（用户内容色，允许进入时间段展示）；`"gap"`（已过、未填）用 `var(--color-ink-3)`；`"future"`（今天 `now → 24:00` 尚未到达）用 `var(--color-surface)`，并禁用点击交互。圆环底、刻度、文字描边和当前时间针使用 `timelineChromeColors` 镜像 `border/ink/page/danger` token，不直接写裸 `rgb()`；`buildTimeSlots` 在当日还有“未到达”区间时显式追加 `kind: "future"` 的 slot，列表组件 `Timeline.tsx` 会过滤掉该段，圆环则保留以维持“一整圈被填满”的视觉。
+**段配色**：无选中态时所有段 100% 不透明；**一旦有选中段，其余可选段降到 `opacity 0.45`**（判据 `currentSelectionKey !== "none" && !selected && slot.kind !== "future"`）——选中段与 `future` 段不降。默认初始通常就有选中段，所以「一律不透明」不是常态。`slot.kind === "entry"` 用分类色（用户内容色，允许进入时间段展示）；`"gap"`（已过、未填）用 `var(--color-ink-3)`；`"future"`（今天 `now → 24:00` 尚未到达）用 `var(--color-surface)`，并禁用点击交互。圆环底、刻度、文字描边和当前时间针使用 `timelineChromeColors` 镜像 `border/ink/page/danger` token，不直接写裸 `rgb()`；`buildTimeSlots` 在当日还有“未到达”区间时显式追加 `kind: "future"` 的 slot，列表组件 `Timeline.tsx` 会过滤掉该段，圆环则保留以维持“一整圈被填满”的视觉。
 
 **刻度**：三层刻度——144 个 10 分钟微刻度（弱、短），每隔 3 个升级为半点刻度，每隔 6 个升级为整点刻度（最长、最亮）；在 RADIUS 中线位置标 0–23 全部整点数字，0/6/12/18 加粗作为锚点。文字以深色描边压在分段之上避免被分类色淹没。
 
@@ -159,6 +159,7 @@ entry.endTime > 当天 00:00:00 对应的 UTC 边界
 
 - 灰色：云同步未启用。
 - 绿色：空闲或最近一次同步成功。
+- `accent` 色：**待上传**（`pending`）——云同步已开、未同步日志数 > 0、且不在同步中也没出错。它排在绿色之前判定，所以有待上传时不会显示成「已同步」。
 - 黄色：正在同步，使用 1.5 秒 opacity 脉冲动画。
 - 红色：最近一次同步失败，使用 2.5 秒 opacity 慢闪动画。
 

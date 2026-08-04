@@ -106,7 +106,7 @@ last-reviewed: 2026-08-04
 | select | 不置 | 用户一个字没改，不该变脏 |
 | noop | 不置 | 同上 |
 
-置脏的两个出口只有 `onChange` 与 `runEditAction` 的降级分支，二者都调 `markDirty()`（序号 +1 再 `setDirty(true)`），不许裸调 `setDirty(true)`；`select`/`noop` 两条路径刻意什么都不调。序号是"保存在途中有没有继续打字"的唯一判据（[diary](../diary.md#diary-save-revision)）。**清除**只有两个出口：保存成功且序号未变、加载/重载成功。
+置脏的两个出口只有 `onChange` 与 `runEditAction` 的降级分支，二者都调 `markDirty()`（序号 +1 再 `setDirty(true)`），不许裸调 `setDirty(true)`；`select`/`noop` 两条路径刻意什么都不调。序号是"保存在途中有没有继续打字"的唯一判据（[diary](../diary.md#diary-save-revision)）。**清除**有三个出口：保存成功且序号未变、加载/重载成功、**日期 effect 开头无条件 `setDirty(false)`**。第三个是切日期的五态重置之一（[diary §3.3](../diary.md)）：它清在 `fetchDiary` 发起**之前**，且加载失败分支不会把 dirty 改回 true——这是有意的，`switchDate` 已经在调用方问过一次「放弃修改」，这里只是把确认结果落地。不重置才是 bug：加载失败后 dirty 会永久停在 true，把共享的 `useUnsavedChangesGuard` 钉死在武装状态。
 
 <a id="diary-editor-s8"></a>
 

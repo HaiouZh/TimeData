@@ -125,5 +125,6 @@ DOM 见证是容器上的 `data-dock-state`；药丸另有 `data-dock-engaged`�
 - `pages/todo/todoDnd.test.ts`：三档车道全阈值与滞回（含 base=child 的两次越档、单帧大位移一步进坞、dock 右甩落 child）、`holdDock` 短路释放与"不短路进档"、键盘守卫压过 holdDock、`laneToIndentLevel` 三档、`preferProjectCollisions` 的 `dockAllowed` 双路剔除、坞 id 域往返与落点解析矩阵。另有 `resolveTodoDragLaneAtPointer` 的几何用例（真实坐标进坞、两轴 `holdDock`、无锚点降级、坐标缺失保持原档）与**防回潮闸**：断言 `clampTodoIndentPreview` 的输出接回车道判定就够不到 dock（§3.1 的根因）。
 - `pages/todo/TodoDragDock.test.tsx`：三形态 DOM 见证、`aria-hidden` 仅 engaged 放开、空坞（手头源/父在手头）不出细条、`dropBlocked` 项目药丸灰态。
 - `pages/TodoPage.test.tsx`：键盘拖起时坞出细条预告（恒基线档）、手头子任务拖起坞恒空、**鼠标拖起后左拉过阈值坞展开、右拉回位收回细条**。
+- `pages/todo/todoDockDrop.test.ts`：`applyTodoDockDrop` 的副作用调度——非 dock 落点、grab-to-hand、promote-to-hand、子任务投项目被拒、根任务折算 op，以及坞落位触感。
 - **jsdom 造得出指针拖拽**：`mousedown`（带 `clientX/Y`）→ 等 `MouseSensor` 的 180ms delay → 往 window 发 `pointermove` 即可。车道判定只看坐标差，不依赖 jsdom 量不出的布局；坞矩形恒 0 使 `holdDock` 恒 false，正好把释放路径也测进去。
 - **覆盖边界**：真投递（`dockAllowed` 传参、末道闸、药丸命中）要 droppable 矩形，jsdom 全 0 量不出，靠代码审读与真机验收，不写恒绿用例充数。

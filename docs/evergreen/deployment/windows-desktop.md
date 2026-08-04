@@ -30,7 +30,9 @@ last-reviewed: 2026-08-04
 
 `packages/desktop` 是 Tauri v2 工程，Rust 侧只做壳：窗口、托盘、关窗拦截、开机自启，不含业务逻辑。前端不单独构建：`tauri.conf.json` 的 `frontendDist` 指向 `../../client/dist`，`beforeBuildCommand` 与 `beforeDevCommand` 都调 `pnpm --filter @timedata/client build:mobile`，吃的是与 Android / iOS 壳同一份产物。
 
-`mode=mobile` 产物不注册 service worker。桌面壳因此不经过网页端 `AppUpdateProvider` 在 `window.focus` 上的版本检查与 `hardRefresh`（注销 service worker、清空 Cache Storage、reload）——常驻壳被热键唤起即得焦点，该链路会在唤起瞬间清缓存并重载页面。选型依据见 [ADR 0029](../../adr/0029-desktop-shell-embeds-frontend.md)。
+`mode=mobile` 产物不注册 service worker（`virtual:pwa-register/react` 被 alias 成 no-op hook）。**但 `AppUpdateProvider` 照常挂载**——`main.tsx` 无条件包裹它，`visibilitychange` / `window.focus` 监听照常注册、`hasFrontendUpdate()` 照常调用。桌面壳躲开 `hardRefresh`（注销 service worker、清空 Cache Storage、reload）靠的是**另一件事**：`mode=mobile` 不产出 `/version.json`，`fetchLatestBuildId()` 拿不到就返回 `null`，`hasFrontendUpdate()` 随之恒 `false`。
+
+这个区别不是措辞：常驻壳被热键唤起即得焦点，**一旦哪天桌面产物开始产出 `version.json`，这条链路会立刻活过来**，在唤起瞬间清缓存并重载页面。要挡就得挡在 Provider 或构建产物那一层，不能假设"桌面壳没有这条链路"。选型依据见 [ADR 0029](../../adr/0029-desktop-shell-embeds-frontend.md)。
 
 Rust 侧的可判定逻辑集中在 `packages/desktop/src-tauri/src/shell.rs`，全为纯函数（关窗行为、托盘动作路由、启动是否显示窗口、开机自启判定），`main.rs` 只做装配与系统调用。
 
@@ -146,7 +148,7 @@ Rust 单测用 `cargo test` 在 `packages/desktop/src-tauri` 下手动跑，**�
 
 ## 5. 构建与发布
 
-`windows` job 跑在 `windows-latest` runner 上，与 `android` / `ios` 同为 `needs: prepare` 的平台 job，先到先上架。`workflow_dispatch` 的 `platform` 选项含 `windows`，`both` 含全部三个平台；`push` 触发经 `packages/desktop/**` 与 `scripts/desktop-version.mjs` 两条 paths 命中。
+`windows` job 跑在 `windows-latest` runner 上，与 `android` / `ios` 同为 `needs: prepare` 的平台 job，先到先上架。`workflow_dispatch` 的 `platform` 选项含 `windows`，`both` 含全部三个平台。**`push` 触发不区分平台**：`mobile-release` 的 push paths 是三个壳共用的一大串（`packages/{client,mobile,desktop,shared}/**`、根 `package.json` / lockfile / workspace / tsconfig、各版本与图标脚本、workflow 自身），且 push 时 `inputs.platform` 为空串、`prepare` 显式把它当 `both`——**改 client 或 shared 照样会跑 Windows job**，不是只有 `packages/desktop/**` 与 `scripts/desktop-version.mjs` 两条路径才触发。想让 Windows 只随 desktop 变更发布，得改 workflow 的 paths 或 prepare 判定，光改文档不解决。
 
 版本号有一道转换：发布链路的版本码是 8 位数字 `YYMMDDNN`，Tauri 的 `version` 必须是合法 semver。`scripts/desktop-version.mjs` 的 `codeToSemver` 把它转成 `YY.MMDD.NN`（各段去前导零，`26080301` → `26.803.1`），三级都单调递增。转换结果经 `tauri build --config` 注入，`tauri.conf.json` 里的 `version` 字段不参与发布。
 

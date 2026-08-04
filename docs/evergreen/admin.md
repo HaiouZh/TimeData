@@ -61,7 +61,7 @@ last-reviewed: 2026-08-04
 
 健康检查有四类：`invalid_time_range`、`missing_category`、`archived_category`、`overlap`。每类返回 count 与最多 5 个 sampleIds；这是时间记录数据卫生检查，不是已退役健康数据域。
 
-基础分析读取 `from` / `to` / `groupBy` 查询参数：`groupBy` 允许 `day`、`week`、`month`。时间桶和分类聚合都只计 `end_time > start_time` 的正时长；分类缺失时用空名称与中性回退色。
+基础分析读取 `from` / `to` / `groupBy` 查询参数：`groupBy` schema 上允许 `day`、`week`、`month`，但**只有 `month` 真的换桶**——`analyticsBucketExpression` 只对 `month` 特判取 `substr(start_time,1,7)`，其余值（含 `week`）一律落 `substr(start_time,1,10)` 按日聚合。**传 `week` 拿到的是日桶，不报错、不提示**。时间桶和分类聚合都只计 `end_time > start_time` 的正时长；分类名缺失时回退成 `category_id` 本身（`COALESCE(c.name, e.category_id)`，不是空字符串），颜色缺失回退 `#808080`。
 
 ## 4. 模块速查
 

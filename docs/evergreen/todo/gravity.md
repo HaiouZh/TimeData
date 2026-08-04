@@ -36,7 +36,7 @@ last-reviewed: 2026-07-08
 
 today 附近的临时折叠复查面，不注册 `sortable/containerId`：
 
-- 展开时抽 `drawM` 张水下任务、最多顶 `pickN` 张；抽卡优先久未露面，其次 `weight` 作温和 tie-breaker，再按创建时间（`pickGravityReviewBatch`）。
+- 展开时抽 `drawM` 张水下任务、最多顶 `pickN` 张（`pickGravityReviewBatch`）。排序分两组：**从没露过面的整体优先**，组内只按创建时间（`weight` 在这组完全不参与）；都露过面的按露面年龄倒序，`weight` 只在**同龄时**才作温和 tie-breaker，再往下才是创建时间。
 - `↑ 顶一下` 经 `TaskRow` 的 `extraAction` 插槽渲染，调 `bumpTaskWeight` 累加 `weight` 并写 syncLog；顶过的卡在本轮额度内即时移出并补抽，直到额度耗尽。
 - **展示即标记**：`drawBatch()` 发牌后经 `onMarkSurfaced` 写已过目表，不写 Task、不刷新 `updatedAt`；另维护本会话已标记 set，防 settings 回流慢时「再翻几张」抽回刚展示过的任务。
 
@@ -78,4 +78,4 @@ Inbox `DayGroupedList` 展开链条尾部的找回入口，**不是新平级模�
 | `lib/settings/todoGravitySetting.ts` | `todo.gravity.v1` 设置包装 |
 | `pages/settings/SettingsTodoGravityPage.tsx` | 设置子页：调参 + 预览 |
 
-测试：`lib/tasks/gravityClock.test.ts`、`pages/todo/SunkenInboxTail.test.tsx`（其余行为并入 `TodoPage.test.tsx`）。
+测试：`lib/tasks/{gravityClock,gravity,gravityReviewStorage}.test.ts`（水位时钟 / 抽卡排序 / 已过目记账）、`lib/settings/todoGravitySetting.test.ts`（参数设置包装）、`pages/todo/{SunkenInboxTail,GravityReviewSection}.test.tsx`（沉底尾巴 / 翻牌组件）、`pages/settings/SettingsTodoGravityPage.test.tsx`（设置页预览与保存）；页面级联动并入 `TodoPage.test.tsx`。

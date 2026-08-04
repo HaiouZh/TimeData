@@ -61,7 +61,7 @@ last-reviewed: 2026-08-04
 
 localStorage 偏好不在 `settings` 同步表，不随设备同步：`timedata_cloud_sync_enabled` 属 [sync/realtime-and-scheduler](../sync/realtime-and-scheduler.md)，`timedata_merge_overnight` 属 [timeline](../timeline.md)。这类 key 由消费域文档拥有，本表只说明它们不属于 Dexie `settings`。
 
-> 本子文档 covers 只含通用基础设施 `lib/settings/index.ts` + 四个本域归属的包装：`desktopSidebarSetting.ts`、`navVisibleTabsSetting.ts`、`punchCategorySetting.ts`、`sleepCategorySetting.ts`（在 `lib/` 非 `lib/settings/` 目录）。其余包装（stats-layout / stats-trend / todo-dest）的 covers 归各自消费域文档，本表只导航。
+> 本子文档 covers 含通用基础设施 `lib/settings/index.ts`、四个本域归属的包装（`desktopSidebarSetting.ts`、`navVisibleTabsSetting.ts`、`punchCategorySetting.ts`、`sleepCategorySetting.ts`——最后一个在 `lib/` 非 `lib/settings/` 目录），**以及导航设置的读写面**：`lib/navOrder.ts` 排序 helper 与 `SettingsNavPage.tsx` / `SettingsMorePage.tsx` 两个页面——它们正是上面两个导航设置项的编辑入口，页面与数据层同归一处。其余包装（stats-layout / stats-trend / todo-dest）的 covers 归各自消费域文档，本表只导航。
 
 ## 3. 关键不变量 / 坑 / 红线
 
@@ -88,4 +88,4 @@ localStorage 偏好不在 `settings` 同步表，不随设备同步：`timedata_
 
 ## 深水细节
 
-- **`SettingsInsightsPage` 是跨域宿主页**（显示名“记录偏好”；待办默认落点 / 打点分类 / 睡眠分类都在它里编辑），其页面 covers 归 [stats-insights](../stats-insights.md)；本子文档只拥有 `desktopSidebarSetting`/`navVisibleTabsSetting`/`punchCategorySetting`/`sleepCategorySetting` 数据层。
+- **`SettingsInsightsPage` 是跨域宿主页**（显示名“记录偏好”；待办默认落点 / 打点分类 / 睡眠分类都在它里编辑），其页面 covers 归 [stats-insights](../stats-insights.md)；本子文档拥有 `desktopSidebarSetting`/`navVisibleTabsSetting`/`punchCategorySetting`/`sleepCategorySetting` 数据层，以及导航设置的两个专属页面（`SettingsNavPage`/`SettingsMorePage`）与 `navOrder` helper。

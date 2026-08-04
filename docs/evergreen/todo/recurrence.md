@@ -10,6 +10,7 @@ covers:
   - packages/client/src/components/ui/MonthCalendar.tsx
   - packages/client/src/components/Wheel.tsx
 contracts:
+  - packages/shared/src/entitySchemas.ts
   - packages/shared/src/recurrence.ts
   - packages/shared/src/occurrence.ts
 last-reviewed: 2026-07-28

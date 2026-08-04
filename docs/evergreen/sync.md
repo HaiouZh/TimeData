@@ -94,7 +94,8 @@ last-reviewed: 2026-08-05
 4. resolveConflicts()（UI 决定）keep_local 还是 use_remote
 5. reportToServer() 通过 `/api/admin/sync-logs` 写一条 sync_logs 摘要
    （fire-and-forget：不 await、不计入同步窗口，自身吞错）
-6. 成功分支收尾 pruneSyncedLogs()：synced=1 的历史日志按 7 天窗口清理
+6. 有实际动作的成功分支收尾 pruneSyncedLogs()：synced=1 的历史日志按 7 天窗口清理
+   （第 3 步 no-op 早退不清理——那条路径零写入、零请求，连回执都不产生）
 ```
 
 写后阻塞链路因此至多 push + pull 两个网络请求，且无插队时进一步降到仅 push 一个（push 回执带 latestSeq/appliedCount，判定无插队即跳过回声 pull，见 [ADR 0016](../adr/0016-push-latestseq-and-pull-pagination.md)）。主链无前置探活：服务器不可达时由 push/status 请求本身报错走 `setError`（`lib/serverHealth.ts` 仅供诊断场景）。同步前不创建本地快照备份（[ADR 0015](../adr/0015-remove-client-auto-snapshots.md)）。
@@ -133,7 +134,7 @@ Android 原生同步通道是显式、窄范围的 transport 选择：只有 `Ca
 3. 从业务表读最新数据填进 `change.data`（delete 除外）。`tasks` 域的完成语义还会把压缩组里时间序最后一条 `op` 带进 change：完成后又改标题时，最后一条日志本身无 `op`，压缩结果仍保留前一条完成 `op`，避免 push 快照失去“有意修改完成字段”的授权。
 4. **附带分类依赖**（`categoryDependencyChangesForEntry`）：push 的 entry 引用的分类还没在服务器上时，把分类（和它的父分类）一起塞进 changes，避免"先 push entry 因分类不存在被拒"的死锁。
 5. POST `/api/sync/push`，请求体 `{ changes, baseSeq, requestId? }`。`baseSeq` 来自本地读数，服务端用它判断快进、非重叠合并、重叠冲突还是 unknown-base 保守路径。`requestId` 是对冲/重试幂等键（每批 `crypto.randomUUID()`，409 拆出的子批换新 id）：命中服务端 `sync_push_requests` 回放表时直接原样返回首发的状态码与响应体，不重复 apply、不占新 seq；备份竞态 409 与内部 500 不进回放表，详见 [ADR 0020](../adr/0020-sync-push-request-idempotency.md)。入口先过 `SyncPushRequestSchema`，不合法返回 400 `invalid_request`。
-6. 服务器 200 返回后按 `SyncPushOutcome.reasonCode` 分类处理本地 syncLog：`applied`、`client_bug` 和 `stale_rejected` 类标已同步；`user_actionable` / `conflict` / `unknown` 保留。HTTP 409 表示整批原子拒绝，accepted outcome 的 reasonCode 为 `validated`、只代表"通过校验"、不能确认日志；客户端把被拒项按类归置（client_bug/stale 标 synced=1，其余隔离为 `synced=2` 死信）后立即重试合法子批，只有重试 200 后才确认。`stale_change_rejected` 会进入 `pushIssues`，但客户端放弃本地主张，随后回声 pull 落地服务器权威版本。
+6. 服务器 200 返回后按 `SyncPushOutcome.reasonCode` 分类处理本地 syncLog：`applied`、`client_bug` 和 `stale_rejected` 类标已同步；`user_actionable` / `conflict` / `unknown` 保留。HTTP 409 有**两种形状，别混**：校验失败的 409 返回完整 `SyncPushResponse`（带 accepted/rejected outcomes、`latestSeq`、`appliedCount`），表示整批原子拒绝，accepted outcome 的 reasonCode 为 `validated`、只代表"通过校验"、不能确认日志；客户端把被拒项按类归置（client_bug/stale 标 synced=1，其余隔离为 `synced=2` 死信）后立即重试合法子批，只有重试 200 后才确认。**备份竞态的 409（`push_retry_after_backup_race`）走的是通用 error 形状**，只带错误与 `backupId`，没有 outcomes / `latestSeq` / `appliedCount`；客户端靠 `isSyncPushResponse()` 判形状，不满足就不进拆批分支、直接抛错走整轮重试。`stale_change_rejected` 会进入 `pushIssues`，但客户端放弃本地主张，随后回声 pull 落地服务器权威版本。
 7. `pushIssues` / `clientBugIssues` / `userActionableIssues` 暴露给 UI / 诊断。
 
 <a id="sync-server-push"></a>

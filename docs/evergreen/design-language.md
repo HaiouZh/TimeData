@@ -15,6 +15,8 @@ covers:
   - packages/client/src/lib/contentTint.ts
   - packages/client/src/hooks/useKeyboardHeight.ts
   - packages/client/src/lib/bottomInset.ts
+  - packages/client/src/App.tsx
+  - packages/client/src/contexts/BottomNavContext.tsx
   - packages/client/src/lib/haptics.ts
   - packages/client/src/lib/messages.ts
   - scripts/check-design-language.mjs
@@ -100,7 +102,7 @@ last-reviewed: 2026-08-04
 - 禁止 UI chrome 新增裸 hex / rgb / rgba / hsl / oklch / lab；测试 fixture、用户内容色、图表色和 scoped 特殊场景由脚本/allowlist 显式区分。
 - 禁止 UI chrome 用裸 `white`/`black` 命名色（`bg-black/50`、`text-white`、`bg-[white]`、`border-t-white` 等）：规则 `bare-black-white`，遮罩用 `bg-backdrop/*`，accent 反白字用 `text-accent-contrast`（测试文件豁免）。
 - **token 定义与图表镜像不算「裸色」**：`index.css` 里 `--color-*` / `--galaxy-*` / `--shadow-*` 的 token 定义本身（值含 hex/rgba）是颜色的唯一事实源，脚本直接跳过；token 镜像文件（`pages/stats/chartColors.ts` 图表 chrome、`lib/navigation/routeFavicon.ts` favicon SVG data-URI——recharts / SVG data-URI 不解析 `var()`，故把 token 镜像成 JS 常量）整文件跳过 `bare-raw-color`。镜像文件登记在脚本的 `TOKEN_MIRROR_FILES`，新增镜像文件需登记；长期 allowlist 不是维持图表裸 hex 的手段。
-- 禁止交互控件用文字字符或 emoji 伪装图标。
+- 禁止交互控件用文字字符或 emoji 伪装图标。**`interactive-text-icon` 规则只是辅助，有两个已知洞**：①字符集是一份固定白名单（`x × ✕ ✓ ✔ › ‹ ← → ↑ ↓ ⋯ …` 与对应实体），白名单外的符号一律放行——`▢` / `⤢`（`TaskDetailSheet` 放大还原钮）与 `−`（U+2212 减号，`SettingsNumberRow` 步进钮，注意它不是 ASCII `-`）都在洞里；②正则只匹配**单行**的 `>符号<` 或 `{"符号"}`，符号独占一行时 `>` 与 `<` 不同行，匹配不到。所以**闸绿不等于合规**，这条红线主要靠写的时候自觉，不靠脚本兜。
 - 禁止业务时间/数字/统计值直接用 `font-mono`；代码、日志、ID、debug 标识应优先放在 `code/pre/kbd/samp` 或专用技术文本组件中，确有遗留例外必须进 allowlist。
 - 禁止原生圆角 `rounded-md/lg/xl/2xl/3xl/full` 及其方向变体、以及 `rounded-[…px|rem]` 任意值：规则 `bare-card-radius`，生产代码使用 `rounded-ctl/row/card/pill`，仅发丝级/小型原子细节保留 `rounded/rounded-sm`（测试文件豁免）。
 - 禁止裸字号 `text-{xs,sm,base,lg,xl,2xl…}` 与字号任意值 `text-[…px|rem]`：规则 `bare-text-size`，须用 `.td-text-{caption,label,body,title,display}` 语义类（`.css` 与测试文件豁免）。

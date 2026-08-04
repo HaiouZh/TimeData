@@ -67,7 +67,7 @@ last-reviewed: 2026-08-04
 
 ## 4. Release 契约：latest 只由带 APK 的发布步骤打
 
-iOS、Android 与 Windows 共用一个 `v<code>` tag 与同一个 Release（`mobile-release.yml`：`prepare` 建 Release → `android` / `ios` / `windows` 三个平台 job 各自上传附件，先到先上架、互不等待）。latest 规则是硬约束：设置页的「APK 更新」入口读的是仓库的 latest Release，latest 一旦落到只有 `.ipa` 的 Release 上，Android 用户的应用内更新就会指向一个装不了的包（更早那批走 `/releases/latest` 的客户端首当其冲，合并前它们就被 iOS 顶掉的 latest 打坏过）。
+iOS、Android 与 Windows 共用一个 `v<code>` tag 与同一个 Release（`mobile-release.yml`：`prepare` 建 Release → `android` / `ios` / `windows` 三个平台 job 各自上传附件，先到先上架、互不等待）。latest 规则是硬约束，但**当前设置页的「APK 更新」入口已经不读 latest**：它拉 `/releases?per_page=30` 扫列表，取第一个能解析出 Android versionCode 且带 `.apk` 资产的 Release（见 [deployment/android-apk](android-apk.md#deployment-android-apk-s2)）。latest 仍只由带 APK 的发布步骤打，理由变成两条：兼容更早那批走 `/releases/latest` 的客户端（合并前它们就被 iOS 顶掉的 latest 打坏过），以及不让仓库发布页的 latest 指向一个没有 APK 的 Release。
 
 因此：**latest 只由含 APK 的发布步骤打**——`prepare` 创建 Release 时显式 `--latest=false`（`gh` 的 `--latest` 默认是 `automatic`，非 semver tag 按创建时间自动成为 latest，不显式关掉的话 prepare 一创建就把 latest 从上一个带 APK 的 Release 抢走，Android 构建失败时更会永久停在没 APK 的 Release 上）；`android` job 上传 APK 成功后，由单独的 `Mark release as latest` 步骤 `gh release edit --latest` 落位——该步骤带 `if: ${{ inputs.tag == '' }}` 条件，补包（`inputs.tag` 非空，即 workflow_dispatch 填了 `tag` 输入）时整个跳过。**除 `android` 外的平台 job 一律不碰这个标记**——iOS 与 Windows 侧同此规矩。合并后早期走 `/releases/latest` 的客户端一并被修复——从此 latest 指向的 Release 必然带 apk。
 
