@@ -13,21 +13,15 @@ notes/ 孤儿 WARN 的索引源是 ROADMAP + backlog + ideas 三份、
 单主题分节预算随小节内链接条数浮动（长命主题的链接开销是结构性的，不该挤内容）。
 6.3：「现在在哪」行首词表封闭（词表外报 WARN，rules §8）。
 6.4：词表收窄为 刚完成/下一步——「进行中」是集合、正本在阶段行 @标记，单行复述必失真。
+7.0：删「现在在哪」节——6.4 把它收窄到只剩「刚完成/下一步」两行公式后，这两样也是
+复述：刚完成的正本是 [完成] 阶段行的 SHA，下一步的正本是 [排队] 阶段行与 backlog 优先序。
+故整节退场，改由本脚本 OK 行印在飞清单、下一行印排队清单，机器汇总不要人工维护（rules §8）。
 """
 import re
 import sys
 from pathlib import Path
 
 SIZE_CAP = 8000
-NOW_MAX_LINES = 5
-NOW_BUDGET = 600
-# 「现在在哪」行首词表（6.3，rules §8）：体量闸管不住内容漂移——「闸/约束」「另」类
-# 即兴行没有例行覆盖事件，一写就腐。词表管行首不管行内（括注合法）。
-# 6.4 收窄：「进行中」行首出列——「刚完成/下一步」是标量（最新者胜，覆盖即正确），
-# 「进行中」是集合（在飞的线），单行写集合必失真：多线时要么一线一行增殖挤爆
-# 5 行硬顶（TimeData 实证），要么漏写误导。在飞正本 = 阶段行 [进行中@分支] +
-# 本脚本 OK 行在飞清单，机器汇总，不需要人工复述行。
-NOW_LINE_PREFIXES = ("刚完成", "下一步")
 TOPIC_BUDGET = 1200
 PHASE_LINE_BUDGET = 150
 # 分节预算随**小节内 markdown 链接条数**浮动：前 5 条免费，之后每条 +80
@@ -43,15 +37,14 @@ TOPIC_BUDGET_PER_LINK = 80
 MD_LINK_RE = re.compile(r"\[[^\]]*\]\([^)]*\)")
 NO_PHASE_STATES = {"设计中", "排队", "进行中", "完成"}
 MOVE_LADDER = [
-    "搬家五档（按优先序，做一档就重跑；只搬家不改写）：",
+    "搬家四档（按优先序，做一档就重跑；只搬家不改写）：",
     "  ① 全 [完成] 主题 → 归档四联动（rules §3.1）",
     "  ② [完成] 阶段行 → 压一行，详情回写该阶段 plan 尾部「落地记录」（rules §2.2）",
     "  ③ 已否决/暂缓主题 → 移进 ideas.md「已处置」，一句原因 + 指针（rules §3.2）",
     "  ④ 沉淀记录 → 做沉淀 pass，压成去向指针（rules §2.1）",
-    "  ⑤ 「现在在哪」→ 压到两行公式最小态：「刚完成」≤1 行只写主题名 + 归档去向，「下一步」一句指针（rules §8）",
 ]
 VALID_STATES = {"设计中", "排队", "进行中", "完成"}
-REQUIRED_SECTIONS = ["现在在哪", "主题总览", "阶段完成定义"]
+REQUIRED_SECTIONS = ["主题总览", "阶段完成定义"]  # 7.0 起不含「现在在哪」
 MUST_HAVE_SECTION = {"设计中", "排队", "进行中"}  # 这些状态的主题必须开五件套小节
 INDEX_FILES = ("backlog.md", "ideas.md")  # notes/ 孤儿的索引源，与 ROADMAP 正文合并后判定
 ACTIVE_DOC_DIRS = ("specs", "plans")  # 孤儿检查范围：活目录只放活的（rules.md §3）
@@ -141,7 +134,7 @@ def check_links(md_path: Path, report):
 
 
 def check(root: Path):
-    errors, warns, inflight = [], [], []
+    errors, warns, inflight, queued = [], [], [], {}
 
     def report(level, tag, msg):
         (errors if level == "error" else warns).append(f"{level.upper()}({tag}): {msg}")
@@ -162,26 +155,13 @@ def check(root: Path):
         if not any(t.startswith(req) for t, _ in sections):
             report("error", "section", f"缺必需节「## {req}」")
 
-    # 「现在在哪」硬顶行数 + 行首词表
-    for t, body in sections:
+    # 7.0 删「现在在哪」节：留着即报，否则它会继续被当成状态屏维护下去
+    for t, _ in sections:
         if t.startswith("现在在哪"):
-            lines = [ln for ln in body.split("\n") if ln.strip()]
-            if len(lines) > NOW_MAX_LINES:
-                report("error", "now", f"「现在在哪」{len(lines)} 行 > 硬顶 {NOW_MAX_LINES} 行——只写刚完成 + 下一步，历史不进这节")
-            for ln in lines:
-                s = ln.strip()
-                if not s.startswith("-") or s.lstrip("- ").startswith(NOW_LINE_PREFIXES):
-                    continue
-                if s.lstrip("- ").startswith("进行中"):
-                    report("warn", "now-vocab",
-                           "「现在在哪」不写「进行中」行——在飞是集合，正本在阶段行 [进行中@分支] 与"
-                           "本脚本 OK 行在飞清单，此行是复述（多线时还会一线一行增殖挤爆 5 行硬顶）。"
-                           "删即可；开工的领取动作写在阶段行（rules.md §8/§9）")
-                else:
-                    report("warn", "now-vocab",
-                           f"「现在在哪」行首不在词表 {{刚完成|下一步}}：「{s.lstrip('- ')[:14]}…」"
-                           f"——即兴行无例行覆盖事件、一写就腐；按三分法回家："
-                           f"一次性待办→backlog、持久决策→ADR/evergreen+主题小节、历史→archive（rules.md §8）")
+            report("warn", "now-retired",
+                   "「现在在哪」节 7.0 起退场——刚完成看 [完成] 阶段行的 SHA、下一步看 [排队] 阶段行与"
+                   "backlog 优先序、谁在飞看带 @ 的阶段行；三样都有正本，本节是复述。"
+                   "整节删掉即可（rules.md §8）")
 
     # 总览表
     topics = {}
@@ -211,6 +191,14 @@ def check(root: Path):
                 inflight.append((slug, branch))
         if phase_states and all(st == "完成" for st in phase_states):
             report("error", "archive-due", f"主题「{slug}」全部阶段 [完成] —— 该归档了。{ARCHIVE_GUIDANCE}")
+        # 排队清单（7.0）：「接下来捡什么」的正本是 [排队] 阶段行，印在 OK 行下面省一次 grep。
+        # 它是索引不是许可——被前置阻塞的阶段状态仍是 [排队]、照样在清单里，领取前要回读那行（rules §8.4）。
+        for ln in body.split("\n"):
+            m = PHASE_LINE_RE.match(ln)
+            if m and split_state(m.group(1))[0] == "排队":
+                num_m = re.match(r"\s*(\d+)\.", ln)
+                if num_m:
+                    queued.setdefault(slug, []).append(num_m.group(1))
         for ln in body.split("\n"):
             if PHASE_LINE_RE.match(ln) and len(ln) > PHASE_LINE_BUDGET:
                 num = re.match(r"\s*(\d+)\.", ln).group(1)
@@ -223,8 +211,6 @@ def check(root: Path):
 
     # 分节体量预算（WARN）
     def _budget_for(title, body):
-        if title.startswith("现在在哪"):
-            return NOW_BUDGET
         if TOPIC_TITLE_RE.match(title):
             # 链接开销是结构性的（一条 spec/plan 路径 ≈ 80 字符），链接多的长命
             # 主题会被固定预算挤掉内容——前 5 条免费，之后按条放宽。数的是小节内
@@ -299,7 +285,7 @@ def check(root: Path):
             diagnostics.append(f"  {n:>5} {mark}  {t.split('（')[0]}  {cap_note}")
         diagnostics.extend(MOVE_LADDER)
 
-    return errors, warns, len(text), len(topics), diagnostics, inflight
+    return errors, warns, len(text), len(topics), diagnostics, inflight, queued
 
 
 def main(argv):
@@ -309,7 +295,7 @@ def main(argv):
     if not (root / "ROADMAP.md").is_file():
         print(f"[check_roadmap] skip: {root / 'ROADMAP.md'} 不存在")
         return 0
-    errors, warns, size, n_topics, diagnostics, inflight = check(root)
+    errors, warns, size, n_topics, diagnostics, inflight, queued = check(root)
     for msg in errors + warns:
         print(f"[check_roadmap] {msg}")
     for line in diagnostics:
@@ -321,6 +307,11 @@ def main(argv):
     inflight_note = (f"，{len(inflight)} 线在飞：" + " · ".join(f"{s}@{b}" for s, b in inflight)
                      if inflight else "")
     print(f"[check_roadmap] OK（{size} 字符，{n_topics} 主题，{len(warns)} warn{inflight_note}）")
+    # 排队清单印在 OK 行下一行：跨主题 ` · ` 分隔，同主题内 `,` 连编号；无 [排队] 时不印
+    if queued:
+        n = sum(len(v) for v in queued.values())
+        items = " · ".join(f"{slug}#{','.join(nums)}" for slug, nums in queued.items())
+        print(f"[check_roadmap] 可捡（{n} 个 [排队] 阶段）：{items}")
     return 0
 
 
