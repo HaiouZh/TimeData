@@ -154,7 +154,7 @@ Android 原生同步通道是显式、窄范围的 transport 选择：只有 `Ca
 
 ### 2.2.1 tasks / tracks 语义 op
 
-`tasks` 域的 `done` / `completedAt` / `skipped` / `lastDoneAt` / `completedCount` 是完成语义字段，不再允许普通整行快照无条件覆盖。客户端在本地写入时用守卫字段 diff 推导可选 `op`：
+`tasks` 域的 `done` / `completedAt` / `skipped` / `lastDoneAt` / `completedCount` 是完成语义字段，不再允许普通整行快照无条件覆盖。写入方用守卫字段 diff 推导可选 `op`——客户端本地写入时推，服务端 `routes/agent.ts` 代写任务时同样调 `completionOp` 推：
 
 - `complete`：`done` 从 false 变 true，或 create 出已完成任务。
 - `reopen`：`done` 从 true 变 false。

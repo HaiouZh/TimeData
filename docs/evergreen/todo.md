@@ -71,7 +71,7 @@ last-reviewed: 2026-08-03
         → sync_seq 记账 → notifySyncChange → 其他设备 SSE pull
 ```
 
-所有本地写入（含 `persistTaskOrder` 批量重排）都在同一个 Dexie transaction 内同时写 `tasks` 与 `syncLog`；同步日志失败时业务写入回滚。`putTask` 会读 prev 行并用 `done` / `completedAt` / `skipped` / `lastDoneAt` / `completedCount` 的 diff 推导可选 `completionOp`，完成、撤勾、跳过和重复规则重锚这类完成语义写入会随 syncLog 上行；改标题、改排序、改标签、改权重等非完成语义写入不附 `op`。服务端收到无 `op` 的 tasks upsert 时保留现存完成字段，只更新非守卫列，避免旧快照把另一设备的勾选翻回。`updated_at` 由服务器记账时分配，设备时钟漂移不影响同步正确性。客户端校验只为体验，服务端用登记簿 schema 重新解析并按 LWW + 完成字段守卫写入。
+所有本地写入（含 `persistTaskOrder` 批量重排）都在同一个 Dexie transaction 内同时写 `tasks` 与 `syncLog`；同步日志失败时业务写入回滚。可选 `completionOp` 由 `completionOp(prev, next, at)` 按 `done` / `completedAt` / `skipped` / `lastDoneAt` / `completedCount` 的 diff 推导：`putTask` 读 prev 行后自动带上，**另有约十处绕开 `putTask` 的事务直写点各自手传**（物化、跳过、重锚、批量迁移等，都在 `lib/tasks.ts` 内）——推导逻辑只有一份，入口不止一个。完成、撤勾、跳过和重复规则重锚这类完成语义写入会随 syncLog 上行；改标题、改排序、改标签、改权重等非完成语义写入不附 `op`。服务端收到无 `op` 的 tasks upsert 时保留现存完成字段，只更新非守卫列，避免旧快照把另一设备的勾选翻回；**守卫只作用在 `ON CONFLICT DO UPDATE` 那一支**，行不存在时走 INSERT 全列写入——那时没有现存字段需要保护。`updated_at` 由服务器记账时分配，设备时钟漂移不影响同步正确性。客户端校验只为体验，服务端用登记簿 schema 重新解析并按 LWW + 完成字段守卫写入。
 
 ### 1.2 agent / CLI 回写任务状态（封闭动作集合）
 
