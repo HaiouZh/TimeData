@@ -175,7 +175,7 @@ iOS 原生工程不入库，构建链路与原生补丁见 [deployment/ios-ipa](
 
 ## 6. 文档登记簿
 
-文档准入、详略、主题轴（域/模块/设计语言/横切）判定树、单轴 `covers` 归属和骨架模板见 [_docs-guide](_docs-guide.md)；拆分与体量阈值见 [_docs-guide/splitting](_docs-guide/splitting.md)。本登记簿只列**主题文档**；主题膨胀后外提的子文档由各自主题文档在“子文档索引”里登记，不在此重复。
+文档准入、详略、主题轴（域/模块/设计语言/横切）判定树、`covers` 多对多归属和骨架模板见 [_docs-guide](_docs-guide.md)；拆分与体量阈值见 [_docs-guide/splitting](_docs-guide/splitting.md)。本登记簿只列**主题文档**；主题膨胀后外提的子文档由各自主题文档在“子文档索引”里登记，不在此重复。
 
 | 文档 | 类型 | 职责 |
 |---|---|---|
