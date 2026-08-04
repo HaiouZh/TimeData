@@ -55,7 +55,7 @@ last-reviewed: 2026-08-03
 
 全局星图顶部 HUD 显示 canvas-level rollup（全局完成百分比、本周推进、在动 Goal），它只读现有 Goal/Task/Track/Step 快照；旁边的“目标”“未归类”“回到全图”控制都在同一控件群中，“目标”打开左索引并可 `fitView` 聚焦某颗星，“未归类(N)”打开右托盘且 N 是当前未归类候选数。星图线透明度控件可在“归属线 / 连接线”之间切换：归属线只调 Goal -> 成员 tether 的本地透明度，默认 5%，可拉到 0 隐藏；连接线调前置边整体星云层透明度，默认 100%，不改变前置语义。全局星图继续复用 `goalGraphActions`、`GoalGraphNodeView`、添加成员 picker、目标编辑 sheet 和确认 sheet 等编辑叶子；`GoalGraphEditor` 仍是 `/goals/:id` 的局部编辑器，没有被抽成共享大内核，也不单独提供透明度滑杆。布局默认仍是确定性引擎，OFF 路径不引 `d3-force`。
 
-全局星图另有本地引擎模式开关，localStorage key 为 `timedata_galaxy_engine`：默认 `deterministic` 完全沿用确定性布局；`settle` 模式才通过 hook 动态 import `d3-force`，跑短暂物理 settle 后冻结。`/goals` 壳会等 Goal/Task/Track/Step/布局钉点 live query 全部返回后再挂载星图画布，避免 settle 引擎从空数据或半数据布局起跑；settle 的第一帧位置以当前完整静态布局 seed 为准。settle 模式下 Goal 恒星一律固定在当前画布坐标，只让 Task/Track 成员参与物理排布；用户 pin 仍是硬锚，单 Goal 成员钉点继续按“相对恒星偏移”落 `goal_layout_pins`，桥接成员不落 pin。切回静态模式会回到确定性布局；`/goals/:id` 的局部编辑器不受该开关影响。
+全局星图另有本地引擎模式开关，localStorage key 为 `timedata_galaxy_engine`：默认 `deterministic` 完全沿用确定性布局；`settle` 模式才通过 hook 动态 import `d3-force`，跑短暂物理 settle 后冻结。`/goals` 壳会等 Goal/Task/Track/Step/布局钉点 live query 全部返回后再挂载星图画布，避免 settle 引擎从空数据或半数据布局起跑；settle 的第一帧位置以当前完整静态布局 seed 为准。settle 模式下 Goal 恒星一律固定在当前画布坐标，只让 Task/Track 成员参与物理排布。**settle 是纯观赏模式**：拖动不落 `goal_layout_pins`，既有钉点只作为确定性 seed 参与、**不做硬锚**，钉点角标与「恢复自动」在该模式下隐藏，拖停给一次「灵动模式不保存位置」提示。切回静态模式回到确定性布局（含既有钉点）；`/goals/:id` 的局部编辑器不受该开关影响。
 
 ## 2. 局部星图编辑器
 
@@ -65,7 +65,7 @@ last-reviewed: 2026-08-03
 
 B 阶段后，`goalGraphLayout` 输出确定性星环 seed：Goal 居中，成员按前置 rank 与成员顺序环绕；自动布局不持久化，也不由 force settle 主导。Goal 锚读 `goal_layout_pins` world pin（无 pin 为 `{x:0,y:0}`），`task` / `track` pins 存相对锚偏移并覆盖 seed。打开 `/goals/:id` 等 pins 后定格并局部解碰撞；拖成员只动当前节点，拖停找最近不重叠落点再写 pin，不重排其它节点；拖 Goal 平移整团并写 world pin。ghost 不可拖且不写 pin。
 
-已钉节点显示图钉角标。选中已钉节点的「恢复自动」删单点 pin；工具栏「恢复自动布局」只清当前 goal 的 task/track pins，保留 Goal world pin。pan/zoom 视口按 Goal id 本地保存，不同步；只有用户钉住坐标进入 `goal_layout_pins`。React Flow 坐标按节点中心解释，`fitView` 只负责初次纳入视野；防重叠按视觉占位计算，包含 ToDo 圆点右侧外置标题、Track 胶囊、Goal 卡片和连接把手余量。settle 模式下 Goal 恒星一律固定在当前画布坐标，只让 Task/Track 成员参与物理排布；settle 是纯观赏模式：拖动不落 `goal_layout_pins`、既有钉点只作为 seed 参与不做硬锚，钉点角标与「恢复自动」在该模式下隐藏，拖停给一次「灵动模式不保存位置」提示；切回静态模式会回到确定性布局（含既有钉点）。前置语义看箭头（`blocker -> blocked`）；四向 handle 默认低存在感，边按两端相对位置选最近 handle，避免反侧绕线。完整标题用应用内 tooltip。
+已钉节点显示图钉角标。选中已钉节点的「恢复自动」删单点 pin；工具栏「恢复自动布局」只清当前 goal 的 task/track pins，保留 Goal world pin。pan/zoom 视口按 Goal id 本地保存，不同步；只有用户钉住坐标进入 `goal_layout_pins`。React Flow 坐标按节点中心解释，`fitView` 只负责初次纳入视野；防重叠按视觉占位计算，包含 ToDo 圆点右侧外置标题、Track 胶囊、Goal 卡片和连接把手余量。局部编辑器不接引擎模式开关，只走确定性布局（见 §1 末）。前置语义看箭头（`blocker -> blocked`）；四向 handle 默认低存在感，边按两端相对位置选最近 handle，避免反侧绕线。完整标题用应用内 tooltip。
 
 交互语义以防误触为先：点节点只选中，显式“打开”才进入源页面。打开 Task 使用 `/todo?taskId=<id>` 深链；打开 Track 使用 `/tracks/:id`。Task 可在图内快速完成/取消完成（勾掉挂轨道的任务会附带归档该轨道，见 [tracks](../tracks.md) §5），Track 状态仍回轨道页处理。结构写入仍只经 `lib/goals.ts` 和 Task 写入 helper：加已有成员、移出成员、快建任务、增删前置、编辑/归档/删除 Goal 都复用既有 Dexie + `syncLog` 边界。
 

@@ -25,7 +25,7 @@ last-reviewed: 2026-08-01
 
 - **上游**：用户在 `/diary`（`DiaryPage.tsx`）编辑当天日记；在 `/settings/diary`（`SettingsDiaryPage.tsx`）配置路径模板。
 - **下游**：内容直接写入服务器本机文件系统（`DIARY_VAULT_DIR` 挂载的目录），不落库、不同步、不进独立备份。
-- **契约**：`routes/diary.ts` 的四个端点（`GET/PUT /config`、`GET/PUT /:date`）与 `lib/diary-path.ts` 的模板展开/安全校验规则，见本文 §2。
+- **契约**：`routes/diary.ts` 的六个端点与 `lib/diary-path.ts` 的模板展开/安全校验规则，见本文 §2。编辑页用 `GET/PUT /config` 与 `GET/PUT /:date`；回顾页另用 `POST /batch` 批量取多天、`GET /asset` 取 vault 内资源，见 [diary/review](diary/review.md)。
 - **邻居**：[diary/editor](diary/editor.md)、[diary/reference-panel](diary/reference-panel.md) 与 [diary/review](diary/review.md)（同主题子文档）；[quick-notes](quick-notes.md)（QuickNotesPage 提供跳转 `/diary` 的入口，二者是并列的记录方式，互不引用数据）。
 
 ## 1. 数据流
@@ -46,7 +46,7 @@ SettingsDiaryPage 保存模板
   → server 用固定日期 2026-01-01 校验模板语法，非法 → 400 { error: 中文原因 }
 ```
 
-`enabled` 由服务端 `DIARY_VAULT_DIR` 环境变量是否配置决定（非 server_config 存储项）；`template` 存在 `server_config` 表（key = `diary.pathTemplate.v1`，走 `lib/serverConfig.ts` 的 `getServerConfig`/`setServerConfig` 通用 KV，同表其他配置项 key 独立）。
+`enabled` 由服务端 `DIARY_VAULT_DIR` 环境变量是否配置决定（非 server_config 存储项）；`template` 与周记模板 `weeklyTemplate` 都存在 `server_config` 表（key 分别是 `diary.pathTemplate.v1` 与 `diary.weeklyPathTemplate.v1`，走 `lib/serverConfig.ts` 的 `getServerConfig`/`setServerConfig` 通用 KV，同表其他配置项 key 独立）。`PUT /config` 按传入字段分别写入，两者互不牵连。
 
 ## 2. 关键契约 / 不变量
 
