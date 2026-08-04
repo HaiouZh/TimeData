@@ -40,7 +40,7 @@ last-reviewed: 2026-08-03
 
 # 架构总览
 
-> 这份文档是 TimeData 的系统地图：五个包的关系、主要数据流、启动顺序、关键约定和文档登记簿。
+> 这份文档是 TimeData 的系统地图：六个包的关系、主要数据流、启动顺序、关键约定和文档登记簿。
 > 具体功能域的字段、页面、路由和测试不在这里展开，去对应 evergreen 子文档。
 
 ## 1. 一句话定位
@@ -49,12 +49,12 @@ TimeData 是个人时间记录 PWA：
 
 - 本地优先：Web 端先写 IndexedDB，再异步同步。
 - 自托管：服务端是 Hono + SQLite，负责最终校验、写入、同步账本和受控 API。
-- 多入口：Web/PWA、CLI、Android WebView；授权 agent 只能经服务端受控 API 写入。
+- 多入口：Web/PWA、CLI、Android / iOS 的 Capacitor 壳、Windows 的 Tauri 壳；授权 agent 只能经服务端受控 API 写入。
 - 数据域：时间记录、分类/设置、速记、待办、任务轨道、目标层、健康数据（仅数据层，无 UI）、统计/洞察、同步、备份。
 
 **不做**：多用户、协作、SaaS、复杂权限、AI 直接写 DB 或备份/导出文件。
 
-## 2. 五个包的职责与依赖
+## 2. 六个包的职责与依赖
 
 ```text
 shared  类型、schema、同步域登记簿、常量、跨端纯函数（occurrence 物化引擎 / 重复规则 / 日期助手 / 轨道看板信号 / 目标布局钉点 key helper）
@@ -63,10 +63,11 @@ shared  类型、schema、同步域登记簿、常量、跨端纯函数（occurr
    ├── server  Hono + SQLite，鉴权、权威校验、同步账本、静态文件
    └── cli     Node CLI，server API 的受控封装
 
-mobile   Capacitor Android 壳，webDir 指向 client/dist
+mobile   Capacitor Android / iOS 壳，webDir 指向 client/dist
+desktop  Tauri Windows 壳，前端产物同样取 client/dist
 ```
 
-依赖方向单向：`client` / `server` / `cli` 都依赖 `shared`，彼此不 import。它们靠 HTTP API、同步账本和共享类型契约协作。`mobile` 不写业务逻辑，只包装前端构建产物与原生配置。
+依赖方向单向：`client` / `server` / `cli` 都依赖 `shared`，彼此不 import。它们靠 HTTP API、同步账本和共享类型契约协作。`mobile` 与 `desktop` 都不写业务逻辑，只包装前端构建产物与原生配置。
 
 根 `package.json` 只做 workspace 脚本编排：构建先产出 `shared`，再并行跑 client/server/cli；测试允许 package 间有限并行并在最后串起根目录脚本测试；文档、UI、设计语言和测试卫生棘轮以 `check:*` 脚本集中暴露。包管理器由 `packageManager` 固定到 pnpm 11，`pnpm-workspace.yaml` 管 workspace、catalog 和原生依赖构建审批。本地命令细节见 [development](development.md)，CI 顺序见 [deployment](deployment.md)。
 
@@ -105,7 +106,7 @@ CLI 写时间记录见 [cli](cli.md) 与 [timeline](timeline.md)；agent 投递�
 3. 暴露 `/api/health` 与 `/api/version`。
 4. 先挂 `/api/health` 与 `/api/version` 公开标记，再挂 `/api/*` request audit 与 scoped auth / Bearer auth；未配置 `AUTH_TOKEN` 默认 fail-closed。
 5. 装 sync/admin rate limit。
-6. 注册业务路由：agent 任务回写、agent 轨道 ingest、categories、entries、quick-notes、tasks、sync、export、update、data、admin（含 sync logs / request logs）。
+6. 注册业务路由：agent 任务回写、agent 轨道 ingest、categories、entries、quick-notes、tasks、sync、export、update、data、diary、admin（含 sync logs / request logs）。
 7. 服务静态前端产物与 SPA fallback。
 8. `initializeDatabase()` 建表、补列、播种默认分类、处理一次性迁移。
 9. 清理旧 server backup，按需跑每日备份并注册每日备份定时器。
@@ -188,7 +189,7 @@ iOS 原生工程不入库，构建链路与原生补丁见 [deployment/ios-ipa](
 | 文档 | 类型 | 职责 |
 |---|---|---|
 | [_docs-guide](_docs-guide.md) | 横切 | evergreen 写作准入、详略、组织和骨架模板；拆分与检查分别见子文档 |
-| [architecture](architecture.md) | 横切 | 系统地图、五包关系、启动顺序、文档登记簿 |
+| [architecture](architecture.md) | 横切 | 系统地图、六包关系、启动顺序、文档登记簿 |
 | [data-model](data-model.md) | 横切 | 跨域数据契约、全表索引脉、同步信封、时间/ID/映射约定 |
 | [development](development.md) | 横切 | 开发流程、测试分层、工程约定 |
 | [deployment](deployment.md) | 横切 | 部署、环境变量、Docker、自更新 |

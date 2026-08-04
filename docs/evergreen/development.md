@@ -91,14 +91,18 @@ lockfile 不变时 `install` 基本只校验 / 补链接，很快；变了也只
 后端：
 
 ```bash
-pnpm dev:server
+AUTH_TOKEN=dev-token pnpm dev:server
 ```
 
-默认监听 `http://localhost:3000`。访问时如果看到类似下面的 JSON，说明后端正常运行：
+默认监听 `http://localhost:3000`。`AUTH_TOKEN` 为空且未显式设 `ALLOW_UNAUTHENTICATED_DEV=1` 时，受保护的 `/api/*` 一律返回 500——这是 fail-closed，不是启动失败；前端设置页填的 token 要与它一致。
+
+探活走公开端点 `GET /api/health`：
 
 ```json
-{"name":"TimeData API","status":"running","hint":"Client dev server is on http://localhost:5174/"}
+{"status":"ok","db":"ok"}
 ```
+
+数据库 ping 不通时 `db` 变成 `"error"` 且状态码 503。`/api/health` 与 `/api/version` 是仅有的两个公开端点，根路径走静态文件与 SPA fallback，不返回 API banner。
 
 前端：
 
@@ -210,7 +214,7 @@ Release APK 输出位置：
 packages/mobile/android/app/build/outputs/apk/release/app-release.apk
 ```
 
-GitHub Actions 的 `android-apk` workflow 会使用仓库 Secrets 构建签名 release APK，完成后在 run 页面下载 `timedata-release-apk` artifact，main 分支还会发布到最新 GitHub Release。workflow 会把计算出的 versionCode 同时传给 Vite 的 `TIMEDATA_ANDROID_VERSION_CODE` 和 Gradle 的 `ORG_GRADLE_PROJECT_TIMEDATA_ANDROID_VERSION_CODE`，避免在 CI 中临时改源码。
+GitHub Actions 的 `mobile-release` workflow 在 android job 里用仓库 Secrets 构建签名 release APK，完成后在 run 页面下载 `timedata-release-apk` artifact。该 workflow 的 Android / iOS / Windows 三个平台共用 prepare 阶段；GitHub Release 的 latest 只由新发版 android job 的「Mark release as latest」步骤落位，补包不碰 latest。workflow 会把计算出的 versionCode 同时传给 Vite 的 `TIMEDATA_ANDROID_VERSION_CODE` 和 Gradle 的 `ORG_GRADLE_PROJECT_TIMEDATA_ANDROID_VERSION_CODE`，避免在 CI 中临时改源码。
 
 移动端构建会使用 `packages/client` 的 mobile Vite 模式：
 
@@ -236,7 +240,8 @@ TimeData/
 │   ├── server/                  # Hono + SQLite 后端 API
 │   ├── client/                  # React + Vite 前端 PWA
 │   ├── cli/                     # 受控 API 网关 CLI
-│   └── mobile/                  # Capacitor Android Shell
+│   ├── mobile/                  # Capacitor Android / iOS 壳
+│   └── desktop/                 # Tauri Windows 壳，内嵌 client/dist
 └── docs/                        # 设计和实现计划文档
 ```
 
