@@ -62,6 +62,9 @@
   "docs/evergreen/goals/canvas.md": {
     "covers": 15
   },
+  "docs/evergreen/project-zone.md": {
+    "covers": 3
+  },
   "docs/evergreen/quick-notes.md": {
     "covers": 16
   },
@@ -103,9 +106,6 @@
   },
   "docs/evergreen/todo/modules.md": {
     "covers": 7
-  },
-  "docs/evergreen/todo/project-zone.md": {
-    "covers": 3
   },
   "docs/evergreen/todo/recurrence.md": {
     "covers": 7

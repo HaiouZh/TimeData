@@ -44,7 +44,7 @@ last-reviewed: 2026-08-03
 
 > 待办域的**主题文档**：`tasks` 表（轻量任务池 + 重复待办），跨端同步，不引用分类/时间记录/速记，不参与时长统计。
 > 本文讲：Task 字段契约（含 `parentId` 一层父子）、四分区落点、三条写入通道、tags、子任务=独立可拖 Task、agent/CLI 回写；不变量、坑与红线归纵切子文档 [todo/invariants](todo/invariants.md)。
-> 重复规则引擎见子文档 [todo/recurrence](todo/recurrence.md)；想法重力（水位线/翻牌/水下找回）见子文档 [todo/gravity](todo/gravity.md)；手头软会话（抓/移/散/续 + atHand 排他投影）见子文档 [todo/at-hand](todo/at-hand.md)；项目区与归属轴（`Goal.members` → 分组投影 + 收件箱排他）见子文档 [todo/project-zone](todo/project-zone.md)。不变量与坑见纵切子文档 [todo/invariants](todo/invariants.md)；代码入口地图见 [todo/modules](todo/modules.md)。
+> 重复规则引擎见子文档 [todo/recurrence](todo/recurrence.md)；想法重力（水位线/翻牌/水下找回）见子文档 [todo/gravity](todo/gravity.md)；手头软会话（抓/移/散/续 + atHand 排他投影）见子文档 [todo/at-hand](todo/at-hand.md)。项目区与归属轴已升格为邻居主题 [project-zone](project-zone.md)。不变量与坑见纵切子文档 [todo/invariants](todo/invariants.md)；代码入口地图见 [todo/modules](todo/modules.md)。
 > 不讲：同步账本机制（见 [sync](sync.md)）、备份（见 [backup](backup.md)）、CLI 命令清单（见 [cli](cli.md)）。
 
 ## 承上启下
@@ -52,7 +52,7 @@ last-reviewed: 2026-08-03
 - **上游**：用户在 Web `TodoPage` 新增/编辑/勾选/排序；速记页 composer 「存待办」调 `addTask`；授权 agent / CLI 经 `POST /api/agent/tasks/:id/status` 回写状态；CLI 经 `POST /api/tasks/:id/schedule` 排期。
 - **下游**：本地 Dexie `tasks` 与 `syncLog(tableName="tasks")` 同事务写 → [sync](sync.md) 推送 → 服务端通用 LWW 域 + `sync_seq` → 其他设备按 seq 拉取。force-push 里 `tasks` 是核心同步表之一（见 [backup](backup.md)）。
 - **契约**：`Task` 字段 schema（含 `parentId` 一层父子）见本文 §2；`Recurrence` 见 [todo/recurrence](todo/recurrence.md)；跨域约定见 [data-model](data-model.md)；`tags` 不驱动自动逻辑（见 [ADR 0014](../adr/0014-task-tags-vs-fields.md)）。
-- **邻居**：[quick-notes](quick-notes.md)（另一捕捉入口）、[goals](goals.md)（通过 `Goal.members` 引用 Task 作为目标成员）、[sync](sync.md)（LWW 域 + 登记簿）、[cli](cli.md)（`tasks` / `task-*` 命令）。
+- **邻居**：[quick-notes](quick-notes.md)（另一捕捉入口）、[goals](goals.md)（通过 `Goal.members` 引用 Task 作为目标成员）、[project-zone](project-zone.md)（项目区与归属轴）、[sync](sync.md)（LWW 域 + 登记簿）、[cli](cli.md)（`tasks` / `task-*` 命令）。
 
 ## 1. 数据流（本域端到端，跨包）
 
@@ -188,4 +188,3 @@ agent / CLI (task-done/task-tag)
 | [todo/recurrence](todo/recurrence.md) | 重复规则引擎：Recurrence schema、occurrence 物化、终止条件、预设门、删除级联 |
 | [todo/gravity](todo/gravity.md) | 想法重力：水位线浮沉、翻牌复查、已过目记忆、水下找回尾部、设置页 |
 | [todo/at-hand](todo/at-hand.md) | 手头软会话：`Session` schema、sessions 域登记、抓/移/散/续生命周期、atHand 排他投影、自愈规则，以及与待办其他区域统一的标题 / 行面板 UI 骨架 |
-| [todo/project-zone](todo/project-zone.md) | 项目区与归属轴：两份 goal→task 索引、分组投影、收件箱排他、归属变更 touch 不变量、呈现契约 |

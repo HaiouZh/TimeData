@@ -12,14 +12,14 @@ last-reviewed: 2026-08-03
 
 > 母主题：[todo](../todo.md)。
 > 本文管的是**拖着一条任务时，怎么把它送到别处**——坞的三档车道手势、三形态渲染、命中资格裁决，以及"坞不发明语义"这条红线。
-> 落点本身的语义（今天/收件箱/项目/手头各自意味着什么）不在这里：见 [invariants](invariants.md) 与 [todo/at-hand](at-hand.md)、[todo/project-zone](project-zone.md)。
+> 落点本身的语义（今天/收件箱/项目/手头各自意味着什么）不在这里：见 [invariants](invariants.md)、[todo/at-hand](at-hand.md) 与 [project-zone](../project-zone.md)。
 
 ## 承上启下
 
 - **上游**：`TodoPage` 的 `DndContext`。拖起时 `handleDragStart` 量来源区块（`[data-section]`）左缘存 `dockAnchorLeftPx`、记起手指针视口坐标（`dragStartPointRef`）与是否键盘拖拽（`keyboardDragRef`）；此后由 window 上的 `pointermove`/`touchmove` 驱动 `syncLaneFromPointer` 算车道，写 `laneRef` 并派生 `dockEngaged` state。**不走 dnd-kit 的 `onDragMove`**，理由见 §3.1。
 - **下游**：`TodoDragDock` 按 `dragging`/`dockEngaged`/`targets` 推导三形态；`preferProjectCollisions` 按车道决定坞参不参与命中；`handleDragEnd` 经 `resolveTodoDockDrop`/`applyTodoDockDrop` 落库。
 - **契约**：车道判定与落点解析的纯函数全在 `pages/todo/todoDnd.ts`（归母文 covers）：`resolveTodoDragLane` / `laneToIndentLevel` / `preferProjectCollisions` / `todoDockId` / `parseTodoDockId` / `todoDockTargets` / `resolveTodoDockDrop`。本文 §1–§4 是它们的语义合同。
-- **邻居**：[todo](../todo.md)（Task 落点全貌、缩进收纳手势、[invariants](invariants.md) 第 5 条的 dnd 身份规则）、[todo/at-hand](at-hand.md)（手头源整区不出坞的理由、子任务投手头的两步落库）、[todo/project-zone](project-zone.md)（子任务不可入组的拒绝口径）。
+- **邻居**：[todo](../todo.md)（Task 落点全貌、缩进收纳手势、[invariants](invariants.md) 第 5 条的 dnd 身份规则）、[todo/at-hand](at-hand.md)（手头源整区不出坞的理由、子任务投手头的两步落库）、[project-zone](../project-zone.md)（子任务不可入组的拒绝口径）。
 
 ## 1. 坞不发明语义
 

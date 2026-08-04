@@ -738,12 +738,12 @@ test("listSubDocs lists only docs under the topic directory sorted by chars desc
   const docs = [
     { filePath: "docs/evergreen/todo.md", chars: 3000, covers: ["root"] },
     { filePath: "docs/evergreen/todo/modules.md", chars: 6490, covers: ["a"] },
-    { filePath: "docs/evergreen/todo/project-zone.md", chars: 21912, covers: ["a", "b", "c"] },
+    { filePath: "docs/evergreen/todo/gravity.md", chars: 21912, covers: ["a", "b", "c"] },
     { filePath: "docs/evergreen/todos.md", chars: 100, covers: ["sibling"] },
   ];
 
   assert.deepEqual(listSubDocs("docs/evergreen/todo.md", docs), [
-    { filePath: "docs/evergreen/todo/project-zone.md", chars: 21912, covers: 3 },
+    { filePath: "docs/evergreen/todo/gravity.md", chars: 21912, covers: 3 },
     { filePath: "docs/evergreen/todo/modules.md", chars: 6490, covers: 1 },
   ]);
 });
@@ -775,7 +775,7 @@ test("buildHardCapAdviceLines renders legal actions, splitting criteria, and sub
   const allDocs = [
     { filePath: "docs/evergreen/todo.md", chars: 25001, covers: ["root"] },
     { filePath: "docs/evergreen/todo/modules.md", chars: 6490, covers: ["a", "b", "c", "d", "e", "f", "g"] },
-    { filePath: "docs/evergreen/todo/project-zone.md", chars: 21912, covers: ["a", "b", "c"] },
+    { filePath: "docs/evergreen/todo/gravity.md", chars: 21912, covers: ["a", "b", "c"] },
     { filePath: "docs/evergreen/todos.md", chars: 99999, covers: ["sibling"] },
   ];
 
@@ -789,9 +789,9 @@ test("buildHardCapAdviceLines renders legal actions, splitting criteria, and sub
   assert.match(text, /压缩措辞、删例子、把句子改短不是合法动作/);
   assert.match(text, /docs\/evergreen\/_docs-guide\/splitting\.md/);
   assert.match(text, /docs\/evergreen\/todo\.md 已有 2 份子文档/);
-  assert.match(text, /docs\/evergreen\/todo\/project-zone\.md（21912 字符，covers 3）/);
+  assert.match(text, /docs\/evergreen\/todo\/gravity\.md（21912 字符，covers 3）/);
   assert.match(text, /docs\/evergreen\/todo\/modules\.md（6490 字符，covers 7）/);
-  assert.ok(text.indexOf("project-zone.md") < text.indexOf("modules.md"));
+  assert.ok(text.indexOf("gravity.md") < text.indexOf("modules.md"));
   assert.doesNotMatch(text, /docs\/evergreen\/todos\.md/);
   assert.doesNotMatch(text, /横切多半已用尽/);
 });

@@ -192,6 +192,7 @@ iOS 原生工程不入库，构建链路与原生补丁见 [deployment/ios-ipa](
 | [quick-notes](quick-notes.md) | 域 | 速记表、聊天式速记页、CLI 只读、agent 投递 |
 | [diary](diary.md) | 域 | 日记 vault 文件、路径模板展开与安全校验、mtime 并发守卫、有序列表续号 |
 | [todo](todo.md) | 域 | 待办任务、重复规则、子任务、agent 状态回写 |
+| [project-zone](project-zone.md) | 域 | 项目区与归属轴：两份 goal→task 索引、分组投影、收件箱排他、归属变更 touch 不变量、呈现契约 |
 | [tracks](tracks.md) | 域 | 任务轨道、轨道步骤、状态线数据地基、agent ingest |
 | [goals](goals.md) | 域 | 目标层、Task/Track 成员引用、项目完成度、主题 7 天活跃度、前置关系 |
 | [stats-insights](stats-insights.md) | 域 | 时间统计、洞察模块、统计布局和趋势设置 |
