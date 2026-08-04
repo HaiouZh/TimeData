@@ -110,13 +110,15 @@ AUTH_TOKEN=dev-token pnpm dev:server
 pnpm dev:client
 ```
 
-默认监听 `http://localhost:5174`。Vite 已配置 `/api` 代理到 `http://localhost:3000`，前后端可以分开启动。
+`vite.config.ts` 只固定 `server.port = 5174` 与 `/api` 代理到 `http://localhost:3000`，**不设 `server.host`**，前后端可以分开启动。
 
-如果浏览器访问 `localhost:5174` 失败，可以尝试 `http://127.0.0.1:5174`，或显式指定 host：
+不设 host 的后果：Vite 默认可能只监听 IPv6 `[::1]`，而浏览器走 IPv4 时连不上——**`localhost` 同样中招**，它在本机多半解析成 `127.0.0.1`，那个地址上没人接。此时换 `http://127.0.0.1:5174` 无效（是同一个没人接的地址），要显式绑定：
 
 ```bash
-pnpm --filter @timedata/client dev -- --host 127.0.0.1
+pnpm --filter @timedata/client exec vite --host 127.0.0.1
 ```
+
+Vite 打印的启动 URL 写的是 `localhost`，不反映实际绑定的地址族，据它判断「起好了」会误判。确诊看实际监听地址：`Get-NetTCPConnection -LocalPort 5174 -State Listen | Select LocalAddress,OwningProcess`——`::1` 即命中本坑，`127.0.0.1` / `0.0.0.0` 则另有原因。
 
 ## 常用命令
 
@@ -133,8 +135,9 @@ pnpm --filter @timedata/mobile test # 检查 Android 明文流量和 Capacitor v
 pnpm build:mobile:apk          # 构建 Android debug APK
 pnpm build:mobile:release-apk  # 构建 Android release APK（需要签名参数）
 pnpm build             # 先构建 shared，再并行构建 Web/Server/CLI；不包含 Android APK
-pnpm lint              # Biome lint（v2.4，配置在 biome.json 使用 files.includes 反向写法），当前用于报告存量 any/import type warning，不因 warning 阻塞
-pnpm -r typecheck      # 递归执行各 package TypeScript 检查
+pnpm lint              # Biome lint（v2.4，配置在 biome.json 使用 files.includes 反向写法）；noExplicitAny / useImportType / noNonNullAssertion 均为 error，CI 与 gate 据此阻断
+pnpm format            # Biome 格式化并写回
+pnpm typecheck         # 根入口（= pnpm -r typecheck）：递归执行各 package TypeScript 检查
 pnpm test              # 以 workspace-concurrency=2 递归执行各 package 测试，并在最后运行根目录 scripts/*.test.mjs
 pnpm test:client:changed # 本地快速窄测：只让 client unit project 跑 Vitest changed 集合，不替代正式 pnpm test
 pnpm --filter @timedata/client exec vitest run --project unit src/pages   # 本地只跑某一段（按路径窄测），定位慢点/失败面
@@ -143,15 +146,24 @@ pnpm test:scripts      # 只运行根目录 Node test 脚本（如 docs 检查�
 pnpm --filter @timedata/server test routes
 pnpm --filter @timedata/server test middleware/auth
 pnpm --filter @timedata/client test:e2e
-pnpm check:docs        # 检查本次改动是否命中需要同步的 evergreen 文档
-pnpm check:docs:strict # CI 使用的严格文档检查
+pnpm check:docs        # 检查本次改动是否命中需要同步的 evergreen 文档（warn，恒 exit 0）
+pnpm check:docs:strict # CI 使用的严格文档检查（按 contracts 硬拦）
 pnpm check:docs:stale  # 检查 evergreen 文档是否长期未审阅
-pnpm check:docs:size   # evergreen 文档体量棘轮，拦新增膨胀
+pnpm check:docs:size   # evergreen 文档体量棘轮：字符绝对上限 + covers 棘轮
+pnpm check:docs:coverage # 新增代码是否有 evergreen 文档认领（须带 --since=<base>）
+pnpm check:docs:links  # evergreen / ADR 互链与显式锚点的目标存在性
 pnpm check:design      # 设计语言棘轮：退役模块色、裸色、散装交互图标、业务 font-mono
 pnpm check:ui          # UI 控件棘轮：禁新增原生 select/checkbox/radio/confirm/alert
 pnpm check:test        # 测试卫生棘轮：禁新增真实等待 / 裸 createRoot / 干净桶混入脏文件
+pnpm check:diary       # 日记日期闸：本地日界与 UTC 存储的换算
+pnpm check:roadmap     # ROADMAP 程序门（docs_local 不入 Git，本地是唯一执行点）
+pnpm gate              # 全量门禁唯一入口，本机全局互斥
 pnpm icons:generate    # 从根目录 icon.png 生成 PWA / Android / favicon / iOS 全套图标
 ```
+
+**两档分工**：日常提交走**聚焦验证**——按路径窄测 + 命中的那几道 check，快且够用。**收工 / 合并前走 `pnpm gate`**：它串行跑 CI 同集棘轮（lint、四道静态闸、typecheck、test、e2e、四道 docs、roadmap、build），是全量门禁的唯一入口，不必再手工挨个敲。gate 本机全局互斥，同一时刻只允许一份在跑，多 worktree 撞上会自动排队。
+
+`check:docs:strict` 与 `check:docs:coverage` **不带 `--since` 等于没跑**：默认比对 `HEAD`，对已提交的改动是空 diff、必然假通过。本地自测带 `--since=main`，CI 带 `--since=origin/main`。
 
 `packages/shared` 的运行时契约测试使用 Vitest，覆盖 `packages/shared/src/schemas.ts` 中的 schema；改跨端类型或同步 payload 形状时先跑 `pnpm --filter @timedata/shared test` 和 `pnpm --filter @timedata/shared build`。`@timedata/cli` 的 `typecheck` 会先构建 shared，因为 CLI 在 package 解析时读取 `packages/shared/dist/index.d.ts`；干净 CI 环境不能依赖本地已有 dist。
 
@@ -165,7 +177,7 @@ pnpm icons:generate    # 从根目录 icon.png 生成 PWA / Android / favicon / 
 
 `packages/server` 的路由级测试直接装配 Hono route + 内存 better-sqlite3，通用 helper 在 `packages/server/src/__tests__/helpers.ts`；认证中间件测试在 `packages/server/src/middleware/auth.test.ts`。
 
-`packages/client` 的测试使用 Vitest project 配置：默认 `pnpm --filter @timedata/client test` 跑 unit、unit-clean、unit-clean-jsdom 三个 project。**三桶分工**：`unit-clean`（node + `isolate:false`，**派生**——全 `src` 测试减去命中脏标记者 = 纯逻辑 / `renderToStaticMarkup` / 已洗白的 node-db，挂精简 `src/test/setup.clean.ts`，其提供桶级内存 localStorage + afterEach 清空，prefs 类测试无需自带 defineProperty 注入）、`unit-clean-jsdom`（jsdom + `isolate:false`，**显式 allowlist** `packages/client/test-buckets.fast-jsdom.json`，挂 `src/test/setup.clean-jsdom.ts`，afterEach 统一 `unstubAllGlobals` + `cleanupRoots` + `resetDb`）、`unit`（`isolate:true` 默认 + 完整 `src/test/setup.ts` 的全局清理——含 `cleanupRoots()`：只清 `document.body.innerHTML` 不卸 React root，页面级用例任一断言先失败就走不到末行 `unmount(root)`，留活的页面连同 `useLiveQuery` 订阅会被后续用例开头的 `db.*.clear()` 反复唤醒重渲染，把一条真失败放大成别的用例的连带超时，契约由 `src/test/rootCleanupContract.test.tsx` 钉住；收纳未洗白残留：用 `vi.mock` / `defineProperty(globalThis)` 的文件（isolate:false 下会跨文件泄漏）、真 schema 测试、未转 domHarness 的裸 createRoot）。两个 isolate:false 快桶免去每文件隔离的 import/jsdom 开销，是提速主力。**纪律**：db 测试统一走 `src/test/dbReset.ts`（open + 逐表 clear，绝不 `db.delete()` 重建 schema）；需真实 DOM 的测试走 `src/test/domHarness.tsx`（`renderDom` / `unmount`，活跃 root 登记 + afterEach `cleanupRoots()` 自动卸载，三桶皆然）。三个桶的 setup **`restoreAllMocks` 与 `clearAllMocks` 都要调**：Vitest 3 起前者只还原 `vi.spyOn` 装的间谍、不再清 `vi.fn()` 的调用历史（含 `vi.mock` 工厂里造的），少了后者就会让「上一条用例调用过某 mock」泄漏成下一条的 `toHaveBeenCalled` 脏数据——按声明顺序跑时可能恒绿，`--sequence.shuffle` 换序即随机翻车，契约由 `src/test/mockResetContract.test.ts` 钉住。分桶唯一事实源是 `packages/client/test-buckets.mjs`（node 派生 `resolveCleanBucket` + jsdom `resolveFastJsdomBucket`），`vitest.config.ts` 与 `scripts/check-test-hygiene.mjs` 共用它。按路径窄测纯逻辑时省略 `--project`（或 `--project unit-clean`），jsdom 快桶文件用 `--project unit-clean-jsdom`，其余 `--project unit`。同步端到端链路单独用 `pnpm --filter @timedata/client test:e2e`（CI 也分两步跑，避免 e2e 拖慢日常 test）。e2e 测试入口是 `packages/client/src/__tests__/e2e/sync-roundtrip.e2e.test.ts`，它通过 `packages/server/src/__tests__/e2e/helpers.ts` 在同一 Node 进程里启动内存 Hono server，并用 fake-indexeddb 作为 Dexie 后端。默认多数组件测试走 React server rendering；需要真实 DOM 的交互测试使用 `@vitest-environment jsdom`，依赖由 `packages/client/package.json` 的 devDependency `jsdom` 提供。测试卫生由 `pnpm check:test`（CI 步骤 + `scripts/check-test-hygiene.mjs` 文件级棘轮）守护：禁新增真实定时等待、裸 `createRoot`、干净桶目录混入新脏文件（`dirty-in-clean-bucket`），以及 jsdom 快桶 allowlist 成员含裸 createRoot（`bare-createroot-in-fast-jsdom`）或直接 `fake-indexeddb/auto` / `db.delete(`（`unsafe-db-in-fast`），存量豁免在 `scripts/test-hygiene-baseline.json`。**登记豁免只走 `node scripts/check-test-hygiene.mjs --add <路径>`**——只收编你指定路径下的违规、合并进现有基线（只增不删）；文件修好后用 `--prune` 洗白已失效条目；`--rewrite-baseline` 才整体重写，且会把新收编的条目逐条打印出来。旧的 `--write-baseline` 已移除：它按当前工作树整体覆盖写，会把与本次改动无关的违规一并收编，diff 里只表现为基线多几行、review 极易放过（`scripts/check-evergreen-docs.mjs --write-size-baseline` 因为要重建新增/删除文档条目仍是整体重写，但同样会把被抬高的 covers 逐条喊出来）。CI 不再用一步 `pnpm -r --parallel test` 跑 client unit，而是单独的 `client-unit` 矩阵 job 用 vitest 原生 `--shard=i/4` 并行切成 4 片（`fail-fast: false`，每片一个独立检查），既缩短反馈墙钟又能一眼定位是哪一片挂；主 `test` job 仅跑非 client 包的测试。本地复现某片用 `--shard=i/4`，按路径窄测用 `vitest run --project unit <路径>`；提交前仍以根 `pnpm test` 为最终 gate。
+`packages/client` 的测试使用 Vitest project 配置：默认 `pnpm --filter @timedata/client test` 跑 unit、unit-clean、unit-clean-jsdom 三个 project。**三桶分工**：`unit-clean`（node + `isolate:false`，**派生**——全 `src` 测试减去命中脏标记者 = 纯逻辑 / `renderToStaticMarkup` / 已洗白的 node-db，挂精简 `src/test/setup.clean.ts`，其提供桶级内存 localStorage + afterEach 清空，prefs 类测试无需自带 defineProperty 注入）、`unit-clean-jsdom`（jsdom + `isolate:false`，**显式 allowlist** `packages/client/test-buckets.fast-jsdom.json`，挂 `src/test/setup.clean-jsdom.ts`，afterEach 统一 `unstubAllGlobals` + `cleanupRoots` + 动态 import `db/index.js` 后逐表 `clear()`——**走的不是 `src/test/dbReset.ts` 的 `resetDb()`**）、`unit`（`isolate:true` 默认 + 完整 `src/test/setup.ts` 的全局清理——含 `cleanupRoots()`：只清 `document.body.innerHTML` 不卸 React root，页面级用例任一断言先失败就走不到末行 `unmount(root)`，留活的页面连同 `useLiveQuery` 订阅会被后续用例开头的 `db.*.clear()` 反复唤醒重渲染，把一条真失败放大成别的用例的连带超时，契约由 `src/test/rootCleanupContract.test.tsx` 钉住；收纳未洗白残留：用 `vi.mock` / `defineProperty(globalThis)` 的文件（isolate:false 下会跨文件泄漏）、真 schema 测试、未转 domHarness 的裸 createRoot）。两个 isolate:false 快桶免去每文件隔离的 import/jsdom 开销，是提速主力。**纪律**：db 测试统一走 `src/test/dbReset.ts`（open + 逐表 clear，绝不 `db.delete()` 重建 schema）；需真实 DOM 的测试走 `src/test/domHarness.tsx`（`renderDom` / `unmount`，活跃 root 登记 + afterEach `cleanupRoots()` 自动卸载，三桶皆然）。三个桶的 setup **`restoreAllMocks` 与 `clearAllMocks` 都要调**：Vitest 3 起前者只还原 `vi.spyOn` 装的间谍、不再清 `vi.fn()` 的调用历史（含 `vi.mock` 工厂里造的），少了后者就会让「上一条用例调用过某 mock」泄漏成下一条的 `toHaveBeenCalled` 脏数据——按声明顺序跑时可能恒绿，`--sequence.shuffle` 换序即随机翻车，契约由 `src/test/mockResetContract.test.ts` 钉住。分桶唯一事实源是 `packages/client/test-buckets.mjs`（node 派生 `resolveCleanBucket` + jsdom `resolveFastJsdomBucket`），`vitest.config.ts` 与 `scripts/check-test-hygiene.mjs` 共用它。按路径窄测纯逻辑时省略 `--project`（或 `--project unit-clean`），jsdom 快桶文件用 `--project unit-clean-jsdom`，其余 `--project unit`。同步端到端链路单独用 `pnpm --filter @timedata/client test:e2e`（CI 也分两步跑，避免 e2e 拖慢日常 test）。e2e 测试入口是 `packages/client/src/__tests__/e2e/sync-roundtrip.e2e.test.ts`，它通过 `packages/server/src/__tests__/e2e/helpers.ts` 在同一 Node 进程里启动内存 Hono server，并用 fake-indexeddb 作为 Dexie 后端。默认多数组件测试走 React server rendering；需要真实 DOM 的交互测试使用 `@vitest-environment jsdom`，依赖由 `packages/client/package.json` 的 devDependency `jsdom` 提供。测试卫生由 `pnpm check:test`（CI 步骤 + `scripts/check-test-hygiene.mjs` 文件级棘轮）守护：禁新增真实定时等待、裸 `createRoot`、干净桶目录混入新脏文件（`dirty-in-clean-bucket`），以及 jsdom 快桶 allowlist 成员含裸 createRoot（`bare-createroot-in-fast-jsdom`）或直接 `fake-indexeddb/auto` / `db.delete(`（`unsafe-db-in-fast`），存量豁免在 `scripts/test-hygiene-baseline.json`。**登记豁免只走 `node scripts/check-test-hygiene.mjs --add <路径>`**——只收编你指定路径下的违规、合并进现有基线（只增不删）；文件修好后用 `--prune` 洗白已失效条目；`--rewrite-baseline` 才整体重写，且会把新收编的条目逐条打印出来。旧的 `--write-baseline` 已移除：它按当前工作树整体覆盖写，会把与本次改动无关的违规一并收编，diff 里只表现为基线多几行、review 极易放过（`scripts/check-evergreen-docs.mjs --write-size-baseline` 因为要重建新增/删除文档条目仍是整体重写，但同样会把被抬高的 covers 逐条喊出来）。CI 不再用一步 `pnpm -r --parallel test` 跑 client unit，而是单独的 `client-unit` 矩阵 job 用 vitest 原生 `--shard=i/4` 并行切成 4 片（`fail-fast: false`，每片一个独立检查），既缩短反馈墙钟又能一眼定位是哪一片挂；主 `test` job 仅跑非 client 包的测试。本地复现某片用 `--shard=i/4`，按路径窄测用 `vitest run --project unit <路径>`；提交前仍以根 `pnpm test` 为最终 gate。
 
 **假测试甄别法**：怀疑某条测试不承重时，把实现故意改坏后重跑、看哪条变红——不变红的就是假测试（2026-07 diary-workbench 工程靠它拆穿多条假测试，并推翻「onChange 红线不可机检」的自我判断）。
 

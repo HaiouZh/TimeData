@@ -160,7 +160,7 @@ Dockerfile 构建镜像时先从根 `packageManager` 读取并安装对应 pnpm 
 
 具体 workflow yaml 文件名和构建参数详见 `.github/workflows/`。其中：
 
-- `ci.yml`：push / PR 的基础 CI，`pnpm/action-setup` 从根 `packageManager` 读取 pnpm 11 版本并安装依赖后，先运行 `pnpm audit --audit-level=high --prod`，生产依赖存在 high/critical advisory 时直接阻断；随后依次运行 `pnpm lint`、`pnpm -r typecheck`、`pnpm -r --parallel test`、`pnpm check:ui`、`pnpm check:design`、`pnpm check:test`、`pnpm test:scripts`、evergreen 文档一致性检查、`pnpm check:docs:size` 和 `pnpm build`，不发布产物。文档一致性检查只在 `pull_request` 事件下运行（main 的 push 不重跑，因为同样的 diff 在 PR 阶段已经查过），按发起人区分：依赖 bot（`dependabot[bot]` / `renovate[bot]`）触发的 PR 走 `pnpm check:docs`（warn，不阻塞），其余走 `pnpm check:docs:strict`。体量棘轮不依赖 PR diff，push 和 PR 都会跑，要求 `scripts/evergreen-size-baseline.json` 覆盖当前所有 evergreen 文档，且字符数 / `covers:` 不超过基线。`ci.yml` 配有 `concurrency`（按 ref 取消被顶掉的旧跑批）。
+- `ci.yml`：push / PR 的基础 CI，`pnpm/action-setup` 从根 `packageManager` 读取 pnpm 11 版本并安装依赖后，先运行 `pnpm audit --audit-level=high --prod`，生产依赖存在 high/critical advisory 时直接阻断；随后按 `pnpm lint` → 四道静态闸（`check:ui`、`check:design`、`check:test`、`check:diary`，**都排在 typecheck 之前**，让廉价的闸先失败）→ `pnpm -r typecheck` → 测试 → evergreen 文档四道检查 → `pnpm build` 的顺序跑，不发布产物。**测试分两个 job**：主 job 跑 `pnpm -r --parallel --filter '!@timedata/client' test`（非 client 包）、`pnpm test:scripts` 与 client e2e；client 单测由独立的 `client-unit` 矩阵 job 用 `--shard=i/4` 切四片并行（`fail-fast: false`，一眼定位是哪片挂）。文档一致性检查只在 `pull_request` 事件下运行（main 的 push 不重跑，因为同样的 diff 在 PR 阶段已经查过），按发起人区分：依赖 bot（`dependabot[bot]` / `renovate[bot]`）触发的 PR 走 `pnpm check:docs`（warn，不阻塞），其余走 `pnpm check:docs:strict`。体量棘轮不依赖 PR diff，push 和 PR 都会跑，要求 `scripts/evergreen-size-baseline.json` 覆盖当前所有 evergreen 文档，且字符数 / `covers:` 不超过基线。`ci.yml` 配有 `concurrency`（按 ref 取消被顶掉的旧跑批）。
 - `build.yml`：main 分支发布镜像到 GHCR，自更新机制读取它的成功运行记录。
 - `mobile-release.yml`：一条 workflow 出 Android + iOS + Windows 三包——`prepare` 算版本号并建 `v<code>` Release，`android` job 上传签名 APK 并打 latest，`ios` job 上传未签名 IPA、`windows` job 上传 NSIS 安装包（两者都不碰 latest）；`pnpm/action-setup`（v6，自身运行在 Node 24）必须先于 `actions/setup-node`，因为 setup-node v5 的 pnpm 缓存逻辑会在步骤执行时查找 `pnpm`。此 workflow 和 `ci.yml` 都从根 `packageManager` 读取 pnpm 11 版本。细节见子文档 [deployment/android-apk](deployment/android-apk.md)、[deployment/ios-ipa](deployment/ios-ipa.md) 与 [deployment/windows-desktop](deployment/windows-desktop.md)。
 - `secret-scan.yml`：push main / PR 上用 gitleaks 扫全历史找泄漏的密钥；误报白名单维护在根目录 `.gitleaks.toml`（`regexTarget = "match"`）。
@@ -191,13 +191,15 @@ Tauri 壳内嵌 client 的 `mode=mobile` 产物，产出不签名的 NSIS 安装
 1. 当前版本 = `process.env.GIT_SHA`（运行时环境变量），取前 7 位。`dev` 表示开发模式。
 2. 最新版本 = 调 GitHub API 查 `actions/workflows/build.yml/runs?status=success&branch=main&per_page=1`，取最新成功 run 的 `head_sha` 前 7 位。
 3. `hasUpdate = current !== 'dev' && latest !== 'unknown' && current !== latest`。
-4. 服务端结果缓存 5 分钟（`CACHE_TTL_MS`）；设置页点「服务端更新」会先重查版本再判断，避免页面旧状态误判。
+4. 服务端结果缓存 30 秒（`CACHE_TTL_MS`）；设置页点「服务端更新」会先重查版本再判断，避免页面旧状态误判。
 
 返回：
 
 ```ts
-{ current, latest, hasUpdate, checkedAt }
+{ current, latest, hasUpdate, checkedAt, checkOk }
 ```
+
+`checkOk` 是 `latest !== "unknown"`——GitHub 查询失败时它为 `false`，设置页据此区分「已是最新」与「没查到」，不把查询失败显示成无更新。
 
 ## 5. 自更新（`/api/update`）
 
@@ -228,6 +230,8 @@ Watchtower 拉取镜像、比较 digest，并在有新镜像时用旧容器 spec
 关键点：
 
 1. **服务端互斥是强约束**：`data/update.lock` 通过原子创建保护同一部署；重复 `POST /api/update` 会返回 `409 Conflict`，不会启动第二次更新。锁创建成功后，如果状态文件初始化或后台任务启动前的同步步骤抛错，服务端会立即删除本次 `update.lock` 并把错误抛回调用方；后台 Watchtower 触发失败则写入 `failed` 状态并释放锁。
+
+   **残留锁会自愈，不需要人工删**。自更新会换掉容器本身，持锁进程往往在释放锁之前就被 Watchtower 杀掉，所以「锁还在」是这条链路的正常中间态而非故障：超过 `STALE_LOCK_TTL_MS`（15 分钟）的锁被判定为中断残留，下一次 `acquireUpdateLock` 直接接管重建；服务启动时 `reconcileInterruptedUpdate` 还会按 `fromSha` 与当前 sha 比对，把上一次的结果补写成 `succeeded` / `failed` / `unknown` 并释放锁。
 2. **应用容器不挂 Docker socket**：`timedata` 不直接接触 Docker API，也不安装 docker CLI；它只调用内部网络里的 Watchtower HTTP API，攻击面收敛到“触发更新”一个动作。
 3. **更新范围由 Watchtower label 限定**：compose 使用 `--label-enable`，默认只有 `timedata` 带 `com.centurylinklabs.watchtower.enable=true`，因此按需更新只作用于 TimeData 容器，不会波及 host 上其它容器。
 4. **Watchtower 负责真正的 recreate**：Watchtower 拉取镜像、比较 digest，并在有新镜像时使用旧容器 spec 重新创建 `timedata`；这比单纯 restart 更符合"更新到新镜像"的目标。
@@ -266,7 +270,7 @@ docker version
 - `failed`：Watchtower token、URL、网络或 HTTP 响应失败；此时看 `update.log` 和 `docker compose ps` 排查。
 - `unknown`：还没有状态文件。
 
-如果 `POST /api/update` 返回 `409 Conflict`，说明已有更新锁；不要手动重复触发。只有确认 `update.log` 显示流程已经结束、且没有正在重启的容器时，才考虑在 host 上删除残留的 `data/update.lock`。
+如果 `POST /api/update` 返回 `409 Conflict`，说明已有更新锁；不要手动重复触发。**等 15 分钟即可**——过期锁会被下一次请求自动接管，容器重启时 `reconcileInterruptedUpdate` 也会补写状态并释放它。手删 `data/update.lock` 只在这两条自愈路径都没生效时才考虑，且要先确认 `update.log` 显示流程已结束、没有正在重启的容器。
 
 ## 6. 静态前端服务
 
@@ -277,9 +281,9 @@ docker version
 - 所有未匹配 API 的路径 fallback 到 `index.html`（SPA 路由）
 - 设置页的 `/settings/admin-insights` 是服务端数据洞察入口，会调用 `/api/admin/*` 读取服务器概览、最近记录、分类汇总、同步诊断、服务端备份、健康检查、基础分析和请求审计；它仍受 `AUTH_TOKEN` 保护。
 
-打开方式：先在客户端 `设置 → 服务器配置` 保存 API 地址和 Token，再进入 `设置 → 服务端数据洞察`，或直接访问前端域名下的 `/settings/admin-insights`。该面板只读，不修改 SQLite，也不提供任意 SQL；请求审计区块读取 `/api/admin/request-logs`，仅用于展示和排查认证/限流/客户端提示分布。
+打开方式：先在客户端 `设置 → 服务器配置` 保存 API 地址和 Token，再进入 `设置 → 服务端数据洞察`，或直接访问前端域名下的 `/settings/admin-insights`。该面板不提供任意 SQL。**诊断数据只读，备份管理是例外**——同页的备份区块会保存备份设置、立即触发日备、删除备份，这几个是受控维护端点，其余读取一律不写 SQLite；请求审计区块读取 `/api/admin/request-logs`，仅用于展示和排查认证/限流/客户端提示分布。
 
-`SettingsPage` 是共享设置入口：部署文档只拥有其中服务器配置、同步摘要、服务端数据洞察、APK/服务端/前端更新这些行；轨道看板信号、导航配置等领域设置归各自主题文档。设置首页当前按「连接与同步 / 记录偏好 / 统计与健康 / 导航与界面 / 高级与更新」五组组织，`/settings/insights` 行显示为“记录偏好”但路由名保留历史兼容。设置首页的「更多功能」入口列出未放进手机底栏的页面，「导航」入口配置手机底栏入口归属与桌面侧栏；具体 key 契约见 [categories-settings/settings-catalog](categories-settings/settings-catalog.md)。主入口里的服务器配置、同步摘要和更新动作消费 [design-language](design-language.md) 的 `surface/border/ink/accent/status` token，不使用独立渐变卡片或旧 Tailwind 展示色。代码入口：`packages/client/src/pages/SettingsPage.tsx`、`packages/client/src/pages/settings/SettingsAdminInsightsPage.tsx`、`packages/client/src/lib/adminApi.ts`、`packages/server/src/routes/admin/`
+`SettingsPage` 是共享设置入口：部署文档只拥有其中服务器配置、同步摘要、服务端数据洞察、APK/服务端/前端更新这些行；轨道看板信号、导航配置等领域设置归各自主题文档。设置首页顶部先渲染 `ServerStatusCard`（不属任何分组），其下按「记录偏好 / 统计 / 导航与界面 / 高级与更新」四个 `SettingsSection` 组织；`/settings/insights` 行显示为“记录偏好”但路由名保留历史兼容。设置首页的「更多功能」入口列出未放进手机底栏的页面，「导航」入口配置手机底栏入口归属与桌面侧栏；具体 key 契约见 [categories-settings/settings-catalog](categories-settings/settings-catalog.md)。主入口里的服务器配置、同步摘要和更新动作消费 [design-language](design-language.md) 的 `surface/border/ink/accent/status` token，不使用独立渐变卡片或旧 Tailwind 展示色。代码入口：`packages/client/src/pages/SettingsPage.tsx`、`packages/client/src/pages/settings/SettingsAdminInsightsPage.tsx`、`packages/client/src/lib/adminApi.ts`、`packages/server/src/routes/admin/`
 
 相关测试：`packages/client/src/pages/SettingsPage.test.tsx`、`packages/client/src/pages/settings/SettingsAdminInsightsPage.test.tsx`、`packages/client/src/lib/adminApi.test.ts`、`packages/server/src/routes/admin.test.ts`
 

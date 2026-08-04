@@ -94,6 +94,8 @@ last-reviewed: 2026-08-04
 
 运行时约束：`source` 只接受 `"user"`/`"agent"`；时间字段严格 UTC ISO（正则 + `toISOString()===value`）；**schema 不强制 `updatedAt >= createdAt`**（避免历史导入/时钟漂移失败）。`text` max 5000 只在 agent POST 入口加，`QuickNoteSchema` 本身无 text 长度上限。
 
+<a id="quick-notes-s2-2"></a>
+
 ### 2.2 SQL `quick_notes` ↔ JS 映射（`server/src/db/schema.ts`）
 
 | SQL 列 | JS 字段 | 存储 |

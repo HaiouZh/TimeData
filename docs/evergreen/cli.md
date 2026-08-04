@@ -152,6 +152,19 @@ api-client 包装：
 
 - `INVALID_DATE`、`INVALID_REQUEST`
 
+服务端 `tasks` 路由产生（`tasks` / `task-schedule` / `task-unschedule` 透传）：
+
+- `INVALID_REQUEST`：请求体未过 schema
+- `NOT_FOUND`：`--id` 指的任务不存在
+- `TASK_RECURRING_USE_RULE`（409）：目标是重复任务模板，排期由它的重复规则管，不能直接改
+- `TASK_OCCURRENCE_NOT_SCHEDULABLE`（409）：目标是规则的「这一发」，`scheduledAt` 同时是账本游标，外部改期会拖歪整条规则的推进
+
+服务端 `agent` 路由产生（`task-done` / `task-tag` 透传）：
+
+- `INVALID_REQUEST`、`NOT_FOUND`
+- `TASK_CHILD_CANNOT_HAVE_CHILDREN`：子任务下不能再挂子任务（一层约束）
+- `RULE_NOT_DUE`：重复规则当前没有可完成的一发——未到期或已耗尽
+
 ## 5. 不允许做的事
 
 CLI 严格**不能**：

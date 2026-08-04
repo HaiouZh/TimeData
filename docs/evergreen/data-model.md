@@ -213,42 +213,23 @@ type SyncChange =
 
 ## 9. SQL 字段映射
 
-SQL 使用 `snake_case`，JS 使用 `camelCase`。没有 ORM，跨边界时手工映射。
+SQL 使用 `snake_case`，JS 使用 `camelCase`。没有 ORM，跨边界时手工映射：读走 `rowToXxx`（`server/src/lib/db-rows.ts`），写走 `xxxToRow`（`server/src/sync/domains.ts`，均不写 `updated_at`——服务器分配）。
 
-| SQL 列 | JS 字段 |
-|---|---|
-| `parent_id` | `parentId` |
-| `category_id` | `categoryId` |
-| `start_time` | `startTime` |
-| `end_time` | `endTime` |
-| `occurred_at` | `occurredAt` |
-| `source_label` | `sourceLabel` |
-| `track_id` | `trackId` |
-| `goal_layout_pins.goal_id` | `goalId` |
-| `goal_layout_pins.node_kind` | `nodeKind` |
-| `goal_layout_pins.node_id` | `nodeId` |
-| `token_tier` | `tokenTier` |
-| `client_hint` | `clientHint` |
-| `duration_ms` | `durationMs` |
-| `device_label` | `deviceLabel` |
-| `user_agent` | `userAgent` |
-| `started_at` | `startedAt` |
-| `ended_at` | `endedAt` |
-| `session_id` | `sessionId` |
-| `last_done_at` | `lastDoneAt` |
-| `start_at` | `startAt` |
-| `scheduled_at` | `scheduledAt` |
-| `completed_count` | `completedCount` |
-| `weight` | `weight` |
-| `rule_id` | `ruleId` |
-| `skipped` | `skipped` |
-| `completed_at` | `completedAt` |
-| `sort_order` | `sortOrder` |
-| `is_archived` | `isArchived` |
-| `created_at` | `createdAt` |
-| `updated_at` | `updatedAt` |
+**逐列对照可由这条规则机械推出，本节不展开**。带存储语义、索引与幂等补列迁移的 per-table 明细在各域文档：[tasks](todo.md#todo-s2-3)、[quick_notes](quick-notes.md#quick-notes-s2-2)。
 
-JSON 字符串列：`recurrence`、`tasks.tags`、`tracks.refs`、`track_steps.tags`、`track_steps.refs`、`goals.members`、`goals.prerequisites`、`health_charts.config`。布尔列通常以 0/1 存储（`tasks.done`、`tasks.skipped`、`categories.is_archived` 等）。`tasks.parent_id` 和 `track_steps.track_id` 都是普通 TEXT 列；`track_steps.track_id` 不建 SQL 外键，由同步宿主闸拒收孤儿步骤。`track_steps.edited_at` 映射为 `TrackStep.editedAt?`，只表示 user 步正文被编辑过，不参与索引。旧 `tasks.goal_id` / `tracks.goal_id` 目标归属列已退役，启动迁移会幂等删除。
+推不出来的才列在这里：
+
+**JSON 字符串列**：`recurrence`、`tasks.tags`、`tracks.refs`、`track_steps.tags`、`track_steps.refs`、`goals.members`、`goals.prerequisites`、`health_charts.config`。
+
+**布尔以 0/1 存储**：`tasks.done`、`tasks.skipped`、`categories.is_archived`、`quick_notes.pinned` 等。
+
+**同名列在不同表含义不同，引用时带表前缀**：`goal_layout_pins` 的 `goal_id` / `node_kind` / `node_id`。
+
+**无 SQL 外键**：`tasks.parent_id` 与 `track_steps.track_id` 都是普通 TEXT 列。`track_steps.track_id` 不建外键，孤儿步骤由同步宿主闸拒收。
+
+**语义窄于列名**：`track_steps.edited_at` 映射为 `TrackStep.editedAt?`，只表示 user 步正文被编辑过，不参与索引。
+
+`tasks.goal_id` / `tracks.goal_id` 不存在——目标归属改由 `Goal.members` 解引用，启动迁移幂等删除旧库残留列。
 
 ## 10. Dexie schema
 

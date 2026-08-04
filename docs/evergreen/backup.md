@@ -37,7 +37,7 @@ TimeData 现有三种备份/可恢复文件：
 |---|---|---|---|
 | Backup JSON 手动导出 | 客户端 | 用户在设置页主动点 | 用户下载到本机 |
 | Quick Notes 独立备份 JSON | 客户端 | 用户在速记页或设置页主动点 | 用户下载到本机 |
-| Server backup `.db` | 服务端 | seq 冲突、重叠删除、force-push、手动按钮、每日定时 | `data/backups/<id>.db` |
+| Server backup `.db` | 服务端 | seq 冲突、重叠删除、force-push、手动按钮、每日定时、`/api/data/reset` | `data/backups/<id>.db` |
 
 `GET /api/export` 是普通只读导出，不是可恢复 Backup：默认 JSONL、`format=csv` 时输出 CSV，只包含 categories 与 time_entries；CSV 单元格会转义并给 `= + - @` 开头值加前导 `'` 防公式注入。它受 TOTP 危险操作锁保护，但导出的文件不能被 Backup 恢复入口导入。
 
@@ -117,7 +117,7 @@ TimeData 现有三种备份/可恢复文件：
 - `packages/client/src/quick-notes/schema.ts`：格式常量与运行时校验，复用 shared 的 `QuickNoteSchema`。
 - `packages/client/src/quick-notes/exportQuickNotes.ts`：按 `occurredAt` 日期、范围或当前多选集合导出 JSON / Markdown。
 - `packages/client/src/quick-notes/importQuickNotes.ts`：只导入速记，merge 模式。
-- `packages/client/src/quick-notes/deleteQuickNotesRange.ts`：按本地日期闭区间删除速记。
+- `packages/client/src/quick-notes/deleteQuickNotesRange.ts`：按本地日期闭区间删除速记，**置顶的跳过不删**（`pinned !== true` 过滤后才 `bulkDelete`）。
 - `packages/client/src/quick-notes/deleteQuickNotesByIds.ts`：按多选 ID 批量删除速记。
 - `packages/client/src/quick-notes/fileDownload.ts`：Web 下载和 Capacitor Documents + Share 落盘。
 
@@ -162,7 +162,7 @@ TimeData 现有三种备份/可恢复文件：
 | `INVALID_DOMAINS` | `domains` 字段存在但不是对象 |
 | `INVALID_DOMAIN_RECORDS` | 某个 bundled 域不是数组，或单条未通过对应 shared schema |
 | `INVALID_TIME_FORMAT` | 备份缺少 `timeFormat: "utc"` |
-| `INVALID_TIME_ENTRY_TIME` | 记录时间不是 UTC ISO，或 `endTime <= startTime` |
+| `INVALID_TIME_ENTRY_TIME` | 只在 `BackupValidationErrorCode` 类型里声明，**没有产出路径**——时间不合法时 `TimeEntrySchema.safeParse` 先失败，实际返回 `INVALID_TIME_ENTRIES` |
 | `INVALID_CATEGORY_TREE` | 分类自引用、形成环，或超过两级分类树 |
 | `DUPLICATE_CATEGORY_ID` | 分类 ID 重复 |
 | `DUPLICATE_ENTRY_ID` | 记录 ID 重复 |
@@ -172,7 +172,9 @@ TimeData 现有三种备份/可恢复文件：
 
 **仍未检查**（已知缺口）：
 
-- 字段类型严格性之外的业务格式（如 `color` 是否合法 CSS 颜色）
+- 同一分类下 `timeEntries` 的时段是否互相重叠（server 侧同步时才拦，`TIME_OVERLAP`）
+
+分类 `color` **不在缺口内**：`CategorySchema.color` 是 `HexColorSchema`（`/^#[0-9a-fA-F]{6}$/`），比「合法 CSS 颜色」更严，恢复入口逐条 `safeParse` 已拦。记录引用不存在的分类同样已拦（`ORPHAN_ENTRY_CATEGORY`）。
 
 这些缺失是**有意的轻量化**：恢复后用户同步时 server 会再校验一次，校验失败的记录会被拒绝并冒泡给用户。如果未来出现“恢复看似成功但同步全被拒”的常见反馈，可以把更严的校验前置到客户端；但 `endTime > startTime`、UTC 格式和分类树循环等会导致同步大面积失败的问题，恢复入口已经前置拦截。
 
@@ -204,7 +206,7 @@ TimeData 现有三种备份/可恢复文件：
 
 - 恢复完成后看一眼：客户端是备份的状态，服务器是它原本的状态。
 - 如果想"用本地覆盖服务器"——手动同步，本地 syncLog 是空的，所以同步只会把服务器拉下来覆盖本地……这一步 UI 必须明确警告。
-- 如果想"先拿服务器现状再决定"——直接同步即可。
+- 如果想"先拿服务器现状再决定"——直接同步即可。**绑了 TOTP 的话这一步要验证码**：恢复已清掉 seq cursor，恢复后的第一次 pull 必然是全量，而全量 pull 是硬闸（`sinceSeq` 为空即验码，不带码返回 401）。手边没验证器时这一步会卡住，机制见 [security](security.md)。
 
 UI 提示文案在 `SettingsDataPage.tsx`，每次改恢复流程时都要顺便审一下文案。
 
