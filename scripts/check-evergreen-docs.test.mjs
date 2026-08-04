@@ -564,6 +564,24 @@ test("selectUncovered ignores files outside code roots", () => {
   assert.deepEqual(res, []);
 });
 
+test("selectUncovered exempts test scaffolding under src/test/", () => {
+  const files = [
+    "packages/client/src/test/setup.ts",
+    "packages/client/src/test/domHarness.tsx",
+    "packages/client/src/test/dbReset.ts",
+    "packages/client/src/lib/realFeature.ts",
+  ];
+  const docs = [{ filePath: "docs/evergreen/x.md", covers: [] }];
+
+  const uncovered = docsCheck.selectUncovered(files, docs, {
+    roots: ["packages/client/src/"],
+    exempts: docsCheck.COVERAGE_EXEMPTS,
+  });
+
+  // 测试基建被豁免，真实业务文件仍要求认领
+  assert.deepEqual(uncovered, ["packages/client/src/lib/realFeature.ts"]);
+});
+
 test("evaluateLinks flags a link to a missing doc", () => {
   const docs = [{ filePath: "docs/evergreen/a.md", links: [{ target: "missing.md", anchor: null }] }];
 

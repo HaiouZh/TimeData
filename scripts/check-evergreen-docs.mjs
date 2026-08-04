@@ -24,8 +24,8 @@ const COVERAGE_ROOTS = [
   "packages/shared/src/",
   "packages/cli/src/",
 ];
-// 豁免：测试 / 类型声明 / mock / 夹具 / story 不要求文档归属。
-const COVERAGE_EXEMPTS = [
+// 豁免：测试 / 类型声明 / mock / 夹具 / story / 测试基建目录不要求文档归属。
+export const COVERAGE_EXEMPTS = [
   /\.test\.[jt]sx?$/,
   /\.test-d\.ts$/,
   /\.d\.ts$/,
@@ -33,6 +33,7 @@ const COVERAGE_EXEMPTS = [
   /(^|\/)__mocks__\//,
   /(^|\/)fixtures?\//,
   /(^|\/)test-utils?\//,
+  /(^|\/)test\//,
   /\.stories\.[jt]sx?$/,
 ];
 const REGEXP_SPECIAL_CHARS = new Set([".", "+", "^", "$", "{", "}", "(", ")", "|", "[", "]", "\\"]);

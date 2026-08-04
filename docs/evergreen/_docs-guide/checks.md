@@ -18,12 +18,14 @@ last-reviewed: 2026-08-04
 | 命令 | 守什么 | 失败条件 |
 |---|---|---|
 | `check:docs:strict --since=<base>` | 改了契约点就同步对应文档 | 改动命中文档 `contracts`，而该文档没有一起改。`covers` 不触发 strict |
-| `check:docs:coverage --since=<base>` | 新源码必须有文档认领 | 新增 `packages/*/src/**` 不匹配任何 covers，且不属于测试、`.d.ts`、mock、夹具或 story 豁免 |
+| `check:docs:coverage --since=<base>` | 新源码必须有文档认领 | 新增 `packages/*/src/**` 不匹配任何 covers，且不属于测试、`.d.ts`、mock、夹具、story 或 `src/test/` 这类测试基建目录豁免 |
 | `check:docs:size` | frontmatter 有效、单文档别膨胀到该拆 | frontmatter 形状错误、`covers`/`contracts` 双空、字符数超 hard cap、covers 数超基线，或基线漏项、保留已删除文档。拆分处置见 [拆分与体量](splitting.md) |
 | `check:docs:links` | 互链和指针不指向消失目标 | evergreen 以及 `AGENTS.md` / `README.md` 指向 evergreen、ADR 的 Markdown `.md` 链接不存在；目标 `.md#id` 缺独立 `<a id="..."></a>` 显式锚点；独立锚点行畸形；不同文档重名锚点 |
 | `check:docs:stale` | `last-reviewed` 不过期 | 缺字段或超过 180 天 |
 
 links 不校验同页 fragment、Markdown 标题自动锚点或 prose `§x.y`；拆分后这类引用按 [拆分与体量](splitting.md) 的四类手动扫描。锚点名必须是严格配对的 `<a id="..."></a>`，避免同名目标和格式畸形让链接看似有效却无稳定落点。
+
+新增 coverage 豁免前必须打开目标文件确认它只是测试基建 / mock / fixture / 类型声明等辅助面，没有 grep 不出来的契约、状态机、不变量或跨模块联动；否则要由 evergreen `covers` 明确认领，而不是放进豁免。
 
 锚点有两种合法落点，都由 links 守：**独占一行时上一行必须留空**；**列表条目内嵌在内容行首**（`8. <a id="x"></a>正文`）。配对锚点不满足 CommonMark HTML block 的起始条件（开标签后跟的是闭标签而非空白），只能走行内 HTML——紧贴上一行正文会被并进上一段，锚点落到上一节，跳转差一节而 diff 看不出来。列表里也不能改用空行隔开：那会把一个列表切成两段 `<ol>`。
 
