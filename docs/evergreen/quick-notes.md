@@ -106,7 +106,7 @@ last-reviewed: 2026-08-03
 
 ### 2.3 同步域登记（`syncDomains.ts`）
 
-`quick_notes` 域：`conflictPolicy:"lww"`、**`countsInStatus:true`**（计入 `/api/sync/status` counts + contentHash 行数）、upsert/deletePriority 40。客户端登记在 `clientDomains.ts`。
+`quick_notes` 域：`conflictPolicy:"lww"`、**`countsInStatus:true`**（只决定是否计入 `/api/sync/status` 响应里的具名 counts 字段；`contentHash` 与 `lastUpdatedAt` 无条件遍历全部域，不看这个标志）、upsert/deletePriority 40。客户端登记在 `clientDomains.ts`。
 
 客户端启动时的 schema 归一 pass 会按这份登记簿遍历 `quickNotes`：只清理本地 IndexedDB 形状（补默认/剥孤儿，坏行保留并 warn），不写 `syncLog`，不改变 quick_notes 的 LWW 同步语义。
 
