@@ -26,7 +26,7 @@ contracts:
   - scripts/check-design-language.mjs
   - scripts/design-language-allowlist.json
   - packages/client/src/lib/navigation/navRegistry.ts
-last-reviewed: 2026-08-04
+last-reviewed: 2026-08-05
 ---
 
 # 设计语言
@@ -143,6 +143,7 @@ last-reviewed: 2026-08-04
 | 全部颜色/圆角/边框/阴影/字体 token + 全局样式 | `packages/client/src/index.css`（Tailwind v4 `@theme static`） |
 | 设计语言棘轮 + 旧债 allowlist | `scripts/check-design-language.mjs`、`scripts/design-language-allowlist.json` |
 | 主导航图标映射与纯图标壳 | `packages/client/src/lib/navigation/navRegistry.ts`、`components/app-shell/{MobileBottomNav,DesktopSidebar}.tsx`；移动底栏无三点菜单，未选入口在 `/settings/more` 显示，桌面侧栏仍可配置更多收纳 |
+| 「这条路由自己不要底栏」判据 | `navRegistry.ts` 的 `layoutHidesBottomNav`（前缀清单）。三个消费点共用它：`App.tsx` 单层壳、`KeptRouteStack` 分层壳（iOS）、`hooks/useHideBottomNavOnScroll.ts` 的路由切换复位。判据只此一份，抄第二份就会静默分叉 |
 | 设置详情页外壳与设置首页行组件 | `packages/client/src/pages/settings/SettingsDetailPage.tsx`、`packages/client/src/pages/settings/components/SettingsRows.tsx` |
 | 字体引入（GB 屏显子集 + Tinos） | `packages/client/src/main.tsx`（covers 归 [architecture](architecture.md)）；守序测试 `fontLoading.test.ts` |
 | 自绘控件 / 无原生控件棘轮 / 图标 | → [design-language/controls](design-language/controls.md) |
