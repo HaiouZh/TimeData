@@ -22,11 +22,20 @@ export function currentDueDay(task: Task, now: Date): number {
   return currentDueDayFor(task.recurrence, task.lastDoneAt, task.startAt, now);
 }
 
-/** 重复任务是否已耗尽（count 满 / until 过且无到期），供落点兜底到「完成」。 */
+/**
+ * 重复任务的 **until 腿**是否已耗尽（until 过且无到期），供落点兜底到「完成」。
+ *
+ * **权威判定是 `isRuleExhausted`（读 occurrence 账本），不是这里**：`listTasks` 对重复模板
+ * 一律走账本，走不到本函数。本函数只服务拿不到账本的调用方（projectZone / todoStats /
+ * 目标候选），是个降级近似。
+ *
+ * 故意不看 `completedCount`：该字段全仓只有置 0 路径、没有递增路径（`occurrence.ts` /
+ * `agent.ts` / `taskCompletion.ts` 都写 0），曾经的 count 腿 `completedCount >= r.count`
+ * 对真实数据恒 false，留着只会让人以为 count 在这里生效。count 配额由账本条数判定。
+ */
 export function isExhausted(task: Task, now: Date): boolean {
   const r = task.recurrence;
   if (!r) return false;
-  if (r.count != null && (task.completedCount ?? 0) >= r.count) return true;
   if (r.until != null) {
     const untilDay = localDayIndex(new Date(r.until));
     const nowDay = localDayIndex(now);

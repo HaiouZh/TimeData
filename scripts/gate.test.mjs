@@ -122,7 +122,10 @@ test("GATE_STEPS 顺序：静态闸在前、慢活在后，失败早停才省时
 test("空闲时按清单顺序全部跑完，返回 0，且跑完把锁删干净", async () => {
   const { root, lockDir } = makeLockDir();
   const ran = [];
-  const code = await run([], { lockDir, runStep: (s) => (ran.push(s.name), 0), ...silent });
+  const code = await run([], { lockDir, runStep: (s) => {
+      ran.push(s.name);
+      return 0;
+    }, ...silent });
 
   assert.equal(code, 0);
   assert.deepEqual(ran, GATE_STEPS.map((s) => s.name));
@@ -168,7 +171,10 @@ test("--no-wait 撞上别人持锁：一步都不跑，直接退 1", async () =>
   acquireLock({ lockDir, now: () => Date.now(), pid: 111, worktree: "slot-1" });
 
   const ran = [];
-  const code = await run(["--no-wait"], { lockDir, runStep: (s) => (ran.push(s.name), 0), ...silent });
+  const code = await run(["--no-wait"], { lockDir, runStep: (s) => {
+      ran.push(s.name);
+      return 0;
+    }, ...silent });
 
   assert.equal(code, 1);
   assert.deepEqual(ran, []);
@@ -186,7 +192,10 @@ test("默认排队：等到前一份释放后自动开跑（注入 sleep，不�
     if (slept === 2) releaseLock(holder.handle); // 第二次轮询时前一份跑完了
   };
   const ran = [];
-  const code = await run([], { lockDir, sleep, runStep: (s) => (ran.push(s.name), 0), ...silent });
+  const code = await run([], { lockDir, sleep, runStep: (s) => {
+      ran.push(s.name);
+      return 0;
+    }, ...silent });
 
   assert.equal(code, 0);
   assert.equal(slept, 2);

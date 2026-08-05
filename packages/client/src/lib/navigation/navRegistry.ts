@@ -146,9 +146,10 @@ export function primaryRouteForPath(pathname: string): MainNavRoute {
 /**
  * 这条路由的布局是否**自己不要底栏**（钻进去的子页：记录编辑、设置二级、目标 / 轨道详情）。
  *
- * 两条渲染路径共用同一份判据：非 iOS 走 `App.tsx` 的单层壳，iOS 走 `KeptRouteStack` 的分层壳。
- * 曾经两边各抄一份，分头演化就会让两个平台静默分叉——一边子页干干净净，另一边底下多出一条底栏
- * 压着内容，且没有任何测试会红。故收到这张导航登记簿里，改一处两边同时生效。
+ * 三个消费点共用同一份判据：非 iOS 走 `App.tsx` 的单层壳，iOS 走 `KeptRouteStack` 的分层壳，
+ * 外加 `useHideBottomNavOnScroll` 的路由切换复位（对不渲染底栏的页跳过 setHidden(false)）。
+ * 曾经各抄一份，分头演化就会静默分叉——一边子页干干净净，另一边底下多出一条底栏压着内容，
+ * 且没有任何测试会红。故收到这张导航登记簿里，改一处三边同时生效。
  */
 export function layoutHidesBottomNav(pathname: string): boolean {
   return (

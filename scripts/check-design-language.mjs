@@ -179,11 +179,12 @@ function inputTagLines(lines) {
   const src = lines.join("\n").replace(/=>/g, "=»");
   const covered = new Set();
   INPUT_TAG_RE.lastIndex = 0;
-  let match;
-  while ((match = INPUT_TAG_RE.exec(src)) !== null) {
+  let match = INPUT_TAG_RE.exec(src);
+  while (match !== null) {
     const start = src.slice(0, match.index).split("\n").length;
     const end = start + match[0].split("\n").length - 1;
     for (let line = start; line <= end; line++) covered.add(line);
+    match = INPUT_TAG_RE.exec(src);
   }
   inputTagLinesCache.set(lines, covered);
   return covered;

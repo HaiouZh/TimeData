@@ -1,6 +1,7 @@
 import { type UIEvent, useCallback, useEffect, useRef } from "react";
 import { useLocation } from "react-router";
 import { useBottomNav } from "../contexts/BottomNavContext.js";
+import { layoutHidesBottomNav } from "../lib/navigation/navRegistry.js";
 import { initialNavScrollState, resolveNavVisibility } from "../lib/navScroll.js";
 
 const NAV_TRANSITION_COOLDOWN_MS = 300;
@@ -24,10 +25,9 @@ export function useHideBottomNavOnScroll(): (event: UIEvent<HTMLElement>) => voi
     needsSeedRef.current = true;
     stateRef.current = initialNavScrollState();
     cooldownUntilRef.current = 0;
-    // 子页（/entries/*、/settings/*）本就不渲染底部导航，无需强制显示；
-    // 其余主路由切换时回到显示，避免带着上一页的隐藏态进入新页。
-    const hidesNav = pathname.startsWith("/entries/") || pathname.startsWith("/settings/");
-    if (!hidesNav) setHidden(false);
+    // 子页本就不渲染底部导航，无需强制显示；其余主路由切换时回到显示，
+    // 避免带着上一页的隐藏态进入新页。判据走登记簿，别在这里再抄一份前缀。
+    if (!layoutHidesBottomNav(pathname)) setHidden(false);
   }, [pathname, setHidden]);
 
   return useCallback(

@@ -80,14 +80,16 @@ describe("normalizeScheduledDate", () => {
 describe("isExhausted", () => {
   const now = new Date("2026-06-15T08:00:00.000Z");
 
-  it("count 已满 → 完成", () => {
+  // 反证：count 配额归 occurrence 账本（isRuleExhausted）判，这里故意不看 completedCount。
+  // 该字段全仓无递增路径，若哪天有人把 count 腿加回来，这条会红。
+  it("completedCount 已满但无 until → 不判耗尽（count 配额不归这里判）", () => {
     const t = task({
       recurrence: { freq: "daily", interval: 1, basis: "due", count: 3 },
       completedCount: 3,
       startAt: "2026-06-01T00:00:00.000Z",
     });
-    expect(isExhausted(t, now)).toBe(true);
-    expect(placementForTask(t, now)).toEqual({ pool: "completed" });
+    expect(isExhausted(t, now)).toBe(false);
+    expect(placementForTask(t, now).pool).not.toBe("completed");
   });
 
   it("until 已过且无到期 → 完成", () => {

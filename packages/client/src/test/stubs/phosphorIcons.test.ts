@@ -27,8 +27,8 @@ function collectUsedIcons(): Set<string> {
     if (file.includes(join("test", "stubs"))) continue;
     const text = readFileSync(file, "utf8");
     const re = /import\s+(type\s+)?\{([^}]+)\}\s+from\s+["']@phosphor-icons\/react["']/g;
-    let match: RegExpExecArray | null;
-    while ((match = re.exec(text))) {
+    let match: RegExpExecArray | null = re.exec(text);
+    while (match) {
       const isTypeOnlyImport = Boolean(match[1]);
       for (const raw of match[2].split(",")) {
         const spec = raw.trim();
@@ -39,6 +39,7 @@ function collectUsedIcons(): Set<string> {
         const name = spec.replace(/^type\s+/, "").split(/\s+as\s+/)[0]?.trim();
         if (name) used.add(name);
       }
+      match = re.exec(text);
     }
   }
   return used;
