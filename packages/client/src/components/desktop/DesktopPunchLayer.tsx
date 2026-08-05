@@ -1,3 +1,6 @@
+import { X } from "@phosphor-icons/react";
+import { Icon } from "../Icon.js";
+
 export interface DesktopUndoState {
   message: string;
 }
@@ -63,10 +66,10 @@ export function DesktopPunchLayer({
               <button
                 type="button"
                 onClick={onDismissNotice}
-                className="shrink-0 text-ink-3 transition hover:text-ink"
+                className="flex shrink-0 items-center text-ink-3 transition hover:text-ink"
                 aria-label="关闭提示"
               >
-                ✕
+                <Icon icon={X} size={16} />
               </button>
             </div>
           )}
@@ -87,10 +90,10 @@ export function DesktopPunchLayer({
               <button
                 type="button"
                 onClick={onDismissUndo}
-                className="shrink-0 text-ink-3 transition hover:text-ink"
+                className="flex shrink-0 items-center text-ink-3 transition hover:text-ink"
                 aria-label="关闭"
               >
-                ✕
+                <Icon icon={X} size={16} />
               </button>
             </div>
           )}

@@ -12,7 +12,7 @@ covers:
   - scripts/check-design-language.mjs
 contracts:
   - packages/client/src/components/ui/**
-last-reviewed: 2026-08-04
+last-reviewed: 2026-08-05
 ---
 
 # 设计语言 · 控件库
@@ -78,12 +78,16 @@ last-reviewed: 2026-08-04
 
 **`input` / `textarea` / `select` 上不加任何字号类**：`index.css` 顶层的 `input,select,textarea { font-size: 16px }` 是 iOS 聚焦防缩放兜底（字号 <16px 时 Safari 会自动放大视口）。它是元素选择器，而 `.td-text-*` 是类选择器、特异性更高——加上去**会真的盖掉兜底**（三档 caption/label/body 分别是 12/13/15px，全在 16px 以下），聚焦放大随之回归。`check:design` 的 `input-font-size-override` 规则守着这条：命中即报，规则跨行认标签，落在普通元素上的字号类不受影响。
 
+<a id="design-language-controls-s2"></a>
+
 ## 2. 图标（`components/Icon.tsx` → Phosphor）
 
 - 全站图标走 `@phosphor-icons/react`，统一经 `components/Icon.tsx` 包装。
 - `Icon.tsx` 导出 `IconProps` 与 `resolveIconWeight(size, weight?)`：按尺寸解析图标 weight（小尺寸用更重的字重保证可读）。
 - 红线：不用 emoji 或散装图标库；新图标从 Phosphor 取，经 `Icon` 渲染。
-- **`check:design` 的 `interactive-text-icon` 只认一份字符白名单**（`x × ✕ ✓ ✔ › ‹ ← → ↑ ↓ ⋯ …` 与对应 HTML 实体），白名单外的符号当图标用它一律放行。已知漏网：`TaskDetailSheet` 的放大/还原钮用 `▢` / `⤢` 当可见图标，闸不报。**这道闸是辅助不是保证**——写图标时按红线自觉走 Phosphor，别拿"闸绿了"当合规证据。
+- **`check:design` 的 `interactive-text-icon` 认一份穷举字符白名单**，源在脚本的 `INTERACTIVE_TEXT_ICON_CHARS` / `INTERACTIVE_TEXT_ICON_ENTITIES`，按用途分组：关闭勾选 `x × ✕ ✖ ✗ ✘ ✓ ✔`、尖角 `› ‹ ❯ ❮ ⌃ ⌄`、三角 `▲ ▼ ◀ ▶ ▴ ▾ ◂ ▸`、箭头 `← → ↑ ↓ ↔ ↕`、放大还原 `⤢ ⤡ ▢`、省略更多 `⋯ … ⋮ ...`、步进正负 `+ ＋ ➕ - − － ➖`、菜单星标 `☰ ★ ☆`，外加 `&times;` `&minus;` `&check;` `&hellip;` 等 HTML 实体。步进正负那组里 **`−` 是 U+2212 减号、`－` 是 U+FF0D 全角，都不是 ASCII `-`**，三个各自登记。
+- **收录判据是「这个字符在 UI 里几乎只可能当图标用」**：真正的文字标点与数学符号刻意不收——`—`（破折号）、`–`（en dash）、`±` `÷` `≈` `•` 都会作为正文出现，收进来就是大面积误报。代价是白名单**穷举**：名单外的新符号一律放行，要么写的时候自觉走 Phosphor，要么事后补名单。所以这道闸是辅助不是保证。
+- 匹配形态三种：同行 `>符号<`、同行 `{"符号"}`，以及**跨行的纯文本子节点**——`>` 与下一个 `<` 之间的内容整体就是一个符号（符号独占一行），或是只含伪装字符字面量的表达式（`{expanded ? "▢" : "⤢"}`）。跨行扫描用 `[^<>]*` 把匹配锁在一对尖括号之间，因此属性里的箭头函数 `=>` 与 `{t("x")}` 这类调用不会被当成子节点误报；表达式形态另排除括号 / 嵌套花括号 / 模板串。交互上下文取同行或前后 8 行内的 `<button` / `<a` / `<Link` / `<NavLink` / `role="button"` / `onClick=`，**测试文件不豁免**（测试夹具同样不许教错写法）。
 
 ## 3. 交互 hooks（`useConfirm` / `useActionToast` / `useLongPress`）
 

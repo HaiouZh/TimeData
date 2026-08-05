@@ -1,4 +1,4 @@
-import { CaretRight } from "@phosphor-icons/react";
+import { CaretRight, Minus, Plus } from "@phosphor-icons/react";
 import type { ReactNode } from "react";
 import { Link } from "react-router";
 import { Icon } from "../../../components/Icon.js";
@@ -174,7 +174,7 @@ export function SettingsNumberRow({
           onClick={() => onChange(clamp(value - step))}
           className="flex h-7 w-7 items-center justify-center rounded-ctl bg-surface-hover text-ink-2 hover:bg-surface-elevated disabled:opacity-40"
         >
-          −
+          <Icon icon={Minus} size={16} />
         </button>
         <input
           type="number"
@@ -197,7 +197,7 @@ export function SettingsNumberRow({
           onClick={() => onChange(clamp(value + step))}
           className="flex h-7 w-7 items-center justify-center rounded-ctl bg-surface-hover text-ink-2 hover:bg-surface-elevated disabled:opacity-40"
         >
-          +
+          <Icon icon={Plus} size={16} />
         </button>
       </span>
     </div>

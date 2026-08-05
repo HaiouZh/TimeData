@@ -2,7 +2,7 @@ import type { ReactElement, SVGProps } from "react";
 
 // @phosphor-icons/react 的测试替身。真库是个巨型 barrel（全量图标），在 vitest 里冷加载实测
 // 11.94s，而全仓有 112 个测试文件可达它——isolate:true 下每文件重付一次，是 import 耗时的最大单点。
-// 本替身只提供项目实际用到的 59 个具名图标，行为上保留 Icon.tsx 依赖的契约：
+// 本替身只提供项目实际用到的 62 个具名图标，行为上保留 Icon.tsx 依赖的契约：
 // 渲染 <svg>、透传 aria-label / role / aria-hidden / className，吞掉 phosphor 专有的
 // size / weight / color / mirrored（它们不是合法 DOM 属性，透传会触发 React 警告）。
 // 由 vitest.config.ts 的 resolve.alias 挂载，只作用于测试，不影响 vite build。
@@ -35,6 +35,8 @@ export const ArrowRight = glyph("ArrowRight");
 export const ArrowSquareOut = glyph("ArrowSquareOut");
 export const ArrowUp = glyph("ArrowUp");
 export const ArrowsClockwise = glyph("ArrowsClockwise");
+export const ArrowsInSimple = glyph("ArrowsInSimple");
+export const ArrowsOutSimple = glyph("ArrowsOutSimple");
 export const BookOpen = glyph("BookOpen");
 export const CalendarBlank = glyph("CalendarBlank");
 export const Cards = glyph("Cards");
@@ -65,6 +67,7 @@ export const LinkSimple = glyph("LinkSimple");
 export const ListChecks = glyph("ListChecks");
 export const Lock = glyph("Lock");
 export const MagnifyingGlass = glyph("MagnifyingGlass");
+export const Minus = glyph("Minus");
 export const Moon = glyph("Moon");
 export const NotePencil = glyph("NotePencil");
 export const PencilSimple = glyph("PencilSimple");

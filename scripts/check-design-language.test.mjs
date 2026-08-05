@@ -231,6 +231,107 @@ test("flags string and entity text icons in interactive content", () => {
   );
 });
 
+test("flags the icon characters that actually shipped as fake icons", () => {
+  // 真闸验证：这些字符曾经在生产代码里当图标用而白名单认不出。注意 `−` 是 U+2212 减号、
+  // 不是 ASCII `-`；`▢`/`⤢` 是 TaskDetailSheet 的放大还原钮。
+  for (const glyph of ["▢", "⤢", "−", "⋮", "▾", "❯", "✖", "☰"]) {
+    assert.equal(
+      classifyLine("x.tsx", `<button type="button" onClick={onToggle}>${glyph}</button>`).some(
+        (v) => v.rule === "interactive-text-icon",
+      ),
+      true,
+      `should flag: ${glyph}`,
+    );
+  }
+});
+
+test("does not treat real text punctuation as a fake icon", () => {
+  // 破折号 / en dash / 数学符号是正文内容，收进白名单会大面积误报
+  for (const glyph of ["—", "–", "±", "÷", "≈", "•"]) {
+    assert.equal(
+      classifyLine("x.tsx", `<button type="button" onClick={onToggle}>${glyph}</button>`).some(
+        (v) => v.rule === "interactive-text-icon",
+      ),
+      false,
+      `should not flag: ${glyph}`,
+    );
+  }
+});
+
+test("flags a text icon that sits alone on its own line", () => {
+  // 洞②：符号独占一行时 `>` 与 `<` 不在同一行，单行正则匹配不到。
+  // 用的是 SettingsNumberRow 步进钮的原文形态（`−` = U+2212）。
+  const result = collectViolations({
+    files: [
+      {
+        file: "x.tsx",
+        content: `        <button
+          type="button"
+          aria-label={\`减少 \${title}\`}
+          onClick={() => onChange(clamp(value - step))}
+          className="flex h-7 w-7 items-center justify-center rounded-ctl"
+        >
+          −
+        </button>`,
+      },
+    ],
+    allowlist: loadAllowlist({ entries: [] }),
+  });
+
+  const hits = result.violations.filter((violation) => violation.rule === "interactive-text-icon");
+  assert.deepEqual(hits.map((hit) => hit.line), [7]);
+});
+
+test("flags a text icon inside a multi-line JSX literal expression", () => {
+  // TaskDetailSheet 放大/还原钮的原文形态：`{expanded ? "▢" : "⤢"}` 独占一行
+  const result = collectViolations({
+    files: [
+      {
+        file: "x.tsx",
+        content: `          <button
+            type="button"
+            aria-label={expanded ? "还原" : "放大"}
+            onClick={() => setExpanded((value) => !value)}
+            className="absolute right-3 rounded-ctl px-2 py-1"
+          >
+            {expanded ? "▢" : "⤢"}
+          </button>`,
+      },
+    ],
+    allowlist: loadAllowlist({ entries: [] }),
+  });
+
+  const hits = result.violations.filter((violation) => violation.rule === "interactive-text-icon");
+  assert.deepEqual(hits.map((hit) => hit.line), [7]);
+});
+
+test("cross-line text icon scan does not swallow surrounding JSX", () => {
+  // `[^<>]*` 把匹配锁在一对尖括号之间：属性里的箭头函数 `=>` 与它带的字符串字面量不算子节点，
+  // 正常文案子节点也不该因为跨行扫描被吞进来。
+  const result = collectViolations({
+    files: [
+      {
+        file: "x.tsx",
+        content: `        <button
+          type="button"
+          onClick={(event) => setSeparator("-")}
+          title={t("x")}
+        >
+          删除
+        </button>
+        <p>
+          这段是正文，里面有 — 破折号
+        </p>`,
+      },
+      // 非交互上下文里的省略号是正常文案
+      { file: "y.tsx", content: `<span>\n  …\n</span>` },
+    ],
+    allowlist: loadAllowlist({ entries: [] }),
+  });
+
+  assert.deepEqual(result.violations.filter((v) => v.rule === "interactive-text-icon"), []);
+});
+
 test("flags text icons in multiline interactive content", () => {
   const result = collectViolations({
     files: [

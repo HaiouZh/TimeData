@@ -944,7 +944,7 @@ describe("TaskRow", () => {
                 onExtra(item.id);
               }}
             >
-              ↑
+              顶
             </button>
           )}
         />,

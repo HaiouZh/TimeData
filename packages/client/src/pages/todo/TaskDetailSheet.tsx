@@ -1,4 +1,4 @@
-import { HandGrabbing, Trash, X } from "@phosphor-icons/react";
+import { ArrowsInSimple, ArrowsOutSimple, HandGrabbing, Trash, X } from "@phosphor-icons/react";
 import { nextDueDate, type Recurrence, type Task } from "@timedata/shared";
 import { useLiveQuery } from "dexie-react-hooks";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -351,9 +351,9 @@ export function TaskDetailSheet({ id, onClose, onTagsChange, onTimeChanged }: Ta
             type="button"
             aria-label={expanded ? "还原" : "放大"}
             onClick={() => setExpanded((value) => !value)}
-            className="absolute right-3 rounded-ctl px-2 py-1 td-text-caption text-ink-3 hover:bg-surface-hover"
+            className="absolute right-3 flex items-center justify-center rounded-ctl px-2 py-1 text-ink-3 hover:bg-surface-hover"
           >
-            {expanded ? "▢" : "⤢"}
+            <Icon icon={expanded ? ArrowsInSimple : ArrowsOutSimple} size={16} />
           </button>
         </div>
 

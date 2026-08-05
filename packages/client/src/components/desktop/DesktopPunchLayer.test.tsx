@@ -7,7 +7,7 @@ const UNDO = { message: "已打点 09:00–09:15" };
 const CONFIRM = { message: "要把 09:00–14:30 记为打点吗？", retry: false };
 const NOTICE = { message: "请先在设置里选择打点分类" };
 
-type ClickableProps = { children?: ReactNode; onClick?: () => void };
+type ClickableProps = { children?: ReactNode; onClick?: () => void; "aria-label"?: string };
 
 function flatten(node: ReactNode, out: ReactElement<ClickableProps>[] = []): ReactElement<ClickableProps>[] {
   if (Array.isArray(node)) {
@@ -22,14 +22,15 @@ function flatten(node: ReactNode, out: ReactElement<ClickableProps>[] = []): Rea
 
 // 本层是无 hook 的纯展示组件，可以直接当函数调用拿到元素树。node 环境没有 DOM，
 // 渲染成 markup 只看得见文案、看不见 onClick 挂没挂上，按钮接线只能从元素树上验。
+// label 同时认文字按钮的文案与图标按钮的 aria-label（关闭钮是 Phosphor 图标，没有文本子节点）。
 function press(tree: ReactNode, label: string): void {
   const button = flatten(tree).find(
     (element) =>
       element.type === "button" &&
-      typeof element.props.children === "string" &&
-      element.props.children.trim() === label,
+      ((typeof element.props.children === "string" && element.props.children.trim() === label) ||
+        element.props["aria-label"] === label),
   );
-  if (!button) throw new Error(`没有找到文案为「${label}」的按钮`);
+  if (!button) throw new Error(`没有找到文案 / aria-label 为「${label}」的按钮`);
   button.props.onClick?.();
 }
 
@@ -63,7 +64,7 @@ describe("DesktopPunchLayer", () => {
     press(tree, "撤销");
     expect(onUndo).toHaveBeenCalledOnce();
     expect(onDismissUndo).not.toHaveBeenCalled();
-    press(tree, "✕");
+    press(tree, "关闭");
     expect(onDismissUndo).toHaveBeenCalledOnce();
   });
 
@@ -86,7 +87,7 @@ describe("DesktopPunchLayer", () => {
       onDismissNotice,
       onDismissUndo,
     });
-    press(tree, "✕");
+    press(tree, "关闭提示");
     expect(onDismissNotice).toHaveBeenCalledOnce();
     expect(onDismissUndo).not.toHaveBeenCalled();
   });

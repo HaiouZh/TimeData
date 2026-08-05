@@ -9,11 +9,92 @@ const COLOR_PREFIXES =
   "bg|text|border(?:-[trblxy]{1,2})?|ring|from|to|via|divide|placeholder|ring-offset|fill|stroke|outline|caret|accent|shadow|decoration";
 const TAILWIND_VARIANTS = "(?:[a-z][a-z0-9-]*:)*!?";
 const LEGAL_RULE_IDS = new Set();
-const INTERACTIVE_TEXT_ICON_PATTERN =
-  "(?:x|×|✕|✓|✔|›|‹|←|→|↑|↓|⋯|…|\\.\\.\\.|\\+|＋|-|&times;|&plus;|&minus;|&rarr;|&larr;|&uarr;|&darr;|&hellip;|&rsaquo;|&lsaquo;)";
+
+// 「文本字符冒充图标」白名单。收录判据：该字符在 UI 里几乎只可能当图标用（关闭/勾选、尖角、
+// 三角、箭头、放大还原、省略更多、步进正负、菜单星标），不会作为正文内容出现。
+// **不收**真正的文字标点与数学符号：`–`(en dash) / `—`(em dash，中文破折号) / `±` / `÷` / `≈` /
+// `•` 都可能是正文，收进来会大面积误报。白名单是穷举式的，新符号需显式补入。
+const INTERACTIVE_TEXT_ICON_CHARS = [
+  // 关闭 / 勾选
+  "x",
+  "×",
+  "✕",
+  "✖",
+  "✗",
+  "✘",
+  "✓",
+  "✔",
+  // 尖角 / 折叠指示
+  "›",
+  "‹",
+  "❯",
+  "❮",
+  "⌃",
+  "⌄",
+  // 三角（展开 / 排序 / 步进）
+  "▲",
+  "▼",
+  "◀",
+  "▶",
+  "▴",
+  "▾",
+  "◂",
+  "▸",
+  // 箭头
+  "←",
+  "→",
+  "↑",
+  "↓",
+  "↔",
+  "↕",
+  // 放大 / 还原（对角双向箭头 + 窗口方块）
+  "⤢",
+  "⤡",
+  "▢",
+  // 省略 / 更多
+  "⋯",
+  "…",
+  "⋮",
+  "...",
+  // 步进正负（`−` 是 U+2212 减号、`－` 是 U+FF0D 全角，都不是 ASCII `-`）
+  "+",
+  "＋",
+  "➕",
+  "-",
+  "−",
+  "－",
+  "➖",
+  // 菜单 / 星标
+  "☰",
+  "★",
+  "☆",
+];
+const INTERACTIVE_TEXT_ICON_ENTITIES = [
+  "&times;",
+  "&plus;",
+  "&minus;",
+  "&rarr;",
+  "&larr;",
+  "&uarr;",
+  "&darr;",
+  "&hellip;",
+  "&rsaquo;",
+  "&lsaquo;",
+  "&check;",
+  "&cross;",
+];
+
+function escapeForRegExp(literal) {
+  return literal.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+const INTERACTIVE_TEXT_ICON_PATTERN = `(?:${[...INTERACTIVE_TEXT_ICON_CHARS, ...INTERACTIVE_TEXT_ICON_ENTITIES]
+  .map(escapeForRegExp)
+  .join("|")})`;
 const INTERACTIVE_TEXT_ICON_RE = new RegExp(
   `(?:>\\s*${INTERACTIVE_TEXT_ICON_PATTERN}\\s*<|\\{\\s*["']${INTERACTIVE_TEXT_ICON_PATTERN}["']\\s*\\})`,
 );
+const INTERACTIVE_TEXT_ICON_EXACT_RE = new RegExp(`^${INTERACTIVE_TEXT_ICON_PATTERN}$`);
 const INTERACTIVE_CONTEXT_RE = /<button\b|<a\b|<Link\b|<NavLink\b|role=["']button["']|onClick=/;
 const TD_TEXT_STEP = "td-text-(?:caption|label|body|title|display)";
 // 变体前缀照收，但 important 不收：`leading-6!` / `!leading-6` 会翻转 layer 优先级、真的压过顶层
@@ -190,6 +271,60 @@ function inputTagLines(lines) {
   return covered;
 }
 
+// JSX 纯文本子节点：`>` 与下一个 `<` 之间的内容。`[^<>]*` 把匹配锁在同一对尖括号之间，
+// 既天然不贪婪（吞不掉整段 JSX），又让属性里的箭头函数 `=>` 自动落空（它后面必然先遇到标签的
+// `>` 而不是 `<`）。`<` 用前瞻不消费，避免相邻两段子节点被吃掉一个。
+const JSX_TEXT_CHILD_RE = />([^<>]*)(?=<)/g;
+const JSX_STRING_LITERAL_RE = /"([^"]*)"|'([^']*)'/g;
+// key 用 lines 数组本身，同 inputTagLinesCache。
+const textIconChildLinesCache = new WeakMap();
+
+/**
+ * 这段 JSX 子节点内容是不是「整个子节点就是一个伪装图标」。
+ * 两种形态：裸字符（`▢` 独占一行）与纯字面量表达式（`{expanded ? "▢" : "⤢"}`）。
+ * 表达式形态刻意排除括号 / 嵌套花括号 / 模板串——`{t("x")}` 这类调用不算图标。
+ */
+function isTextIconChild(text) {
+  const trimmed = text.trim();
+  if (trimmed === "") return false;
+  if (INTERACTIVE_TEXT_ICON_EXACT_RE.test(trimmed)) return true;
+  if (!/^\{[^(){}<>`]*\}$/.test(trimmed)) return false;
+  let sawIcon = false;
+  JSX_STRING_LITERAL_RE.lastIndex = 0;
+  let match = JSX_STRING_LITERAL_RE.exec(trimmed);
+  while (match !== null) {
+    const literal = match[1] ?? match[2] ?? "";
+    // 空串是三元的「另一支不渲染」，不影响判定
+    if (literal !== "") {
+      if (!INTERACTIVE_TEXT_ICON_EXACT_RE.test(literal)) return false;
+      sawIcon = true;
+    }
+    match = JSX_STRING_LITERAL_RE.exec(trimmed);
+  }
+  return sawIcon;
+}
+
+/** 承载伪装图标文本子节点的行号集合（1-based）；符号独占一行时 `>`/`<` 不同行，只能整文件扫。 */
+function textIconChildLines(lines) {
+  const cached = textIconChildLinesCache.get(lines);
+  if (cached) return cached;
+  const src = lines.join("\n");
+  const hits = new Set();
+  JSX_TEXT_CHILD_RE.lastIndex = 0;
+  let match = JSX_TEXT_CHILD_RE.exec(src);
+  while (match !== null) {
+    const text = match[1];
+    if (isTextIconChild(text)) {
+      const inner = new RegExp(INTERACTIVE_TEXT_ICON_PATTERN).exec(text);
+      const offset = match.index + 1 + (inner?.index ?? 0);
+      hits.add(src.slice(0, offset).split("\n").length);
+    }
+    match = JSX_TEXT_CHILD_RE.exec(src);
+  }
+  textIconChildLinesCache.set(lines, hits);
+  return hits;
+}
+
 function normalizePath(file) {
   return file.replace(/\\/g, "/");
 }
@@ -352,7 +487,7 @@ function classifyLineWithContext(file, line, lines, index) {
     });
   }
   if (violations.some((violation) => violation.rule === "interactive-text-icon")) return violations;
-  if (!INTERACTIVE_TEXT_ICON_RE.test(line)) return violations;
+  if (!INTERACTIVE_TEXT_ICON_RE.test(line) && !textIconChildLines(lines).has(index + 1)) return violations;
 
   const contextStart = Math.max(0, index - 8);
   const contextEnd = Math.min(lines.length, index + 9);

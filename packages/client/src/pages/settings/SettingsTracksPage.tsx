@@ -1,4 +1,6 @@
+import { X } from "@phosphor-icons/react";
 import { useState } from "react";
+import { Icon } from "../../components/Icon.js";
 import {
   readTrackActionTags,
   setTrackActionTags,
@@ -82,9 +84,9 @@ export function SettingsTracksPage() {
                   type="button"
                   aria-label={`删除 ${tag}`}
                   onClick={() => void remove(tag)}
-                  className="text-ink-3 transition hover:text-ink"
+                  className="flex items-center text-ink-3 transition hover:text-ink"
                 >
-                  ×
+                  <Icon icon={X} size={16} />
                 </button>
               </li>
             ))}
@@ -131,9 +133,9 @@ export function SettingsTracksPage() {
                   type="button"
                   aria-label={`删除执行者信号 ${tag}`}
                   onClick={() => void removeExec(tag)}
-                  className="text-ink-3 transition hover:text-ink"
+                  className="flex items-center text-ink-3 transition hover:text-ink"
                 >
-                  ×
+                  <Icon icon={X} size={16} />
                 </button>
               </li>
             ))}
