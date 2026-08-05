@@ -122,7 +122,7 @@ agent 接力协议：派活时给 agent `trackId` 和当前看板信号词表；
 
 **「打 `待我处理`」是协议对调用方的要求，不是服务端会补的默认值**：端点的 `tags` 是可选字段，缺省落 `[]`（`endedAt` 才是真由服务端默认成 `null` = 开口）。agent 漏带标签时这一步照样写入、照样闭合旧开口步，但看板信号**不会**前进到 `待我处理`——轨道静悄悄停在上一个信号上，回手 badge 也不亮。想让它成为服务端保证就得改 API 加默认值，当前不是。
 
-本地续写协议的单一事实源是 `.claude/skills/track-step/SKILL.md`（平台无关，任何能跑 shell/Node 的 agent 通用；技术契约见同目录 `references/api.md`，执行器 `scripts/td-track.mjs`）。该目录是本地 AI state，被 `.gitignore` 忽略；evergreen 只记录指针和端点契约，不复制协议正文。协议要求 agent 被用户显式召回后先读 context、保守匹配已有 active track、命中后写 step、未命中时回报建议新建标题，且写入或未写入都必须给回执。
+本地续写协议的单一事实源是 `track-step` skill 的 `SKILL.md`（平台无关，任何能跑 shell/Node 的 agent 通用；技术契约见同目录 `references/api.md`，执行器 `scripts/td-track.mjs`）。**它是 Claude Code skill，按 skill 的常规两处安装位查**：用户级 `~/.claude/skills/track-step/` 或项目级 `<repo>/.claude/skills/track-step/`；两处的 `.claude/` 都是本地 AI state，都不入 Git，所以在仓库里找不到它是正常的、不代表协议退役（服务端 `/api/agent/tracks/:id/steps` 端点在不在才是判据）。evergreen 只记录指针和端点契约，不复制协议正文。协议要求 agent 被用户显式召回后先读 context、保守匹配已有 active track、命中后写 step、未命中时回报建议新建标题，且写入或未写入都必须给回执。
 
 <a id="tracks-s8"></a>
 
