@@ -21,7 +21,7 @@ covers:
 contracts:
   - .github/workflows/mobile-release.yml
   - packages/mobile/capacitor.config.ts
-last-reviewed: 2026-08-04
+last-reviewed: 2026-08-05
 ---
 
 # 部署 · Android APK 发布
@@ -69,7 +69,7 @@ Capacitor 7 版本的 Android 构建要求：Node 22+、pnpm 11、Java 21、Andr
 
 Android 端依赖的 Capacitor 插件清单：`@capacitor/app`（返回键）、`@capacitor/app-launcher`（把外链交给系统处理）、`@capacitor/browser`（外链浏览器 fallback）、`@capacitor/filesystem` + `@capacitor/share`（备份导出落盘和分享）、`@capacitor/haptics`（触感反馈，见 [design-language](../design-language.md#design-language-s4) 第 13 条）、`@capacitor/keyboard`（软键盘事件桥接，见 [design-language](../design-language.md#design-language-s4) 第 12 条）。新增或升级这些插件后必须重跑 `pnpm --filter @timedata/mobile android:sync`，让 `packages/mobile/android/capacitor.settings.gradle` 与 `packages/mobile/android/app/capacitor.build.gradle` 同步注册原生插件，否则原生工程拿不到新插件。
 
-**当前入库的 Gradle 注册文件缺 `capacitor-haptics`**：两份 Gradle 文件只注册了 app / app-launcher / browser / filesystem / keyboard / share 六个，而 `packages/mobile/package.json` 与 `check-capacitor-versions.mjs` 的 `sharedPackages` 都登记了 haptics——**版本闸只比清单与版本号，不检查 Gradle 注册**，所以这个缺口没有任何闸会报。后果是触感在 Android 上整层空转：`lib/haptics.ts` 把「插件未注册」当预期路径防着（先探 thenable 再挂拒绝兜底、外层再包 try 兜同步抛），业务动作不会炸，但也不震。`packages/mobile/package.json` 与 `packages/mobile/scripts/check-capacitor-versions.mjs` 的 `sharedPackages` 登记同一份插件清单，闸住 client / mobile 两侧版本不对齐。
+`packages/mobile/package.json` 与 `packages/mobile/scripts/check-capacitor-versions.mjs` 的 `sharedPackages` 登记同一份插件清单，闸住 client / mobile 两侧版本不对齐。同一个脚本另有一条**「共享清单 ⊆ Gradle 注册」**校验：`sharedPackages` 里每个插件都必须在 `capacitor.settings.gradle` 有 `include ':capacitor-<名>'`、在 `app/capacitor.build.gradle` 有 `implementation project(':capacitor-<名>')`，缺任一侧即报错点名该插件并要求重跑 `android:sync`。`@capacitor/core` 是唯一豁免（纯 JS 桥，原生侧随 `:capacitor-android` 一起进包，没有独立 Gradle 子工程），豁免表 `nativeRegistrationExemptions` 每条都带理由。这条校验存在的理由是**漏注册不会炸**：插件在 JS 侧照常 import，调用只拿到「未实现」，而 `lib/haptics.ts` 这类调用点把它当预期路径防着（先探 thenable 再挂拒绝兜底、外层再包 try 兜同步抛），业务动作不报错，功能却整层静默空转。`packages/mobile/scripts/check-capacitor-versions.test.mjs` 钉住「缺注册报错 / 齐全通过」两条，跟着 `pnpm --filter @timedata/mobile test` 跑。
 
 Android 生产 Manifest 显式设置 `android:usesCleartextTraffic="false"`，并且 `packages/mobile/capacitor.config.ts` 保持 `server.cleartext: false`、`android.allowMixedContent: false`。App 内服务器配置在原生 Android 环境会拒绝保存 `http://` API 地址；自托管服务器需要先通过 Caddy / Nginx / Tunnel 等方式暴露 HTTPS，再在 App 中填写 `https://` 地址。`pnpm --filter @timedata/mobile test` 会静态检查这些安全配置，避免 release APK 默认允许 HTTP 明文流量或混合内容。
 
