@@ -30,6 +30,31 @@ function entry(id: string, categoryId: string, start: string, end: string): Time
 
 const categories = [cat("work", null), cat("sleep", null), cat("nap", "sleep")];
 
+// 每晚固定本地 23:00 入睡、次日本地 07:00 ± offset 起床。
+// 入睡时刻恒定 → 入睡 stdev = 0；起床与睡眠时长的偏移完全相同 → 两者 stdev 相等。
+// 偏移取半数 -k、半数 +k（均值 0），总体标准差恰好 = k，于是 maxSpread === k，可精确钉边界。
+function nightsWithWakeOffsets(offsetsMin: number[]): TimeEntry[] {
+  return offsetsMin.map((offset, index) => {
+    const day = String(7 + index).padStart(2, "0");
+    const bedUtc = `2026-05-${day}T15:00:00.000Z`; // 本地 05-{day} 23:00
+    const wakeUtc = new Date(Date.parse(`2026-05-${day}T23:00:00.000Z`) + offset * 60000).toISOString();
+    return entry(`s${index}`, "sleep", bedUtc, wakeUtc);
+  });
+}
+
+// 8 晚 → 醒来本地日 2026-05-08 ~ 2026-05-15，满足 routineMinRegularitySamples=7。
+function regularityStateForSpread(spreadMin: number) {
+  const offsets = [-spreadMin, -spreadMin, -spreadMin, -spreadMin, spreadMin, spreadMin, spreadMin, spreadMin];
+  const routine = buildRoutineInsights({
+    entries: nightsWithWakeOffsets(offsets),
+    categories,
+    fromDate: "2026-05-08",
+    toDate: "2026-05-15",
+    sleepCategoryId: "sleep",
+  });
+  return routine;
+}
+
 describe("buildRoutineInsights", () => {
   it("未指定睡眠分类时回退默认窗口", () => {
     const routine = buildRoutineInsights({
@@ -135,5 +160,40 @@ describe("buildRoutineInsights", () => {
     expect(routine.sleepWindow.source).toBe("samples");
     expect(formatClockFromMinute(routine.sleepWindow.startMin)).toBe("00:00");
     expect(formatClockFromMinute(routine.sleepWindow.endMin)).toBe("10:00");
+  });
+
+  describe("规律度三档边界", () => {
+    // 先自证造样器：maxSpread 确实等于给定的偏移量，边界断言才不是空转。
+    it("造样器让 maxSpread 精确等于偏移量", () => {
+      const routine = regularityStateForSpread(90);
+      expect(routine.sampleCount).toBe(8);
+      expect(routine.regularity.bedTimeStdevMin).toBe(0);
+      expect(routine.regularity.wakeTimeStdevMin).toBe(90);
+      expect(routine.regularity.durationStdevMin).toBe(90);
+    });
+
+    it("刚好 60 仍算稳定（stable 上界闭区间）", () => {
+      expect(regularityStateForSpread(60).regularity.state).toBe("stable");
+    });
+
+    it("刚过 60（61）落入中间档 moderate", () => {
+      expect(regularityStateForSpread(61).regularity.state).toBe("moderate");
+    });
+
+    it("60~120 之间（90）落入中间档 moderate", () => {
+      expect(regularityStateForSpread(90).regularity.state).toBe("moderate");
+    });
+
+    it("刚好 119 仍是中间档 moderate（variable 下界不含 119）", () => {
+      expect(regularityStateForSpread(119).regularity.state).toBe("moderate");
+    });
+
+    it("刚好 120 即判波动（routineVolatileStdevMin 是闭区间下界）", () => {
+      expect(regularityStateForSpread(120).regularity.state).toBe("variable");
+    });
+
+    it("超过 120（150）判波动", () => {
+      expect(regularityStateForSpread(150).regularity.state).toBe("variable");
+    });
   });
 });

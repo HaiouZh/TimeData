@@ -18,11 +18,12 @@ export const INSIGHT_CONSTANTS = {
   sleepWindowEndMin: 7 * 60,
   // 作息主睡眠段：低于 3h 的睡眠段不作为入睡/起床锚点，但仍计入总睡眠时长。
   routineMainSleepMin: 180,
-  // 作息判断：样本少于该值时仅展示原始指标，不给稳定/波动结论，也不覆盖默认睡眠窗口。
+  // 作息判断：样本少于该值时仅展示原始指标，不给稳定/一般/波动结论，也不覆盖默认睡眠窗口。
   routineMinRegularitySamples: 7,
-  // 作息稳定性：入睡、起床、睡眠时长三者标准差都不超过此值才判稳定。
+  // 作息稳定性：入睡、起床、睡眠时长三者标准差都不超过此值才判稳定（闭区间上界，60 仍算稳定）。
   routineStableStdevMaxMin: 60,
-  // 作息波动性：任一指标标准差达到该值时明确视为波动较大。
+  // 作息波动性：任一指标标准差达到该值即判波动较大（闭区间下界，120 就算波动）。
+  // 落在 (routineStableStdevMaxMin, 此值) 之间为中间档 moderate（规律一般）。
   routineVolatileStdevMin: 120,
   // 通常睡眠窗口：按中位入睡/起床各外扩该分钟数。
   routineSleepWindowPaddingMin: 60,

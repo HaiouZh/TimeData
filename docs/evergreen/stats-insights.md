@@ -16,7 +16,7 @@ covers:
   - packages/client/src/pages/settings/SettingsInsightsPage.tsx
   - packages/client/src/pages/settings/SettingsStatsLayoutPage.tsx
   - packages/client/src/pages/settings/SettingsTodoStatsLayoutPage.tsx
-last-reviewed: 2026-08-04
+last-reviewed: 2026-08-05
 ---
 
 # 统计与洞察
@@ -104,7 +104,7 @@ last-reviewed: 2026-08-04
 | `cache.ts` | 指纹 `${length}:${maxUpdatedAt}` + 单槽 memo + 日桶缓存 | 5 模块 memo 导出；`getCachedDailyRollups` 按 `${from}~${to}`+指纹 Map 缓存；跨 React 卸载存活 |
 | `dailyRollup.ts` | `(entries,categories,from,to)` → `DailyRollup[]` | 本地日桶预聚合；跨午夜按本地午夜裁剪；防御上限 400 天；二分定桶 |
 | `overview.ts` | `OverviewInput` → `OverviewInsights` | totalRecordedHours/coverageRawPct/coverageDisplayPct(clamp≤100)/parents；有睡眠分类时 `awakeMin=periodMin-sleepMin`，否则不扣睡眠 |
-| `routine.ts` | `RoutineInput` → `RoutineInsights` | 主睡眠段 `durationMin≥180` 才作锚点；样本≥7 按中位入睡/起床外扩 60min 得 `sleepWindow(source:"samples")`，否则回退 23:00~07:00(`source:"fallback"`)；规律度**只有二分**：入睡/起床/时长三个 stdev 取最大，`≤60` 为 stable，其余一律 variable（`routineVolatileStdevMin: 120` 定义了但无消费方，没有中间态） |
+| `routine.ts` | `RoutineInput` → `RoutineInsights` | 主睡眠段 `durationMin≥180` 才作锚点；样本≥7 按中位入睡/起床外扩 60min 得 `sleepWindow(source:"samples")`，否则回退 23:00~07:00(`source:"fallback"`)；规律度**三档**：入睡/起床/时长三个 stdev 取最大记为 maxSpread，`≤routineStableStdevMaxMin(60)` 为 stable、`<routineVolatileStdevMin(120)` 为 moderate、其余 variable——两个常量各守一端且**都是闭区间边界**（60 仍算稳定，120 就算波动）。UI 文案在 `RoutineSection.tsx` 的 `ROUTINE_STATE_TEXT`（`Record<RoutineRegularityState, string>`，新增档位缺键即 tsc 报错，不再有 else 兜底） |
 | `baseline.ts` | `baselineEntries` → 阈值 | `overlongThresholdMin=max(P95,180)`；`longGapThresholdMin` 清醒空档样本≥10 取 P90 否则 90 |
 | `anomalies.ts` | `DetectAnomaliesInput` → `Anomaly[]` | 5 型 overlong/overnight/sleepTimeActivity/longGap/unrecordedDay；阈值来自 baseline；**只对当前周期 `inRange(date)` 产出**；`sleepTimeActivity` 仅以 startTime 判定 |
 | `trends.ts` | `TrendInput` → `TrendResult` | 本期 + 等长上一窗口；上期数据天数≥3 才 `prevComparable`；上期 <30min 不算百分比改判 new；TopN=3 |

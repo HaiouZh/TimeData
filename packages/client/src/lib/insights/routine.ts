@@ -3,7 +3,13 @@ import { APP_TIME_ZONE } from "@timedata/shared";
 import { INSIGHT_CONSTANTS } from "./constants.js";
 import { buildSessions, resolveParentId } from "./sessions.js";
 
-export type RoutineRegularityState = "notConfigured" | "noSamples" | "insufficientSamples" | "stable" | "variable";
+export type RoutineRegularityState =
+  | "notConfigured"
+  | "noSamples"
+  | "insufficientSamples"
+  | "stable"
+  | "moderate"
+  | "variable";
 
 export interface SleepRoutineSample {
   date: string;
@@ -224,7 +230,11 @@ export function buildRoutineInsights(input: RoutineInput): RoutineInsights {
   else if (sampleCount < INSIGHT_CONSTANTS.routineMinRegularitySamples) state = "insufficientSamples";
   else {
     const maxSpread = Math.max(bedTimeStdevMin ?? 0, wakeTimeStdevMin ?? 0, durationStdevMin ?? 0);
-    state = maxSpread <= INSIGHT_CONSTANTS.routineStableStdevMaxMin ? "stable" : "variable";
+    // 三档，两个常量各自守一端且都取闭区间：≤ routineStableStdevMaxMin 稳定、
+    // ≥ routineVolatileStdevMin 波动大、二者之间为 moderate（一般）。
+    if (maxSpread <= INSIGHT_CONSTANTS.routineStableStdevMaxMin) state = "stable";
+    else if (maxSpread < INSIGHT_CONSTANTS.routineVolatileStdevMin) state = "moderate";
+    else state = "variable";
   }
 
   return {
