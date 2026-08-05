@@ -9,6 +9,20 @@ export interface TodoDockProject {
   goalTitle: string;
 }
 
+/**
+ * 坞的三形态。**加第四态（如全禁 blocked）必须三处一起改**：
+ * `resolveTodoDockState` 的推导、`DOCK_STATE_CLASSES` 的类映射（Record 缺键会让 tsc 红）、
+ * 以及 `TodoDragDockProps` 的驱动字段——只改其一不会静默落到别的态的样式里。
+ */
+export type TodoDockState = "hidden" | "hint" | "engaged";
+
+/** 形态 → 容器类映射。用 Record 而不是裸三元：加态时漏改映射会编译失败。 */
+const DOCK_STATE_CLASSES: Record<TodoDockState, string> = {
+  hidden: "pointer-events-none overflow-y-hidden opacity-0 duration-0",
+  hint: "pointer-events-none overflow-y-hidden opacity-100 duration-150 before:opacity-60",
+  engaged: "pointer-events-auto overflow-y-auto opacity-100 duration-150",
+};
+
 export interface TodoDragDockProps {
   /** 拖拽进行中才显形;false 时保持挂载(droppable rect 在拖起瞬间已就绪)但透明。 */
   dragging: boolean;
@@ -56,7 +70,7 @@ function dockTargetIcon(target: TodoDockTarget) {
  * 命中态是**实心 accent 填充**而不是缩放:缩放会把最宽的药丸顶出容器,而容器为纵向滚动
  * 设了 overflow,横向随之自动变 auto——真机上表现为坞里闪出横向滚动条(验收退回项)。
  */
-function DockPill({ target, label, blocked, engaged }: { target: TodoDockTarget; label: string; blocked: boolean; engaged: boolean }) {
+function DockPill({ target, label, blocked, state }: { target: TodoDockTarget; label: string; blocked: boolean; state: TodoDockState }) {
   const id = todoDockId(target);
   // 药丸恒注册 droppable:命中控制集中在 `preferProjectCollisions` 的 `dockAllowed`(页面按车道 ref
   // 判定、逐帧同步)。此处曾用 `disabled: !engaged`,那是 state 驱动的、比车道慢两跳提交,
@@ -68,8 +82,10 @@ function DockPill({ target, label, blocked, engaged }: { target: TodoDockTarget;
       data-testid="todo-dock-pill"
       data-dock-id={id}
       data-drop-blocked={blocked}
-      data-dock-engaged={engaged}
-      className={`flex w-full items-center gap-2 rounded-row border px-3 py-2.5 td-text-label transition duration-150 group-data-[dock-state=hint]:opacity-0 ${
+      data-dock-engaged={state === "engaged"}
+      className={`flex w-full items-center gap-2 rounded-row border px-3 py-2.5 td-text-label transition duration-150 ${
+        state === "hint" ? "opacity-0" : ""
+      } ${
         blocked
           ? "border-border bg-surface text-ink-3 opacity-60"
           : isOver
@@ -109,7 +125,7 @@ export function TodoDragDock({
 }: TodoDragDockProps) {
   const targets = todoDockTargets(activeContainerId ?? "", projects, activeParentInHand);
   // 空坞（手头源/父在手头）连细条都不出：细条是坞的预告,无坞则无预告。
-  const state = !dragging || targets.length === 0 ? "hidden" : dockEngaged ? "engaged" : "hint";
+  const state: TodoDockState = !dragging || targets.length === 0 ? "hidden" : dockEngaged ? "engaged" : "hint";
   const { measureDroppableContainers } = useDndContext();
   const dockIdKey = targets.map(todoDockId).join("|");
   useEffect(() => {
@@ -126,15 +142,13 @@ export function TodoDragDock({
       data-testid="todo-drag-dock"
       data-dock-state={state}
       aria-hidden={state !== "engaged"}
-      className={`group fixed top-1/2 z-[var(--z-dropdown)] flex w-44 max-h-[calc(100vh-6rem)] -translate-y-1/2 flex-col gap-1.5 overflow-x-hidden transition-opacity before:absolute before:bottom-0 before:left-0 before:top-0 before:w-1 before:rounded-pill before:bg-accent before:opacity-0 before:transition-opacity before:duration-150 ${
+      // scrollbar-gutter:stable 让滚动条空间在任何形态都预留(药丸宽恒等于内容区减滚动条宽),
+      // 否则经典滚动条系统上 engaged 溢出时药丸突然窄约 15px,而 droppable rect 按 hint 态测得——
+      // 药丸右侧会多出一条看不见的可命中区。仅非覆盖式滚动条系统 + 项目溢出时才有差,不支持的
+      // 浏览器(旧 WebView/iOS overlay)降级回现状,无回归。
+      className={`group fixed top-1/2 z-[var(--z-dropdown)] flex w-44 max-h-[calc(100vh-6rem)] -translate-y-1/2 flex-col gap-1.5 overflow-x-hidden transition-opacity [scrollbar-gutter:stable] before:absolute before:bottom-0 before:left-0 before:top-0 before:w-1 before:rounded-pill before:bg-accent before:opacity-0 before:transition-opacity before:duration-150 ${
         anchorLeftPx === null ? "right-3" : ""
-      } ${
-        state === "hidden"
-          ? "pointer-events-none overflow-y-hidden opacity-0 duration-0"
-          : state === "hint"
-            ? "pointer-events-none overflow-y-hidden opacity-100 duration-150 before:opacity-60"
-            : "pointer-events-auto overflow-y-auto opacity-100 duration-150"
-      }`}
+      } ${DOCK_STATE_CLASSES[state]}`}
       style={anchorLeftPx === null ? undefined : { left: anchorLeftPx }}
     >
       {targets.map((target) => (
@@ -143,7 +157,7 @@ export function TodoDragDock({
           target={target}
           label={dockTargetLabel(target, projects)}
           blocked={target.kind === "project" && dropBlocked === true}
-          engaged={state === "engaged"}
+          state={state}
         />
       ))}
     </ul>

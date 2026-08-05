@@ -107,6 +107,7 @@ import {
   resolveTodoDockDrop,
   resolveTodoDragLaneAtPointer,
   resolveTodoDragWithIndent,
+  resetTodoDragRefs,
   type TodoContainer,
   type TodoDragLane,
   type TodoIndentLevel,
@@ -190,6 +191,15 @@ export function TodoPage() {
   const pointerPosRef = useRef<{ x: number; y: number } | null>(null);
   // 坞容器,用来取它的真实矩形:坞垂直居中、高度随药丸数量变,横向带宽算得出、纵向范围只能量。
   const dockElRef = useRef<HTMLUListElement | null>(null);
+  // 复位走单点 resetTodoDragRefs(纯函数层可测):dragStart/End/Cancel 三条路径共用,新增字段只改一处。
+  const resetDragRefs = () =>
+    resetTodoDragRefs({
+      lane: laneRef,
+      indentBase: indentBaseRef,
+      keyboard: keyboardDragRef,
+      dragStartPoint: dragStartPointRef,
+      pointerPos: pointerPosRef,
+    });
   // dock 车道离散 state：只在越档时变化(setState 同值跳过渲染),驱动坞的细条↔完整形态。
   const [dockEngaged, setDockEngaged] = useState(false);
   const [indentTargetId, setIndentTargetId] = useState<string | null>(null);
@@ -708,6 +718,8 @@ export function TodoPage() {
 
   function handleDragStart(event: DragStartEvent): void {
     hapticGrab();
+    // 清掉异常中断可能留下的旧值,再逐个初始化(新增 ref 的初始值只写 resetTodoDragRefs 一处)。
+    resetDragRefs();
     const activeContainerId = (event.active.data.current as { containerId?: string } | undefined)?.containerId ?? "";
     const base: TodoIndentLevel = parseTodoContainerId(activeContainerId)?.kind === "parent" ? "child" : "root";
     indentBaseRef.current = base;
@@ -812,8 +824,7 @@ export function TodoPage() {
     setDockEngaged(false);
     const endLane = laneRef.current;
     const indentLevel: TodoIndentLevel = laneToIndentLevel(endLane);
-    laneRef.current = "root";
-    pointerPosRef.current = null;
+    resetDragRefs();
     setIndentTargetId(null);
     const { active, over } = event;
     if (!over) return;
@@ -1394,8 +1405,7 @@ export function TodoPage() {
         setDragging(false);
         setDragCandidateId(null);
         setDragCandidateContainerId(null);
-        laneRef.current = "root";
-        pointerPosRef.current = null;
+        resetDragRefs();
         setIndentTargetId(null);
         setDockEngaged(false);
       }}

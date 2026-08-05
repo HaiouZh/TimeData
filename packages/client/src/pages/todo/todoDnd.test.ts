@@ -14,6 +14,7 @@ import {
   resolveIndentLevel,
   resolveTodoDragLane,
   resolveTodoDragLaneAtPointer,
+  resetTodoDragRefs,
   type ResolveTodoDragLaneAtPointerInput,
   resolveTodoDragOperation,
   resolveTodoDragWithIndent,
@@ -22,6 +23,7 @@ import {
   type TodoContainer,
   type TodoDockRect,
   type TodoDragLane,
+  type TodoIndentLevel,
   todoContainerId,
   todoDockId,
   todoDockTargets,
@@ -1025,5 +1027,35 @@ describe("hand 容器（手头区拖拽排序）", () => {
       active: handActive,
     } as Parameters<Modifier>[0]);
     expect(leftward.x).toBe(0);
+  });
+});
+
+describe("resetTodoDragRefs（拖拽状态 ref 组复位单点）", () => {
+  function dirtyRefs() {
+    return {
+      lane: { current: "dock" as TodoDragLane },
+      indentBase: { current: "child" as TodoIndentLevel },
+      keyboard: { current: true },
+      dragStartPoint: { current: { x: 12, y: 34 } },
+      pointerPos: { current: { x: 56, y: 78 } },
+    };
+  }
+
+  it("五个 ref 全部回到初始值（lane/indentBase=root,其余 null/false）", () => {
+    const refs = dirtyRefs();
+    resetTodoDragRefs(refs);
+    expect(refs.lane.current).toBe("root");
+    expect(refs.indentBase.current).toBe("root");
+    expect(refs.keyboard.current).toBe(false);
+    expect(refs.dragStartPoint.current).toBeNull();
+    expect(refs.pointerPos.current).toBeNull();
+  });
+
+  it("初始值上再调一次也稳定（幂等）", () => {
+    const refs = dirtyRefs();
+    resetTodoDragRefs(refs);
+    resetTodoDragRefs(refs);
+    expect(refs.lane.current).toBe("root");
+    expect(refs.pointerPos.current).toBeNull();
   });
 });

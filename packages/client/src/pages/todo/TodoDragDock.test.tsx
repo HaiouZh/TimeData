@@ -124,4 +124,46 @@ describe("TodoDragDock 三形态", () => {
     expect(dock(host).getAttribute("data-dock-state")).toBe("hidden");
     await unmount(root);
   });
+
+  it("hint 态:细条可见而药丸透明(药丸视觉规则与态同源,防新态落错样式分支)", async () => {
+    const { host, root } = await renderDom(
+      <DndContext>
+        <TodoDragDock dragging dockEngaged={false} activeContainerId="pool:inbox" projects={projects} dropBlocked={false} />
+      </DndContext>,
+    );
+    const el = dock(host);
+    expect(el.getAttribute("data-dock-state")).toBe("hint");
+    expect(el.classList.contains("opacity-100")).toBe(true);
+    expect(el.classList.contains("opacity-0")).toBe(false);
+    for (const pill of host.querySelectorAll('[data-testid="todo-dock-pill"]')) {
+      expect(pill.classList.contains("opacity-0")).toBe(true);
+    }
+    await unmount(root);
+  });
+
+  it("engaged 态:容器可滚可点、药丸不透明(投递视觉完整)", async () => {
+    const { host, root } = await renderDom(
+      <DndContext>
+        <TodoDragDock dragging dockEngaged activeContainerId="pool:inbox" projects={projects} dropBlocked={false} />
+      </DndContext>,
+    );
+    const el = dock(host);
+    expect(el.getAttribute("data-dock-state")).toBe("engaged");
+    expect(el.classList.contains("overflow-y-auto")).toBe(true);
+    expect(el.classList.contains("pointer-events-auto")).toBe(true);
+    for (const pill of host.querySelectorAll('[data-testid="todo-dock-pill"]')) {
+      expect(pill.classList.contains("opacity-0")).toBe(false);
+    }
+    await unmount(root);
+  });
+
+  it("容器恒预留滚动条空间(非覆盖式滚动条系统上药丸宽与 droppable 测量一致)", async () => {
+    const { host, root } = await renderDom(
+      <DndContext>
+        <TodoDragDock dragging={false} dockEngaged={false} activeContainerId={null} projects={projects} dropBlocked={null} />
+      </DndContext>,
+    );
+    expect(dock(host).classList.contains("[scrollbar-gutter:stable]")).toBe(true);
+    await unmount(root);
+  });
 });

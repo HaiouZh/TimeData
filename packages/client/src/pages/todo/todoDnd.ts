@@ -165,6 +165,29 @@ export const clampTodoIndentPreview: Modifier = ({ transform, active }) => {
   return { ...transform, x };
 };
 
+/** 拖拽期内联状态 ref 组（页面接线层持有的可变坐标/车道状态）。 */
+export interface TodoDragRefs {
+  lane: { current: TodoDragLane };
+  indentBase: { current: TodoIndentLevel };
+  keyboard: { current: boolean };
+  dragStartPoint: { current: { x: number; y: number } | null };
+  pointerPos: { current: { x: number; y: number } | null };
+}
+
+/**
+ * 拖拽状态 ref 组复位到初始值，**新增字段只改这一处**。
+ * 复位必须在 dragEnd 与 dragCancel 两条路径都执行：此前复位逻辑在两处各写一份，
+ * 漏改 cancel 路径会静默残留（`laneRef` 非拖拽时仍被碰撞层读取，`7a05f126` 修过的
+ * 「行隐身」正是残留车道态）。dragStart 开头也复位一次，清掉异常中断留下的旧值。
+ */
+export function resetTodoDragRefs(refs: TodoDragRefs): void {
+  refs.lane.current = "root";
+  refs.indentBase.current = "root";
+  refs.keyboard.current = false;
+  refs.dragStartPoint.current = null;
+  refs.pointerPos.current = null;
+}
+
 /** dnd-kit container id 域：池容器、父任务容器、项目组容器。 */
 export type TodoContainer =
   | { kind: "pool"; pool: TodoPool }
