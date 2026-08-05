@@ -748,6 +748,48 @@ describe("admin route", () => {
     });
   });
 
+  it("groups analytics into Monday-start weekly buckets when groupBy=week", async () => {
+    const insertEntry = db.prepare(`
+      INSERT INTO time_entries (id, category_id, start_time, end_time, note, created_at, updated_at)
+      VALUES (?, ?, ?, ?, NULL, ?, ?)
+    `);
+    // 2026-05-04 周一、2026-05-08 周五（seed 已放 5 条有效记录）、2026-05-10 周日 —— 同一自然周
+    insertEntry.run("entry-week-mon", "cat-code", "2026-05-04T09:00:00.000Z", "2026-05-04T10:00:00.000Z", now, now);
+    insertEntry.run("entry-week-sun", "cat-code", "2026-05-10T09:00:00.000Z", "2026-05-10T09:30:00.000Z", now, now);
+    // 2026-05-11 是下一个周一 —— 必须落进另一个桶
+    insertEntry.run("entry-next-week", "cat-code", "2026-05-11T09:00:00.000Z", "2026-05-11T10:00:00.000Z", now, now);
+
+    const res = await app.request("/api/admin/analytics?from=2026-05-04&to=2026-05-11&groupBy=week");
+
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.range).toMatchObject({ groupBy: "week" });
+    expect(body.byTime).toEqual([
+      { bucket: "2026-05-04", totalMinutes: 330, entryCount: 7 },
+      { bucket: "2026-05-11", totalMinutes: 60, entryCount: 1 },
+    ]);
+  });
+
+  it("keeps a weekly bucket intact across the year boundary", async () => {
+    const insertEntry = db.prepare(`
+      INSERT INTO time_entries (id, category_id, start_time, end_time, note, created_at, updated_at)
+      VALUES (?, ?, ?, ?, NULL, ?, ?)
+    `);
+    // 2026-12-28 周一 与 2027-01-03 周日属于同一周；strftime('%Y-%W') 会把它们劈成 2026-52 / 2027-00
+    insertEntry.run("entry-ny-mon", "cat-code", "2026-12-28T09:00:00.000Z", "2026-12-28T10:00:00.000Z", now, now);
+    insertEntry.run("entry-ny-sun", "cat-code", "2027-01-03T09:00:00.000Z", "2027-01-03T10:00:00.000Z", now, now);
+    insertEntry.run("entry-ny-next", "cat-code", "2027-01-04T09:00:00.000Z", "2027-01-04T10:00:00.000Z", now, now);
+
+    const res = await app.request("/api/admin/analytics?from=2026-12-28&to=2027-01-04&groupBy=week");
+
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.byTime).toEqual([
+      { bucket: "2026-12-28", totalMinutes: 120, entryCount: 2 },
+      { bucket: "2027-01-04", totalMinutes: 60, entryCount: 1 },
+    ]);
+  });
+
   it("rejects invalid analytics date parameters", async () => {
     const res = await app.request("/api/admin/analytics?from=invalid");
 

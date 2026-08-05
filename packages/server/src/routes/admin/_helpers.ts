@@ -229,7 +229,17 @@ export function buildAnalyticsFilters(from: string | undefined, to: string | und
 }
 
 export function analyticsBucketExpression(groupBy: AdminAnalyticsResponse["range"]["groupBy"]): string {
-  return groupBy === "month" ? "substr(e.start_time, 1, 7)" : "substr(e.start_time, 1, 10)";
+  switch (groupBy) {
+    case "month":
+      return "substr(e.start_time, 1, 7)";
+    case "week":
+      // 周桶 = 该周周一的日期串（'weekday 0' 先跳到本周日，再回退 6 天）。
+      // 周一为周首，与客户端 startOfWeek / isoWeekMonday 一致；日期串保证字典序 = 时间序。
+      // 不用 strftime('%Y-%W')：跨年会把同一周劈成 2026-52 与 2027-00 两个桶。
+      return "date(substr(e.start_time, 1, 10), 'weekday 0', '-6 days')";
+    default:
+      return "substr(e.start_time, 1, 10)";
+  }
 }
 
 type HealthCheckQuery = {
