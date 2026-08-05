@@ -35,7 +35,7 @@ covers:
   - packages/mobile/android/app/src/main/AndroidManifest.xml
 contracts:
   - packages/client/src/components/app-shell/AppRoutes.tsx
-last-reviewed: 2026-08-04
+last-reviewed: 2026-08-05
 ---
 
 # 架构总览
@@ -185,6 +185,10 @@ iOS 原生工程不入库，构建链路与原生补丁见 [deployment/ios-ipa](
 5. **同步域登记簿封闭**：新增域必须改 `packages/shared/src/syncDomains.ts` 和 `packages/server/src/sync/domains.ts`，见 [ADR 0012](../adr/0012-sync-ledger-and-domain-registry.md)。
 6. **SyncPushReasonCode 封闭**：扩展必须同步 server validation、client engine 和文档。
 7. **Sync ≠ Backup**：同步是多设备一致性，备份是防误删。
+8. **错误响应形态按层分组，不是全局统一**——消费方不能假定所有 `/api/*` 失败都是同一个形状：
+   - `{ok:false,error:{code,message,details?}}`（`server/src/lib/errors.ts` 的 `errorJson`）：业务路由用，`code` 取自 `ErrorCode` 表。
+   - 中间件各用各的：auth 返裸 `{error:"Unauthorized"}`，rateLimit 返 `{error:"rate_limited",message,retryAfterSec}` 并带 `Retry-After` 头，bodyLimit 返自己的 payload-too-large 体。
+   - `ErrorCode` 表里有成员没有 `errorJson` 调用点（语义由中间件另一形状承载，或只有 CLI 侧在用同名码），**表内成员不等于服务端会发出的码集**；逐条缘由记在该文件的类型注释里。
 
 <a id="architecture-s6"></a>
 

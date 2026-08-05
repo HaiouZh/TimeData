@@ -22,7 +22,7 @@ covers:
 contracts:
   - packages/shared/src/trackBoardSignals.ts
   - packages/server/src/routes/agent-tracks.ts
-last-reviewed: 2026-08-04
+last-reviewed: 2026-08-05
 ---
 
 # 任务轨道
@@ -117,6 +117,8 @@ agent 续写上下文另有只读 API：`GET /api/agent/tracks/context` 返回 a
 `/tracks` 列表的分组、统计带与状态卡展示见 §8（调度台按判定优先级分组，不再是扁平列表+顶部 chip OR 筛选）。
 
 agent 接力协议：派活时给 agent `trackId` 和当前看板信号词表；人手可先 append 一步打 `agent在做`。agent 完成或需要人接手后经 `/api/agent/tracks/:id/steps` append 一步，打 `待我处理` 或用户当前配置中的等价看板信号。append 自动闭合全部旧开口步；该步成为看板当前信号，直到后续步骤写入新的已配置看板信号。
+
+**标签由调用方传，服务端不注入默认值**：append 端点的 `tags` 是可选字段，缺省落空数组。不带 tags 的 append 是一条无标签步骤，按上面的信号规则**不清空也不推进**已有信号——看板上那条轨道会停在 agent 接手前的信号，看不出它在等人。所以"交接回人"这层语义完全由调用方显式打标签承载，服务端不会替它补。
 
 **「打 `待我处理`」是协议对调用方的要求，不是服务端会补的默认值**：端点的 `tags` 是可选字段，缺省落 `[]`（`endedAt` 才是真由服务端默认成 `null` = 开口）。agent 漏带标签时这一步照样写入、照样闭合旧开口步，但看板信号**不会**前进到 `待我处理`——轨道静悄悄停在上一个信号上，回手 badge 也不亮。想让它成为服务端保证就得改 API 加默认值，当前不是。
 

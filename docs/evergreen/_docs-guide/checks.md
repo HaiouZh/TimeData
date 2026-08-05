@@ -4,7 +4,7 @@ title: 文档组织规则 · 检查与闭环
 covers:
 contracts:
   - scripts/check-evergreen-docs.mjs
-last-reviewed: 2026-08-04
+last-reviewed: 2026-08-05
 ---
 
 # 文档组织规则 · 检查与闭环
@@ -21,7 +21,7 @@ last-reviewed: 2026-08-04
 | `check:docs:coverage --since=<base>` | 新源码必须有文档认领 | 新增文件落在 `COVERAGE_ROOTS` 下却不匹配任何 covers，且不属于测试、`.d.ts`、mock、夹具、story 或 `src/test/` 这类测试基建目录豁免 |
 | `check:docs:size` | frontmatter 有效、单文档别膨胀到该拆 | frontmatter 形状错误、`covers`/`contracts` 双空、字符数超 hard cap、covers 数超基线，或基线漏项、保留已删除文档。拆分处置见 [拆分与体量](splitting.md) |
 | `check:docs:links` | 互链和指针不指向消失目标 | 链接源（`docs/evergreen` + `docs/adr` 全部文档，外加 `AGENTS.md` / `README.md`）里的 Markdown `.md` 链接不存在；目标 `.md#id` 缺独立 `<a id="..."></a>` 显式锚点；独立锚点行畸形；锚点 ID 重复 |
-| `check:docs:stale` | `last-reviewed` 不过期 | 缺字段或超过 180 天 |
+| `check:docs:stale` | `last-reviewed` 不过期 | **不失败,只列清单**——缺字段或超过 180 天的文档会被打印,但退出码始终为 0(脚本 help 里这一 mode 标的就是 warn)。它是给人看的复查提醒,不是闸;真要拦住过期文档需要另加机制 |
 
 links 不校验同页 fragment、Markdown 标题自动锚点或 prose `§x.y`；拆分后这类引用按 [拆分与体量](splitting.md) 的四类手动扫描。锚点名必须是严格配对的 `<a id="..."></a>`，避免同名目标和格式畸形让链接看似有效却无稳定落点。**锚点 ID 要求全局唯一**：`findDuplicateAnchors` 拿一张跨全部长期文档的表判重，同一份文档内重复也照报——所以 ID 用 `<文档 slug>-<节号>` 前缀，不要只写 `s2`。
 
