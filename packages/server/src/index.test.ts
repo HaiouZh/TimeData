@@ -242,4 +242,31 @@ describe("server app middleware order", () => {
     },
     INDEX_TEST_TIMEOUT_MS,
   );
+
+  it(
+    "rate limits the update trigger but leaves /api/update/status pollable",
+    async () => {
+      // 限流是按 token 标识的固定窗口，配额调小才能在用例里撞到上限。
+      process.env.UPDATE_RATE_MAX = "2";
+      const { default: app } = await import("./index.js");
+      const auth = { Authorization: "Bearer secret" };
+
+      const trigger = () => app.request("/api/update", { method: "POST", headers: auth });
+      expect((await trigger()).status).not.toBe(429);
+      expect((await trigger()).status).not.toBe(429);
+      const third = await trigger();
+      expect(third.status).toBe(429);
+      expect(third.headers.get("Retry-After")).not.toBeNull();
+
+      // 触发端点已被限死，状态轮询必须照常放行：客户端更新期间 3s 一次
+      // （serverVersion.ts 的 POLL_INTERVAL_MS），一分钟 20 次，跟触发共用配额会把进度显示打成 429。
+      for (let i = 0; i < 5; i++) {
+        const status = await app.request("/api/update/status", { headers: auth });
+        expect(status.status).not.toBe(429);
+      }
+
+      delete process.env.UPDATE_RATE_MAX;
+    },
+    INDEX_TEST_TIMEOUT_MS,
+  );
 });

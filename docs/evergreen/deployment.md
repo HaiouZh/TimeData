@@ -30,7 +30,7 @@ contracts:
   - packages/server/Dockerfile
   - packages/server/docker-entrypoint.sh
   - .env.example
-last-reviewed: 2026-08-02
+last-reviewed: 2026-08-05
 ---
 
 # 部署与自更新
@@ -87,6 +87,7 @@ last-reviewed: 2026-08-02
 | `MAX_BODY_BYTES` | 否 | `/api/*` 请求体大小上限（字节），默认 `5242880`（5 MB）；超出返回 HTTP 413 |
 | `SYNC_RATE_MAX` | 否 | `/api/sync/*` 每 60 秒最大请求次数（按 token 标识），默认 `60`；超出返回 HTTP 429 |
 | `ADMIN_RATE_MAX` | 否 | `/api/admin/*` 每 60 秒最大请求次数，默认 `120`；超出返回 HTTP 429。`/api/admin/sync-logs` 的读写清空和 `/api/admin/request-logs` 的只读查询都使用该限流，其中 sync logs 清空必须发送 `X-Confirm: true` |
+| `UPDATE_RATE_MAX` | 否 | `POST /api/update`（自更新触发）每 60 秒最大次数，默认 `6`。状态轮询端点 `/api/update/status` 不计入 |
 | `DB_PATH` | 否 | 容器内 SQLite 路径，默认 `/app/data/timedata.db` |
 | `GEOIP_DIR` | 否 | GeoLite2 mmdb（City + ASN）所在目录，默认 `/app/data/geoip`。两个库都缺时归属地降级为「位置未知」、陌生来源按网段收敛；单缺一个只半降级（缺 City：有运营商无地名，收敛按 ASN；缺 ASN：有地名无运营商，收敛按网段），服务在任何一种情况下照常工作。两库读进内存常驻，全就绪约多占 70 MB RSS。语义见 [security](security.md#security-new-ip-alert) |
 | `PORT` | 否 | 监听端口，默认 3000 |

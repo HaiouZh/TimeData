@@ -35,7 +35,7 @@ contracts:
   - packages/server/src/middleware/auth.ts
   - packages/server/src/middleware/totp.ts
   - packages/client/src/lib/storageKeys.ts
-last-reviewed: 2026-08-04
+last-reviewed: 2026-08-05
 ---
 
 # 安全与凭据处理
@@ -79,10 +79,10 @@ Android 原生环境保持 HTTPS-only：`packages/mobile/capacitor.config.ts` �
 
 鉴权之外还有两层中间件保护服务端：
 
-- **速率限制**（`middleware/rateLimit.ts`）：按 token 标识对 `/api/sync/*` 与 `/api/admin/*` 分别限流，60 秒滑窗，超限返回 HTTP 429；`/api/admin/sync-logs` 与 `/api/admin/request-logs` 复用 admin 限流。
+- **速率限制**（`middleware/rateLimit.ts`）：按 token 标识对 `/api/sync/*`、`/api/admin/*` 与 `POST /api/update` 分别限流，60 秒滑窗，超限返回 HTTP 429；`/api/admin/sync-logs` 与 `/api/admin/request-logs` 复用 admin 限流。update 一档只挂精确路径不带 `/*`，故状态轮询 `/api/update/status` 不受限（理由见 §TOTP 危险操作锁末段）。
 - **请求体上限**（`middleware/bodyLimit.ts`）：`/api/*` 请求体超限返回 HTTP 413；`Content-Length` 超限快速拒绝，无/未知长度的 body 先读取计数再判定。
 
-窗口次数与上限字节由 `SYNC_RATE_MAX` / `ADMIN_RATE_MAX` / `MAX_BODY_BYTES` 调整，**默认值与完整说明见 [deployment](deployment.md) 环境变量表（数值单一来源）**。多实例部署时限流计数当前是单进程内存结构。
+窗口次数与上限字节由 `SYNC_RATE_MAX` / `ADMIN_RATE_MAX` / `UPDATE_RATE_MAX` / `MAX_BODY_BYTES` 调整，**默认值与完整说明见 [deployment](deployment.md) 环境变量表（数值单一来源）**。多实例部署时限流计数当前是单进程内存结构。
 
 ## force-push 临时 Token
 
@@ -109,7 +109,7 @@ Android 原生环境保持 HTTPS-only：`packages/mobile/capacitor.config.ts` �
 - **全量 pull**——`POST /api/sync/pull` 的 `sinceSeq` 为 `0`/`null` 时等价于一次性导出全部数据,必须验码;`sinceSeq > 0` 的增量同步照常放行,零打扰。参数 schema 校验先于此闸,故缺 `sinceSeq` 键仍是 400。
 - **批量删除 push**——`POST /api/sync/push` 的 `changes` 中 `action === "delete"` 条数超过 `PUSH_BULK_DELETE_TOTP_THRESHOLD`(50)时要求验码。闸在幂等回放命中之后、实际 apply 之前:重放命中只回放缓存响应,不再验码。被拦时写 `sync_logs` 的 `push_bulk_delete_totp_blocked` / `pull_full_totp_blocked`。
 
-`/api/update` 刻意不锁——它只能触发 Watchtower 拉服务端环境变量定死的镜像源,滥用上限是骚扰性重启。**它也不在限流范围内**：`rateLimit` 只挂 `/api/sync/*` 与 `/api/admin/*` 两个前缀,`/api/update` 两者都不是,路由自身也没挂。挡在前面的是 Bearer 鉴权与 `update.lock` 互斥(重复触发返回 409),不是速率限制。缺码返回 401 `totp_required`,错码 401 `totp_invalid`;**未绑定时全部放行**(渐进启用)。
+`/api/update` 刻意不锁 TOTP——它只能触发 Watchtower 拉服务端环境变量定死的镜像源,滥用上限是骚扰性重启。挡在前面的是 Bearer 鉴权、`update.lock` 互斥(重复触发返回 409)与限流三层。**限流只盖触发端点 `POST /api/update`,不盖 `GET /api/update/status`**:客户端发起更新后按固定间隔轮询状态直到终态,两者共用配额会让客户端把自己的进度显示打成 429。缺码返回 401 `totp_required`,错码 401 `totp_invalid`;**未绑定时全部放行**(渐进启用)。
 
 绑定走 `/api/admin/totp`(master-only):`setup` 生成密钥与 10 个一次性恢复码(只下发这一次,恢复码只存 sha256 哈希),`confirm` 验码落库,`disable` 需当期码或恢复码。密钥存服务端 SQLite `totp_config` 单行表。
 

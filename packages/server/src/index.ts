@@ -56,6 +56,7 @@ if (allowedOrigins.length === 0) {
 const MAX_BODY_BYTES = Number.parseInt(process.env.MAX_BODY_BYTES || "", 10) || 5 * 1024 * 1024;
 const SYNC_RATE_MAX = Number.parseInt(process.env.SYNC_RATE_MAX || "", 10) || 60;
 const ADMIN_RATE_MAX = Number.parseInt(process.env.ADMIN_RATE_MAX || "", 10) || 120;
+const UPDATE_RATE_MAX = Number.parseInt(process.env.UPDATE_RATE_MAX || "", 10) || 6;
 const RATE_WINDOW_MS = 60_000;
 
 // CSP defaults are too strict for the SPA's inline styles / Vite bundles;
@@ -107,6 +108,9 @@ app.use("/api/data/*", requireTotp);
 
 app.use("/api/sync/*", rateLimit({ windowMs: RATE_WINDOW_MS, max: SYNC_RATE_MAX }));
 app.use("/api/admin/*", rateLimit({ windowMs: RATE_WINDOW_MS, max: ADMIN_RATE_MAX }));
+// 只闸触发端点，不含 /api/update/status：客户端更新期间按 3s 一次轮询状态
+// （`client/src/lib/serverVersion.ts` 的 POLL_INTERVAL_MS），连轮询一起限会把自己的进度显示打成 429。
+app.use("/api/update", rateLimit({ windowMs: RATE_WINDOW_MS, max: UPDATE_RATE_MAX }));
 
 app.route("/api/categories", categoriesRoute);
 app.route("/api/entries", entriesRoute);
