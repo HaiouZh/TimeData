@@ -36,7 +36,8 @@ async function flush() {
 
 // 上限用「事件循环轮次」而非墙钟：等的是同线程的 liveQuery 通知 + React 重渲染，
 // 快桶 isolate:false 多 worker 并行时墙钟会在很少的轮次内流干，导致没坏也判超时。
-const MAX_FLUSHES = 200;
+// 2026-08-05 调至 400：shuffle 全桶并行下轮次流干仍偶发（每轮只是一个 setTimeout(0)，成本可忽略）。
+const MAX_FLUSHES = 400;
 
 async function waitForText(host: HTMLElement, text: string): Promise<void> {
   for (let i = 0; i < MAX_FLUSHES; i += 1) {

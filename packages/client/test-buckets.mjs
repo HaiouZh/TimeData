@@ -81,7 +81,10 @@ export function listCleanBucketDirtyFiles(clientRoot) {
 }
 
 // jsdom 快桶（unit-clean-jsdom）成员：显式 allowlist，非派生。
-// jsdom 文件天生带 DOM 标记，无法靠"标记缺失"判 isolate:false 安全，必须正面列出已过硬闸者。
+// jsdom 文件天生带 DOM 标记，无法靠"标记缺失"判 isolate:false 安全，必须正面列出已过准入闸者。
+// 准入闸只在**文件加入那一刻**对单个文件跑（isolate:false + shuffle×5）；桶继续长人后，
+// 成员之间新增的交叉污染不会自动被复验——4 个既有 flaky（2026-08-05 修）就是这么漏进去的。
+// 交叉污染防回潮靠门禁 test 步的整桶 shuffle（见 scripts/gate.mjs），单文件过闸不构成永久免疫。
 // 文件 test-buckets.fast-jsdom.json = 相对 clientRoot 的 posix 路径数组（按批增长）。
 export function resolveFastJsdomBucket(clientRoot) {
   try {

@@ -231,6 +231,10 @@ afterEach(() => {
   vi.useRealTimers();
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
+  // 用例内 defineProperty 装的 clipboard 不删会在 isolate:false 下泄漏给同 worker 的后续文件，
+  // 改变它们对 navigator.clipboard 缺席的假设（如 TaskRow 的复制失败路径）。桩恒 configurable:true，
+  // 置 undefined 与 delete 等价（消费方都走 falsy 判断），且不触发 noDelete 规则。
+  (navigator as { clipboard?: unknown }).clipboard = undefined;
 });
 
 // 这个文件是页面级 jsdom 用例，整套跑 70s+，最慢一条（搜索截断上限那组）在空闲机器上就要 4.4s，

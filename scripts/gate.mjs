@@ -96,6 +96,14 @@ export const GATE_STEPS = [
   { name: "check:settings", command: "pnpm", args: ["check:settings"] },
   { name: "typecheck", command: "pnpm", args: ["typecheck"] },
   { name: "test", command: "pnpm", args: ["test"] },
+  // jsdom 快桶（unit-clean-jsdom, isolate:false）打乱顺序复验：固定顺序下成员间新增的交叉污染
+  // 不报错,只在 shuffle 时翻（4 个既有 flaky 就是这么漏进来的,2026-08-05 修）。门禁跑随机 seed 单轮
+  // 当防回潮棘轮;失败时 vitest 会打印 seed,可复现。准入/排查按 test-buckets.mjs 注释跑 shuffle×5。
+  {
+    name: "test:fast-bucket-shuffle",
+    command: "pnpm",
+    args: ["--filter", "@timedata/client", "exec", "vitest", "run", "--project", "unit-clean-jsdom", "--sequence.shuffle"],
+  },
   { name: "test:e2e", command: "pnpm", args: ["--filter", "@timedata/client", "test:e2e"] },
   { name: "check:docs:strict", command: "pnpm", args: ["check:docs:strict", "--since=main"] },
   { name: "check:docs:size", command: "pnpm", args: ["check:docs:size"] },

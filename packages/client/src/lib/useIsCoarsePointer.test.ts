@@ -50,6 +50,10 @@ function renderHook(): Promise<{ host: HTMLElement; root: Awaited<ReturnType<typ
 afterEach(() => {
   vi.restoreAllMocks();
   document.body.innerHTML = "";
+  // 裸 defineProperty 桩不在 restoreAllMocks/unstubAllGlobals 管辖内；isolate:false 下 jsdom
+  // 环境跨文件共享，文件内用例 shuffle 后末条可能是 matches=true/false 的 matchMedia 桩，
+  // 会以该值污染后续文件的 useIsWideScreen 判定（如 TracksListPage 宽屏布局断言），显式摘掉。
+  Reflect.deleteProperty(window, "matchMedia");
 });
 
 describe("useIsCoarsePointer", () => {

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { act } from "react";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterAll, afterEach, beforeEach, describe, expect, it } from "vitest";
 import { renderDom, unmount } from "../../test/domHarness.js";
 import { STORAGE_KEYS } from "../../lib/storageKeys.js";
 import { TRAY_WIDTH_DEFAULT, TRAY_WIDTH_MAX, TRAY_WIDTH_MIN } from "./goalTrayPrefs.js";
@@ -16,6 +16,11 @@ const localStorageMock = (() => {
   };
 })();
 
+// 桩是裸 defineProperty，不受 restoreAllMocks/unstubAllGlobals 管；isolate:false 下 jsdom 环境
+// 跨文件共享，不还原会把 Map 版 localStorage / 固定 innerWidth 泄漏给同 worker 的后续文件。
+const originalLocalStorage = Object.getOwnPropertyDescriptor(globalThis, "localStorage");
+const originalInnerWidth = Object.getOwnPropertyDescriptor(window, "innerWidth");
+
 Object.defineProperty(globalThis, "localStorage", { value: localStorageMock, configurable: true });
 
 let mounted: Awaited<ReturnType<typeof renderDom>> | null = null;
@@ -28,6 +33,13 @@ afterEach(async () => {
   if (mounted) await unmount(mounted.root);
   mounted = null;
   localStorage.clear();
+});
+
+afterAll(() => {
+  if (originalLocalStorage) Object.defineProperty(globalThis, "localStorage", originalLocalStorage);
+  else Reflect.deleteProperty(globalThis, "localStorage");
+  if (originalInnerWidth) Object.defineProperty(window, "innerWidth", originalInnerWidth);
+  else Reflect.deleteProperty(window, "innerWidth");
 });
 
 async function render() {

@@ -4,6 +4,11 @@ import { copyText } from "./clipboard.js";
 
 afterEach(() => {
   vi.restoreAllMocks();
+  // 裸 defineProperty 桩不在 restoreAllMocks/unstubAllGlobals 管辖内；isolate:false 下 jsdom
+  // 环境跨文件共享，不显式摘除会把 execCommand（返回 true）与 clipboard 泄漏给同 worker 的后续文件——
+  // 曾让 TaskRow 的「clipboard 拒绝且 DOM 兜底失败」用例拿到能成功的兜底而翻红。
+  Reflect.deleteProperty(document, "execCommand");
+  delete (navigator as { clipboard?: unknown }).clipboard;
 });
 
 describe("copyText", () => {

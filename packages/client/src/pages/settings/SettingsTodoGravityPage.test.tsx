@@ -7,7 +7,7 @@ import { SyncProvider } from "../../contexts/SyncContext.tsx";
 import { getSetting } from "../../lib/settings/index.js";
 import { addTask } from "../../lib/tasks.js";
 import { db } from "../../test/dbReset.js";
-import { click, renderDom } from "../../test/domHarness.tsx";
+import { click, renderDom, unmount } from "../../test/domHarness.tsx";
 import SettingsTodoGravityPage from "./SettingsTodoGravityPage.tsx";
 
 beforeEach(async () => {
@@ -29,7 +29,7 @@ describe("SettingsTodoGravityPage", () => {
     expect(host.textContent).toContain("新建保护期");
     expect(host.textContent).toContain("一次备几张牌");
     expect(host.textContent).toContain("一批最多顶几张");
-    await act(async () => root.unmount());
+    await unmount(root);
   });
 
   it("toggling enabled writes todo.gravity.v1", async () => {
@@ -47,7 +47,7 @@ describe("SettingsTodoGravityPage", () => {
     expect(raw).not.toBeNull();
     const parsed = JSON.parse(raw!);
     expect(parsed.enabled).toBe(false);
-    await act(async () => root.unmount());
+    await unmount(root);
   });
 
   it("changing drawM below current pickN clamps pickN", async () => {
@@ -72,7 +72,7 @@ describe("SettingsTodoGravityPage", () => {
     const parsed = JSON.parse(raw!);
     expect(parsed.drawM).toBe(1);
     expect(parsed.pickN).toBeLessThanOrEqual(parsed.drawM);
-    await act(async () => root.unmount());
+    await unmount(root);
   });
 
   it("restore default writes DEFAULT_TODO_GRAVITY_SETTINGS", async () => {
@@ -103,7 +103,7 @@ describe("SettingsTodoGravityPage", () => {
     expect(parsed.enabled).toBe(true);
     expect(parsed.waterlineDays).toBe(14);
     expect(parsed.drawM).toBe(5);
-    await act(async () => root.unmount());
+    await unmount(root);
   });
 
   it("preview displays X / Y underwater count", async () => {
@@ -123,7 +123,7 @@ describe("SettingsTodoGravityPage", () => {
     }
 
     expect(host.textContent).toContain("1 / 2");
-    await act(async () => root.unmount());
+    await unmount(root);
   });
 
   it("setting enabled=false makes preview X become 0", async () => {
@@ -155,7 +155,7 @@ describe("SettingsTodoGravityPage", () => {
     }
 
     expect(host.textContent).toContain("0 / 1");
-    await act(async () => root.unmount());
+    await unmount(root);
   });
 
   it("keeps number controls editable when waterline is disabled", async () => {
@@ -189,6 +189,6 @@ describe("SettingsTodoGravityPage", () => {
     expect(parsed).not.toBeNull();
     expect(parsed.enabled).toBe(false);
     expect(parsed.waterlineDays).toBe(30);
-    await act(async () => root.unmount());
+    await unmount(root);
   });
 });
