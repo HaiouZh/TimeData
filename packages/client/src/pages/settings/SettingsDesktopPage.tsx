@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { ShortcutInput } from "../../components/desktop/ShortcutInput.js";
 import { Icon } from "../../components/Icon.js";
 import { SegmentedControl } from "../../components/ui/SegmentedControl.js";
+import { SelectSheet } from "../../components/ui/SelectSheet.js";
 import { Switch } from "../../components/ui/Switch.js";
 import type {
   AutostartState,
@@ -11,6 +12,7 @@ import type {
   RegistrationOutcome,
 } from "../../lib/desktop/api.js";
 import { invokeDesktop, messageOf } from "../../lib/desktop/api.js";
+import { isMainNavRoute, MAIN_NAV_ITEMS } from "../../lib/navigation/navRegistry.js";
 import SettingsDetailPage from "./SettingsDetailPage.tsx";
 
 /**
@@ -147,8 +149,38 @@ const ACTION_OPTIONS: { value: DesktopHotkeyBinding["action"]; label: string }[]
 ];
 
 /** 行身份：快捷键可以为空、可以重复，只有本地 rowId 能稳定标识一行（删中间行不错位）。 */
-interface HotkeyRow extends DesktopHotkeyBinding {
+export interface HotkeyRow extends DesktopHotkeyBinding {
   rowId: string;
+}
+
+/**
+ * 目标页选项 = 主导航表，零维护：以后给 app 加一个主导航页，这里自动多一项。
+ * 不另维护一张桌面专用表——那张表加页面时漏改不会有任何东西报红。
+ */
+export const NAV_TARGET_OPTIONS: { value: string; label: string }[] = MAIN_NAV_ITEMS.map((item) => ({
+  value: item.to,
+  label: item.label,
+}));
+
+/**
+ * 换动作时顺带把 target 摆正：切到 navigate 补默认值，切走则清掉。
+ *
+ * 补默认值不是顺手——留空存下去，Rust 解析时缺 target 会把整条绑定跳过，用户看着保存成功、
+ * 热键却凭空没了，一条测试都不会红。切走时清掉则是免得非 navigate 动作带着无意义的残留字段落盘。
+ */
+export function applyActionChange(
+  row: HotkeyRow,
+  action: DesktopHotkeyBinding["action"],
+): Partial<DesktopHotkeyBinding> {
+  if (action !== "navigate") return { action, target: undefined };
+  return { action, target: row.target ?? MAIN_NAV_ITEMS[0].to };
+}
+
+/** 目标页不在白名单里时的可见提示。存量绑定会因上游路由改名落到这里。 */
+export function navTargetErrorOf(row: HotkeyRow): string | null {
+  if (row.action !== "navigate") return null;
+  if (row.target && isMainNavRoute(row.target)) return null;
+  return `目标页「${row.target ?? ""}」不存在，重新选一个`;
 }
 
 function toRows(bindings: DesktopHotkeyBinding[], nextRowId: { current: number }): HotkeyRow[] {
@@ -320,11 +352,21 @@ export default function SettingsDesktopPage() {
                     <SegmentedControl
                       options={ACTION_OPTIONS}
                       value={row.action}
-                      onChange={(action) => updateRow(row.rowId, { action })}
+                      onChange={(action) => updateRow(row.rowId, applyActionChange(row, action))}
                       ariaLabel="动作"
                       size="sm"
                       className="min-w-0 flex-1"
                     />
+                    {row.action === "navigate" && (
+                      <SelectSheet
+                        options={NAV_TARGET_OPTIONS}
+                        value={row.target ?? null}
+                        onChange={(target) => updateRow(row.rowId, { target })}
+                        label="目标页"
+                        placeholder="选一个页面"
+                        className="min-w-0 flex-1"
+                      />
+                    )}
                     <button
                       type="button"
                       aria-label="删除"
@@ -338,6 +380,9 @@ export default function SettingsDesktopPage() {
                     </button>
                   </div>
                   {failure && <p className="td-text-caption text-danger">{failure}</p>}
+                  {navTargetErrorOf(row) && (
+                    <p className="td-text-caption text-danger">{navTargetErrorOf(row)}</p>
+                  )}
                 </li>
               );
             })}
