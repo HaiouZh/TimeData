@@ -128,12 +128,17 @@ fn main() {
                 let _ = commands::apply_bindings(app.handle(), &desktop_config.hotkeys, &registry);
             }
 
-            // 被开机自启拉起时不弹窗口，直接躲托盘。
+            // 被开机自启拉起时不弹主窗口，直接躲托盘。浮窗则**任何情况下**都起手隐藏：
+            // 它只由 capture 热键唤起，配置里 visible:false 已是这个意思，这里是双保险
+            // （改配置漏改一处时不至于让浮窗糊在屏幕正中）。
             let args: Vec<String> = std::env::args().collect();
             if !should_show_on_startup(&args) {
                 if let Some(window) = app.get_webview_window("main") {
                     let _ = window.hide();
                 }
+            }
+            if let Some(window) = app.get_webview_window("capture") {
+                let _ = window.hide();
             }
 
             Ok(())
