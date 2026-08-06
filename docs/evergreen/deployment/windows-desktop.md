@@ -12,7 +12,7 @@ contracts:
   - packages/desktop/src-tauri/tauri.conf.json
   - .github/workflows/mobile-release.yml
   - packages/desktop/src-tauri/src/config.rs
-last-reviewed: 2026-08-06
+last-reviewed: 2026-08-07
 ---
 
 # 部署 · Windows 桌面壳
@@ -155,15 +155,15 @@ Rust 单测不在 `pnpm gate` 里（门禁机器没有 Rust 工具链），走 `
 
 `target` 的取值来自 client 的主导航表 `MAIN_NAV_ITEMS`（八项，不含搜索页）。
 
-**校验分工**：Rust 只管结构完整——`navigate` 必须带非空 `target`，否则那条绑定在 `parse_config` 就被跳过。**serde 只挡得住 `target` 缺失**（反序列化失败），空串是合法 `String`、会一路通过，因此空串要显式过滤。**页面清单只存在于前端一处**，由 `resolveNavigateTarget` 查 `isMainNavRoute` 裁定；Rust 对有哪些页面零知识。这样不产生第二个跨语言重复点，也就不欠第二道闸；代价是无效 target 会一路注册成功、到前端才被丢弃——那条路径上有回显（设置页红字），不是静默。
+**校验分工**：Rust 只管结构完整——`navigate` 必须带非空 `target`，否则整条绑定被跳过。判据收在 `config.rs::binding_is_structurally_valid` 一处，**读写两路都过**：`parse_config` 挡手改配置文件写进来的坏条目，`replace_hotkeys` 挡不经设置页 UI 的写入。只在读路径过滤是不够的——空 target 绑定会「注册成功 → 按下去零反应 → 下次读配置整条凭空消失」。**serde 只挡得住 `target` 缺失**（反序列化失败）；空串与只有空白的串都是合法 `String`，要显式 `trim` 后判空。**页面清单只存在于前端一处**，由 `resolveNavigateTarget` 查 `isMainNavRoute` 裁定；Rust 对有哪些页面零知识。这样不产生第二个跨语言重复点，也就不欠第二道闸；代价是无效 target 会一路注册成功、到前端才被丢弃——那条路径上有回显（设置页红字），不是静默。
 
-**四种窗口状态**：隐藏 / 最小化 → `show_main_window` 拉出来并跳；开着但在别的页 → 跳过去；开着且已在目标页 → 什么都不干；目标页有未保存修改 → `useUnsavedChangesGuard` 照常拦（跳转走 router，`useBlocker` 管得到）。「已在目标页」判的是 **pathname**，`/?date=…` 按「跳时间轴」也算已经在那页。
+**四种窗口状态**：隐藏 / 最小化 → `show_main_window` 拉出来并跳；开着但在别的页 → 跳过去；开着且已在目标页 → **不发生页面跳转**——但 `handle_hotkey` 对 `navigate` 无条件先调 `show_main_window`（拉出 + 取消最小化 + 聚焦），窗口该拉还是会拉：最小化 / 被别的应用盖住时按同页 navigate，窗口会到前台，「什么都不干」只指前端那一跳没发生；目标页有未保存修改 → `useUnsavedChangesGuard` 照常拦（跳转走 router，`useBlocker` 管得到）。「已在目标页」判的是 **pathname**，`/?date=…` 按「跳时间轴」也算已经在那页。
 
 同页不跳不只是行为取舍：`navigate()` 到当前路径会往 history 压一条重复条目，压多了返回键要按很多次才退得出去。
 
 `navigate` 不进桥的串行队列（§4.4）——它不写库、无顺序依赖，排在正在跑的 punch 后面只会让跳转莫名延迟。
 
-**投递载荷的构造在 `hotkeys.rs::hotkey_payload`，不在 `commands.rs`。** 抽出来是为了立闸：`handle_hotkey` 要 `AppHandle`、单测够不着它，内联在那里时把 target 恒置 `None` 不会让任何测试变红，而热键的可观察结果是零（前端拿不到 target 就丢弃）。两条单测分别锁住「navigate 必须带上目标页」与「其余动作一律不带」。
+**投递载荷的构造在 `hotkeys.rs::hotkey_payload`，不在 `commands.rs`。** 抽出来是为了立闸：`handle_hotkey` 要 `AppHandle`、单测够不着它，内联在那里时把 target 恒置 `None` 不会让任何测试变红，而热键的可观察结果是零（前端拿不到 target 就丢弃）。三条单测分别锁住「navigate 必须带上目标页」「其余动作一律不带」，以及**载荷 JSON 里根本没有 `target` 键**——`Option` 不加 `skip_serializing_if` 会序列化成 `"target": null` 且键恒在，而前端类型声明的是 `target?: string`，按 `=== undefined` 判「没带」就会全部落空。
 
 ### 4.8 已知界限：存量绑定会被上游变更抹掉
 
@@ -253,11 +253,12 @@ Tauri 用独立的 WebView2 用户数据目录，与 Edge / Chrome 的 profile �
 
 ## 8. 配置闸
 
-`packages/desktop/scripts/check-desktop-config.mjs` 随 `pnpm --filter @timedata/desktop test` 运行，守三类「配错了没有任何其他门禁会红」的约定：
+`packages/desktop/scripts/check-desktop-config.mjs` 随 `pnpm --filter @timedata/desktop test` 运行，守四类「配错了没有任何其他门禁会红」的约定：
 
 1. **`tauri.conf.json` 快照**：`frontendDist` 为 `../../client/dist`、两个 before 命令都调 `build:mobile`、`identifier` 为 `icu.yanzhou.timedata`、`bundle.targets` 恰好 `["nsis"]`。窗口按 **label** 取（不按数组下标），主窗口 `visible` 为 `true`，浮窗的 `url` 与 `visible` / `decorations` / `skipTaskbar` / `alwaysOnTop` / `resizable` 五项逐一断言——浮窗少一项 `decorations: false` 就是一个带标题栏的窗口，少一项 `skipTaskbar` 就多一个任务栏图标，都不会让任何测试变红。这些字段配错时构建不一定报错，产出的却是空壳、旧产物或注册了 service worker 的包。
 2. **跨语言事件名（全匹配）**：`hotkeys.rs` 必须声明 `pub const HOTKEY_EVENT: &str = "…";`；`src-tauri/src/` 下**任何 `.rs` 里一处裸字面量 emit 都不许有**（正则覆盖 `emit` / `emit_to` / `emit_filter` 三种形态，集合必须为空——只认 `app.emit(` 的话，改用 `emit_to` 点名投递的那条路径会整个绕开闸）；`api.ts` 里 `listen<…>("…")` 的名字集合必须恰好等于那个常量的值。闸不能写成「文件里出现过一次」——`commands.rs` 有两处 emit（实时投递、就绪后补投），那种写法在改名时只改到第一处就照绿：日常按键正常，唯独「WebView 就绪前排队的那批」发的是旧名字、前端永远收不到，正好打掉 §4.2 承诺的「开机第一秒按下也生效」。两端之间没有共享类型，typecheck 管不到字符串字面量。
 3. **禁静态 import Tauri API**：扫 `packages/client/src/**/*.{ts,tsx}`，任何 `from "@tauri-apps/api…"` / `import "@tauri-apps/api…"` 形态（含 type-only 与单引号）都报红，只准 `await import(...)`。这是三端 bundle 不加载 Tauri 运行时的唯一保证。需要类型就在 `lib/desktop/api.ts` 里自己声明。
+4. **capabilities 授权列表 == 窗口集合**：`capabilities/default.json` 的 `windows` 列表必须逐字等于 `tauri.conf.json` 的窗口 label 集合。新增窗口时漏改 capabilities，构建 / 测试 / 其余断言全绿，装机后那个窗口却一片空白（§5.6）。
 
 ## 9. 排错
 
@@ -265,7 +266,7 @@ Tauri 用独立的 WebView2 用户数据目录，与 Edge / Chrome 的 profile �
 - **在任务管理器里关了自启，下次启动又回来了**：这是 §3 的判定语义。持久关闭的路径只有一条——应用的「设置 → 桌面设置」，它会把意图记进 `desktop-config.json`。
 - **窗口关不掉 / 关了进程还在**：这是设计语义（§2），托盘菜单「退出」才是唯一退出口。
 - **热键没反应**：先看「设置 → 桌面设置」里该行有没有红字——有则组合被别的软件占用（换一个）；再看有没有「改动要保存才生效」——**改了 / 删了行不点保存是不生效的**，壳里注册着的仍是上次保存的那张表，而且再聚焦任意录入框会按磁盘配置重新注册、把「删掉」的那条装回来；都没有则检查是不是按了裸字母 / 数字（录入框会就地回显「要带 Ctrl / Alt / Shift」）。
-- **按了跳转键没反应**：先看「设置 → 桌面设置」那一行有没有红字——有则目标页已失效（多半是路由改过名），重选一个。都没有则看主窗口是不是已经停在那一页了：同页再按是刻意不做任何事的（§4.7）。
+- **按了跳转键没反应**：先看「设置 → 桌面设置」那一行有没有红字——有则目标页已失效（多半是路由改过名），重选一个。都没有则看主窗口是不是已经停在那一页了：同页再按是刻意不做任何事的（§4.7）。**主窗口隐藏 / 最小化时失效的表现不是「没反应」**：窗口会被拉出来、页面停在原处——窗口弹出来但没换页 = target 失效（去设置页看红字），不是热键没生效（原因同 §4.7）。
 - **在 `?date=` 翻过页的时间轴上按「跳时间轴」没反应**：判据是 pathname，`?date=` 不算另一页。要回今天走时间轴页自己的入口。
 - **改了打点确认阈值好像没生效**：填了 0 / 负数 / 非数字时不保存，输入框会自动改回上次存住的值并给出提示。看到「已改回 X」就说明这次没存上。
 - **按了打点却弹出确认卡**：不是故障，是同步没拉完时的防打歪，见 §4.3。

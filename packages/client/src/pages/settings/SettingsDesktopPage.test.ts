@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import type { AutostartState, DesktopConfigDto, RegistrationOutcome } from "../../lib/desktop/api.js";
-import { MAIN_NAV_ITEMS } from "../../lib/navigation/navRegistry.js";
+import { isMainNavRoute, MAIN_NAV_ITEMS } from "../../lib/navigation/navRegistry.js";
 import {
   applyActionChange,
   type DesktopSettingsIo,
@@ -255,6 +255,14 @@ describe("目标页选项", () => {
     // 防有人图省事把它抄成硬编码：抄了之后行为一样对，但「以后加一个主导航页、
     // 桌面热键下拉自动多一项」这条好处会无声消失。
     expect(NAV_TARGET_OPTIONS).toEqual(MAIN_NAV_ITEMS.map((item) => ({ value: item.to, label: item.label })));
+  });
+
+  it("下拉里的每一项都必须过 isMainNavRoute，否则用户选得到、热键却拒绝", () => {
+    // 两张表（MAIN_NAV_ITEMS / MAIN_NAV_ROUTES）漂移时，设置页选得到的页面会被
+    // resolveNavigateTarget 丢弃：保存成功、注册成功、按下去零反应，且没有任何回显。
+    for (const option of NAV_TARGET_OPTIONS) {
+      expect(isMainNavRoute(option.value)).toBe(true);
+    }
   });
 });
 

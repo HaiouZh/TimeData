@@ -17,9 +17,10 @@ describe("resolveNavigateTarget", () => {
     expect(resolveNavigateTarget(event("/todo"), "/todo")).toBeNull();
   });
 
-  it("路径相同但 query 不同也算已经在目标页", () => {
-    // 判据是 pathname。`/?date=…` 就是时间轴页，要回今天走页面自己的入口。
-    expect(resolveNavigateTarget(event("/"), "/")).toBeNull();
+  it("同页判据是逐字相等：带 query 的 currentPath 会被判成另一页", () => {
+    // 这条锁的是契约方向：函数假设入参已剥掉 query。调用方传 pathname+search
+    // 会走进这里的「不同页」分支——真正防住它的是 DesktopBridge 那条 dom 测试。
+    expect(resolveNavigateTarget(event("/"), "/?date=2026-08-07")).toBe("/");
   });
 
   it("白名单外的目标丢弃", () => {

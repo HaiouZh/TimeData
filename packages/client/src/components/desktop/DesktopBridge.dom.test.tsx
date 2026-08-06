@@ -341,4 +341,30 @@ describe("navigate 与未保存修改守卫", () => {
     expect(router.state.location.pathname).toBe("/diary");
     expect(rendered.host.textContent).toContain("dirty");
   });
+
+  it("带 query 的当前页上按 navigate 到同一 pathname 不跳", async () => {
+    // currentPath 契约的组件级闸：同页判据是逐字相等，桥必须传裸 pathname。
+    // 若传成 pathname+search，`/?date=…` 上的「跳时间轴」会被判成不同页，
+    // 往 history 压一条重复条目——这条测的就是那不会发生。
+    const router = createMemoryRouter(
+      [
+        {
+          path: "/",
+          element: createElement("div", null, "home", createElement(DesktopBridge)),
+        },
+      ],
+      { initialEntries: ["/?date=2026-08-07"] },
+    );
+    const rendered = await renderDom(createElement(RouterProvider, { router }));
+    mountedRoot = rendered.root;
+    await waitFor(() => handlers.length > 0, "桥挂上监听");
+
+    await act(async () => {
+      handlers[0]?.({ action: "navigate", pressedAtMs: 0, target: "/" });
+    });
+    await settle();
+
+    expect(router.state.location.pathname).toBe("/");
+    expect(router.state.location.search).toBe("?date=2026-08-07");
+  });
 });

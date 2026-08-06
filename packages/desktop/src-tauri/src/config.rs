@@ -29,6 +29,20 @@ pub fn action_id(action: &HotkeyAction) -> &'static str {
     }
 }
 
+/// 一条绑定的**结构**是否完整。Rust 只管这一层——「有哪些页面」是前端的事。
+///
+/// 读写两路都要过：`parse_config` 挡住手改配置文件写进来的坏条目，`replace_hotkeys`
+/// 挡住不经设置页 UI 的写入（导入、CLI、将来的第二个写入口）。只在读路径过滤时，
+/// 空 target 绑定会「注册成功 → 按下去零反应 → 下次读配置整条凭空消失」。
+///
+/// `trim` 不是多余：`" "` 是合法非空 String，`is_empty()` 放行它，而它同样不是有效目标。
+pub fn binding_is_structurally_valid(binding: &HotkeyBinding) -> bool {
+    match &binding.action {
+        HotkeyAction::Navigate { target } => !target.trim().is_empty(),
+        HotkeyAction::Punch | HotkeyAction::ToggleMain | HotkeyAction::Capture => true,
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct HotkeyBinding {
@@ -81,11 +95,12 @@ pub fn parse_config(text: &str) -> DesktopConfig {
                 .iter()
                 .filter_map(|item| {
                     let binding = serde_json::from_value::<HotkeyBinding>(item.clone()).ok()?;
-                    // serde 只挡得住 target **缺失**（反序列化失败）。空串是合法 String，
+                    // serde 只挡得住 target **缺失**（反序列化失败）。空串 / 空白串是合法 String，
                     // 会一路通过——注册成功、按下去前端丢弃、屏幕上零反应。显式滤掉。
-                    match &binding.action {
-                        HotkeyAction::Navigate { target } if target.is_empty() => None,
-                        _ => Some(binding),
+                    if binding_is_structurally_valid(&binding) {
+                        Some(binding)
+                    } else {
+                        None
                     }
                 })
                 .collect()
@@ -217,7 +232,10 @@ where
     S: FnMut(&DesktopConfig) -> Result<(), String>,
 {
     let mut cfg = load()?;
-    cfg.hotkeys = bindings;
+    cfg.hotkeys = bindings
+        .into_iter()
+        .filter(binding_is_structurally_valid)
+        .collect();
     save(&cfg)?;
     Ok(cfg.hotkeys)
 }
@@ -357,6 +375,14 @@ mod tests {
         // **空串 serde 是收的**（String 可以为空），必须显式过滤——否则这条绑定注册成功、
         // 按下去前端拿到空 target 丢弃，表现为「按了没反应」。
         let config = parse_config(r#"{"hotkeys":[{"shortcut":"Ctrl+Alt+T","action":"navigate","target":""}]}"#);
+        assert!(config.hotkeys.is_empty());
+    }
+
+    #[test]
+    fn navigate_with_blank_target_is_skipped() {
+        // 空串的升级版：`" "` 是合法非空 String，`is_empty()` 放行它、`trim()` 才能挡住——
+        // 它同样会注册成功、按下去前端丢弃、屏幕上零反应。
+        let config = parse_config(r#"{"hotkeys":[{"shortcut":"Ctrl+Alt+T","action":"navigate","target":"  "}]}"#);
         assert!(config.hotkeys.is_empty());
     }
 
@@ -546,5 +572,35 @@ mod tests {
             |_| Err("替换配置文件 X 失败".to_owned()),
         );
         assert_eq!(result.unwrap_err(), "替换配置文件 X 失败");
+    }
+
+    #[test]
+    fn replace_hotkeys_drops_invalid_bindings() {
+        // 写路径也要过同一道结构闸：只在读路径过滤时，空 target 绑定会「注册成功 →
+        // 按下去零反应 → 下次读配置整条凭空消失」。这里走 replace_hotkeys 直接喂坏条目，
+        // 返回值与落盘内容都必须只剩合法那条。
+        let mut written: Option<DesktopConfig> = None;
+        let result = replace_hotkeys(
+            vec![
+                HotkeyBinding {
+                    shortcut: "Ctrl+Alt+T".into(),
+                    action: HotkeyAction::Navigate { target: "/todo".into() },
+                },
+                HotkeyBinding {
+                    shortcut: "Ctrl+Alt+X".into(),
+                    action: HotkeyAction::Navigate { target: "  ".into() },
+                },
+            ],
+            || Ok(DesktopConfig::default()),
+            |cfg| {
+                written = Some(cfg.clone());
+                Ok(())
+            },
+        );
+        let returned = result.expect("正常路径应成功");
+        let written = written.expect("正常路径必须落盘");
+        assert_eq!(returned.len(), 1, "坏条目不许进返回值");
+        assert_eq!(returned[0].shortcut, "Ctrl+Alt+T");
+        assert_eq!(written.hotkeys, returned, "落盘内容与返回值一致，都不含坏条目");
     }
 }

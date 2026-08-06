@@ -18,7 +18,9 @@ pub const HOTKEY_EVENT: &str = "desktop-hotkey";
 pub struct HotkeyEventPayload {
     pub action: String,
     pub pressed_at_ms: u64,
-    /// 只有 `navigate` 用得上；其余动作恒为 `None`。
+    /// 只有 `navigate` 用得上；其余动作这个键**不出现在载荷里**（不是 `null`）——
+    /// 前端类型声明的是 `target?: string`，序列化出 null 会让 `=== undefined` 的判断失效。
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub target: Option<String>,
 }
 
@@ -35,7 +37,9 @@ pub fn hotkey_payload(action: &HotkeyAction, pressed_at_ms: u64) -> HotkeyEventP
         pressed_at_ms,
         target: match action {
             HotkeyAction::Navigate { target } => Some(target.clone()),
-            _ => None,
+            // 不用 `_` 兜底：加第二个带参动作时漏写它的 arm，这里要编译红，
+            // 而不是静默发出一个丢了参数的载荷（那正是本函数被抽出来要堵的形状）。
+            HotkeyAction::Punch | HotkeyAction::ToggleMain | HotkeyAction::Capture => None,
         },
     }
 }
@@ -106,6 +110,24 @@ mod tests {
         assert_eq!(hotkey_payload(&HotkeyAction::Punch, 1).target, None);
         assert_eq!(hotkey_payload(&HotkeyAction::Capture, 1).target, None);
         assert_eq!(hotkey_payload(&HotkeyAction::ToggleMain, 1).target, None);
+    }
+
+    #[test]
+    fn non_navigate_payload_omits_target_key() {
+        // 前端类型声明的是 `target?: string`。None 不带 skip_serializing_if 时会被
+        // 序列化成 "target": null 且键恒在——类型在撒谎，「其余动作一律不带」在 JSON
+        // 层面不成立。这里锁的是键**根本不存在**（不是值为 null）。
+        let punch = serde_json::to_value(hotkey_payload(&HotkeyAction::Punch, 1)).expect("序列化 punch");
+        assert!(!punch.as_object().expect("应是对象").contains_key("target"));
+
+        let navigate = serde_json::to_value(hotkey_payload(
+            &HotkeyAction::Navigate { target: "/todo".to_owned() },
+            1,
+        ))
+        .expect("序列化 navigate");
+        let obj = navigate.as_object().expect("应是对象");
+        assert!(obj.contains_key("target"), "navigate 载荷必须带 target 键");
+        assert_eq!(obj.get("target").and_then(|v| v.as_str()), Some("/todo"));
     }
 
     fn capture_at(ms: u64) -> HotkeyEventPayload {

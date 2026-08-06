@@ -167,6 +167,11 @@ export const NAV_TARGET_OPTIONS: { value: string; label: string }[] = MAIN_NAV_I
  *
  * 补默认值不是顺手——留空存下去，Rust 解析时缺 target 会把整条绑定跳过，用户看着保存成功、
  * 热键却凭空没了，一条测试都不会红。切走时清掉则是免得非 navigate 动作带着无意义的残留字段落盘。
+ *
+ * 切走再切回**必然落回默认页**：切走那一步已经把 target 清成 `undefined`，`??` 的左分支
+ * 在真实 UI 流里不可达，只为防御非 UI 来源的 row。
+ * 默认值取 `MAIN_NAV_ITEMS[0]`，即**主导航表的第一项**——那张表是按侧边栏展示顺序排的，
+ * 重排导航表会静默改变这里的默认目标页。
  */
 export function applyActionChange(
   row: HotkeyRow,
@@ -341,6 +346,7 @@ export default function SettingsDesktopPage() {
           <ul className="mt-3 space-y-3">
             {rows.map((row, index) => {
               const failure = registrationErrorOf(rowOutcomes[index]);
+              const navTargetError = navTargetErrorOf(row);
               return (
                 <li key={row.rowId} className="space-y-1">
                   <div className="flex flex-wrap items-center gap-2">
@@ -380,9 +386,7 @@ export default function SettingsDesktopPage() {
                     </button>
                   </div>
                   {failure && <p className="td-text-caption text-danger">{failure}</p>}
-                  {navTargetErrorOf(row) && (
-                    <p className="td-text-caption text-danger">{navTargetErrorOf(row)}</p>
-                  )}
+                  {navTargetError && <p className="td-text-caption text-danger">{navTargetError}</p>}
                 </li>
               );
             })}
