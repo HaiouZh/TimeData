@@ -8,17 +8,17 @@
 检查项与级别见 live-roadmap references/rules.md §4。exit 1 = 有 ERROR；WARN 不挡门。
 
 6.0 形态：状态收窄为四态（废 [构想]/[搁置]，去处见 rules §3.2/§5 的 ideas 台账）、
-阶段行支持 [进行中@分支] 领取标记并在 OK 行打印在飞清单（rules §9 并发协议）、
+阶段行支持 [进行中@分支] 领取标记并在 OK 行打印在飞清单（rules §8 并发协议）、
 notes/ 孤儿 WARN 的索引源是 ROADMAP + backlog + ideas 三份、
 单主题分节预算随小节内链接条数浮动（长命主题的链接开销是结构性的，不该挤内容）。
-6.3：「现在在哪」行首词表封闭（词表外报 WARN，rules §8）。
-6.4：词表收窄为 刚完成/下一步——「进行中」是集合、正本在阶段行 @标记，单行复述必失真。
-7.0：删「现在在哪」节——6.4 把它收窄到只剩「刚完成/下一步」两行公式后，这两样也是
-复述：刚完成的正本是 [完成] 阶段行的 SHA，下一步的正本是 [排队] 阶段行与 backlog 优先序。
-故整节退场，改由本脚本 OK 行印在飞清单、下一行印排队清单，机器汇总不要人工维护（rules §8）。
+7.0：删「现在在哪」节全部判据（必需节 / 5 行硬顶 / 600 预算 / 6.3-6.4 的行首词表）
+——三个行首的正本分别在阶段行 @标记、[完成] 阶段行的 SHA、[排队] 阶段行与 backlog，
+状态屏是这份真相源的人工缓存、必然滞后；搬家五档收为四档；OK 行下另起一行印排队
+清单（可捡），check() 返回值增 queued。
 """
 import re
 import sys
+from datetime import date
 from pathlib import Path
 
 SIZE_CAP = 8000
@@ -44,7 +44,7 @@ MOVE_LADDER = [
     "  ④ 沉淀记录 → 做沉淀 pass，压成去向指针（rules §2.1）",
 ]
 VALID_STATES = {"设计中", "排队", "进行中", "完成"}
-REQUIRED_SECTIONS = ["主题总览", "阶段完成定义"]  # 7.0 起不含「现在在哪」
+REQUIRED_SECTIONS = ["主题总览", "阶段完成定义"]
 MUST_HAVE_SECTION = {"设计中", "排队", "进行中"}  # 这些状态的主题必须开五件套小节
 INDEX_FILES = ("backlog.md", "ideas.md")  # notes/ 孤儿的索引源，与 ROADMAP 正文合并后判定
 ACTIVE_DOC_DIRS = ("specs", "plans")  # 孤儿检查范围：活目录只放活的（rules.md §3）
@@ -55,6 +55,16 @@ ARCHIVE_GUIDANCE = (
     "②spec/plan 搬 archive/{specs,plans}/ ③链接改归档后路径 ④跑本脚本验残链与索引登记（rules.md §3）"
 )
 
+# ---- 8.0：backlog 条目协议（rules.md §5.1）----
+BACKLOG_ITEM_CAP = 500          # 单条上限；不设条目数上限、不设全文线
+BACKLOG_STALE_DAYS = 90         # 登记日距今超此天数报 WARN
+BACKLOG_OWNERS = ("@agent", "@decide", "@you")   # 归属标记，判据是「拍板之后谁动手」
+BACKLOG_DATE_RE = re.compile(r"（(\d{4}-\d{2}-\d{2}) 记）")
+BACKLOG_MALFORMED_RE = re.compile(r"^(?:[*+][ \t]|[-*+]\S|@)")
+BACKLOG_HRULE_RE = re.compile(r"^([-*_])\1{2,}[ \t]*$")
+BACKLOG_GROUP_RE = re.compile(r"^[ \t]{0,3}#{2,6}[ \t]")
+BACKLOG_FENCE_RE = re.compile(r"^[ \t]*(?:```|~~~)")   # 围栏内是代码，不参与结构判据
+
 TOPIC_TITLE_RE = re.compile(r"^主题[：:]\s*(.+)$")
 PHASE_LINE_RE = re.compile(r"^\s*\d+\.\s*\[([^\]]+)\]")
 STATE_CELL_RE = re.compile(r"\[([^\]]+)\]")
@@ -64,7 +74,7 @@ LINK_RE = re.compile(r"\[[^\]]*\]\(([^)]+)\)")
 def split_state(raw: str):
     """'进行中@fix/x' → ('进行中', 'fix/x')；无 @ → (raw, None)。
 
-    @ 只许挂 [进行中]（rules §9 并发协议：领取标记标的是「谁在飞这条线」，
+    @ 只许挂 [进行中]（rules §8 并发协议：领取标记标的是「谁在飞这条线」，
     非进行中的行挂了它就是过期领取），由调用方校验。
     """
     base, _, branch = raw.partition("@")
@@ -133,8 +143,101 @@ def check_links(md_path: Path, report):
             report("error", "link", f"{md_path.name} 链接目标不存在：{raw}")
 
 
+def split_backlog_items(lines):
+    """按行首 '- ' 切条目，缩进续行归属上一条，空行结束当前条目。
+
+    返回 [(首行号, 条目全文)]。不用 '- [ ]' checkbox 做边界——8.0 起
+    条目不带 checkbox（rules.md §5.1）。
+    """
+    items, cur, start = [], None, 0
+    for i, line in enumerate(lines, 1):
+        if line.startswith("- "):
+            if cur is not None:
+                items.append((start, "\n".join(cur)))
+            cur, start = [line], i
+        elif cur is not None and line[:1] in (" ", "\t") and line.strip():
+            cur.append(line)
+        elif cur is not None:
+            items.append((start, "\n".join(cur)))
+            cur = None
+    if cur is not None:
+        items.append((start, "\n".join(cur)))
+    return items
+
+
+def check_backlog(root: Path, report, today=None):
+    """backlog.md 的条目协议（8.0，rules.md §5.1）。文件不存在则整组跳过。"""
+    p = root / "backlog.md"
+    if not p.is_file():
+        return
+    today = today or date.today()
+    lines = p.read_text(encoding="utf-8").replace("\r\n", "\n").split("\n")
+
+    # 平铺：正文不许有 ## 分组。归属靠 @ 标记表达，分组要倒贴换组/维护/机检三笔成本；
+    # 按来源时间分组另有实证有害（本库 2026-07-28 从 8 段时间分组重排成按对象）。
+    # 无例外——backlog 不留台账节（rules.md §5.1）。
+    # 围栏内的行是代码不是 markdown 结构——`## 服务端` 在围栏里是配置片段，
+    # 报「出现分组标题」既误伤又误导。GROUP 判据放宽到缩进 3 空格后（8.0 修订），
+    # 列表内围栏（必须缩进）恰好落进匹配面，这道门是必须的。
+    in_fence = False
+    for i, line in enumerate(lines, 1):
+        if BACKLOG_FENCE_RE.match(line):
+            in_fence = not in_fence
+            continue
+        if in_fence:
+            continue
+        if BACKLOG_GROUP_RE.match(line):
+            report("error", "backlog-no-group",
+                   f"backlog.md:{i} 出现分组标题「{line.lstrip(' \t#').strip()}」"
+                   f"——backlog 一律平铺，归属靠 @ 标记（rules.md §5.1）")
+        if BACKLOG_MALFORMED_RE.match(line) and not BACKLOG_HRULE_RE.match(line):
+            report("error", "backlog-malformed",
+                   f"backlog.md:{i} 这行像条目但不是合法条目——条目必须以 '- ' "
+                   f"（横线 + 一个空格）开头（rules.md §5.1）：{line[:40]}")
+
+    for lineno, item in split_backlog_items(lines):
+        head = item.split("\n", 1)[0]
+        owner = head[2:].split(" ", 1)[0]
+        if owner not in BACKLOG_OWNERS:
+            report("error", "backlog-owner",
+                   f"backlog.md:{lineno} 条目缺归属标记——行首 '- ' 后须紧跟 "
+                   f"{' / '.join(BACKLOG_OWNERS)} 之一（rules.md §5.1）：{head[:40]}")
+
+        if len(item) > BACKLOG_ITEM_CAP:
+            report("error", "backlog-item-size",
+                   f"backlog.md:{lineno} 条目 {len(item)} 字符 > {BACKLOG_ITEM_CAP}"
+                   f"——明细外提 notes/ 只留指针，或升格 ROADMAP 主题；"
+                   f"压缩措辞不是合法动作（rules.md §5.1）：{head[:40]}")
+
+        m = BACKLOG_DATE_RE.search(item)
+        if not m:
+            report("error", "backlog-item-date",
+                   f"backlog.md:{lineno} 条目缺登记日「（YYYY-MM-DD 记）」"
+                   f"——路线 A 的 backlog 不入 git，这是唯一的时间锚"
+                   f"（rules.md §5.1）：{head[:40]}")
+            continue
+        try:
+            logged = date.fromisoformat(m.group(1))
+        except ValueError:
+            report("error", "backlog-item-date",
+                   f"backlog.md:{lineno} 登记日不是合法日期：{m.group(1)}")
+            continue
+
+        age = (today - logged).days
+        if age < 0:
+            report("error", "backlog-item-date",
+                   f"backlog.md:{lineno} 登记日 {m.group(1)} 在未来（今天 {today}）"
+                   f"——登记日是问题被发现的日子（rules.md §5.1）：{head[:40]}")
+            continue
+        if age > BACKLOG_STALE_DAYS:
+            report("warn", "backlog-stale",
+                   f"backlog.md:{lineno} 条目已登记 {age} 天（> {BACKLOG_STALE_DAYS}）"
+                   f"——登记日是问题被发现的日子，「还在更新」不等于「在推进」"
+                   f"（rules.md §5.1）：{head[:40]}")
+
+
 def check(root: Path):
-    errors, warns, inflight, queued = [], [], [], {}
+    errors, warns, inflight, queued = [], [], [], []
 
     def report(level, tag, msg):
         (errors if level == "error" else warns).append(f"{level.upper()}({tag}): {msg}")
@@ -146,7 +249,7 @@ def check(root: Path):
     if len(text) > SIZE_CAP:
         report("error", "size",
                f"ROADMAP.md {len(text)} 字符 > {SIZE_CAP} —— 只搬家，不改写："
-               f"删句子省字符 = 烧掉一次性教训（rules.md §3.3，分节体量排行与搬家五档见下）")
+               f"删句子省字符 = 烧掉一次性教训（rules.md §3.3，分节体量排行与搬家四档见下）")
 
     sections = split_sections(text)
 
@@ -154,14 +257,6 @@ def check(root: Path):
     for req in REQUIRED_SECTIONS:
         if not any(t.startswith(req) for t, _ in sections):
             report("error", "section", f"缺必需节「## {req}」")
-
-    # 7.0 删「现在在哪」节：留着即报，否则它会继续被当成状态屏维护下去
-    for t, _ in sections:
-        if t.startswith("现在在哪"):
-            report("warn", "now-retired",
-                   "「现在在哪」节 7.0 起退场——刚完成看 [完成] 阶段行的 SHA、下一步看 [排队] 阶段行与"
-                   "backlog 优先序、谁在飞看带 @ 的阶段行；三样都有正本，本节是复述。"
-                   "整节删掉即可（rules.md §8）")
 
     # 总览表
     topics = {}
@@ -178,9 +273,11 @@ def check(root: Path):
 
     # 阶段行状态合法性 + 全 [完成] 报归档 + 体量 WARN
     for slug, body in topic_sections.items():
-        raw_states = [m.group(1) for ln in body.split("\n") if (m := PHASE_LINE_RE.match(ln))]
+        # 收 (行文本, 状态串) 对而不只是状态：排队清单要印阶段序号，而序号在行里。
+        phase_rows = [(ln, m.group(1)) for ln in body.split("\n")
+                      if (m := PHASE_LINE_RE.match(ln))]
         phase_states = []
-        for raw_st in raw_states:
+        for ln, raw_st in phase_rows:
             st, branch = split_state(raw_st)
             phase_states.append(st)
             if st not in VALID_STATES:
@@ -189,16 +286,12 @@ def check(root: Path):
                 report("error", "state", f"主题「{slug}」：@分支 只允许挂在 [进行中] 阶段行上")
             if branch:
                 inflight.append((slug, branch))
+            if st == "排队":
+                # 序号用独立正则取：PHASE_LINE_RE 匹配了 \d+ 但没捕获它，而它的
+                # group(1) 语义（状态串）被多处依赖，不要给它加捕获组。
+                queued.append((slug, re.match(r"\s*(\d+)\.", ln).group(1)))
         if phase_states and all(st == "完成" for st in phase_states):
             report("error", "archive-due", f"主题「{slug}」全部阶段 [完成] —— 该归档了。{ARCHIVE_GUIDANCE}")
-        # 排队清单（7.0）：「接下来捡什么」的正本是 [排队] 阶段行，印在 OK 行下面省一次 grep。
-        # 它是索引不是许可——被前置阻塞的阶段状态仍是 [排队]、照样在清单里，领取前要回读那行（rules §8.4）。
-        for ln in body.split("\n"):
-            m = PHASE_LINE_RE.match(ln)
-            if m and split_state(m.group(1))[0] == "排队":
-                num_m = re.match(r"\s*(\d+)\.", ln)
-                if num_m:
-                    queued.setdefault(slug, []).append(num_m.group(1))
         for ln in body.split("\n"):
             if PHASE_LINE_RE.match(ln) and len(ln) > PHASE_LINE_BUDGET:
                 num = re.match(r"\s*(\d+)\.", ln).group(1)
@@ -274,7 +367,10 @@ def check(root: Path):
                    f"notes/{f.name} 未被 ROADMAP / backlog / ideas 任一索引"
                    "——写完就沉底？（三分法，rules.md §5）")
 
-    # 撞线 diagnostics：分节体量排行 + 搬家五档
+    # backlog 条目协议（8.0，rules.md §5.1）；backlog.md 不存在则整组跳过
+    check_backlog(root, report)
+
+    # 撞线 diagnostics：分节体量排行 + 搬家四档
     diagnostics = []
     if len(text) > SIZE_CAP:
         diagnostics.append("分节体量（降序，✗ = 超预算）：")
@@ -303,15 +399,18 @@ def main(argv):
     if errors:
         print(f"[check_roadmap] ROADMAP.md: {len(errors)} error(s), {len(warns)} warn(s)")
         return 1
-    # 在飞清单印在 OK 行：谁在飞哪条线不用 grep 就看得见（rules.md §9）
+    # 在飞清单印在 OK 行：谁在飞哪条线不用 grep 就看得见（rules.md §8）
     inflight_note = (f"，{len(inflight)} 线在飞：" + " · ".join(f"{s}@{b}" for s, b in inflight)
                      if inflight else "")
     print(f"[check_roadmap] OK（{size} 字符，{n_topics} 主题，{len(warns)} warn{inflight_note}）")
-    # 排队清单印在 OK 行下一行：跨主题 ` · ` 分隔，同主题内 `,` 连编号；无 [排队] 时不印
+    # 排队清单另起一行（7.0）：捡活入口的正本是 [排队] 阶段行，机器汇总替掉人工
+    # 状态屏。不并进 OK 行——条目多时会把在飞清单挤到看不见。
     if queued:
-        n = sum(len(v) for v in queued.values())
-        items = " · ".join(f"{slug}#{','.join(nums)}" for slug, nums in queued.items())
-        print(f"[check_roadmap] 可捡（{n} 个 [排队] 阶段）：{items}")
+        agg = {}
+        for slug, num in queued:
+            agg.setdefault(slug, []).append(num)
+        picks = " · ".join(f"{s}#{','.join(ns)}" for s, ns in agg.items())
+        print(f"[check_roadmap] 可捡（{len(queued)} 个 [排队] 阶段）：{picks}")
     return 0
 
 
