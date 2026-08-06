@@ -11,7 +11,7 @@ use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
 use tauri_plugin_notification::NotificationExt;
 
 use crate::config::{self, action_id, DesktopConfig, HotkeyAction, HotkeyBinding};
-use crate::hotkeys::{HotkeyDispatcher, HotkeyEventPayload, RegistrationOutcome, HOTKEY_EVENT};
+use crate::hotkeys::{hotkey_payload, HotkeyDispatcher, HotkeyEventPayload, RegistrationOutcome, HOTKEY_EVENT};
 use crate::shell::{
     self, resolve_toggle_from_window, AncestorRoot, ForegroundRaw, Minimized, SelfHwnd, ToggleAction, Visible,
 };
@@ -140,14 +140,13 @@ fn handle_hotkey(app: &AppHandle, action: &HotkeyAction) {
     match action {
         HotkeyAction::ToggleMain => toggle_main_window(app),
         HotkeyAction::Capture => show_capture_window(app),
+        // navigate 无条件显示主窗口——它不是 toggle，同页再按也不收窗口。
+        HotkeyAction::Navigate { .. } => show_main_window(app),
         HotkeyAction::Punch => {}
     }
     if let Some(label) = shell::target_window(action) {
-        deliver_to_webview(
-            app,
-            label,
-            HotkeyEventPayload { action: action_id(action).to_owned(), pressed_at_ms: now_ms() },
-        );
+        // 载荷构造在 hotkeys.rs，那里测得到——本文件要 AppHandle，单测够不着（见文件头）。
+        deliver_to_webview(app, label, hotkey_payload(action, now_ms()));
     }
 }
 

@@ -27,6 +27,7 @@ pub fn target_window(action: &HotkeyAction) -> Option<&'static str> {
         HotkeyAction::Punch => Some(MAIN_WINDOW),
         HotkeyAction::Capture => Some(CAPTURE_WINDOW),
         HotkeyAction::ToggleMain => None,
+        HotkeyAction::Navigate { .. } => Some(MAIN_WINDOW),
     }
 }
 
@@ -197,6 +198,11 @@ mod tests {
         assert_eq!(target_window(&HotkeyAction::Capture), Some(CAPTURE_WINDOW));
         // toggleMain 由 Rust 直办，不投给任何 WebView——投了就是白白唤醒一个不处理它的桥。
         assert_eq!(target_window(&HotkeyAction::ToggleMain), None);
+        // navigate 与 punch 同投主窗口：它要显示的就是主窗口，没有第二个候选。
+        assert_eq!(
+            target_window(&HotkeyAction::Navigate { target: "/todo".into() }),
+            Some(MAIN_WINDOW)
+        );
     }
 
     #[test]

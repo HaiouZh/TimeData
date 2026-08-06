@@ -143,6 +143,7 @@ const ACTION_OPTIONS: { value: DesktopHotkeyBinding["action"]; label: string }[]
   { value: "punch", label: "打点" },
   { value: "toggleMain", label: "显示 / 隐藏窗口" },
   { value: "capture", label: "速记浮窗" },
+  { value: "navigate", label: "跳转" },
 ];
 
 /** 行身份：快捷键可以为空、可以重复，只有本地 rowId 能稳定标识一行（删中间行不错位）。 */

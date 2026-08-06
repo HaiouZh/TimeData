@@ -4,10 +4,12 @@
 // seed 真 db，故 dbReset 必须先于任何触 db/index 的模块求值。
 import type { Category } from "@timedata/shared";
 import { act, createElement } from "react";
+import { createMemoryRouter, MemoryRouter, RouterProvider } from "react-router";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { db, resetDb } from "../../test/dbReset.js";
 import { click, renderDom, unmount, type Root } from "../../test/domHarness.js";
 import { setPunchCategoryId } from "../../lib/settings/punchCategorySetting.js";
+import { useUnsavedChangesGuard } from "../../hooks/useUnsavedChangesGuard.js";
 
 // 只挡 IPC 边界，打点仍走真 desktopPunch + 真库。
 // 路径写 ".ts" 而不是 ".js"：本仓 vi.mock 按 vitest 的解析路径匹配（DiaryReferencePanel 已验证），
@@ -31,7 +33,7 @@ const PRESSED_AT_MS = new Date("2026-06-15T04:00:00.000Z").getTime();
 const PUNCH_CATEGORY_ID = "cat-deep";
 const CONFIG = { autostartDisabled: false, punchConfirmHours: 4, hotkeys: [] };
 
-type HotkeyEvent = { action: string; pressedAtMs: number };
+type HotkeyEvent = { action: string; pressedAtMs: number; target?: string };
 
 let mountedRoot: Root | null = null;
 const calls: string[] = [];
@@ -93,7 +95,8 @@ async function waitFor(check: () => boolean | Promise<boolean>, label: string): 
 const countOf = (cmd: string) => calls.filter((call) => call === cmd).length;
 
 async function mount() {
-  const rendered = await renderDom(createElement(DesktopBridge));
+  // 桥用 useNavigate/useLocation（navigate 动作要走 router 跳转），必须有 Router 上下文。
+  const rendered = await renderDom(createElement(MemoryRouter, null, createElement(DesktopBridge)));
   mountedRoot = rendered.root;
   await settle();
   return rendered;
@@ -303,5 +306,39 @@ describe("DesktopBridge 组件接线", () => {
       title: "TimeData",
       body: "invokeDesktop 只能在桌面壳里调用",
     });
+  });
+});
+
+describe("navigate 与未保存修改守卫", () => {
+  it("目标页脏着时跳转被守卫拦住，人留在原地", async () => {
+    // 守的是「navigate 走 router，所以 useUnsavedChangesGuard 的 useBlocker 管得到」。
+    // 改成 window.location.href = target 的话功能看着一样，而正在写的日记会被静默丢掉，
+    // 且没有任何别的测试会红。
+    const confirm = vi.fn(async () => false); // 用户选「继续编辑」
+    function DirtyPage() {
+      useUnsavedChangesGuard({ when: true, confirm });
+      return createElement("div", null, "dirty");
+    }
+    const router = createMemoryRouter(
+      [
+        {
+          path: "/diary",
+          element: createElement("div", null, createElement(DirtyPage), createElement(DesktopBridge)),
+        },
+        { path: "/todo", element: createElement("div", null, "todo") },
+      ],
+      { initialEntries: ["/diary"] },
+    );
+    const rendered = await renderDom(createElement(RouterProvider, { router }));
+    mountedRoot = rendered.root;
+    await waitFor(() => handlers.length > 0, "桥挂上监听");
+
+    await act(async () => {
+      handlers[0]?.({ action: "navigate", pressedAtMs: 0, target: "/todo" });
+    });
+    await waitFor(() => confirm.mock.calls.length > 0, "守卫弹出确认");
+
+    expect(router.state.location.pathname).toBe("/diary");
+    expect(rendered.host.textContent).toContain("dirty");
   });
 });
