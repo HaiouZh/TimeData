@@ -23,24 +23,22 @@ export interface TodoProjectGroup {
   goalTitle: string;
   /** 未完成成员。由 listTasks 在进入 buckets 前按项目区状态排序。 */
   tasks: Task[];
-  /** 已完成成员数，不持有长期增长的已完成任务数组。 */
+  /** 已完成成员数，及它们名下的已完成子任务数；不持有长期增长的已完成任务数组。 */
   doneCount: number;
-  /** 近 RECENT_DONE_WINDOW_DAYS 天完成的成员数。 */
+  /** 近 RECENT_DONE_WINDOW_DAYS 天完成的成员数，及它们名下的已完成子任务数。 */
   recentDoneCount: number;
   /** 原始 goal.members 数组长度，含 track 成员与悬空 ref。 */
   memberCount: number;
   /**
-   * **未完成成员**名下的未完成子任务数（`skipped` 不计）。
+   * 未完成成员 id → 它名下未完成子任务数（`skipped` 不计）。
    *
-   * 口径与手头区 `atHandPendingTotal` 同源（那里是 `pendingRootIds.has(t.parentId)`）：
-   * 已完成成员在组内不渲染，把它名下未完成的子任务数进「还剩 N」，用户展开组数不出 N，
-   * 比少报更糟。**这是刻意取舍，不是 bug，别改成"数全部成员名下的"。**
+   * **刻意不是加总好的标量**：筛选激活时页面会裁剪 `tasks`，而标量结构上不可能跟着裁，
+   * 「还剩 N」就会把看不见的成员名下的子任务算进去、用户展开组数不出 N。按成员分桶后
+   * 求和发生在消费端（`summarizeProjectGroup`），裁剪自动生效。
    *
-   * `doneCount` / `recentDoneCount` 反过来数**全部成员**名下的已完成子任务，与本字段不对称——
-   * 那两个数回答的是「这个组总共完成了多少」，而已完成成员本身也从不渲染却照样计入，
-   * 按同一把尺子，它名下已完成的子任务也该计入。
+   * 口径与手头区 `atHandPendingTotal` 同源；已完成成员不进本表（它们在组内不渲染）。
    */
-  pendingChildCount: number;
+  pendingChildByMember: ReadonlyMap<string, number>;
 }
 
 /** 标题行「近 N 天 +M」的窗口长度。 */
@@ -118,12 +116,13 @@ export function buildTodoProjectGroups(
   const recentSince = new Date(now.getTime() - RECENT_DONE_WINDOW_DAYS * 24 * 60 * 60 * 1000).toISOString();
   const recentUntil = now.toISOString();
 
-  const draft = new Map<string, { group: TodoProjectGroup; latest: string }>();
+  const draft = new Map<string, { group: TodoProjectGroup; latest: string; pendingChildByMember: Map<string, number> }>();
   for (const task of memberTasks) {
     const membership = index.get(task.id);
     if (!membership) continue;
     let entry = draft.get(membership.goalId);
     if (!entry) {
+      const pendingChildByMember = new Map<string, number>();
       entry = {
         group: {
           goalId: membership.goalId,
@@ -131,10 +130,11 @@ export function buildTodoProjectGroups(
           tasks: [],
           doneCount: 0,
           recentDoneCount: 0,
-          pendingChildCount: 0,
+          pendingChildByMember,
           memberCount: goalById.get(membership.goalId)?.members?.length ?? 0,
         },
         latest: "",
+        pendingChildByMember,
       };
       draft.set(membership.goalId, entry);
     }
@@ -150,8 +150,8 @@ export function buildTodoProjectGroups(
         const completedAt = child.completedAt ?? "";
         if (completedAt >= recentSince && completedAt <= recentUntil) entry.group.recentDoneCount += 1;
       } else if (!task.done) {
-        // 只数未完成成员名下的——理由见 TodoProjectGroup.pendingChildCount 的注释
-        entry.group.pendingChildCount += 1;
+        // 只数未完成成员名下的——理由见 TodoProjectGroup.pendingChildByMember 的注释
+        entry.pendingChildByMember.set(task.id, (entry.pendingChildByMember.get(task.id) ?? 0) + 1);
       }
     }
     if (task.updatedAt > entry.latest) entry.latest = task.updatedAt;

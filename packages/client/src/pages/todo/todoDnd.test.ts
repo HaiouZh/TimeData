@@ -18,6 +18,7 @@ import {
   type ResolveTodoDragLaneAtPointerInput,
   resolveTodoDragOperation,
   resolveTodoDragWithIndent,
+  resolveTodoDropTarget,
   TODO_CHILD_INDENT_PX,
   TODO_INDENT_RELEASE_PX,
   type TodoContainer,
@@ -403,6 +404,60 @@ describe("resolveTodoDragOperation", () => {
       }),
     ).toBeNull();
   });
+
+  it("组内子任务 → 手头：null（不提供拖出组）", () => {
+    // 父在项目组的子任务与收件箱子任务在判定层同形（容器都是 `parent:<父id>`），
+    // 靠 activeParentProjectGoalId 分开——非 null 时拖到手头等于把子任务升根离组，项目区不提供。
+    expect(
+      resolveTodoDragOperation({
+        activeContainerId: "parent:member-a",
+        targetContainerId: "hand",
+        activeParentId: "member-a",
+        activeParentProjectGoalId: "g1",
+      }),
+    ).toBeNull();
+  });
+
+  it("组内子任务 → 今天池：null", () => {
+    expect(
+      resolveTodoDragOperation({
+        activeContainerId: "parent:member-a",
+        targetContainerId: "pool:today",
+        activeParentId: "member-a",
+        activeParentProjectGoalId: "g1",
+      }),
+    ).toBeNull();
+    expect(
+      resolveTodoDragOperation({
+        activeContainerId: "parent:member-a",
+        targetContainerId: "pool:inbox",
+        activeParentId: "member-a",
+        activeParentProjectGoalId: "g1",
+      }),
+    ).toBeNull();
+  });
+
+  it("收件箱子任务 → 手头：照常 promote-to-hand（父不在项目组，不受守卫影响）", () => {
+    expect(
+      resolveTodoDragOperation({
+        activeContainerId: "parent:root-1",
+        targetContainerId: "hand",
+        activeParentId: "root-1",
+        activeParentProjectGoalId: null,
+      }),
+    ).toEqual({ kind: "promote-to-hand" });
+  });
+
+  it("收件箱子任务 → 今天池：照常 promote-to-root", () => {
+    expect(
+      resolveTodoDragOperation({
+        activeContainerId: "parent:root-1",
+        targetContainerId: "pool:today",
+        activeParentId: "root-1",
+        activeParentProjectGoalId: null,
+      }),
+    ).toEqual({ kind: "promote-to-root", pool: "today" });
+  });
 });
 
 describe("hoveredRootIdFromOver", () => {
@@ -443,6 +498,73 @@ describe("hoveredRootIdFromOver", () => {
     // 不早退的话会把 "project:g1" 这个容器 id 当成根行 id 返回，下游拼出 parent:project:g1。
     expect(hoveredRootIdFromOver("project:g1", "", "project:g1")).toBeNull();
     expect(hoveredRootIdFromOver("pool:today", "", "pool:today")).toBeNull();
+  });
+
+  it("项目区来源 → 收件箱行：返回 null（不提供拖出组）", () => {
+    // 项目区整区不提供「拖出组」：成员右移进收纳档、指针扫过收件箱一行就松手，
+    // 会把成员静默收纳成那条任务的子任务、连带退出项目组。来源是项目区一律不认组外落点。
+    expect(hoveredRootIdFromOver("pool:inbox", "task-1", "project:g1")).toBeNull();
+  });
+
+  it("项目区来源 → 今天区行：返回 null", () => {
+    // 今天区能看到任意项目的成员（时间轴与归属轴正交），落在那里就是跨组收纳。
+    expect(hoveredRootIdFromOver("pool:today", "task-1", "project:g1")).toBeNull();
+  });
+
+  it("项目区来源 → 别人的子任务行（parent 容器）：返回 null", () => {
+    // 组内子任务行的容器是 `parent:<爹>`，与收件箱子任务完全同形——判定层分不出 over 落在谁家，
+    // 只能按来源拒：项目区来源在 parent 容器上一律不算出根行。
+    expect(hoveredRootIdFromOver("parent:root-1", "child-9", "project:g1")).toBeNull();
+  });
+
+  it("手头来源 → 收件箱行：照常返回该行 id（既有语义不受影响）", () => {
+    // 手头区的行右移收纳到今天 / 收件箱某行是既有允许语义（at-hand 文档「反方向不设防」），
+    // 项目区来源的守卫不得误伤这一支。
+    expect(hoveredRootIdFromOver("pool:inbox", "task-1", "hand")).toBe("task-1");
+    expect(hoveredRootIdFromOver("pool:today", "task-2", "hand")).toBe("task-2");
+  });
+});
+
+const dropLookup = {
+  isTodayRoot: (id: string) => id === "today-root",
+  isFloatingInboxRoot: (id: string) => id === "inbox-root",
+  projectGoalIdOfMember: (id: string) => (id === "member-x" ? "g1" : null),
+};
+
+describe("resolveTodoDropTarget", () => {
+  it("over 是池容器 → 直接返回该容器（不查表）", () => {
+    expect(resolveTodoDropTarget("pool:today", "today-root", dropLookup)).toEqual({ kind: "pool", pool: "today" });
+    expect(resolveTodoDropTarget("pool:inbox", "inbox-root", dropLookup)).toEqual({ kind: "pool", pool: "inbox" });
+  });
+
+  it("over 是项目组容器 → 直接返回该容器", () => {
+    expect(resolveTodoDropTarget("project:g1", "member-x", dropLookup)).toEqual({ kind: "project", goalId: "g1" });
+  });
+
+  it("over 是手头容器 → 直接返回该容器", () => {
+    expect(resolveTodoDropTarget("hand", "today-root", dropLookup)).toEqual({ kind: "hand" });
+  });
+
+  it("over 是 parent 容器且根行在今天桶 → 返回 today 池", () => {
+    expect(resolveTodoDropTarget("parent:X", "today-root", dropLookup)).toEqual({ kind: "pool", pool: "today" });
+  });
+
+  it("over 是 parent 容器且根行在收件箱 → 返回 inbox 池", () => {
+    expect(resolveTodoDropTarget("parent:X", "inbox-root", dropLookup)).toEqual({ kind: "pool", pool: "inbox" });
+  });
+
+  it("over 是 parent 容器且根行是项目组成员（前两个查表都返 false）→ 反查回所属组", () => {
+    // 这段反查是项目区落点解析的承重接线：成员被归属轴排他扣出了 inbox 桶，前两个查表查不到它；
+    // 组内子任务往左拖时 over 常落在兄弟子任务上（容器 `parent:<爹>`），不反查就解析不出落点。
+    expect(resolveTodoDropTarget("parent:X", "member-x", dropLookup)).toEqual({ kind: "project", goalId: "g1" });
+  });
+
+  it("rootAboveId 为 null → 返回 null", () => {
+    expect(resolveTodoDropTarget("parent:X", null, dropLookup)).toBeNull();
+  });
+
+  it("三个查表都查不到根行 → 返回 null", () => {
+    expect(resolveTodoDropTarget("parent:X", "nowhere", dropLookup)).toBeNull();
   });
 });
 

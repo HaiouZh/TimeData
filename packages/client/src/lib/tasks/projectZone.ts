@@ -66,24 +66,26 @@ export function projectMemberRowActions(
 }
 
 export interface ProjectGroupSummary {
-  /** 未完成成员数 */
+  /** 未完成成员数（含其名下未完成子任务） */
   remaining: number;
-  /** 已完成成员数 */
+  /** 已完成成员数，及它们名下的已完成子任务数 */
   doneCount: number;
-  /** 近 RECENT_DONE_WINDOW_DAYS 天完成数 */
+  /** 近 RECENT_DONE_WINDOW_DAYS 天完成数（成员与子任务都算） */
   recentDoneCount: number;
   allDone: boolean;
 }
 
 export function summarizeProjectGroup(group: TodoProjectGroup): ProjectGroupSummary {
-  // 「还剩」= 看得见的未完成成员 + 它们名下未完成的子任务。把活压成父子只是整理结构，
-  // 活一件没少，数字就不该跟着掉（与手头区 atHandPendingTotal 同一条口径）。
-  const remaining = group.tasks.length + group.pendingChildCount;
+  // 「还剩」= 看得见的未完成成员 + 它们名下未完成的子任务。按 group.tasks 求和而不是读一个
+  // 加总好的标量：筛选激活时 tasks 已被裁剪，求和跟着裁，标题数字与展开后能数出来的条数一致。
+  let pendingChildren = 0;
+  for (const task of group.tasks) pendingChildren += group.pendingChildByMember.get(task.id) ?? 0;
+  const remaining = group.tasks.length + pendingChildren;
   return {
     remaining,
     doneCount: group.doneCount,
     recentDoneCount: group.recentDoneCount,
-    // 无未完成成员 ⇒ pendingChildCount 恒 0，故此判据与旧行为等价。
+    // 无未完成成员 ⇒ pendingChildByMember 恒空，故此判据与旧行为等价。
     allDone: remaining === 0 && group.doneCount > 0,
   };
 }

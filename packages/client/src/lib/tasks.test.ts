@@ -1725,7 +1725,7 @@ describe("listTasks projects 桶", () => {
     const buckets = await listTasks();
     const group = buckets.projects.find((g) => g.goalId === p1.id);
     expect(group?.tasks).toHaveLength(2);
-    expect(group?.pendingChildCount).toBe(2);
+    expect(group?.pendingChildByMember.get(a.id)).toBe(2);
   });
 
   /**

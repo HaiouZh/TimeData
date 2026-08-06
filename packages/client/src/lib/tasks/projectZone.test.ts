@@ -37,7 +37,7 @@ function task(patch: Partial<Task> & Pick<Task, "id">): Task {
 }
 
 function group(patch: Partial<TodoProjectGroup> & Pick<TodoProjectGroup, "goalId">): TodoProjectGroup {
-  return { goalTitle: `目标 ${patch.goalId}`, tasks: [], doneCount: 0, recentDoneCount: 0, memberCount: 0, pendingChildCount: 0, ...patch };
+  return { goalTitle: `目标 ${patch.goalId}`, tasks: [], doneCount: 0, recentDoneCount: 0, memberCount: 0, pendingChildByMember: new Map(), ...patch };
 }
 
 describe("projectMemberState", () => {
@@ -125,7 +125,7 @@ describe("summarizeProjectGroup", () => {
     expect(summarizeProjectGroup(group({ goalId: "g1" }))).toEqual({ remaining: 0, doneCount: 0, recentDoneCount: 0, allDone: false });
   });
 
-  it("remaining 计入 pendingChildCount", () => {
+  it("remaining 计入未完成成员名下的子任务（按成员分桶求和）", () => {
     const summary = summarizeProjectGroup({
       goalId: "g1",
       goalTitle: "P1",
@@ -133,13 +133,13 @@ describe("summarizeProjectGroup", () => {
       doneCount: 0,
       recentDoneCount: 0,
       memberCount: 1,
-      pendingChildCount: 2,
+      pendingChildByMember: new Map([["m1", 2]]),
     });
     expect(summary.remaining).toBe(3);
     expect(summary.allDone).toBe(false);
   });
 
-  it("零未完成成员时 pendingChildCount 恒 0，allDone 判据与旧行为等价", () => {
+  it("零未完成成员时 pendingChildByMember 恒空，allDone 判据与旧行为等价", () => {
     const summary = summarizeProjectGroup({
       goalId: "g1",
       goalTitle: "P1",
@@ -147,9 +147,29 @@ describe("summarizeProjectGroup", () => {
       doneCount: 3,
       recentDoneCount: 1,
       memberCount: 3,
-      pendingChildCount: 0,
+      pendingChildByMember: new Map(),
     });
     expect(summary.allDone).toBe(true);
+  });
+
+  it("筛选裁剪成员后，remaining 只数可见成员及其子任务", () => {
+    // 构造：成员 A（名下 2 条未完成子任务）、成员 B（名下 1 条未完成子任务）。
+    const full = {
+      goalId: "g1",
+      goalTitle: "P1",
+      tasks: [task({ id: "A" }), task({ id: "B" })],
+      doneCount: 0,
+      recentDoneCount: 0,
+      memberCount: 2,
+      pendingChildByMember: new Map([
+        ["A", 2],
+        ["B", 1],
+      ]),
+    };
+    expect(summarizeProjectGroup(full).remaining).toBe(5);
+    // 模拟筛选把 tasks 裁成只剩 A：remaining 必须跟着裁，不许把看不见的 B 名下子任务算进去。
+    const filtered = { ...full, tasks: [task({ id: "A" })] };
+    expect(summarizeProjectGroup(filtered).remaining).toBe(3);
   });
 });
 

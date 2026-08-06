@@ -44,7 +44,7 @@ function group(overrides: Partial<TodoProjectGroup> & Pick<TodoProjectGroup, "go
     doneCount: 0,
     recentDoneCount: 0,
     memberCount: 0,
-    pendingChildCount: 0,
+    pendingChildByMember: new Map(),
     ...overrides,
   };
 }

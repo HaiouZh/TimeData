@@ -353,7 +353,8 @@ describe("buildTodoProjectGroups 计数含子任务", () => {
       new Map([["m1", [task({ id: "c1", parentId: "m1" }), task({ id: "c2", parentId: "m1" })]]]),
     );
     expect(groups[0]?.tasks.map((t) => t.id)).toEqual(["m1", "m2"]);
-    expect(groups[0]?.pendingChildCount).toBe(2);
+    expect(groups[0]?.pendingChildByMember.get("m1")).toBe(2);
+    expect(groups[0]?.pendingChildByMember.size).toBe(1);
   });
 
   it("已完成子任务计入 doneCount 与近 7 天，不论爹完没完成", () => {
@@ -384,7 +385,7 @@ describe("buildTodoProjectGroups 计数含子任务", () => {
       NOW,
       new Map([["m1", [task({ id: "c1", parentId: "m1" })]]]),
     );
-    expect(groups[0]?.pendingChildCount).toBe(0);
+    expect(groups[0]?.pendingChildByMember.size).toBe(0);
     expect(groups[0]?.doneCount).toBe(1);
   });
 
@@ -396,7 +397,7 @@ describe("buildTodoProjectGroups 计数含子任务", () => {
       NOW,
       new Map([["m1", [task({ id: "c1", parentId: "m1", skipped: true })]]]),
     );
-    expect(groups[0]?.pendingChildCount).toBe(0);
+    expect(groups[0]?.pendingChildByMember.size).toBe(0);
   });
 
   it("memberCount 不含子任务：500 闸看的是 goal.members 原始长度", () => {

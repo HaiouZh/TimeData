@@ -53,10 +53,10 @@ last-reviewed: 2026-08-06
 1. 只收根任务（`parentId === null`），且 `recurrence === null && ruleId === null`——重复模板与 occurrence 不参与归属。
 2. **排他与归集共用同一个布尔量**。这是红线：若排他单独判 `projectMemberIndex.has(id)`，一条被写进 `members` 的 occurrence 会既被归集守卫挡在项目区外、又被踢出收件箱，整条消失。
 3. 未完成成员进 `group.tasks`；已完成成员**只折成计数**，不保留 `Task[]`。**标题行的三个数都含子任务**（与 [todo/at-hand](todo/at-hand.md) 的 `atHandPendingTotal` 同源）——把几条活收成父子只是整理结构，活一件没少，数字就不该跟着掉。子任务不在任何投影桶里（`listTasks` 主循环按 `parentId` 早退），故由 `listTasks` 另建 `parentId → 子任务[]` 索引交给 `buildTodoProjectGroups`，`skipped` 一律剔除：
-   - `pendingChildCount` 只数**未完成成员**名下的未完成子任务，与 `atHandPendingTotal` 的 `pendingRootIds.has(t.parentId)` 逐字同源。标题的「还剩 N」= `tasks.length + pendingChildCount`。
+   - `pendingChildByMember` 是**未完成成员 id → 它名下未完成子任务数**的表，只收未完成成员，与 `atHandPendingTotal` 的 `pendingRootIds.has(t.parentId)` 逐字同源。标题的「还剩 N」由 `summarizeProjectGroup` 按 `group.tasks` 逐个查表求和得出。**刻意不是一个加总好的标量**：筛选激活时页面裁剪 `tasks`（`filteredProjects`），而标量结构上不可能跟着裁，「还剩 N」就会把看不见的成员名下的子任务算进去、用户展开组数不出 N。分桶后求和发生在消费端，裁剪自动生效。
    - `doneCount` / `recentDoneCount` 反过来数**全部成员**名下的已完成子任务。**两侧刻意不对称，不是笔误**：前者答「展开组你还能数出几条」，而已完成成员在组内不渲染，把看不见的活数进「还剩」，用户展开组数不出 N，比少报更糟；后者答「这个组总共完成了多少」，而已完成成员本身也从不渲染却照样计入，按同一把尺子它名下的已完成子任务也该计入。
    - 已知边角：**爹已完成、子任务未完成**的那几条两个数都不进。这是有意的——上一条的直接推论。
-   - 三个数口径不同，不得互相派生。`allDone` 判据是 `remaining === 0 && doneCount > 0`；无未完成成员时 `pendingChildCount` 恒 0，不参与该判据。
+   - 三个数口径不同，不得互相派生。`allDone` 判据是 `remaining === 0 && doneCount > 0`；无未完成成员时 `pendingChildByMember` 恒空，不参与该判据。`doneCount` / `recentDoneCount` 与筛选无关——已完成成员本来就不在 `tasks` 里，那两个数回答的是组级事实。
 4. `memberCount` 取 `goal.members?.length ?? 0` 的**原始数组长度**，含 track 成员与悬空 ref，**不含子任务**（子任务从不进名单）。它只服务 500 上限预警，不能用 `tasks.length + doneCount` 近似：后者只数可解析 task 成员，会漏掉真实容量占用；也不能掺进子任务——那是给上限闸喂假数。
 5. 组间按**全部可解析成员（含已完成）**的 `max(updatedAt)` 倒序，并列按 `goal.createdAt` 倒序 —— 已完成成员参与排序键，故「某组全部完成」不会让它掉到末尾。
 6. 组内未完成成员由 `sortProjectMembers` 排成「在手头 → 今天 → 躺着 → 已排期」。前三段内保持传入顺序（即 `listTasks` 的 `sortOrder`）；已排期段按 `scheduledAt` 升序。已排期沉底是刻意的：项目组展开是为了挑下一条能动手的，未来有主的先让位。逾期一次性任务由 `placementForTask` 回落 inbox，自然归入 idle 段，不单开逾期态。
@@ -139,9 +139,9 @@ last-reviewed: 2026-08-06
 组内两个手势，**都只在同一个组内成立**：把 A 右移越线停在同组 B 上 = A 成为 B 的子任务（落库走 `lib/taskNesting.ts: nestTaskUnderParent`，同事务清 `sessionId` + 退出全部项目名单）；把组内子任务左移越线 = 升根并**重新入本组**（走 `promoteTaskToProject`，串行 `promoteToRoot(…, "inbox", …)` + `assignTaskToProject`）。阈值与判定层与其余各区共用同一套（见 [todo/invariants](todo/invariants.md) 第 5 条）。
 
 - **升根回组不违反「子任务不持有归属指针」**：它是同一手势内的显式再入组写入，不是归属继承——落库层没有任何「记住原来属于谁」的字段。
-- **两道同组守卫，各自独立成立**：`hoveredRootIdFromOver` 对 project 容器**比 `goalId` 而不只比 `kind`**（hand 是单例容器，比 kind 就够；项目区有 N 个容器，只比 kind 会放行跨组收纳，且拖到隔壁组的行上照样亮高亮、照样落库）；`resolveTodoDragWithIndent` 里 `canBecomeChild` 另有一道同判据的保险，防的是上游错传。
+- **三道守卫，方向不同，各自独立成立**：① `hoveredRootIdFromOver` 对 project 容器**比 `goalId` 而不只比 `kind`**（hand 是单例容器，比 kind 就够；项目区有 N 个容器，只比 kind 会放行跨组收纳，且拖到隔壁组的行上照样亮高亮、照样落库）；② 同一函数对 pool / parent 容器**拒绝项目区来源**——前一道挡「外区来源进不来」，这一道挡「组内来源出不去」；③ `resolveTodoDragWithIndent` 里 `canBecomeChild` 另有一道同判据的保险，防的是上游错传。②的代价是组内成员悬停在**同组另一个成员的子任务行**上不再是收纳落点（判定层分不出那个父在哪个组），主落点仍是成员行本身。
 - **子任务拖到项目卡上有两种情形，容器 id 字符串逐字相同**：收件箱某任务的子任务拖过来（跨区的「先升根再入组」，**拒绝**）vs 组内子任务落回本组（**升根回组**）。判定层分不出，靠页面算好的 `activeParentProjectGoalId` 分流——它同时喂坞的关闭判据，页面只算一次。
-- **`resolveTodoDragOperation` 里 `if (active.kind === "project") return null` 这道哨兵必须排在两条 project 分支之后**。挪到前面会把组内收纳与升根回组一起短路成死代码，而整套测试照绿（返回值都是 null，行为没变），真机上只表现为「项目区的行拖了没反应」。`todoDnd.test.ts` 有一条定向用例守这个位置。
+- **`resolveTodoDragOperation` 里 `if (active.kind === "project") return null` 这道哨兵必须排在两条 project 分支之后**。挪到前面会把组内收纳短路成死代码——这条错法**天然静默**：返回值都是 null、行为「没变」，真机上只表现为「项目区的行拖了没反应」。守它的是 `todoDnd.test.ts` 的定向用例，挪位后从三个入口各红一条。**升根回组不在影响面内**：它的 active 是 `parent` 容器，够不到这道哨兵。
 - **项目区整区不出投递坞**（含「父在项目组」的子任务）：本域不提供「拖出组」，退出项目走行内 × 按钮。机制同手头区，见 [todo/drag-dock](todo/drag-dock.md) §1。
 - **计数口径的连带**：收纳会让被收纳那条退出 `goal.members`，`memberCount` 因此**只减不增**，收纳永远撞不上 500 闸；标题三个数含子任务（§3），所以收纳前后数字不变。
 
@@ -163,14 +163,14 @@ last-reviewed: 2026-08-06
 
 | 入口 | 职责 |
 |---|---|
-| `lib/tasks/goalMembership.ts` | 读侧两份索引与分组投影：`goalLinkedTaskIds`（全 kind active）/ `projectMemberIndex`（active project）/ `buildTodoProjectGroups`（未完成列表、`doneCount`、`recentDoneCount`、`pendingChildCount`、原始 `memberCount`、组间排序键、同挂多组的仲裁；第 5 参 `childrenByParent` **必传**，给默认空 Map 会让漏传静默退回不含子任务的旧口径）/ `GOAL_MEMBERS_MAX` 与 `isProjectMemberCountNearCap` |
+| `lib/tasks/goalMembership.ts` | 读侧两份索引与分组投影：`goalLinkedTaskIds`（全 kind active）/ `projectMemberIndex`（active project）/ `buildTodoProjectGroups`（未完成列表、`doneCount`、`recentDoneCount`、`pendingChildByMember`、原始 `memberCount`、组间排序键、同挂多组的仲裁；第 5 参 `childrenByParent` **必传**，给默认空 Map 会让漏传静默退回不含子任务的旧口径）/ `GOAL_MEMBERS_MAX` 与 `isProjectMemberCountNearCap` |
 | `lib/taskNesting.ts`（归 [todo/modules](todo/modules.md) covers） | 组内两个手势的落库：`nestTaskUnderParent`（收纳，同事务清 `sessionId` + 退出全部名单）、`promoteTaskToProject`（升根回本组，串行两步不合事务；失败停在「已升根、未入组」的可见态，`ProjectAssignError.block` 为 `recurring` 时它落的是重复管理区而非收件箱） |
 | `lib/tasks/projectZone.ts` | 呈现判定纯函数（不碰 db / React，落 node 快桶）：`projectMemberState` 四态 / `sortProjectMembers` 四段排序与 recentTaskIds 覆盖 / `summarizeProjectGroup` 组三态计数 / `projectChipIndex` / `goalBarTaskIds` 竖条裁剪 |
 | `pages/todo/TodoProjectSection.tsx` | 项目区 UI：受控展开的组 header（`revealGoals` 待消费意图 → 组渲染出来才展开 + `scrollIntoView`，并经 `onRevealConsumed` 回报宿主清空）、成员行「当前在哪」胶囊与「退出项目」、内容区限高、`+` 项目内创建、`⋯` 改名 / 跳 goals、90% 上限预警；同文件另导出 `ProjectNameChip`（组外行的项目名 chip）；`trackChipFor` 插槽把宿主的轨道徽章并进成员行 meta 带（与状态胶囊组合，两者皆空时返回 `null` 以免顶开 `TaskRow` 的 meta 带出现闸） |
 | `lib/tasks.ts: listTasks()`（归 [todo](todo.md) covers） | 归集与排他的同源判据 `ownedByProject`、`buckets.projects` 出桶、`goalLinkedIds` |
 | `pages/TodoPage.tsx`（归 [todo](todo.md) covers） | 接线：项目区挂收件箱正上方（宽窄两种布局）、chip → `openProject` 回跳、成员回落 inbox 池时 `revealProjectHome`（唯一落点判据 `landsInCollapsedProjectGroup`，六条路径一律传写入后的 `Task`）、`exitProject` → `removeGoalMember`、`tagOptions` 纳入项目区成员 |
 | `lib/goals.ts`（归 [goals](goals.md) covers） | 写侧四条归属通道 + `touchTasksInCurrentTransaction`（§4.2）；`assignTaskToProject` 单事务先摘后加（§4.1）+ `ProjectAssignError`；`createTaskForProject` 组合项目内创建；`prerequisiteLossOnAssign` 只读预测（§6）；批量版三件套见 [project-zone/multi-select](project-zone/multi-select.md) §3、§4 |
-| `pages/todo/todoDnd.ts`（归 [todo](todo.md) covers） | `project:<goalId>` 容器域与 `assign-to-project` 操作、`project-row:` 行 id 域（`todoProjectRowIdPrefix` / `todoProjectRowId`）、组内 `move-to-parent` 与 `promote-to-project` 两条分支及其哨兵次序、同组守卫、`preferProjectCollisions` 碰撞策略含「本组来源优先认行」一档（§6 / §6.1） |
+| `pages/todo/todoDnd.ts`（归 [todo](todo.md) covers） | `project:<goalId>` 容器域与 `assign-to-project` 操作、`project-row:` 行 id 域（`todoProjectRowIdPrefix` / `todoProjectRowId`）、组内 `move-to-parent` 与 `promote-to-project` 两条分支及其哨兵次序、三道守卫、`preferProjectCollisions` 碰撞策略含「本组来源优先认行」一档、落点解析纯函数 `resolveTodoDropTarget` + `TodoDropLookup`（`parent:` 容器按根行反查所属池 / 组，项目成员被排他扣出 inbox 桶，那一支不能省）（§6 / §6.1） |
 
 测试：`lib/tasks/goalMembership.test.ts`（两份索引口径、分组投影、近 7 天窗口上下界、`memberCount` 原始口径、组间排序、同挂多组仲裁、悬空 ref、上限阈值）、`lib/tasks/projectZone.test.ts`（成员四态、行动作两轴不互遮、组计数、四段排序、recentTaskIds 覆盖、chip 索引、竖条裁剪）、`lib/tasks.test.ts`（`describe("listTasks projects 桶")`：归集/排他同源、手头正交、重复模板与 occurrence 挡在门外、组内排序接线）、`pages/todo/TodoProjectSection.test.tsx`（组展开折叠、标题文案、状态胶囊、成员行动作按真实状态渲染、退出项目、已完成零渲染、限高结构、`+` 创建输入、`⋯` 菜单、改名、上限预警、`revealGoals` 消费与「组还没渲染出来就留着、出现后补上」、chip）、`pages/TodoPage.test.tsx`（页面级：排他后成员离开收件箱、项目内创建成功/满员拒绝、菜单改名和跳转、零 project 不渲染、chip 回跳、回收件箱后展开归属组、红线 3 竖条不同屏，以及落点判据的三条反向用例——手头区取消勾选 / 抽屉清时间但已完成 / 抽屉选未来某天都**不**展开，外加「抽屉→页面」这根线本身）、`lib/goals.test.ts`（`createTaskForProject` 的同事务成功/满员/失效目标/裸行解析失败回滚，`describe("归属变更同事务刷新成员任务 updatedAt")` 与 `describe("assignTaskToProject")`：单一归属先摘后加、theme/归档组不被摘、目标组失效被拒、准入四拒、幂等重入不动钉点、事务原子性）。
 
@@ -186,6 +186,6 @@ last-reviewed: 2026-08-06
 
 **只有 `pool:today` / `pool:inbox` 两个拖拽源能归入项目**——已排期（非今天）与手头的任务没有归入路径，绕法是先清日期或等它到期。另有第三条进组路径但只在组内可达：组内子任务升根回本组（§6.1），它不接受任何外区来源。
 
-**项目区不提供「拖出组」**：组内的行拖不到收件箱 / 今天 / 手头 / 别的组，坞对项目区整区关闭。退出项目走行内 × 按钮，换组走「先退出、再拖入」两步。
+**项目区不提供「拖出组」**：组内的行拖不到收件箱 / 今天 / 手头 / 别的组，坞对项目区整区关闭。退出项目走行内 × 按钮，换组走「先退出、再拖入」两步。**这条边界由三处共同保证，缺一处就有洞**：`resolveTodoDragOperation` 的哨兵挡根成员直落池 / 手头；同函数两条 `parent` 分支按 `activeParentProjectGoalId` 挡组内子任务升根离组；`hoveredRootIdFromOver` 对 pool / parent 落点拒绝项目区来源，挡的是**绕道缩进手势的收纳出组**——那条最隐蔽，落点行会照常亮起收纳高亮环，而 `nestTaskUnderParent` 同事务清空全部项目名单。
 
 归档 Goal 不弹「N 条未完成任务将回到收件箱」提示：归档是 toggle，5 处入口都无确认（属 goals 页的呈现范围）；数据安全由 §4 的 touch 兜住，不依赖提示。

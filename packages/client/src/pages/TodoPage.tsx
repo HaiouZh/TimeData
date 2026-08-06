@@ -107,6 +107,7 @@ import {
   resolveTodoDockDrop,
   resolveTodoDragLaneAtPointer,
   resolveTodoDragWithIndent,
+  resolveTodoDropTarget,
   resetTodoDragRefs,
   type TodoContainer,
   type TodoDragLane,
@@ -814,17 +815,12 @@ export function TodoPage() {
   }, [dragging, syncLaneFromPointer]);
 
   function targetContainerFromOver(overContainerId: string, rootAboveId: string | null): TodoContainer | null {
-    const container = parseTodoContainerId(overContainerId);
-    // 池容器、项目组容器与手头区容器都是直接落点；parent 容器不是（它要按下面的根行反查它所在的池）。
-    if (container?.kind === "pool" || container?.kind === "project" || container?.kind === "hand") return container;
-    if (!rootAboveId) return null;
-    if (buckets.today.some((task) => task.id === rootAboveId)) return { kind: "pool", pool: "today" };
-    if (floatingInbox.some((task) => task.id === rootAboveId)) return { kind: "pool", pool: "inbox" };
-    // 项目区成员被归属轴排他扣出了 inbox 桶，上面两条都查不到它。组内子任务往左拖时 over 常落在
-    // 兄弟子任务上（容器是 `parent:<爹>`），不反查这一支就解析不出落点、松手无事发生。
-    const owner = buckets.projects.find((group) => group.tasks.some((task) => task.id === rootAboveId));
-    if (owner) return { kind: "project", goalId: owner.goalId };
-    return null;
+    return resolveTodoDropTarget(overContainerId, rootAboveId, {
+      isTodayRoot: (id) => buckets.today.some((task) => task.id === id),
+      isFloatingInboxRoot: (id) => floatingInbox.some((task) => task.id === id),
+      projectGoalIdOfMember: (id) =>
+        buckets.projects.find((group) => group.tasks.some((task) => task.id === id))?.goalId ?? null,
+    });
   }
 
   function handleDragOver(event: DragOverEvent): void {

@@ -444,11 +444,15 @@ export function resolveTodoDragOperation({
   // parent:X → hand —— 子任务升为根任务并站到手头。落库走 taskNesting.promoteTaskToHand
   //（先升根再抓，grabTaskToHand 对子任务的硬拒因此不会被这条路径触发）。
   if (active.kind === "parent" && target.kind === "hand") {
+    // 父在项目组的子任务不走这条：项目区不提供「拖出组」，含它名下的子任务。
+    if (activeParentProjectGoalId !== null) return null;
     return { kind: "promote-to-hand" };
   }
 
   // child → pool：升级为 root（child 不允许把别的 root 拖进来——一层约束）
   if (active.kind === "parent" && target.kind === "pool") {
+    // 同 hand 分支的理由：父在项目组的子任务不能经拖拽升根离组。
+    if (activeParentProjectGoalId !== null) return null;
     return { kind: "promote-to-root", pool: target.pool };
   }
 
@@ -507,8 +511,42 @@ export function hoveredRootIdFromOver(
   if (container.kind === "hand") {
     return parseTodoContainerId(activeContainerId)?.kind === "hand" ? overTaskId : null;
   }
+  // 走到这里 container 只可能是 pool / parent 两种容器，两种都是组外落点——
+  // 项目区来源一律不认：组内两个手势只在组内成立，「拖出组」不由拖拽提供（退出走行内 × 按钮）。
+  // 与上面 project / hand 两支的守卫同类——那两支挡的是「外区来源进不来」，这一支挡的是「组内来源出不去」。
+  if (parseTodoContainerId(activeContainerId)?.kind === "project") return null;
   if (container.kind === "pool") return overTaskId;
   return container.parentId;
+}
+
+/** `resolveTodoDropTarget` 的三个查表回调。页面用闭包实现，测试用假数据实现。 */
+export interface TodoDropLookup {
+  isTodayRoot: (taskId: string) => boolean;
+  isFloatingInboxRoot: (taskId: string) => boolean;
+  /** 该任务作为未完成成员属于哪个 active project 组；不属于返回 null。 */
+  projectGoalIdOfMember: (taskId: string) => string | null;
+}
+
+/**
+ * 把 over 的容器 id 解析成落点容器。`parent:` 容器不是直接落点——它要按悬停的那个根行
+ * 反查根行所在的池 / 组，故需要三个查表回调。
+ *
+ * **项目区那一支不能省**：成员被归属轴排他扣出了 inbox 桶，前两个查表都查不到它；
+ * 组内子任务往左拖时 over 常落在兄弟子任务上（容器 `parent:<爹>`），不反查就解析不出落点、
+ * 松手无事发生（而 over 落在组卡片上时照常工作，表现为同一手势一半灵一半失灵）。
+ */
+export function resolveTodoDropTarget(
+  overContainerId: string,
+  rootAboveId: string | null,
+  lookup: TodoDropLookup,
+): TodoContainer | null {
+  const container = parseTodoContainerId(overContainerId);
+  if (container?.kind === "pool" || container?.kind === "project" || container?.kind === "hand") return container;
+  if (!rootAboveId) return null;
+  if (lookup.isTodayRoot(rootAboveId)) return { kind: "pool", pool: "today" };
+  if (lookup.isFloatingInboxRoot(rootAboveId)) return { kind: "pool", pool: "inbox" };
+  const goalId = lookup.projectGoalIdOfMember(rootAboveId);
+  return goalId === null ? null : { kind: "project", goalId };
 }
 
 export interface ResolveTodoDragWithIndentInput {
