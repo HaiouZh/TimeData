@@ -5,7 +5,7 @@ covers:
   - packages/client/src/pages/todo/TodoDragDock.tsx
   - packages/client/src/pages/todo/todoDnd.ts
   - packages/client/src/pages/todo/todoDockDrop.ts
-last-reviewed: 2026-08-04
+last-reviewed: 2026-08-06
 ---
 
 # 待办 · 拖拽投递坞
@@ -28,7 +28,9 @@ last-reviewed: 2026-08-04
 - `dock:pool:today` / `dock:pool:inbox` / `dock:project:<goalId>` 折算成对应容器 id 后走 `resolveTodoDragOperation`，与把行拖到那个池/项目卡逐字同义。
 - `dock:hand` 是坞独有分支：对 root 源 = `grabTaskToHand`；对 child 源 = `promote-to-hand`（先升根再抓，`grabTaskToHand` 对子任务的硬拒因此不被这条路径触发，见 [todo/at-hand](at-hand.md#at-hand-grab-hard-reject)）。
 - **坞永不产生 reorder**：坞没有位置语义，`resolveTodoDockDrop` 一律拦成 `invalid`。正常也不可达（当前池的药丸不渲染），这道拦截是隐藏规则漏了时的兜底。
-- 药丸集合由 `todoDockTargets` 决定：被拖行**所在池**的药丸不显示；**拖子任务时「手头」药丸照常显示**；手头源（含"父在手头"的子任务）返回空数组——手头区整区不出坞，移出手头走 × 按钮。
+- 药丸集合由 `todoDockTargets` 决定：被拖行**所在池**的药丸不显示；**拖子任务时「手头」药丸照常显示**；**手头源与项目区源返回空数组**——这两个区整区不出坞（移出手头走 × 按钮，退出项目走行内 × 按钮），连左缘细条预告都不出。
+  - 子任务的容器 id 只有 `parent:<父id>` 一种形状，收件箱子任务、手头子任务与项目组内的子任务在判定层**完全同形**，分不出父在哪个区。故第三参 `activeParentInDocklessZone`（「父在一个整区不出坞的区里」）由页面查 `buckets.atHand` 与 `buckets.projects` 算好传进来。**这是一个布尔而不是两个**：两个布尔迟早会有人只传一个。
+  - `resolveTodoDockDrop` 对这两种来源一律拦成 `invalid`，是隐藏规则漏了时的兜底。
 - 子任务投项目药丸的拒绝口径与项目卡一致（`projectAssignBlockMessage("subtask", …)`），不因为换了入口就放宽。
 - `hoveredRootIdFromOver` 对 dock id 恒返回 `null`：**坞不是缩进落点**。不加这道守卫，`parseTodoContainerId("dock:hand")` 解析失败会 fall 到 activeContainerId，把 dock id 当"根行 id"返回，下游拼出 `parent:dock:hand` 这种垃圾落点。
 
@@ -87,6 +89,8 @@ last-reviewed: 2026-08-04
 
 裁决点只有一个：`preferProjectCollisions` 的 `dockAllowed`，由页面传 `laneRef.current === "dock"`。
 
+同一个函数另有一档与坞正交的裁决 `activeProjectGoalId`（项目区来源时同组行优先于组卡片，见 [project-zone](../project-zone.md#project-zone-nesting)）。**两档互不影响**：坞档在最前，无资格时先把 `dock:` 前缀整个剔掉，之后才轮到项目区那档。该入参同样走 ref（`activeProjectGoalIdRef`）而非 state，理由与 `dockAllowed` 逐字相同——碰撞策略每帧读它，state 慢两跳。它随其余拖拽 ref 一起在 `resetTodoDragRefs` 单点复位，**新增拖拽期 ref 一律加进那个函数**，别在页面里手写：复位要覆盖 dragStart / dragEnd / dragCancel 三条路径，手写漏的必然是 cancel 那条，留下的残留值会让下一次非项目区拖拽被按「来自那个组」裁决。
+
 - **两条路都要滤**：`pointerHits` 与 `fallback()`（closestCenter 会把坞药丸的矩形一并算进去）在无资格时都得剔掉 `dock:` 前缀，只滤前者会让兜底路把坞重新放进来。
 - **有资格时坞优先**：指针同时落在药丸与其下方行/项目组的矩形内时只认坞。
 - **此闸不挂药丸的 `useDroppable({disabled})`**：那条路是 state 驱动的——值要先经一次 React 提交、再经 `useDroppable` 自己的 effect dispatch 一次，才落进 dnd-kit 的可碰撞集合，比车道 ref 慢两跳。慢出来的窗口两个方向都咬人：**刚释放**（坞视觉已收）时 `over` 仍指着药丸，松手落一次用户以为已放弃的真实投递；**刚进档**（坞已展开）时药丸还禁用着，对着药丸松手却漏接。读 ref 则两侧同拍。
@@ -122,7 +126,7 @@ DOM 见证是容器上的 `data-dock-state`；药丸另有 `data-dock-engaged`�
 
 ## 7. 测试清单
 
-- `pages/todo/todoDnd.test.ts`：三档车道全阈值与滞回（含 base=child 的两次越档、单帧大位移一步进坞、dock 右甩落 child）、`holdDock` 短路释放与"不短路进档"、键盘守卫压过 holdDock、`laneToIndentLevel` 三档、`preferProjectCollisions` 的 `dockAllowed` 双路剔除、坞 id 域往返与落点解析矩阵。另有 `resolveTodoDragLaneAtPointer` 的几何用例（真实坐标进坞、两轴 `holdDock`、无锚点降级、坐标缺失保持原档）与**防回潮闸**：断言 `clampTodoIndentPreview` 的输出接回车道判定就够不到 dock（§3.1 的根因）。
+- `pages/todo/todoDnd.test.ts`：三档车道全阈值与滞回（含 base=child 的两次越档、单帧大位移一步进坞、dock 右甩落 child）、`holdDock` 短路释放与"不短路进档"、键盘守卫压过 holdDock、`laneToIndentLevel` 三档、`preferProjectCollisions` 的 `dockAllowed` 双路剔除与 `activeProjectGoalId` 四档（同组行优先 / 隔壁组不进优先档 / 无行时回落本组卡 / 外区来源行为不变）、项目区源与「父在项目组」子任务的空坞、坞 id 域往返与落点解析矩阵。另有 `resolveTodoDragLaneAtPointer` 的几何用例（真实坐标进坞、两轴 `holdDock`、无锚点降级、坐标缺失保持原档）与**防回潮闸**：断言 `clampTodoIndentPreview` 的输出接回车道判定就够不到 dock（§3.1 的根因）。
 - `pages/todo/TodoDragDock.test.tsx`：三形态 DOM 见证、`aria-hidden` 仅 engaged 放开、空坞（手头源/父在手头）不出细条、`dropBlocked` 项目药丸灰态。
 - `pages/TodoPage.test.tsx`：键盘拖起时坞出细条预告（恒基线档）、手头子任务拖起坞恒空、**鼠标拖起后左拉过阈值坞展开、右拉回位收回细条**。
 - `pages/todo/todoDockDrop.test.ts`：`applyTodoDockDrop` 的副作用调度——非 dock 落点、grab-to-hand、promote-to-hand、子任务投项目被拒、根任务折算 op，以及坞落位触感。

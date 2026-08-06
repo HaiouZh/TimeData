@@ -71,6 +71,9 @@
   "docs/evergreen/project-zone.md": {
     "covers": 3
   },
+  "docs/evergreen/project-zone/multi-select.md": {
+    "covers": 0
+  },
   "docs/evergreen/quick-notes.md": {
     "covers": 16
   },

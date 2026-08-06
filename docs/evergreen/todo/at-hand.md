@@ -7,7 +7,7 @@ covers:
   - packages/server/src/lib/session-rows.ts
 contracts:
   - packages/client/src/lib/sessions.ts
-last-reviewed: 2026-08-04
+last-reviewed: 2026-08-06
 ---
 
 # 待办 · 手头
@@ -96,9 +96,9 @@ if (handSessionId !== null && t.recurrence === null && (t.sessionId ?? null) ===
 
 **手头作为收纳落点只认手头来源**：`hoveredRootIdFromOver` 仅当拖拽来源也是 `hand` 时才把手头行当候选 root，外区来源返回 `null`（外区任务归到手头某件活底下的路径是先入手头、再在区内收敛）。该守卫落在这一层而非落点派发层，因为收纳高亮（`handleDragOver`）与落点派发共用同一函数，只拦落点会留下「亮了高亮却无反馈」。反方向不设防：`over` 落在池容器时走 pool 分支、不判来源，故手头行右移悬停在今天/收件箱某行上会收纳为该行的 child（并因清 `sessionId` 而脱离手头）。
 
-**子任务回手头**：子任务拖到 `hand` 容器或投手头坞，走 `promoteTaskToHand`——先 `promoteToRoot(…, "inbox", …)` 升根再 `grabTaskToHand`。落 `"inbox"` 而非 `"today"`：抓到手头与排今天正交，`promoteToRoot` 会按 pool 写 `scheduledAt`，落 `"today"` 等于替用户排期。两步串行不合事务，中途失败是「升了根、落回它自身字段决定的分区（通常是收件箱；降级不清能力字段——见 [todo](../todo.md#todo-s2-2)——子任务可能带休眠 `recurrence`，升根后规则复活，会落重复管理区而非收件箱）」——可见可重试，非不可观测态。
+**子任务回手头**：子任务拖到 `hand` 容器或投手头坞，走 `promoteTaskToHand`——先 `promoteToRoot(…, "inbox", …)` 升根再 `grabTaskToHand`。落 `"inbox"` 而非 `"today"`：抓到手头与排今天正交，`promoteToRoot` 会按 pool 写 `scheduledAt`，落 `"today"` 等于替用户排期。两步串行不合事务，中途失败是「升了根、落回它自身字段决定的分区（通常是收件箱；降级不清能力字段——见 [todo](../todo.md#todo-s2-2)——子任务可能带休眠 `recurrence`，升根后规则复活，会落重复管理区而非收件箱）」——可见可重试，非不可观测态。项目区有同款姊妹动作 `promoteTaskToProject`（组内子任务升根留在本组，先 `promoteToRoot(…, "inbox", …)` 再 `assignTaskToProject`），同样两步串行、同样的中途失败形状。
 
-**标题计数口径**：手头标题右侧的数字读 `TodoBuckets.atHandPendingTotal` = 手头未完 root 数 + 这些 root 名下未完 child 数。子任务被投影层按 `parentId` 早退丢出所有桶，`atHand` 数组里只有 root，故该计数在 `listTasks` 里另从全表按 `parentId` 反查累加。这一口径**与收件箱/今天区的 root 计数不同**且是刻意的：那两区是清单，数 root 合理；手头是工作台，把几条活压成父子只是整理结构，活的件数没变。
+**标题计数口径**：手头标题右侧的数字读 `TodoBuckets.atHandPendingTotal` = 手头未完 root 数 + 这些 root 名下未完 child 数。子任务被投影层按 `parentId` 早退丢出所有桶，`atHand` 数组里只有 root，故该计数在 `listTasks` 里另从全表按 `parentId` 反查累加。这一口径**与收件箱/今天区的 root 计数不同**且是刻意的：那两区是清单，数 root 合理；手头是工作台，把几条活压成父子只是整理结构，活的件数没变。**项目区走同一口径**（组标题三个数全含子任务，理由同上——组是一份承诺，不是清单；见 [project-zone](../project-zone.md)），两处反查同在 `listTasks` 里、同样剔 `skipped`。
 
 ## 5. 续场 = 散当前场 + 开新场 + 迁移未完任务
 
