@@ -1,8 +1,15 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { addQuickNote } from "../lib/quickNotes.js";
+import type { DesktopHotkeyEvent } from "../lib/desktop/api.js";
+import { invokeDesktop, listenDesktopHotkey } from "../lib/desktop/api.js";
 import { clearCaptureDraft, readCaptureDraft, writeCaptureDraft } from "./captureDraft.js";
 
 type CaptureStatus = "idle" | "saving" | "saved" | "error";
+
+export interface CaptureIo {
+  listen: (handler: (event: DesktopHotkeyEvent) => void) => Promise<() => void>;
+  invoke: <T>(cmd: string, args?: Record<string, unknown>) => Promise<T>;
+}
 
 export interface CaptureAppProps {
   /** 存完闪完之后收窗口。壳外注入，测试里可断言。 */
@@ -13,6 +20,8 @@ export interface CaptureAppProps {
   onSaved?: () => void;
   /** 「已记下」停留多久。 */
   savedFlashMs?: number;
+  /** 壳的 IPC 接触面。抽成参数，接线顺序才能在测试里断言。 */
+  io?: CaptureIo;
 }
 
 const DEFAULT_SAVED_FLASH_MS = 500;
@@ -29,19 +38,52 @@ const DEFAULT_SAVED_FLASH_MS = 500;
  *
  * 往这个文件里加 import 之前，先确认加的东西不属于上面四类。
  */
-export function CaptureApp({ onHide, save, onSaved, savedFlashMs = DEFAULT_SAVED_FLASH_MS }: CaptureAppProps = {}) {
+export function CaptureApp({ onHide, save, onSaved, io, savedFlashMs = DEFAULT_SAVED_FLASH_MS }: CaptureAppProps = {}) {
   const [text, setText] = useState(readCaptureDraft);
   const [status, setStatus] = useState<CaptureStatus>("idle");
   const [error, setError] = useState<string | null>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
-  useEffect(() => {
+  const focusInput = useCallback(() => {
     const input = inputRef.current;
     if (!input) return;
     input.focus();
     // 光标置末：唤起时若上次留着草稿，接着写才顺手。
     input.setSelectionRange(input.value.length, input.value.length);
   }, []);
+
+  useEffect(() => {
+    focusInput();
+  }, [focusInput]);
+
+  // 唤起接线。**先挂监听、后报 desktop_ready**：Rust 收到 ready 会立刻把就绪前排队的
+  // 按键投出来，顺序颠倒这批补投就全打在没有听众的窗口上（与 DesktopBridge 同规矩）。
+  useEffect(() => {
+    const bridge = io ?? { listen: listenDesktopHotkey, invoke: invokeDesktop };
+    let cancelled = false;
+    let unlisten: (() => void) | null = null;
+    void (async () => {
+      try {
+        const un = await bridge.listen((event) => {
+          // 浮窗只认 capture。punch 走主窗口，即使因为哪天投递改回广播而漏到这里，
+          // 也绝不能在浮窗里再处理一次——那正是「一次热键落两条记录」。
+          if (event.action === "capture") focusInput();
+        });
+        if (cancelled) {
+          un();
+          return;
+        }
+        unlisten = un;
+        await bridge.invoke("desktop_ready");
+      } catch {
+        // 壳没起来 / 事件权限缺失：浮窗仍可手动打字保存，不阻断。
+      }
+    })();
+    return () => {
+      cancelled = true;
+      unlisten?.();
+    };
+  }, [io, focusInput]);
 
   const submit = useCallback(async () => {
     const trimmed = text.trim();

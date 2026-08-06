@@ -171,3 +171,62 @@ describe("CaptureApp 存入状态机", () => {
     }
   });
 });
+
+describe("CaptureApp 热键接线", () => {
+  it("挂监听在报 desktop_ready 之前——顺序颠倒时排队补投的按键会打在没听众的窗口上", async () => {
+    const calls: string[] = [];
+    const listen = vi.fn(async () => {
+      calls.push("listen");
+      return () => {};
+    });
+    const invoke = vi.fn(async (cmd: string) => {
+      calls.push(cmd);
+      return undefined as never;
+    });
+    await renderDom(createElement(CaptureApp, { io: { listen, invoke } }));
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(calls).toEqual(["listen", "desktop_ready"]);
+  });
+
+  it("收到 capture 事件时重新聚焦并把光标置末；punch 事件一概不理", async () => {
+    const handlers: ((event: { action: string; pressedAtMs: number }) => void)[] = [];
+    const listen = vi.fn(async (handler: (event: { action: string; pressedAtMs: number }) => void) => {
+      handlers.push(handler);
+      return () => {};
+    });
+    writeCaptureDraft("上次的");
+    const { host } = await renderDom(
+      createElement(CaptureApp, { io: { listen, invoke: async () => undefined as never } }),
+    );
+    const input = host.querySelector("textarea")!;
+    input.blur();
+
+    await act(async () => {
+      handlers[0]({ action: "punch", pressedAtMs: 1 });
+    });
+    expect(document.activeElement).not.toBe(input);
+
+    await act(async () => {
+      handlers[0]({ action: "capture", pressedAtMs: 2 });
+    });
+    expect(document.activeElement).toBe(input);
+    expect(input.selectionStart).toBe("上次的".length);
+  });
+
+  it("卸载时取消监听，不泄漏", async () => {
+    const unlisten = vi.fn();
+    const listen = vi.fn(async () => unlisten);
+    const { root } = await renderDom(
+      createElement(CaptureApp, { io: { listen, invoke: async () => undefined as never } }),
+    );
+    await act(async () => {
+      await Promise.resolve();
+    });
+    await act(async () => {
+      root.unmount();
+    });
+    expect(unlisten).toHaveBeenCalledOnce();
+  });
+});
