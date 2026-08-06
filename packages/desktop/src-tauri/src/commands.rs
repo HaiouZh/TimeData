@@ -289,3 +289,13 @@ pub fn notify_user(app: AppHandle, title: String, body: String) {
 pub fn show_main(app: AppHandle) {
     show_main_window(&app);
 }
+
+/// 收起速记浮窗。**没有它浮窗就永远关不掉**——浮窗 `decorations: false` 没有标题栏和关闭
+/// 按钮，`skipTaskbar: true` 也不在任务栏里，前端的「存完隐藏」与 Esc 全靠这条命令落地。
+/// 与 `show_capture_window` 成对，缺一半的后果是一个 `alwaysOnTop` 的输入条永久钉在屏幕正中。
+#[tauri::command]
+pub fn hide_capture_window(app: AppHandle) {
+    if let Some(window) = app.get_webview_window(shell::CAPTURE_WINDOW) {
+        let _ = window.hide();
+    }
+}

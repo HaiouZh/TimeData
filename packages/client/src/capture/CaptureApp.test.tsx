@@ -140,6 +140,99 @@ describe("CaptureApp 存入状态机", () => {
     expect(readCaptureDraft()).toBe("打了一半");
   });
 
+  // 终审 L1/L6 抓到的 Critical 的闸：生产的 main.tsx 渲染的是无 prop 的 <CaptureApp />，
+  // 而收窗口的两条路当时都写成 onHide?.()——onHide 恒 undefined，两条全是空操作。
+  // 全部既有用例都注入了 mock onHide，所以 3722 条测试一条没红。
+  it("不传 onHide 时按 Esc 走真壳的 hide_capture_window——浮窗没有关闭按钮，这是唯一的收起路径", async () => {
+    const invoke = vi.fn(async () => undefined as never);
+    const listen = vi.fn(async () => () => {});
+    const { host } = await renderDom(createElement(CaptureApp, { io: { listen, invoke } }));
+    const input = host.querySelector("textarea")!;
+    await pressEscape(input);
+    expect(invoke).toHaveBeenCalledWith("hide_capture_window");
+  });
+
+  it("不传 onHide 时存完闪完也走 hide_capture_window", async () => {
+    vi.useFakeTimers();
+    try {
+      const invoke = vi.fn(async () => undefined as never);
+      const listen = vi.fn(async () => () => {});
+      const save = vi.fn(async () => {});
+      const { host } = await renderDom(
+        createElement(CaptureApp, { io: { listen, invoke }, save, savedFlashMs: 500 }),
+      );
+      const input = host.querySelector("textarea")!;
+      await type(input, "存完就走");
+      await pressEnter(input);
+      expect(invoke).not.toHaveBeenCalledWith("hide_capture_window");
+      await act(async () => {
+        vi.advanceTimersByTime(500);
+      });
+      expect(invoke).toHaveBeenCalledWith("hide_capture_window");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("输入法组合中的回车不提交——它是确认候选词，吃掉会拿组合前的旧文本落库", async () => {
+    const save = vi.fn(async () => {});
+    const { host } = await renderDom(createElement(CaptureApp, { save }));
+    const input = host.querySelector("textarea")!;
+    await type(input, "买牛");
+    await act(async () => {
+      input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", isComposing: true, bubbles: true }));
+    });
+    expect(save).not.toHaveBeenCalled();
+    expect(input.value).toBe("买牛");
+  });
+
+  it("输入法组合中的 Esc 不收窗口——它是取消候选词，不是关窗", async () => {
+    const onHide = vi.fn();
+    const { host } = await renderDom(createElement(CaptureApp, { onHide }));
+    const input = host.querySelector("textarea")!;
+    await act(async () => {
+      input.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", isComposing: true, bubbles: true }));
+    });
+    expect(onHide).not.toHaveBeenCalled();
+  });
+
+  it("saving 中输入框只读——放行输入会解除「忽略重复回车」的闸，而写完的续体会清掉在途文字", async () => {
+    let release!: () => void;
+    const gate = new Promise<void>((r) => {
+      release = r;
+    });
+    const { host } = await renderDom(createElement(CaptureApp, { save: async () => gate }));
+    const input = host.querySelector("textarea")!;
+    await type(input, "写着呢");
+    await pressEnter(input);
+    expect(input.readOnly).toBe(true);
+    await act(async () => {
+      release();
+    });
+    expect(input.readOnly).toBe(false);
+  });
+
+  it("saving 中即便有输入落进来，status 也不许被打回 idle（readOnly 之外的第二道防线）", async () => {
+    let release!: () => void;
+    const gate = new Promise<void>((r) => {
+      release = r;
+    });
+    const save = vi.fn(async () => {
+      await gate;
+    });
+    const { host } = await renderDom(createElement(CaptureApp, { save }));
+    const input = host.querySelector("textarea")!;
+    await type(input, "只该存一次");
+    await pressEnter(input);
+    // 绕过 readOnly 直接触发受控 onChange，模拟「输入还是进来了」
+    await type(input, "只该存一次啦");
+    await pressEnter(input);
+    await act(async () => {
+      release();
+    });
+    expect(save).toHaveBeenCalledTimes(1);
+  });
+
   it("唤起时把上次的草稿填回去，光标置末", async () => {
     writeCaptureDraft("上次没写完");
     const { host } = await renderDom(createElement(CaptureApp));

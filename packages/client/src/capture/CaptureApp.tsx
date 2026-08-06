@@ -12,7 +12,11 @@ export interface CaptureIo {
 }
 
 export interface CaptureAppProps {
-  /** 存完闪完之后收窗口。壳外注入，测试里可断言。 */
+  /**
+   * 存完闪完之后收窗口。**不传时走真壳的 `hide_capture_window`**——默认实现在组件里，
+   * 不在调用方：生产的 `main.tsx` 渲染的是无 prop 的 `<CaptureApp />`，靠调用方注入
+   * 就等于没有（而测试注入 mock 照样全绿）。传它只为在测试里断言收窗口这个动作发生过。
+   */
   onHide?: () => void;
   /** 存一条速记。默认走 addQuickNote，测试里可注入失败/挂起。 */
   save?: (text: string) => Promise<unknown>;
@@ -43,6 +47,20 @@ export function CaptureApp({ onHide, save, onSaved, io, savedFlashMs = DEFAULT_S
   const [status, setStatus] = useState<CaptureStatus>("idle");
   const [error, setError] = useState<string | null>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+
+  // 收窗口。**默认实现不能省**：浮窗 `decorations: false` 没有关闭按钮、`skipTaskbar: true`
+  // 不在任务栏里，没有这条 IPC 它就永远关不掉。测试注入 mock `onHide` 会全绿，而生产分支
+  // 从来不传 prop——那样「存完隐藏」与 Esc 两条路都是空操作，屏幕正中留一个赶不走的置顶输入条。
+  const hide = useCallback(() => {
+    if (onHide) {
+      onHide();
+      return;
+    }
+    const invoke = io?.invoke ?? invokeDesktop;
+    void invoke("hide_capture_window").catch(() => {
+      // 收不起来也不该把「已经存进去了」这个结论一起吞掉。
+    });
+  }, [onHide, io]);
 
   const focusInput = useCallback(() => {
     const input = inputRef.current;
@@ -116,15 +134,19 @@ export function CaptureApp({ onHide, save, onSaved, io, savedFlashMs = DEFAULT_S
     if (status !== "saved") return;
     const timer = setTimeout(() => {
       setStatus("idle");
-      onHide?.();
+      hide();
     }, savedFlashMs);
     return () => clearTimeout(timer);
-  }, [status, savedFlashMs, onHide]);
+  }, [status, savedFlashMs, hide]);
 
   const onChange = useCallback((next: string) => {
     setText(next);
     writeCaptureDraft(next);
-    setStatus("idle");
+    // **saving 中一个字都不许动 status**：onKeyDown 那道「saving 中忽略一切按键」的闸是靠
+    // status 判的，这里把它打回 idle 就等于解除闸——用户能在写入返回前再按一次回车发出
+    // 第二个并发提交，而先完成的那个的续体会无条件清空文字与草稿，把他正在打的字一并带走。
+    // textarea 的 readOnly 是第一道防线，这里是第二道（受控组件的 onChange 未必只由键入触发）。
+    setStatus((prev) => (prev === "saving" ? prev : "idle"));
     setError(null);
   }, []);
 
@@ -136,9 +158,14 @@ export function CaptureApp({ onHide, save, onSaved, io, savedFlashMs = DEFAULT_S
         event.preventDefault();
         return;
       }
+      // **输入法组合中，回车与 Esc 都不归浮窗管**：组合态的回车是「确认候选词」、Esc 是
+      // 「取消候选词」，被这里吃掉的话——回车会拿组合前的旧文本落库（React 不把组合中的字
+      // 写进受控 state），Esc 会连窗口一起收走。中文是这个产品的第一输入方式，而浮窗正是
+      // 快打快收的入口。**不 preventDefault**：要把这次按键原样让给输入法。
+      if (event.nativeEvent.isComposing) return;
       if (event.key === "Escape") {
         event.preventDefault();
-        onHide?.();
+        hide();
         return;
       }
       if (event.key === "Enter" && !event.shiftKey) {
@@ -146,7 +173,7 @@ export function CaptureApp({ onHide, save, onSaved, io, savedFlashMs = DEFAULT_S
         void submit();
       }
     },
-    [status, onHide, submit],
+    [status, hide, submit],
   );
 
   return (
@@ -157,6 +184,9 @@ export function CaptureApp({ onHide, save, onSaved, io, savedFlashMs = DEFAULT_S
           aria-label="速记浮窗输入框"
           rows={1}
           value={text}
+          // 只读而不是 disabled：disabled 会让 textarea 失焦，saving 只有几十毫秒，
+          // 焦点一丢一回反而闪。只读期间光标与选区都留在原处。
+          readOnly={status === "saving"}
           onChange={(event) => onChange(event.target.value)}
           onKeyDown={onKeyDown}
           className="w-full resize-none bg-transparent px-2 py-1 text-ink outline-none"

@@ -43,6 +43,7 @@ fn main() {
             commands::desktop_ready,
             commands::notify_user,
             commands::show_main,
+            commands::hide_capture_window,
         ])
         .setup(|app| {
             let show_item = MenuItem::with_id(app, "show", "打开 TimeData", true, None::<&str>)?;

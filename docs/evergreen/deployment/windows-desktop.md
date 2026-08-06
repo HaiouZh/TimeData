@@ -193,7 +193,9 @@ Rust 侧不广播热键事件，按 `shell::target_window` 的映射表**点名�
 
 「按下热键 → 浮窗拿到键盘焦点」这条在 Windows 上**不是必然的**：前台锁会把 `set_focus` 降级成任务栏闪烁（§4.3 的确认卡撞过同一件事）。实现是直白的 `show` + `set_focus`，能不能真拿到焦点由系统裁决，三种场景各不相同：别的应用正在接收键盘输入、别的应用全屏、短时间内连续唤起。
 
-抢不到焦点时的兜底判据是**宁可不显示窗口 + 发通知，也不留半开状态**：半开的浮窗看着能打字、键入却进了别的应用，比不出现更糟。
+**这条路径上没有兜底**：`show_capture_window` 是无条件的 `show` + `unminimize` + `set_focus`，三句的失败都被 `let _ =` 吞掉，既不检查焦点最终落在谁身上，也不发通知。抢不到焦点时浮窗照显，成为「看着能打字、键入却进了别的应用」的半开状态，屏幕上零提示。
+
+补兜底时的判据是**宁可不显示窗口 + 发通知，也不留半开状态**——半开比不出现更糟。
 
 ### 5.6 三道闸各守什么
 
@@ -225,8 +227,8 @@ Tauri 用独立的 WebView2 用户数据目录，与 Edge / Chrome 的 profile �
 
 `packages/desktop/scripts/check-desktop-config.mjs` 随 `pnpm --filter @timedata/desktop test` 运行，守三类「配错了没有任何其他门禁会红」的约定：
 
-1. **`tauri.conf.json` 快照**：`frontendDist` 为 `../../client/dist`、两个 before 命令都调 `build:mobile`、`identifier` 为 `icu.yanzhou.timedata`、`bundle.targets` 恰好 `["nsis"]`、主窗口 `visible` 为 `true`。这些字段配错时构建不一定报错，产出的却是空壳、旧产物或注册了 service worker 的包。
-2. **跨语言事件名（全匹配）**：`hotkeys.rs` 必须声明 `pub const HOTKEY_EVENT: &str = "…";`；`commands.rs` 里**一处裸字面量 emit 都不许有**（正则抓 `app.emit("…"`，集合必须为空）；`api.ts` 里 `listen<…>("…")` 的名字集合必须恰好等于那个常量的值。闸不能写成「文件里出现过一次」——`commands.rs` 有两处 emit（实时投递、就绪后补投），那种写法在改名时只改到第一处就照绿：日常按键正常，唯独「WebView 就绪前排队的那批」发的是旧名字、前端永远收不到，正好打掉 §4.2 承诺的「开机第一秒按下也生效」。两端之间没有共享类型，typecheck 管不到字符串字面量。
+1. **`tauri.conf.json` 快照**：`frontendDist` 为 `../../client/dist`、两个 before 命令都调 `build:mobile`、`identifier` 为 `icu.yanzhou.timedata`、`bundle.targets` 恰好 `["nsis"]`。窗口按 **label** 取（不按数组下标），主窗口 `visible` 为 `true`，浮窗的 `url` 与 `visible` / `decorations` / `skipTaskbar` / `alwaysOnTop` / `resizable` 五项逐一断言——浮窗少一项 `decorations: false` 就是一个带标题栏的窗口，少一项 `skipTaskbar` 就多一个任务栏图标，都不会让任何测试变红。这些字段配错时构建不一定报错，产出的却是空壳、旧产物或注册了 service worker 的包。
+2. **跨语言事件名（全匹配）**：`hotkeys.rs` 必须声明 `pub const HOTKEY_EVENT: &str = "…";`；`src-tauri/src/` 下**任何 `.rs` 里一处裸字面量 emit 都不许有**（正则覆盖 `emit` / `emit_to` / `emit_filter` 三种形态，集合必须为空——只认 `app.emit(` 的话，改用 `emit_to` 点名投递的那条路径会整个绕开闸）；`api.ts` 里 `listen<…>("…")` 的名字集合必须恰好等于那个常量的值。闸不能写成「文件里出现过一次」——`commands.rs` 有两处 emit（实时投递、就绪后补投），那种写法在改名时只改到第一处就照绿：日常按键正常，唯独「WebView 就绪前排队的那批」发的是旧名字、前端永远收不到，正好打掉 §4.2 承诺的「开机第一秒按下也生效」。两端之间没有共享类型，typecheck 管不到字符串字面量。
 3. **禁静态 import Tauri API**：扫 `packages/client/src/**/*.{ts,tsx}`，任何 `from "@tauri-apps/api…"` / `import "@tauri-apps/api…"` 形态（含 type-only 与单引号）都报红，只准 `await import(...)`。这是三端 bundle 不加载 Tauri 运行时的唯一保证。需要类型就在 `lib/desktop/api.ts` 里自己声明。
 
 ## 9. 排错

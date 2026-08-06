@@ -201,10 +201,43 @@ mod tests {
 
     #[test]
     fn window_labels_match_tauri_conf() {
-        // 这两个字面量同时出现在 tauri.conf.json、capabilities/default.json 与前端的
-        // ?window=capture 判据里。改这里就要改那三处。
-        assert_eq!(MAIN_WINDOW, "main");
-        assert_eq!(CAPTURE_WINDOW, "capture");
+        // **这条测试真去读那两个 JSON**。写成 `assert_eq!(MAIN_WINDOW, "main")` 是拿常量跟
+        // 自己同文件里的字面量比——改 label 时把两边一起改就照绿，而 `get_webview_window`
+        // 会静默返回 None，热键唤起、toggleMain、show_main 一起失效，没有任何闸会红。
+        let conf: serde_json::Value =
+            serde_json::from_str(&std::fs::read_to_string("tauri.conf.json").expect("读 tauri.conf.json"))
+                .expect("解析 tauri.conf.json");
+        let declared: Vec<String> = conf["app"]["windows"]
+            .as_array()
+            .expect("app.windows 必须是数组")
+            .iter()
+            .map(|w| w["label"].as_str().expect("每个窗口都要有 label").to_owned())
+            .collect();
+        for label in [MAIN_WINDOW, CAPTURE_WINDOW] {
+            assert!(
+                declared.iter().any(|d| d == label),
+                "tauri.conf.json 的 app.windows 里没有 label={label} 的窗口，实际声明的是 {declared:?}"
+            );
+        }
+
+        // capabilities 漏一个 label 更隐蔽：那个窗口建得出来、看得见，但它发起的
+        // listen / invoke 全被权限层静默拒掉——前端只表现为「热键唤起后什么都没发生」。
+        let caps: serde_json::Value = serde_json::from_str(
+            &std::fs::read_to_string("capabilities/default.json").expect("读 capabilities/default.json"),
+        )
+        .expect("解析 capabilities/default.json");
+        let authorized: Vec<String> = caps["windows"]
+            .as_array()
+            .expect("capabilities.windows 必须是数组")
+            .iter()
+            .map(|w| w.as_str().expect("label 必须是字符串").to_owned())
+            .collect();
+        for label in [MAIN_WINDOW, CAPTURE_WINDOW] {
+            assert!(
+                authorized.iter().any(|a| a == label),
+                "capabilities/default.json 没给 {label} 授权，实际授权的是 {authorized:?}"
+            );
+        }
     }
 
     #[test]
