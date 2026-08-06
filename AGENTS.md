@@ -78,6 +78,7 @@
 - 文档检查：`pnpm check:docs`（本地 warn）/ `:strict`（CI）/ `:stale` / `:size`（单文档过长上限 + covers 棘轮）/ `:coverage --since=<base>` / `:links`。各 mode 守什么、棘轮 / 基线 / 豁免机制见 [`_docs-guide/checks`](docs/evergreen/_docs-guide/checks.md)；体量闸与拆分判据见 [`_docs-guide/splitting`](docs/evergreen/_docs-guide/splitting.md)。**无参 = `--since=HEAD`**：提交干净后比对为空会**假通过**，自测一律带 `--since=main`。
 - ROADMAP 程序门：`pnpm check:roadmap`——docs_local/ROADMAP.md 的 size ≤8k、格式、全 [完成] 主题报归档；每次收工/合并前跑（docs_local 不入 Git，CI 够不着，本地是唯一执行点）。
 - **收工 / 合并前一律 `pnpm gate`**——全量门禁唯一入口，串行跑 CI 同集棘轮（lint / 四道静态闸 / typecheck / test / e2e / 四道 docs / roadmap / build）。本机全局互斥：同一时刻只允许一份，撞上别人在跑会自动排队（`--no-wait` 则立即退出）。**日常提交走聚焦验证，不必 gate。** 锁在主仓 `.git/timedata-gate.lock/`，进程被强杀留下的残锁 60 秒后自动接管，不用手删。
+- **验证命令不接管道取结论**：`pnpm gate 2>&1 | tail -40` 这类写法的退出码是管道末端那个命令的，失败被吃成 exit 0，据此报「全绿」就是假绿（2026-08-03 踩过）。要看结论就直跑读退出码（bash 取 `${PIPESTATUS[0]}`、PowerShell 取 `$LASTEXITCODE`），别只读被截断的输出。
 - 部署、环境变量、自更新见 [`README.md`](README.md)。
 
 ------
