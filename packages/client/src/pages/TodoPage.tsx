@@ -51,7 +51,7 @@ import {
   unscheduleTask,
 } from "../lib/tasks.js";
 import { buildTrackConcludeUndo, toggleTaskDoneWithTrackConclude } from "../lib/taskTrackPromote.js";
-import { nestTaskUnderParent, promoteTaskToHand } from "../lib/taskNesting.js";
+import { nestTaskUnderParent, promoteTaskToHand, promoteTaskToProject } from "../lib/taskNesting.js";
 import { goalBarTaskIds, landsInCollapsedProjectGroup, projectChipIndex } from "../lib/tasks/projectZone.js";
 import { applyOptimisticOrder } from "../lib/tasks/reorderDisplay.js";
 import { splitInboxByGravity } from "../lib/tasks/gravity.js";
@@ -189,6 +189,9 @@ export function TodoPage() {
   // 的 event.delta**:那是过 modifiers 之后的值,出坞要的负位移被 clampTodoIndentPreview 钳没了
   // (理由详见 resolveTodoDragLaneAtPointer 注释)。
   const pointerPosRef = useRef<{ x: number; y: number } | null>(null);
+  // 被拖行来自哪个项目组（非项目区来源为 null）。用 ref 不用 state：碰撞策略每帧读它，
+  // 而 state 要先经一次 React 提交才可见——与坞的 dockAllowed 走 laneRef 是同一条理由。
+  const activeProjectGoalIdRef = useRef<string | null>(null);
   // 坞容器,用来取它的真实矩形:坞垂直居中、高度随药丸数量变,横向带宽算得出、纵向范围只能量。
   const dockElRef = useRef<HTMLUListElement | null>(null);
   // 复位走单点 resetTodoDragRefs(纯函数层可测):dragStart/End/Cancel 三条路径共用,新增字段只改一处。
@@ -199,6 +202,7 @@ export function TodoPage() {
       keyboard: keyboardDragRef,
       dragStartPoint: dragStartPointRef,
       pointerPos: pointerPosRef,
+      activeProjectGoalId: activeProjectGoalIdRef,
     });
   // dock 车道离散 state：只在越档时变化(setState 同值跳过渲染),驱动坞的细条↔完整形态。
   const [dockEngaged, setDockEngaged] = useState(false);
@@ -710,6 +714,20 @@ export function TodoPage() {
     if (container?.kind !== "parent") return false;
     return buckets.atHand.some((t) => t.id === container.parentId);
   })();
+  /**
+   * 被拖子任务的父所在的 active project 组。两处要用：
+   * ① 坞对项目区整区关闭——父在项目组里的子任务同样不出坞；
+   * ② 升根回组的判定——「收件箱某任务的子任务拖到项目卡上」与「项目组内子任务往左拖回本组」
+   *    两种情形的容器 id 逐字相同，只有这份信息分得开。
+   */
+  const dragCandidateParentProjectGoalId: string | null = (() => {
+    const container = parseTodoContainerId(dragCandidateContainerId);
+    if (container?.kind !== "parent") return null;
+    return buckets.projects.find((g) => g.tasks.some((t) => t.id === container.parentId))?.goalId ?? null;
+  })();
+  /** 父在一个整区不出坞的区里（手头 / 项目组）。坞的第三参只收这一个布尔。 */
+  const dragCandidateParentInDocklessZone: boolean =
+    dragCandidateParentInHand || dragCandidateParentProjectGoalId !== null;
   const sensors = useSensors(
     useSensor(MouseSensor, { activationConstraint: { delay: 180, tolerance: 6 } }),
     useSensor(TouchSensor, { activationConstraint: { delay: 300, tolerance: 8 } }),
@@ -721,7 +739,9 @@ export function TodoPage() {
     // 清掉异常中断可能留下的旧值,再逐个初始化(新增 ref 的初始值只写 resetTodoDragRefs 一处)。
     resetDragRefs();
     const activeContainerId = (event.active.data.current as { containerId?: string } | undefined)?.containerId ?? "";
-    const base: TodoIndentLevel = parseTodoContainerId(activeContainerId)?.kind === "parent" ? "child" : "root";
+    const activeContainer = parseTodoContainerId(activeContainerId);
+    activeProjectGoalIdRef.current = activeContainer?.kind === "project" ? activeContainer.goalId : null;
+    const base: TodoIndentLevel = activeContainer?.kind === "parent" ? "child" : "root";
     indentBaseRef.current = base;
     laneRef.current = base;
     keyboardDragRef.current = event.activatorEvent instanceof KeyboardEvent;
@@ -800,6 +820,10 @@ export function TodoPage() {
     if (!rootAboveId) return null;
     if (buckets.today.some((task) => task.id === rootAboveId)) return { kind: "pool", pool: "today" };
     if (floatingInbox.some((task) => task.id === rootAboveId)) return { kind: "pool", pool: "inbox" };
+    // 项目区成员被归属轴排他扣出了 inbox 桶，上面两条都查不到它。组内子任务往左拖时 over 常落在
+    // 兄弟子任务上（容器是 `parent:<爹>`），不反查这一支就解析不出落点、松手无事发生。
+    const owner = buckets.projects.find((group) => group.tasks.some((task) => task.id === rootAboveId));
+    if (owner) return { kind: "project", goalId: owner.goalId };
     return null;
   }
 
@@ -809,10 +833,16 @@ export function TodoPage() {
       setIndentTargetId(null);
       return;
     }
-    const activeContainerId = (active.data.current as { containerId?: string } | undefined)?.containerId ?? "";
-    const overContainerId = (over.data.current as { containerId?: string } | undefined)?.containerId ?? "";
-    const activeId = String(active.id);
-    const rootAboveId = hoveredRootIdFromOver(overContainerId, String(over.id), activeContainerId);
+    const activeData = active.data.current as { containerId?: string; taskId?: string } | undefined;
+    const overData = over.data.current as { containerId?: string; taskId?: string } | undefined;
+    const activeContainerId = activeData?.containerId ?? "";
+    const overContainerId = overData?.containerId ?? "";
+    // 任务 id 从 data 取：项目区的行 dnd id 带 `project-row:<goalId>:` 前缀（同一条任务同屏
+    // 出现两次会撞 id），拿 active.id 当任务 id 会查不到行、静默无事。
+    // 容器级 droppable（项目卡、坞）没有 taskId，故 overTaskId 用空串兜底。
+    const activeId = activeData?.taskId ?? String(active.id);
+    const overTaskId = overData?.taskId ?? "";
+    const rootAboveId = hoveredRootIdFromOver(overContainerId, overTaskId, activeContainerId);
     const activeHasChildren = rootIdsWithChildren.has(activeId);
     setIndentTargetId(rootAboveId && rootAboveId !== activeId && !activeHasChildren ? rootAboveId : null);
   }
@@ -829,13 +859,16 @@ export function TodoPage() {
     const { active, over } = event;
     if (!over) return;
 
-    const activeId = String(active.id);
-    const overId = String(over.id);
-
-    const activeData = active.data.current as { containerId?: string } | undefined;
-    const overData = over.data.current as { containerId?: string } | undefined;
+    const activeData = active.data.current as { containerId?: string; taskId?: string } | undefined;
+    const overData = over.data.current as { containerId?: string; taskId?: string } | undefined;
     const activeContainerId = activeData?.containerId ?? "";
     const overContainerId = overData?.containerId ?? "";
+    // 任务 id 从 data 取（同 handleDragOver 的理由）：项目区的行 dnd id 带前缀，拿 active.id /
+    // over.id 当任务 id 会查不到行。overId 保留给 reorder 下标与 hapticDrop 的同 id 比较；
+    // 容器级 droppable（项目卡、坞）没有 taskId，overTaskId 用空串兜底。
+    const activeId = activeData?.taskId ?? String(active.id);
+    const overId = overData?.taskId ?? String(over.id);
+    const overTaskId = overData?.taskId ?? "";
 
     let activeParentId: string | null = null;
     const activeTask = [...buckets.today, ...buckets.inbox].find((t) => t.id === activeId);
@@ -877,7 +910,7 @@ export function TodoPage() {
           );
     if (dockOutcome === "handled") return;
 
-    const rootAboveId = hoveredRootIdFromOver(overContainerId, overId, activeContainerId);
+    const rootAboveId = hoveredRootIdFromOver(overContainerId, overTaskId, activeContainerId);
     const targetContainer = targetContainerFromOver(overContainerId, rootAboveId);
     const activeHasChildren = rootIdsWithChildren.has(activeId);
 
@@ -886,6 +919,7 @@ export function TodoPage() {
       resolveTodoDragWithIndent({
         activeContainerId,
         activeParentId,
+        activeParentProjectGoalId: dragCandidateParentProjectGoalId,
         activeId,
         activeHasChildren,
         indentLevel,
@@ -995,6 +1029,24 @@ export function TodoPage() {
           }
           break;
         }
+        case "promote-to-project": {
+          // 落位到组内「躺着」段末尾：段内按全局 sortOrder，取本组现有成员的 max+1。
+          const group = buckets.projects.find((g) => g.goalId === op.goalId);
+          const sortOrder =
+            group && group.tasks.length > 0 ? Math.max(...group.tasks.map((t) => t.sortOrder)) + 1 : 0;
+          try {
+            await promoteTaskToProject(activeId, op.goalId, sortOrder);
+          } catch (error) {
+            console.error("[todo] 升根回项目失败:", error);
+            // 两步串行，第一步（升根）已生效——文案必须说清它现在在哪，否则用户找不着这条活。
+            // recurring 那支是子任务带休眠 recurrence、升根后规则复活的情形，它落的是重复管理区。
+            const assignError = error instanceof ProjectAssignError ? error : null;
+            const where = assignError?.block === "recurring" ? "已变成独立的重复待办" : "已放回收件箱";
+            const reason = assignError?.message ?? "回到项目失败，稍后再试";
+            showActionToast({ message: `${reason}，任务${where}` });
+          }
+          break;
+        }
         case "schedule-root": {
           if (op.pool === "today") {
             await scheduleTask(activeId, localDateString(new Date()));
@@ -1080,6 +1132,8 @@ export function TodoPage() {
       onOpenGoal={(goalId) => navigate(`/goals/${goalId}`)}
       dropBlocked={dragDropBlocked}
       trackChipFor={trackChipFor}
+      indentTargetId={indentTargetId}
+      revealChildren={revealChildren}
       {...rowHandlers}
     />
   );
@@ -1395,6 +1449,9 @@ export function TodoPage() {
           // 读 ref 不读 state:车道逐帧同步,state 要多等一次提交才生效——坞的命中资格必须与
           // 手势同拍,否则刚释放/刚进档两个方向都会开出误投与漏接的窗口。
           dockAllowed: laneRef.current === "dock",
+          // 项目区来源时同组的行优先于组卡片：卡片是几百像素的大块，只认卡会把组内行的
+          // 碰撞整个吞掉，组内收纳永远命中不到行（理由见 preferProjectCollisions 注释）。
+          activeProjectGoalId: activeProjectGoalIdRef.current,
         })
       }
       modifiers={[clampTodoIndentPreview]}
@@ -1489,7 +1546,7 @@ export function TodoPage() {
             projects={selectableProjects}
             dropBlocked={dragDropBlocked}
             anchorLeftPx={dockAnchorLeftPx}
-            activeParentInHand={dragCandidateParentInHand}
+            activeParentInDocklessZone={dragCandidateParentInDocklessZone}
             containerRef={dockElRef}
           />
         )}

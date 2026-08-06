@@ -3093,4 +3093,163 @@ describe("拖拽投递坞", () => {
       if (originalMatchMedia) Object.defineProperty(window, "matchMedia", originalMatchMedia);
     }
   });
+
+  it("项目区的行拖起时坞恒空：整区不出坞，连细条预告都不出", async () => {
+    // 与手头区同一条规则的第二处落点。坞是「拖出组」的唯一入口，本批不做拖出组——
+    // 药丸亮着却投不进去（判定层一律拒）比不亮更糟，故整区关掉。
+    const originalMatchMedia = Object.getOwnPropertyDescriptor(window, "matchMedia");
+    Object.defineProperty(window, "matchMedia", {
+      configurable: true,
+      value: (query: string) => ({
+        matches: query === "(min-width: 1024px)",
+        media: query,
+        onchange: null,
+        addEventListener: () => {},
+        removeEventListener: () => {},
+        addListener: () => {},
+        removeListener: () => {},
+        dispatchEvent: () => false,
+      }),
+    });
+    try {
+      const now = "2026-06-28T09:00:00.000Z";
+      const member = await addTask({ title: "刷墙", toInbox: true });
+      await db.goals.add({
+        id: "g1",
+        title: "装修",
+        kind: "project",
+        status: "active",
+        members: [{ kind: "task", id: member.id }],
+        prerequisites: [],
+        createdAt: now,
+        updatedAt: now,
+      });
+      // 对照行：收件箱源拖起必须出细条，证明下面「恒空」不是坞没渲染，而是判定层真的拦了项目区源。
+      await addTask({ title: "买窗帘", toInbox: true });
+      const { host, root } = await renderPage();
+      await waitForText(host, "买窗帘");
+
+      const dockEl = () => host.querySelector('[data-testid="todo-drag-dock"]');
+      await waitForCondition(() => dockEl() !== null, "dock 常驻挂载");
+      expect(dockEl()?.getAttribute("data-dock-state")).toBe("hidden");
+
+      // 展开项目组，组内行的拖柄才存在（组默认折叠，见「折叠的组内不渲染任何行落点」）。
+      await click(host.querySelector('[data-section="todo-projects"] [data-testid="project-group-toggle"]'));
+      await waitForCondition(
+        () => host.querySelector('[data-section="todo-projects"] [aria-label="移动 刷墙"]') !== null,
+        "project member drag handle",
+        settle,
+      );
+
+      const memberHandle = host.querySelector(
+        '[data-section="todo-projects"] [aria-label="移动 刷墙"]',
+      ) as HTMLElement;
+      await act(async () => {
+        memberHandle.dispatchEvent(new KeyboardEvent("keydown", { code: "Space", bubbles: true, cancelable: true }));
+      });
+      // 项目区源整区不出坞：连细条预告都不出（hidden 态），药丸恒零。
+      expect(dockEl()?.getAttribute("data-dock-state")).toBe("hidden");
+      expect(host.querySelectorAll('[data-testid="todo-dock-pill"]').length).toBe(0);
+
+      // 对照：换收件箱行拖起，坞必须出细条（hint）。
+      await act(async () => {
+        document.dispatchEvent(new KeyboardEvent("keydown", { code: "Escape", bubbles: true, cancelable: true }));
+      });
+      await waitForCondition(() => dockEl()?.getAttribute("data-dock-state") === "hidden", "松手即散");
+      const inboxHandle = host.querySelector('[aria-label="移动 买窗帘"]') as HTMLElement;
+      await act(async () => {
+        inboxHandle.dispatchEvent(new KeyboardEvent("keydown", { code: "Space", bubbles: true, cancelable: true }));
+      });
+      expect(dockEl()?.getAttribute("data-dock-state")).toBe("hint");
+
+      await unmount(root);
+    } finally {
+      if (originalMatchMedia) Object.defineProperty(window, "matchMedia", originalMatchMedia);
+    }
+  });
+
+  it("项目组内的子任务拖起时坞同样恒空：父在项目组的那一支", async () => {
+    // 容器 id 只有 `parent:<父id>` 一种形状，收件箱子任务与项目组内子任务在判定层同形，
+    // 靠页面算出的 dragCandidateParentInDocklessZone 分开。本条专锁这个参数没漏传。
+    const originalMatchMedia = Object.getOwnPropertyDescriptor(window, "matchMedia");
+    Object.defineProperty(window, "matchMedia", {
+      configurable: true,
+      value: (query: string) => ({
+        matches: query === "(min-width: 1024px)",
+        media: query,
+        onchange: null,
+        addEventListener: () => {},
+        removeEventListener: () => {},
+        addListener: () => {},
+        removeListener: () => {},
+        dispatchEvent: () => false,
+      }),
+    });
+    try {
+      const now = "2026-06-28T09:00:00.000Z";
+      const parent = await addTask({ title: "父任务", toInbox: true });
+      await createChildTask(parent.id, "子任务");
+      await db.goals.add({
+        id: "g1",
+        title: "装修",
+        kind: "project",
+        status: "active",
+        members: [{ kind: "task", id: parent.id }],
+        prerequisites: [],
+        createdAt: now,
+        updatedAt: now,
+      });
+      await addTask({ title: "买窗帘", toInbox: true });
+      const { host, root } = await renderPage();
+      await waitForText(host, "买窗帘");
+
+      const dockEl = () => host.querySelector('[data-testid="todo-drag-dock"]');
+      await waitForCondition(() => dockEl() !== null, "dock 常驻挂载");
+      expect(dockEl()?.getAttribute("data-dock-state")).toBe("hidden");
+
+      // 展开项目组，再展开父行的子任务层（点左 2/5 抓取区），子任务行的拖柄才存在。
+      await click(host.querySelector('[data-section="todo-projects"] [data-testid="project-group-toggle"]'));
+      await waitForCondition(
+        () => host.querySelector('[data-section="todo-projects"] [aria-label="移动 父任务"]') !== null,
+        "project parent row",
+        settle,
+      );
+      await act(async () => {
+        (host.querySelector('[data-section="todo-projects"] [aria-label="移动 父任务"]') as HTMLElement).dispatchEvent(
+          new MouseEvent("click", { bubbles: true }),
+        );
+      });
+      await waitForCondition(
+        () => host.querySelector('[data-section="todo-projects"] [aria-label="拖动子任务 子任务"]') !== null,
+        "project child drag handle",
+        settle,
+      );
+
+      const childHandle = host.querySelector(
+        '[data-section="todo-projects"] [aria-label="拖动子任务 子任务"]',
+      ) as HTMLElement;
+      await act(async () => {
+        childHandle.dispatchEvent(new KeyboardEvent("keydown", { code: "Space", bubbles: true, cancelable: true }));
+      });
+      // 父在项目组 ⇒ 父在一个整区不出坞的区里：子任务与组内根行（拖起不出坞）保持一致，坞恒空。
+      expect(dockEl()?.getAttribute("data-dock-state")).toBe("hidden");
+      expect(host.querySelectorAll('[data-testid="todo-dock-pill"]').length).toBe(0);
+
+      // 对照：换收件箱行拖起，坞必须出细条（hint）——「父在项目组」这条若漏传参，这里就会是 hint，
+      // 而上面的 hidden 是坞压根没渲染时的恒绿。
+      await act(async () => {
+        document.dispatchEvent(new KeyboardEvent("keydown", { code: "Escape", bubbles: true, cancelable: true }));
+      });
+      await waitForCondition(() => dockEl()?.getAttribute("data-dock-state") === "hidden", "松手即散");
+      const inboxHandle = host.querySelector('[aria-label="移动 买窗帘"]') as HTMLElement;
+      await act(async () => {
+        inboxHandle.dispatchEvent(new KeyboardEvent("keydown", { code: "Space", bubbles: true, cancelable: true }));
+      });
+      expect(dockEl()?.getAttribute("data-dock-state")).toBe("hint");
+
+      await unmount(root);
+    } finally {
+      if (originalMatchMedia) Object.defineProperty(window, "matchMedia", originalMatchMedia);
+    }
+  });
 });

@@ -75,6 +75,8 @@ function sectionElement(props: Partial<Parameters<typeof TodoProjectSection>[0]>
         onOpenGoal={props.onOpenGoal ?? vi.fn()}
         dropBlocked={props.dropBlocked ?? null}
         trackChipFor={props.trackChipFor}
+        indentTargetId={props.indentTargetId ?? null}
+        revealChildren={props.revealChildren ?? null}
         {...handlers}
         onToHand={props.onToHand}
       />
@@ -734,13 +736,49 @@ describe("TodoProjectSection 落点", () => {
     await unmount(root);
   });
 
-  it("组内的行不渲染拖柄：项目区不注册 draggable，同一 taskId 不会在页面里被登记两次", async () => {
+  // 组内逐行可拖是本批开的产品行为（收纳/升根的前提），旧版「组内不渲染拖柄」的断言被规格取代。
+  it("组内的行渲染拖柄：拖柄所在行带组前缀的 dnd 身份，避免与手头/今天区的同屏副本撞 id", async () => {
     const { host, root } = await renderWithDnd({
       groups: [group({ goalId: "g1", tasks: [task({ id: "t1" })] })],
     });
-    // 必须显式展开：折叠态下压根没有行，`toBeNull()` 会恒真——这条守的是「展开后也没有拖柄」。
+    // 必须显式展开：折叠态下压根没有行，`toBeNull()` 会恒真——这条守的是「展开后真的能拖」。
     await click(host.querySelector('[data-testid="project-group-toggle"]'));
-    expect(host.querySelector('[data-testid="task-row-grab-area"]')).toBeNull();
+    const grab = host.querySelector('[data-goal-id="g1"] [data-testid="task-row-grab-area"]');
+    expect(grab).not.toBeNull();
+    expect(grab?.closest("[data-dnd-id]")?.getAttribute("data-dnd-id")).toBe("project-row:g1:t1");
+    await unmount(root);
+  });
+
+  it("展开的组内每行都注册拖拽身份，且带组前缀", async () => {
+    const { host, root } = await renderWithDnd({
+      groups: [group({ goalId: "g1", tasks: [task({ id: "t1" }), task({ id: "t2" })] })],
+    });
+    await click(host.querySelector('[data-testid="project-group-toggle"]'));
+    const ids = [...host.querySelectorAll("[data-dnd-id]")].map((el) => el.getAttribute("data-dnd-id"));
+    expect(ids).toEqual(["project-row:g1:t1", "project-row:g1:t2"]);
+    await unmount(root);
+  });
+
+  it("折叠的组内不渲染任何行落点", async () => {
+    // 这条不只是行为断言，也是「既有拖拽用例不受影响」的结构前提：
+    // 组默认折叠 ⇒ 展开前零新增 droppable ⇒ dnd-kit 的挂载顺序不变。
+    const { host, root } = await renderWithDnd({
+      groups: [group({ goalId: "g1", tasks: [task({ id: "t1" })] })],
+    });
+    expect(host.querySelectorAll("[data-dnd-id]")).toHaveLength(0);
+    await unmount(root);
+  });
+
+  it("indentTargetId 命中的成员行画高亮环", async () => {
+    const { host, root } = await renderWithDnd({
+      groups: [group({ goalId: "g1", tasks: [task({ id: "t1" }), task({ id: "t2" })] })],
+      indentTargetId: "t2",
+    });
+    await click(host.querySelector('[data-testid="project-group-toggle"]'));
+    // 见证是 TaskRow 上的 data-indent-target；断 className 串在本项目属无效测试。
+    // 这条守的是「TodoProjectSection 忘了把 indentTargetId 透传下去」——漏接的话高亮永远不亮，
+    // 而收纳仍会落库，用户得到的是一次没有任何预告的结构变更。
+    expect(host.querySelectorAll('[data-indent-target="true"]')).toHaveLength(1);
     await unmount(root);
   });
 

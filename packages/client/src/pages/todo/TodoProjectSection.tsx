@@ -19,7 +19,7 @@ import {
 import { taskDueDateLabel } from "../../lib/tasks/taskTimeLabel.js";
 import { TaskList } from "./TaskList.js";
 import { META_CHIP_CLASS } from "./TaskRow.js";
-import { projectContainerId } from "./todoDnd.js";
+import { projectContainerId, todoProjectRowIdPrefix } from "./todoDnd.js";
 
 export interface TodoProjectSectionProps {
   /** 已按组间排序好的项目区分组，调用方可传入已按当前筛选裁剪的成员。 */
@@ -72,6 +72,10 @@ export interface TodoProjectSectionProps {
    * 组件不自己查轨道——反查索引在页面顶层一次订阅（`useTaskTrackIndex`），组件手上没有。
    */
   trackChipFor?: (task: Task) => ReactNode;
+  /** 缩进候选父：命中该 id 的成员行渲染高亮环（判定与跨组过滤都在页面做，组件只渲染）。 */
+  indentTargetId?: string | null;
+  /** 收纳后要展开的父行 id（落点反馈，透传 TaskList → TaskRow）。 */
+  revealChildren?: { id: string; nonce: number } | null;
   onToggle: (task: Task) => void;
   onEdit: (task: Task) => void;
   onDelete: (task: Task) => void;
@@ -498,6 +502,8 @@ export function TodoProjectSection({
   onOpenGoal,
   dropBlocked,
   trackChipFor,
+  indentTargetId,
+  revealChildren,
   ...rowHandlers
 }: TodoProjectSectionProps) {
   const [overrides, setOverrides] = useState<Map<string, boolean>>(() => new Map());
@@ -594,7 +600,15 @@ export function TodoProjectSection({
                   rowPool={(task) => rowActions.get(task.id)?.pool ?? "inbox"}
                   atHandIds={new Set([...rowActions].filter(([, a]) => a.atHand).map(([id]) => id))}
                   tasks={visibleTasks}
-                  childrenModeOverride="static"
+                  // 组内逐行可拖：本批开的组内父子收纳的前提。整卡片那个 `project:<goalId>`
+                  // droppable 保持不变——它仍是外区归入的落点，也是组内子任务往左拖升根回组的落点。
+                  sortable
+                  containerId={projectContainerId(group.goalId)}
+                  dndIdPrefix={todoProjectRowIdPrefix(group.goalId)}
+                  indentTargetId={indentTargetId}
+                  revealChildren={revealChildren}
+                  // 从 "static" 改开：子任务要能往左拖升根回组
+                  childrenModeOverride="draggable"
                   metaChip={(task) => {
                     // 皆缺必须返回 null：空 fragment 也是非 null 节点，会把 TaskRow 的 hasMeta 闸顶开、凭空画出空 meta 带。
                     const stateChip = memberStateChip(task, handSessionId, now);

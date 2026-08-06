@@ -38,11 +38,11 @@ export interface TodoDragDockProps {
   /** 拖拽中的行不允许入项目时,项目药丸置禁用视觉(与项目卡 data-drop-blocked 同源判定)。 */
   dropBlocked: boolean | null;
   /**
-   * 被拖子任务的父是否在手头。透传给 `todoDockTargets` 判定层——手头区整个区都不出坞，
-   * 子任务要与父行（`activeContainerId === "hand"`）保持一致（见 todoDockTargets 注释）。
+   * 被拖子任务的父是否在一个**整区不出坞**的区里（手头区 / 项目组）。透传给 `todoDockTargets`
+   * 判定层——手头区与项目区整个区都不出坞，子任务要与父行保持一致（见 todoDockTargets 注释）。
    * 非子任务或未在拖拽时无意义，默认 false。
    */
-  activeParentInHand?: boolean;
+  activeParentInDocklessZone?: boolean;
   /**
    * 坞的左缘锚点(视口坐标 px):拖起时按**来源栏左缘**定位——拖柄在行左 2/5,
    * 锚右缘意味着全程向右横穿,恰是缩进手势(+28px 变子任务)的方向,极易误触;
@@ -120,10 +120,10 @@ export function TodoDragDock({
   projects,
   dropBlocked,
   anchorLeftPx = null,
-  activeParentInHand = false,
+  activeParentInDocklessZone = false,
   containerRef,
 }: TodoDragDockProps) {
-  const targets = todoDockTargets(activeContainerId ?? "", projects, activeParentInHand);
+  const targets = todoDockTargets(activeContainerId ?? "", projects, activeParentInDocklessZone);
   // 空坞（手头源/父在手头）连细条都不出：细条是坞的预告,无坞则无预告。
   const state: TodoDockState = !dragging || targets.length === 0 ? "hidden" : dockEngaged ? "engaged" : "hint";
   const { measureDroppableContainers } = useDndContext();
