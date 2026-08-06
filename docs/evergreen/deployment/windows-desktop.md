@@ -67,7 +67,7 @@ NSIS 安装新版本时先卸载旧版本，会一并清掉启动项。该情形
 | `punchConfirmHours` | 打点确认阈值（小时），默认 4；非有限值或 `<= 0` 被拒 |
 | `autostartDisabled` | 用户在设置页关过自启的意图记录，见 §3 |
 
-`shortcut` 是 Tauri accelerator 字符串，修饰键顺序由前端 `normalizeShortcutFromKeyboardEvent` 钉死为 `Ctrl→Alt→Shift→Super`，与用户按下的先后无关——存进配置的串必须与回显注册结果时用来匹配的串逐字一致。字母 / 数字必须带修饰键（裸键会让正常打字触发全局动作），F1–F24 例外可裸录。`action` 是带参枚举，枚举成员为 `punch` / `toggleMain` / `capture`，序列化格式预留参数位（如 `{ "action": "navigate", "target": "/diary" }`）。
+`shortcut` 是 Tauri accelerator 字符串，修饰键顺序由前端 `normalizeShortcutFromKeyboardEvent` 钉死为 `Ctrl→Alt→Shift→Super`，与用户按下的先后无关——存进配置的串必须与回显注册结果时用来匹配的串逐字一致。字母 / 数字必须带修饰键（裸键会让正常打字触发全局动作），F1–F24 例外可裸录。`action` 是带参枚举，成员为 `punch` / `toggleMain` / `capture` / `navigate`。前三个无参；`navigate` 带一个 `target`（内部标签 + `#[serde(flatten)]` 让它直接落位，见 §4.7）。
 
 **读配置分三态**：文件不存在 → 默认配置（首次启动的正常路径）；**读失败 → `Err`**；读到了 → 解析结果。读失败与文件不存在必须分开——杀软 / OneDrive / 备份工具短暂独占文件的那一瞬，若被当成「还没配过任何东西」，写命令就会拿全默认值（`hotkeys: []`、`autostartDisabled: false`）去做 load→改→**全量覆盖**写回，一次保存抹掉全部快捷键、把关掉的自启重新打开，还返回成功。因此：三个写命令拿到 `Err` 一律**拒绝保存**并把原因抛给前端；`resume_hotkeys` 拿到 `Err` **不碰注册表**（否则一次读不到就等于把当前活着的热键全注销）；启动路径拿到 `Err` 时既不动自启也不注册热键，改发一条系统通知说明本次启动什么都没做（重启即恢复，比上面两件都轻）。
 
@@ -141,12 +141,36 @@ NSIS 安装新版本时先卸载旧版本，会一并清掉启动项。该情形
 | 纯函数判定（关窗 / 托盘 / 自启 / toggle） | `packages/desktop/src-tauri/src/shell.rs` |
 | 桌面壳判定与 IPC 封装 | `packages/client/src/lib/desktop/shell.ts`、`api.ts` |
 | 打点预检与自守上限 | `packages/client/src/lib/desktop/desktopPunch.ts` |
+| navigate 目标页裁定（唯一的页面清单） | `packages/client/src/lib/desktop/navigateAction.ts` |
 | 事件桥 / 撤销条 / 确认卡 | `packages/client/src/components/desktop/DesktopBridge.tsx`、`DesktopPunchLayer.tsx` |
 | 快捷键录入与规范化 | `packages/client/src/components/desktop/ShortcutInput.tsx` |
 | 设置二级页（`/settings/desktop`，仅桌面壳渲染入口行） | `packages/client/src/pages/settings/SettingsDesktopPage.tsx` |
 | 速记浮窗与草稿 | `packages/client/src/capture/CaptureApp.tsx`、`captureDraft.ts` |
 
 Rust 单测不在 `pnpm gate` 里（门禁机器没有 Rust 工具链），走 `pnpm check:desktop`——碰了 `packages/desktop/**` 必跑，见 §5.6。
+
+### 4.7 navigate：显示主窗口并跳到指定页
+
+`navigate` 是唯一带参数的动作，配置形如 `{ "shortcut": "Ctrl+Alt+T", "action": "navigate", "target": "/todo" }`。配置文件这一层天然装得下：`HotkeyAction` 是内部标签枚举、`HotkeyBinding` 用 `#[serde(flatten)]`，带载荷的变体直接落位。
+
+`target` 的取值来自 client 的主导航表 `MAIN_NAV_ITEMS`（八项，不含搜索页）。
+
+**校验分工**：Rust 只管结构完整——`navigate` 必须带非空 `target`，否则那条绑定在 `parse_config` 就被跳过。**serde 只挡得住 `target` 缺失**（反序列化失败），空串是合法 `String`、会一路通过，因此空串要显式过滤。**页面清单只存在于前端一处**，由 `resolveNavigateTarget` 查 `isMainNavRoute` 裁定；Rust 对有哪些页面零知识。这样不产生第二个跨语言重复点，也就不欠第二道闸；代价是无效 target 会一路注册成功、到前端才被丢弃——那条路径上有回显（设置页红字），不是静默。
+
+**四种窗口状态**：隐藏 / 最小化 → `show_main_window` 拉出来并跳；开着但在别的页 → 跳过去；开着且已在目标页 → 什么都不干；目标页有未保存修改 → `useUnsavedChangesGuard` 照常拦（跳转走 router，`useBlocker` 管得到）。「已在目标页」判的是 **pathname**，`/?date=…` 按「跳时间轴」也算已经在那页。
+
+同页不跳不只是行为取舍：`navigate()` 到当前路径会往 history 压一条重复条目，压多了返回键要按很多次才退得出去。
+
+`navigate` 不进桥的串行队列（§4.4）——它不写库、无顺序依赖，排在正在跑的 punch 后面只会让跳转莫名延迟。
+
+**投递载荷的构造在 `hotkeys.rs::hotkey_payload`，不在 `commands.rs`。** 抽出来是为了立闸：`handle_hotkey` 要 `AppHandle`、单测够不着它，内联在那里时把 target 恒置 `None` 不会让任何测试变红，而热键的可观察结果是零（前端拿不到 target 就丢弃）。两条单测分别锁住「navigate 必须带上目标页」与「其余动作一律不带」。
+
+### 4.8 已知界限：存量绑定会被上游变更抹掉
+
+两条同构、都静默：
+
+1. **删掉一个动作变体**会抹掉用户已配的该动作绑定。三个写命令都是 load→改→**全量覆盖**写回；变体一删，存量条目在 `parse_config` 的 `filter_map` 处被跳过，此后任何一次保存就把它永久抹掉——无提示、零测试红。**做删除时必须显式处理存量绑定**（读时迁移剥离 / 保留变体空转 / 删除时通知用户），不能只删变体。反向的「保留变体、只删窗口」同样静默：`target_window` 仍返回那个 label，每次按键往一条没有窗口的队列里塞。
+2. **改路由名**会让 `navigate` 的存量 `target` 失效，表现是按下没反应。这一条有回显——设置页在该行标红字「目标页「…」不存在，重新选一个」。
 
 ## 5. 速记浮窗与双窗口
 
@@ -201,11 +225,15 @@ Rust 侧不广播热键事件，按 `shell::target_window` 的映射表**点名�
 
 | 闸 | 守什么 | 何时跑 |
 |---|---|---|
-| `check-desktop-config.mjs` | 两个窗口按 label 的属性快照、跨语言事件名全匹配、禁静态 import Tauri（§8） | `pnpm --filter @timedata/desktop test` |
-| `check-hotkey-actions.mjs` | 动作名在三处一致：Rust `action_id` / `api.ts` 联合类型 / 设置页 `ACTION_OPTIONS` | 同上 |
+| `check-desktop-config.mjs` | 两个窗口按 label 的属性快照、跨语言事件名全匹配、禁静态 import Tauri（§8）、capabilities 授权列表 == `tauri.conf.json` 的窗口集合 | `pnpm --filter @timedata/desktop test` |
+| `check-hotkey-actions.mjs` | 动作名在**四处**一致：Rust `action_id` / `api.ts` 联合类型 / 设置页 `ACTION_OPTIONS` / 消费分支 | 同上 |
 | `pnpm check:desktop` | 上面两道 + `cargo test` + `cargo clippy -D warnings` | 手动，碰了 `packages/desktop/**` 必跑 |
 
 `check-hotkey-actions.mjs` 存在的理由：设置页的 `ACTION_OPTIONS` 漏一个动作时**没有任何测试会红**，但用户在「桌面设置」里根本选不到那个动作——热键配不上。
+
+消费分支那一条守的是：凡是 `target_window` 返回 `Some` 的动作，必须在**对应窗口**的消费文件里有一处 `event.action === "<id>"`；返回 `None` 的必须一处都没有。不这样守的话，加动作时把三处声明点改全、漏掉消费分支 → 设置页选得到、热键注册成功、按下去零反应，而编译、全部测试、两道闸全绿。按窗口精确匹配而不是扫两个文件的并集，是因为并集守不住「写错窗口」——把 navigate 的处理写进 `CaptureApp` 照样绿，而那条分支永远触发不到。
+
+capabilities 那一条守的是另一个同形的洞：新增窗口时 `tauri.conf.json` 加了 label 却漏了 `capabilities/default.json` 的 `windows` 列表，该窗口的 WebView 拿不到任何 IPC 权限——构建、测试、其余断言全绿，装机后那个窗口一片空白。
 
 ## 6. 构建与发布
 
@@ -237,6 +265,8 @@ Tauri 用独立的 WebView2 用户数据目录，与 Edge / Chrome 的 profile �
 - **在任务管理器里关了自启，下次启动又回来了**：这是 §3 的判定语义。持久关闭的路径只有一条——应用的「设置 → 桌面设置」，它会把意图记进 `desktop-config.json`。
 - **窗口关不掉 / 关了进程还在**：这是设计语义（§2），托盘菜单「退出」才是唯一退出口。
 - **热键没反应**：先看「设置 → 桌面设置」里该行有没有红字——有则组合被别的软件占用（换一个）；再看有没有「改动要保存才生效」——**改了 / 删了行不点保存是不生效的**，壳里注册着的仍是上次保存的那张表，而且再聚焦任意录入框会按磁盘配置重新注册、把「删掉」的那条装回来；都没有则检查是不是按了裸字母 / 数字（录入框会就地回显「要带 Ctrl / Alt / Shift」）。
+- **按了跳转键没反应**：先看「设置 → 桌面设置」那一行有没有红字——有则目标页已失效（多半是路由改过名），重选一个。都没有则看主窗口是不是已经停在那一页了：同页再按是刻意不做任何事的（§4.7）。
+- **在 `?date=` 翻过页的时间轴上按「跳时间轴」没反应**：判据是 pathname，`?date=` 不算另一页。要回今天走时间轴页自己的入口。
 - **改了打点确认阈值好像没生效**：填了 0 / 负数 / 非数字时不保存，输入框会自动改回上次存住的值并给出提示。看到「已改回 X」就说明这次没存上。
 - **按了打点却弹出确认卡**：不是故障，是同步没拉完时的防打歪，见 §4.3。
 - **热键连按几下只记了一条**：不是故障，是桥的串行队列，见 §4.4。
