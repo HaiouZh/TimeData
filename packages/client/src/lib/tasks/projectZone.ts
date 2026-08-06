@@ -76,11 +76,14 @@ export interface ProjectGroupSummary {
 }
 
 export function summarizeProjectGroup(group: TodoProjectGroup): ProjectGroupSummary {
-  const remaining = group.tasks.length;
+  // 「还剩」= 看得见的未完成成员 + 它们名下未完成的子任务。把活压成父子只是整理结构，
+  // 活一件没少，数字就不该跟着掉（与手头区 atHandPendingTotal 同一条口径）。
+  const remaining = group.tasks.length + group.pendingChildCount;
   return {
     remaining,
     doneCount: group.doneCount,
     recentDoneCount: group.recentDoneCount,
+    // 无未完成成员 ⇒ pendingChildCount 恒 0，故此判据与旧行为等价。
     allDone: remaining === 0 && group.doneCount > 0,
   };
 }

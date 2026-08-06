@@ -29,6 +29,18 @@ export interface TodoProjectGroup {
   recentDoneCount: number;
   /** 原始 goal.members 数组长度，含 track 成员与悬空 ref。 */
   memberCount: number;
+  /**
+   * **未完成成员**名下的未完成子任务数（`skipped` 不计）。
+   *
+   * 口径与手头区 `atHandPendingTotal` 同源（那里是 `pendingRootIds.has(t.parentId)`）：
+   * 已完成成员在组内不渲染，把它名下未完成的子任务数进「还剩 N」，用户展开组数不出 N，
+   * 比少报更糟。**这是刻意取舍，不是 bug，别改成"数全部成员名下的"。**
+   *
+   * `doneCount` / `recentDoneCount` 反过来数**全部成员**名下的已完成子任务，与本字段不对称——
+   * 那两个数回答的是「这个组总共完成了多少」，而已完成成员本身也从不渲染却照样计入，
+   * 按同一把尺子，它名下已完成的子任务也该计入。
+   */
+  pendingChildCount: number;
 }
 
 /** 标题行「近 N 天 +M」的窗口长度。 */
@@ -94,6 +106,11 @@ export function buildTodoProjectGroups(
   index: ReadonlyMap<string, ProjectMembership>,
   memberTasks: readonly Task[],
   now: Date,
+  /**
+   * parentId → 子任务（`skipped` 已由调用方剔除）。**必传**：给默认空 Map 会让「忘了传」
+   * 静默退回不含子任务的旧口径，而那正是本次要修的东西。
+   */
+  childrenByParent: ReadonlyMap<string, readonly Task[]>,
 ): TodoProjectGroup[] {
   const goalById = new Map<string, Goal>();
   for (const goal of goals) goalById.set(goal.id, goal);
@@ -114,6 +131,7 @@ export function buildTodoProjectGroups(
           tasks: [],
           doneCount: 0,
           recentDoneCount: 0,
+          pendingChildCount: 0,
           memberCount: goalById.get(membership.goalId)?.members?.length ?? 0,
         },
         latest: "",
@@ -125,6 +143,17 @@ export function buildTodoProjectGroups(
       const completedAt = task.completedAt ?? "";
       if (completedAt >= recentSince && completedAt <= recentUntil) entry.group.recentDoneCount += 1;
     } else entry.group.tasks.push(task);
+    for (const child of childrenByParent.get(task.id) ?? []) {
+      if (child.skipped) continue; // 与 atHandPendingTotal 同源：skipped 是"删·跳"留痕，不是活
+      if (child.done) {
+        entry.group.doneCount += 1;
+        const completedAt = child.completedAt ?? "";
+        if (completedAt >= recentSince && completedAt <= recentUntil) entry.group.recentDoneCount += 1;
+      } else if (!task.done) {
+        // 只数未完成成员名下的——理由见 TodoProjectGroup.pendingChildCount 的注释
+        entry.group.pendingChildCount += 1;
+      }
+    }
     if (task.updatedAt > entry.latest) entry.latest = task.updatedAt;
   }
 

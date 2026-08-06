@@ -1,6 +1,7 @@
 import { occurrenceId, type Task } from "@timedata/shared";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { db, resetDb } from "../test/dbReset.js";
+import { addGoal, addGoalMember } from "./goals.js";
 import { endActiveSession, grabTaskToHand } from "./sessions.js";
 import { occurrenceChildId } from "./tasks/occurrenceChildId.js";
 import { localDateOf } from "./tasks/placement.js";
@@ -1710,6 +1711,21 @@ describe("listTasks projects 桶", () => {
 
     const buckets = await listTasks(new Date("2026-07-10T10:00:00.000Z"));
     expect(buckets.projects).toEqual([]);
+  });
+
+  it("组计数含子任务：收纳不造假进度", async () => {
+    const p1 = await addGoal({ title: "P1", kind: "project" });
+    const a = await addTask({ title: "A" });
+    const b = await addTask({ title: "B" });
+    await addGoalMember(p1.id, { kind: "task", id: a.id });
+    await addGoalMember(p1.id, { kind: "task", id: b.id });
+    await createChildTask(a.id, "A-1");
+    await createChildTask(a.id, "A-2");
+
+    const buckets = await listTasks();
+    const group = buckets.projects.find((g) => g.goalId === p1.id);
+    expect(group?.tasks).toHaveLength(2);
+    expect(group?.pendingChildCount).toBe(2);
   });
 
   /**

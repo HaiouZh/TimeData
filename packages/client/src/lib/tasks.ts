@@ -935,10 +935,22 @@ export async function listTasks(now: Date = new Date()): Promise<TodoBuckets> {
   const sunkenFrom = buckets.scheduled.findIndex((t) => scheduledDateKey(t, now, ruleDueKey) > horizonKey);
   buckets.scheduledSunkenFromIndex = sunkenFrom === -1 ? buckets.scheduled.length : sunkenFrom;
   buckets.completed.sort((a, b) => (b.completedAt ?? "").localeCompare(a.completedAt ?? ""));
-  buckets.projects = buildTodoProjectGroups(goalRows, projectIndex, projectCandidates, now).map((group) => ({
-    ...group,
-    tasks: sortProjectMembers(group.tasks, { handSessionId, now }),
-  }));
+  // 项目区计数口径含子任务：按 parentId 建一份索引交给分组投影。与下方 atHandPendingTotal
+  // 的反查同源——都从 all 里按 parentId 取，skipped 一律剔除（那是"删·跳"留痕，不是活）。
+  const childrenByParent = new Map<string, Task[]>();
+  for (const t of all) {
+    const parentId = t.parentId ?? null;
+    if (parentId === null || t.skipped) continue;
+    const list = childrenByParent.get(parentId);
+    if (list) list.push(t);
+    else childrenByParent.set(parentId, [t]);
+  }
+  buckets.projects = buildTodoProjectGroups(goalRows, projectIndex, projectCandidates, now, childrenByParent).map(
+    (group) => ({
+      ...group,
+      tasks: sortProjectMembers(group.tasks, { handSessionId, now }),
+    }),
+  );
   // 子任务被投影层的 parentId 早退整个丢掉，不在任何桶里；这里直接按 atHand 的根任务反查。
   const pendingRoots = atHand.filter((t) => !t.done);
   const pendingRootIds = new Set(pendingRoots.map((t) => t.id));

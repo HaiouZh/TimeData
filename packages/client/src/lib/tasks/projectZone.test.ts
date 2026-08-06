@@ -37,7 +37,7 @@ function task(patch: Partial<Task> & Pick<Task, "id">): Task {
 }
 
 function group(patch: Partial<TodoProjectGroup> & Pick<TodoProjectGroup, "goalId">): TodoProjectGroup {
-  return { goalTitle: `目标 ${patch.goalId}`, tasks: [], doneCount: 0, recentDoneCount: 0, memberCount: 0, ...patch };
+  return { goalTitle: `目标 ${patch.goalId}`, tasks: [], doneCount: 0, recentDoneCount: 0, memberCount: 0, pendingChildCount: 0, ...patch };
 }
 
 describe("projectMemberState", () => {
@@ -123,6 +123,33 @@ describe("summarizeProjectGroup", () => {
 
   it("空组不判 allDone（数据层已保证不会出现，此处是防御）", () => {
     expect(summarizeProjectGroup(group({ goalId: "g1" }))).toEqual({ remaining: 0, doneCount: 0, recentDoneCount: 0, allDone: false });
+  });
+
+  it("remaining 计入 pendingChildCount", () => {
+    const summary = summarizeProjectGroup({
+      goalId: "g1",
+      goalTitle: "P1",
+      tasks: [task({ id: "m1" })],
+      doneCount: 0,
+      recentDoneCount: 0,
+      memberCount: 1,
+      pendingChildCount: 2,
+    });
+    expect(summary.remaining).toBe(3);
+    expect(summary.allDone).toBe(false);
+  });
+
+  it("零未完成成员时 pendingChildCount 恒 0，allDone 判据与旧行为等价", () => {
+    const summary = summarizeProjectGroup({
+      goalId: "g1",
+      goalTitle: "P1",
+      tasks: [],
+      doneCount: 3,
+      recentDoneCount: 1,
+      memberCount: 3,
+      pendingChildCount: 0,
+    });
+    expect(summary.allDone).toBe(true);
   });
 });
 
