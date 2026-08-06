@@ -78,7 +78,10 @@
     "covers": 29
   },
   "docs/evergreen/stats-insights.md": {
-    "covers": 14
+    "covers": 10
+  },
+  "docs/evergreen/stats-insights/todo-stats.md": {
+    "covers": 4
   },
   "docs/evergreen/sync.md": {
     "covers": 36

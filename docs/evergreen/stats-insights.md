@@ -4,25 +4,21 @@ title: 统计与洞察
 covers:
   - packages/client/src/pages/StatsPage.tsx
   - packages/client/src/pages/TimeStatsPage.tsx
-  - packages/client/src/pages/TodoStatsPage.tsx
   - packages/client/src/pages/stats/InsightCharts.tsx
   - packages/client/src/pages/stats/modules/**
-  - packages/client/src/pages/stats/todo/**
   - packages/client/src/lib/stats.ts
   - packages/client/src/lib/insights/**
-  - packages/client/src/lib/todoStats/**
   - packages/client/src/lib/statsLayoutSetting.ts
   - packages/client/src/lib/statsModuleTrendSetting.ts
   - packages/client/src/pages/settings/SettingsInsightsPage.tsx
   - packages/client/src/pages/settings/SettingsStatsLayoutPage.tsx
-  - packages/client/src/pages/settings/SettingsTodoStatsLayoutPage.tsx
-last-reviewed: 2026-08-05
+last-reviewed: 2026-08-06
 ---
 
 # 统计与洞察
 
 > 时间统计页 `/stats/time`：按周期/日期聚合 `time_entries`，产出总览/作息/异常/趋势/结构五模块洞察。
-> 讲什么：STATS_MODULES 注册表、周期区间与“只统计到今天”、baseline 90 天、布局/趋势设置、insights 引擎各模块契约。
+> 讲什么：STATS_MODULES 注册表、周期区间与“只统计到今天”、baseline 90 天、布局/趋势设置、insights 引擎各模块契约；待办统计（`/stats/todo`）整片见横切子文档 [todo-stats](stats-insights/todo-stats.md)。
 > 不讲什么：时间段数据流（见 [timeline](timeline.md)）、分类管理（见 [categories-settings](categories-settings.md)）、同步（见 [sync](sync.md)）、记录明细检索（`/search`，见 [timeline](timeline.md)——该页跨夜记录归属口径与本页 §2.4 `dailyRollup.ts` 的“跨午夜按本地午夜裁剪”**有意不同**：本页把跨夜记录按零点切成两段分归两天，`/search` 整条记录只按 `startTime` 归开始那天；这是两页回答不同问题的刻意设计（本页是时间预算视角，`/search` 是事件清单视角），不是待修的不一致）。
 
 ## 承上启下
@@ -144,15 +140,12 @@ last-reviewed: 2026-08-05
 | `lib/statsLayoutSetting.ts` / `lib/statsModuleTrendSetting.ts` | 布局 / 趋势设置存取 + sanitize |
 | `pages/settings/SettingsInsightsPage.tsx` | “记录偏好”设置页（历史路由 `/settings/insights` 的跨域宿主）：待办默认落点 + 打点分类 + 睡眠分类（仅睡眠属本域） |
 | `pages/settings/SettingsStatsLayoutPage.tsx` | 统计模块显隐/可拖拽排序/重置 |
-| `pages/TodoStatsPage.tsx` · `pages/stats/todo/**` · `lib/todoStats/**` · `pages/settings/SettingsTodoStatsLayoutPage.tsx` | **待办统计整片**：`todoStatsModules.ts` 注册表 + `modules/` 下 10 个 Section（总览 / 年龄分布 / 完成与创建分布 / 完成热力 / 周期指标 / 维度 / 节奏 / 已删除洞察）+ `lib/todoStats/` 9 个纯逻辑（`age` `cycle` `deletedStats` `dimension` `distribution` `events` `heatmap` `overview` `rhythm`）+ 同款布局设置页 |
-
-> **待办统计只有这一行登记，正文不展开它的口径与不变量**。上面 §1~§3 讲的全是时间统计。covers 认领了待办统计的全部文件（改它们会被 coverage 闸认作已归属），但机制细节没有落点——要改待办统计的算法口径，读代码与测试是唯一真相源。补齐它需要单独的子文档，不是往本文追加小节（本文的域已是「时间统计 + 洞察引擎」）。
+| 待办统计整片（页面 / 注册表 / Section / 纯逻辑 / 布局设置页） | 见横切子文档 [todo-stats](stats-insights/todo-stats.md) |
 
 ### 4.2 测试
 
 **页面/组件**：`pages/{StatsPage,TimeStatsPage}.test.tsx`、`pages/stats/InsightCharts.test.tsx`、`pages/stats/modules/{statsModules,OverviewSection,RoutineSection,AnomaliesSection,TrendSection,StructureSection,ui}.test.{ts,tsx}`、`pages/settings/{SettingsStatsLayoutPage,SettingsInsightsPage}.test.tsx`
 **纯逻辑**：`lib/stats.test.ts`、`lib/statsLayoutSetting.test.ts`、`lib/statsModuleTrendSetting.test.ts`、`lib/insights/{cache,dailyRollup,sessions,overview,routine,baseline,anomalies,trends,structure}.test.ts`
-**待办统计**：`pages/TodoStatsPage.test.tsx`、`pages/stats/todo/todoStatsModules.test.ts`、`pages/stats/todo/modules/DeletedInsightsSection.test.tsx`、`pages/settings/SettingsTodoStatsLayoutPage.test.tsx`、`lib/todoStats/{age,cycle,deletedStats,dimension,distribution,events,heatmap,overview,rhythm}.test.ts`（10 个 Section 里只有 `DeletedInsightsSection` 有组件测试，其余靠 9 个纯逻辑测试兜）
 
 ## 深水细节
 
