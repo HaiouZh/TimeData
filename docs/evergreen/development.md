@@ -12,7 +12,7 @@ covers:
   - packages/client/src/lib/backNavigation.ts
   - packages/mobile/README.md
   - packages/mobile/capacitor.config.ts
-last-reviewed: 2026-08-04
+last-reviewed: 2026-08-06
 ---
 
 # 本地开发指南
@@ -268,6 +268,7 @@ TimeData/
 - 后端：Node.js、Hono、better-sqlite3、Zod、TypeScript
 - CLI：Node.js、TypeScript、受控 API 命令
 - Android：Capacitor、Gradle、Android SDK
+- iOS：Capacitor、CocoaPods、Xcode——**macOS-only**，本机（Windows）编不了；原生工程不入库、CI 现场生成，验收只能走 CI 出包 + 侧载装机，见 [deployment/ios-ipa](deployment/ios-ipa.md)
 - 包管理：pnpm workspaces
 
 ## 故障排查

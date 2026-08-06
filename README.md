@@ -147,6 +147,14 @@ Android App 内「设置 → APK 更新」会检查最新 GitHub Release；发�
 
 GitHub Actions 发布的是稳定 release keystore 签名的 APK。首次从旧 debug 签名包迁移时 Android 会提示签名不同，需要先导出备份、卸载旧包、安装新版，再恢复或同步数据；之后 release 包之间可以覆盖安装。
 
+## iOS 侧载 IPA
+
+GitHub Release 与 APK 同版本附带 `TimeData-unsigned.ipa`。该 IPA **未签名**，不能直接安装：在手机上用 SideStore（推荐，可离机自行续签）或 AltStore 导入，安装时用你自己的 Apple ID 签名。免费 Apple ID 的签名 7 天到期，到期重签即可，应用数据不丢；同时最多 3 个自签应用。
+
+iOS 壳与 Safari 里的 PWA **不同源**（壳是 `capacitor://localhost`），两者本地数据互不可见。装好后先在设置里填 API 地址与 Token，靠服务器同步把数据拉下来。服务端 `ALLOWED_ORIGINS` 必须包含 `capacitor://localhost`，否则壳内所有 `/api/*` 请求都会被 CORS 拒。
+
+装机步骤、构建链路与排错见 [docs/evergreen/deployment/ios-ipa.md](docs/evergreen/deployment/ios-ipa.md)。
+
 ## 本地开发
 
 参见 [docs/evergreen/development.md](docs/evergreen/development.md)。

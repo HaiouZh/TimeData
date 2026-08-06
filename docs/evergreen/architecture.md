@@ -35,7 +35,7 @@ covers:
   - packages/mobile/android/app/src/main/AndroidManifest.xml
 contracts:
   - packages/client/src/components/app-shell/AppRoutes.tsx
-last-reviewed: 2026-08-05
+last-reviewed: 2026-08-06
 ---
 
 # 架构总览
@@ -135,15 +135,17 @@ CLI 写时间记录见 [cli](cli.md) 与 [timeline](timeline.md)；agent 投递�
 
 CLI 不直接读写 SQLite。命令面见 [cli](cli.md)。
 
-### 4.4 Android 壳
+### 4.4 原生壳（Android / iOS）
 
-`packages/mobile/capacitor.config.ts` 指向 `../client/dist`。Android 原生工程只承载壳、权限、图标和 Capacitor 插件配置；业务逻辑仍在 client。
+`packages/mobile/capacitor.config.ts` 指向 `../client/dist`，两平台共用。原生工程只承载壳、权限、图标和 Capacitor 插件配置；业务逻辑仍在 client。
+
+两平台在**原生工程的入库方式**上不对称：Android 工程在 `packages/mobile/android/` 随仓库走，改完直接提交；iOS 工程不入库，由 CI 现场 `cap add ios` 生成，原生定制只能表达成 `packages/mobile/scripts/ios/patch-ios.rb` 里的补丁步骤。代价是 iOS 侧改动本机验不了，只能 CI 出包后侧载装机人工确认。
 
 <a id="architecture-s4-5"></a>
 
 ### 4.5 iOS 壳：页面栈与边缘返回
 
-iOS 原生工程不入库，构建链路与原生补丁见 [deployment/ios-ipa](deployment/ios-ipa.md)。**主内容区**的渲染路径上 iOS 与其余平台只有一处分叉：`AppShell` 按 `Capacitor.getPlatform() === "ios"` 二选一，iOS 渲染 `components/app-shell/KeptRouteStack.tsx`，其余平台仍是单份 `<main>` + `<Routes>`，分叉之外零差异。
+构建链路与原生补丁见 [deployment/ios-ipa](deployment/ios-ipa.md)（工程为何不入库见 §4.4）。**主内容区**的渲染路径上 iOS 与其余平台只有一处分叉：`AppShell` 按 `Capacitor.getPlatform() === "ios"` 二选一，iOS 渲染 `components/app-shell/KeptRouteStack.tsx`，其余平台仍是单份 `<main>` + `<Routes>`，分叉之外零差异。
 
 `AppShell` 里另有一处与主内容区无关的平台条件：`lib/desktop/shell.ts` 的 `isDesktopShell()` 决定挂不挂 `components/desktop/DesktopBridge.tsx`（桌面壳的全局热键桥与打点反馈层，Tauri API 只在其内部动态 import，三端 bundle 不加载）。该 gate 与设置页「桌面设置」入口是桌面专属代码在 client 里的全部落点，见 [deployment/windows-desktop](deployment/windows-desktop.md)。
 

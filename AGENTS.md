@@ -14,7 +14,7 @@
 
 ## 定位
 
-- TimeData = 个人记录 PWA：本地优先（IndexedDB），可同步到自托管 Hono + SQLite，多入口（Web / CLI / 授权 agent 经服务端受控 API 写入），Capacitor 套 Android 壳。
+- TimeData = 个人记录 PWA：本地优先（IndexedDB），可同步到自托管 Hono + SQLite，多入口（Web / CLI / 授权 agent 经服务端受控 API 写入），Capacitor 套 Android / iOS 双壳（iOS 走侧载未签名 IPA，与 Android APK 同为长期维护的一等入口），Tauri 套 Windows 桌面壳。
 - 速记、时间记录、待办任务、任务轨道、目标层、日记、统计洞察、设置
 - **不做**：多用户、协作、SaaS、复杂权限、AI 直接写 DB / 备份文件。
 
@@ -159,4 +159,4 @@
 
 ------
 
-*Last reviewed: 2026-07-28*
+*Last reviewed: 2026-08-06*
