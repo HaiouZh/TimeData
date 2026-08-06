@@ -1753,6 +1753,31 @@ describe("TodoPage", () => {
     await unmount(root);
   });
 
+  it("撤销提示落在独立槽，不与本页那 17 条纯提示共用", async () => {
+    // useActionToast 的 showToast 是无条件覆盖、无队列。撤销有 6 秒时限且是误勾的唯一补救
+    // 入口，与「改名失败」「已复制」这些共用一个槽就会被随手一个操作顶没。
+    // 断言的是槽的归属而不是「顶掉」的过程：两个槽 = 两个 useActionToast 实例，
+    // 各自 setState 互不影响，顶不掉由 hook 本身保证。合并回一个槽时
+    // 「待办撤销提示」元素就不存在，下面第一条 waitForCondition 会超时。
+    await db.tracks.clear();
+    await db.trackSteps.clear();
+    const t = await addTask({ title: "占独立槽的活" });
+    await promoteTaskToTrack(t);
+
+    const { host, root } = await renderPage();
+    await waitForCondition(() => (host.textContent ?? "").includes("占独立槽的活"), "挂轨道的任务行", settle);
+    await click(host.querySelector('input[aria-label="完成 占独立槽的活"]'));
+
+    await waitForCondition(
+      () => (host.querySelector('[aria-label="待办撤销提示"]')?.textContent ?? "").includes("已归档轨道"),
+      "撤销槽里的归档提示",
+      settle,
+    );
+    // 普通槽必须仍是空的——撤销提示没有走那条共用通道。
+    expect(host.querySelector('[aria-label="待办操作反馈"]')).toBeNull();
+    await unmount(root);
+  });
+
   it("轨道被手动重开后，已完成任务行仍显示轨道徽章（归档失败/重开态的唯一线索）", async () => {
     await db.tracks.clear();
     await db.trackSteps.clear();

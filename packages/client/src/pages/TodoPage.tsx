@@ -319,7 +319,7 @@ export function TodoPage() {
     // 归档是勾选的附带动作，不给提示的话它在屏幕上零痕迹。撤销走完整回退（取消勾选 + 轨道重开）。
     const undoState = buildTrackConcludeUndo(result);
     if (undoState) {
-      showActionToast({
+      showUndoToast({
         message: undoState.message,
         actions: [{ label: "撤销", onClick: () => void undoState.onUndo() }],
       });
@@ -634,6 +634,10 @@ export function TodoPage() {
 
   // —— 顶层 DnD：单一 DndContext 包住整页，可拖区只有 today/inbox ——
   const { toast: actionToast, showToast: showActionToast, clearToast: clearActionToast } = useActionToast();
+  // 带撤销的提示单独占一个槽。本页 18 处提示共用上面那个，而 showToast 是无条件覆盖：
+  // 勾选归档的撤销有 6 秒时限、且是误勾后的唯一补救入口，被随后任一条纯文字提示
+  // （改名失败 / 筛选未显示……）顶掉就等于没给过。同 TaskDetailSheet 的独立实例做法。
+  const { toast: undoToast, showToast: showUndoToast, clearToast: clearUndoToast } = useActionToast();
   const createTaskInsideProject = async (goalId: string, title: string): Promise<Task> => {
     try {
       const created = await createTaskForProject(goalId, { title, now: gravityNow });
@@ -1456,7 +1460,10 @@ export function TodoPage() {
             } as CSSProperties
           }
         >
-          <div className="pointer-events-auto mx-auto w-full max-w-2xl">
+          <div className="pointer-events-auto mx-auto flex w-full max-w-2xl flex-col gap-2">
+            {/* 撤销槽在上：两条同时在时它更靠近视线，且它有时限、另一条没有。
+                ActionToastBar 在 toast 为 null 时不渲染，gap 不会留空档。 */}
+            <ActionToastBar toast={undoToast} onDismiss={clearUndoToast} ariaLabel="待办撤销提示" />
             <ActionToastBar toast={actionToast} onDismiss={clearActionToast} ariaLabel="待办操作反馈" />
           </div>
         </div>
