@@ -20,8 +20,6 @@ export interface CaptureAppProps {
   onHide?: () => void;
   /** 存一条速记。默认走 addQuickNote，测试里可注入失败/挂起。 */
   save?: (text: string) => Promise<unknown>;
-  /** 存成功后的回调（壳侧用不到，留给测试与将来的埋点）。 */
-  onSaved?: () => void;
   /** 「已记下」停留多久。 */
   savedFlashMs?: number;
   /** 壳的 IPC 接触面。抽成参数，接线顺序才能在测试里断言。 */
@@ -42,7 +40,7 @@ const DEFAULT_SAVED_FLASH_MS = 500;
  *
  * 往这个文件里加 import 之前，先确认加的东西不属于上面四类。
  */
-export function CaptureApp({ onHide, save, onSaved, io, savedFlashMs = DEFAULT_SAVED_FLASH_MS }: CaptureAppProps = {}) {
+export function CaptureApp({ onHide, save, io, savedFlashMs = DEFAULT_SAVED_FLASH_MS }: CaptureAppProps = {}) {
   const [text, setText] = useState(readCaptureDraft);
   const [status, setStatus] = useState<CaptureStatus>("idle");
   const [error, setError] = useState<string | null>(null);
@@ -125,8 +123,7 @@ export function CaptureApp({ onHide, save, onSaved, io, savedFlashMs = DEFAULT_S
     setText("");
     clearCaptureDraft();
     setStatus("saved");
-    onSaved?.();
-  }, [text, save, onSaved]);
+  }, [text, save]);
 
   // 「已记下」闪完再收窗口。写成 effect 而不是 submit 里的 await sleep：
   // 组件在闪的过程中被卸载时，定时器要跟着清掉，否则往已卸载的树上 setState。

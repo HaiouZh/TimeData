@@ -200,6 +200,28 @@ where
     update_config_at(&path, mutate)
 }
 
+/// 「读一份配置、换掉热键表、写回」的编排。
+///
+/// 两次 IO 注入进来只为一件事：让「读失败就不写文件」这条**测得到**。命令本体
+/// （`commands::set_hotkeys`）要 `AppHandle`，那一层测不了，闸只能立在这里。
+///
+/// 返回写进去的那份热键表，调用方拿它去注册——**不要改成返回整个 config**，
+/// 调用方只需要这一项。
+pub fn replace_hotkeys<L, S>(
+    bindings: Vec<HotkeyBinding>,
+    load: L,
+    mut save: S,
+) -> Result<Vec<HotkeyBinding>, String>
+where
+    L: FnOnce() -> Result<DesktopConfig, String>,
+    S: FnMut(&DesktopConfig) -> Result<(), String>,
+{
+    let mut cfg = load()?;
+    cfg.hotkeys = bindings;
+    save(&cfg)?;
+    Ok(cfg.hotkeys)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -465,5 +487,64 @@ mod tests {
         );
         assert!(err.contains("读取配置文件"), "错误信息要指明是读取失败，实际：{err}");
         assert!(!write_trace.exists(), "读失败时不许产生任何写入痕迹");
+    }
+
+    #[test]
+    fn 读失败时不换热键也不写文件() {
+        // 这条守的是 set_hotkeys 的那个 `?`。把它改成 unwrap_or_default() 时必须红——
+        // 否则杀软/OneDrive 短暂独占文件的那一瞬会被当成「用户没配过任何东西」，
+        // 一次保存就把全部快捷键永久抹掉，且全程返回 Ok、零提示。
+        let mut saved = false;
+        let result = replace_hotkeys(
+            vec![HotkeyBinding { shortcut: "Ctrl+Alt+P".into(), action: HotkeyAction::Punch }],
+            || Err("读取配置文件 X 失败".to_owned()),
+            |_| {
+                saved = true;
+                Ok(())
+            },
+        );
+        assert!(!saved, "读失败时一个字都不许写");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn 换热键只动热键那一项其余原样带过() {
+        // 全量覆盖写回时漏带字段就是静默清设置，所以要逐项确认其余字段原封不动。
+        let mut written: Option<DesktopConfig> = None;
+        let result = replace_hotkeys(
+            vec![HotkeyBinding {
+                shortcut: "Ctrl+Alt+T".into(),
+                action: HotkeyAction::Navigate { target: "/todo".into() },
+            }],
+            || {
+                Ok(DesktopConfig {
+                    autostart_disabled: true,
+                    punch_confirm_hours: 2.5,
+                    hotkeys: vec![HotkeyBinding { shortcut: "Ctrl+Alt+P".into(), action: HotkeyAction::Punch }],
+                })
+            },
+            |cfg| {
+                written = Some(cfg.clone());
+                Ok(())
+            },
+        );
+        let returned = result.expect("正常路径应成功");
+        let written = written.expect("正常路径必须落盘");
+        assert_eq!(written.hotkeys, returned);
+        assert_eq!(written.hotkeys.len(), 1);
+        assert_eq!(written.hotkeys[0].shortcut, "Ctrl+Alt+T");
+        assert!(written.autostart_disabled, "自启意图不许被顺手改掉");
+        assert_eq!(written.punch_confirm_hours, 2.5, "打点阈值不许被顺手改掉");
+    }
+
+    #[test]
+    fn 写失败时把错误原样往上送() {
+        // 落盘失败必须让用户看见——吞掉它就是「看着保存成功、壳里其实没换」。
+        let result = replace_hotkeys(
+            vec![],
+            || Ok(DesktopConfig::default()),
+            |_| Err("替换配置文件 X 失败".to_owned()),
+        );
+        assert_eq!(result.unwrap_err(), "替换配置文件 X 失败");
     }
 }

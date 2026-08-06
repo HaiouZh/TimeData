@@ -199,11 +199,13 @@ pub fn get_desktop_config(app: AppHandle) -> Result<DesktopConfig, String> {
 #[tauri::command]
 pub fn set_hotkeys(app: AppHandle, bindings: Vec<HotkeyBinding>) -> Result<Vec<RegistrationOutcome>, String> {
     let _guard = config::config_write_guard();
-    let mut cfg = config::load_config(&app)?;
-    cfg.hotkeys = bindings;
-    config::save_config(&app, &cfg)?;
+    let hotkeys = config::replace_hotkeys(
+        bindings,
+        || config::load_config(&app),
+        |cfg| config::save_config(&app, cfg),
+    )?;
     let registry = lock_registry();
-    Ok(apply_bindings(&app, &cfg.hotkeys, &registry))
+    Ok(apply_bindings(&app, &hotkeys, &registry))
 }
 
 #[tauri::command]
