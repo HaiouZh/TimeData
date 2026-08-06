@@ -172,6 +172,8 @@ export interface TodoDragRefs {
   keyboard: { current: boolean };
   dragStartPoint: { current: { x: number; y: number } | null };
   pointerPos: { current: { x: number; y: number } | null };
+  /** 被拖行所属的项目组 id（非项目区来源为 null）；喂 preferProjectCollisions 的同组行优先档。 */
+  activeProjectGoalId: { current: string | null };
 }
 
 /**
@@ -186,6 +188,7 @@ export function resetTodoDragRefs(refs: TodoDragRefs): void {
   refs.keyboard.current = false;
   refs.dragStartPoint.current = null;
   refs.pointerPos.current = null;
+  refs.activeProjectGoalId.current = null;
 }
 
 /** dnd-kit container id 域：池容器、父任务容器、项目组容器。 */
@@ -201,12 +204,29 @@ export type TodoDragOperation =
   | { kind: "move-to-parent"; parentId: string }
   | { kind: "promote-to-root"; pool: TodoPool }
   | { kind: "promote-to-hand" }
+  | { kind: "promote-to-project"; goalId: string }
   | { kind: "schedule-root"; pool: TodoPool }
   | { kind: "assign-to-project"; goalId: string };
 
 /** 项目组 droppable 的 container id。组件与判定层共用它，避免两处手写前缀漂移。 */
-export function projectContainerId(goalId: string): string {
+export function projectContainerId(goalId: string): `project:${string}` {
   return `project:${goalId}`;
+}
+
+/**
+ * 项目区行的 dnd id 前缀。
+ *
+ * **不能用 `project:<goalId>:<taskId>` 那种形状**：`parseTodoContainerId` 会把它误解析成
+ * goalId = `"<goalId>:<taskId>"` 的项目容器，静默拼出一个不存在的组；`preferProjectCollisions`
+ * 里的 `startsWith("project:")` 也会把行当成卡片。带 `-row` 的形状对两者都天然不匹配。
+ */
+export function todoProjectRowIdPrefix(goalId: string): string {
+  return `project-row:${goalId}:`;
+}
+
+/** 项目区某一行的 dnd id。组件与判定层共用，避免两处手写前缀漂移（同 projectContainerId 的理由）。 */
+export function todoProjectRowId(goalId: string, taskId: string): string {
+  return `${todoProjectRowIdPrefix(goalId)}${taskId}`;
 }
 
 export function todoContainerId(container: TodoContainer): string {
@@ -289,8 +309,10 @@ export function resolveTodoDockDrop({
 }): TodoDockDropResolution {
   const target = parseTodoDockId(dockId);
   if (!target) return { kind: "not-dock" };
-  // 手头源不开放投坞（区内重排专属）：todoDockTargets 已不渲染，这里是隐藏规则漏了时的兜底。
-  if (parseTodoContainerId(activeContainerId)?.kind === "hand") return { kind: "invalid", target };
+  // 手头源 / 项目区源都不开放投坞（区内动作专属）：todoDockTargets 已不渲染药丸，
+  // 这里是隐藏规则漏了时的兜底。
+  const activeKind = parseTodoContainerId(activeContainerId)?.kind;
+  if (activeKind === "hand" || activeKind === "project") return { kind: "invalid", target };
   if (target.kind === "hand") {
     // 子任务投手头 = 升根并站到手头（走 promote-to-hand，落库先升根再抓；
     // grabTaskToHand 对子任务的硬拒因此不会被这条路径触发）。
@@ -315,21 +337,22 @@ export function resolveTodoDockDrop({
  * 被拖行所在池的药丸不显示;子任务(parent:)时 today/inbox 都显示(升根语义),
  * 子任务也显示手头药丸——投上去走升根到手头。
  *
- * `activeParentInHand`：被拖子任务的父是否在手头。容器 id 只有 `parent:<父id>` 一种形状，
- * 收件箱子任务与手头子任务在这一层完全同形、判定层本身分不出来——这个参数由调用方
- * （TodoPage，能查 `buckets.atHand`）算好了传进来。手头区整个区都不出坞（父行本就不出，
- * 子任务跟着一致，见用户反馈「手头收掉扩展坞，回池已经有 × 按钮了」）；收件箱子任务的坞
- * 不受影响，默认值 `false` 保证不传这个参数时行为一字不变。
+ * `activeParentInDocklessZone`：被拖子任务的父是否在一个**整区不出坞**的区里（手头区 / 项目组）。
+ * 容器 id 只有 `parent:<父id>` 一种形状，收件箱子任务、手头子任务与项目组内的子任务在这一层
+ * 完全同形、判定层本身分不出来——这个参数由调用方（页面，能查手头桶与项目桶）算好了传进来。
+ * 默认值 `false` 保证不传时行为一字不变。
  */
 export function todoDockTargets(
   activeContainerId: string,
   projects: readonly { goalId: string }[],
-  activeParentInHand = false,
+  activeParentInDocklessZone = false,
 ): TodoDockTarget[] {
   const active = parseTodoContainerId(activeContainerId);
-  // 手头区只做区内重排，坞不对手头源显示任何药丸。子任务的父若在手头，同一条规则也套用。
+  // 手头区只做区内重排，坞不对手头源显示任何药丸。
   if (active?.kind === "hand") return [];
-  if (active?.kind === "parent" && activeParentInHand) return [];
+  // 项目区整区同理：本批不做「拖出组」，退出项目走行尾 × 按钮。
+  if (active?.kind === "project") return [];
+  if (active?.kind === "parent" && activeParentInDocklessZone) return [];
   const targets: TodoDockTarget[] = [];
   if (!(active?.kind === "pool" && active.pool === "today")) targets.push({ kind: "pool", pool: "today" });
   targets.push({ kind: "hand" });
@@ -345,6 +368,15 @@ export interface ResolveTodoDragInput {
   targetContainerId: string;
   /** 当前 active task 的 parentId（root 为 null）；用于区分升降级语义。 */
   activeParentId: string | null;
+  /**
+   * 被拖**子任务**的父所在的 active project 组 id；父不属于任何组、或被拖的不是子任务时为 null。
+   *
+   * 存在的理由只有一个：下面两种情形的容器 id 字符串**逐字相同**，判定层分不出来——
+   * ① 收件箱某条任务的子任务拖到项目卡上（跨区的「先升根再入组」复合动作，**仍然拒绝**）；
+   * ② 项目组内某成员的子任务往左拖落回本组（升根回组，**本批要开的**）。
+   * 区分点是「父属不属于这个组」，只有页面查得到（`buckets.projects`），故由它算好传进来。
+   */
+  activeParentProjectGoalId?: string | null;
 }
 
 /**
@@ -362,6 +394,7 @@ export function resolveTodoDragOperation({
   activeContainerId,
   targetContainerId,
   activeParentId,
+  activeParentProjectGoalId = null,
 }: ResolveTodoDragInput): TodoDragOperation | null {
   const active = parseTodoContainerId(activeContainerId);
   const target = parseTodoContainerId(targetContainerId);
@@ -376,16 +409,31 @@ export function resolveTodoDragOperation({
     return { kind: "reorder", containerId: activeContainerId };
   }
 
-  // → 项目组：只收根任务。子任务不做「先升根再入组」的复合动作——一个手势改两件事、
-  // 且拆父子关系不可撤销，判为无效由调用方给拒绝反馈。
+  // → 项目组：分两支。
   if (target.kind === "project") {
+    // 子任务这一支：只有「父就在这个组里」才是升根回组，其余一律拒绝（口径同上方入参注释）。
+    if (active.kind === "parent") {
+      return activeParentProjectGoalId !== null && activeParentProjectGoalId === target.goalId
+        ? { kind: "promote-to-project", goalId: target.goalId }
+        : null;
+    }
+    // 根任务这一支：外区归入，语义一字未变。
     if (active.kind !== "pool" || activeParentId !== null) return null;
     return { kind: "assign-to-project", goalId: target.goalId };
   }
 
-  // 项目区的行不注册 draggable（design §动作二 dnd 身份规则），active 不可能是项目容器；防御闸。
-  // 注意：此刻它对返回值零影响——下面六个分支都要求 active 是 pool/parent/hand，落到末尾同样 return null。
-  // 留着是为了让「项目容器不作 active」这条规则在代码里有据可依，且将来新增分支时不至于漏掉它。
+  // 组内收纳：项目区的行 → 同组某行的 parent 容器。
+  // **不在这里重复判「那个 parentId 属于哪个组」**：本函数拿不到这份信息，硬加只能写成恒真的假闸。
+  // 跨组已被上游 `hoveredRootIdFromOver` 的同组守卫挡掉（它对跨组算不出 rootAboveId，
+  // 于是根本拼不出 `parent:<别组的行>`），第二道保险在 `resolveTodoDragWithIndent`。
+  if (active.kind === "project" && target.kind === "parent") {
+    return { kind: "move-to-parent", parentId: target.parentId };
+  }
+
+  // 哨兵：项目容器作 active 的其余组合（→ pool、→ project、→ hand）一律无效。
+  // **位置有讲究**：必须排在上面两条 project 分支之后。挪到它们之前会把组内收纳与升根回组
+  // 一起短路成死代码，而整套测试照绿（返回值都是 null，行为没变），真机上只表现为
+  // 「项目区的行拖了没反应」。
   if (active.kind === "project") return null;
 
   // hand → parent:X —— 手头行被收纳为 X 的子任务（区内收纳）
@@ -424,37 +472,50 @@ export function resolveTodoDragOperation({
 
 /**
  * 由一次 drag-over 的目标，反查它归属的 root 任务 id（用于缩进候选父判定）。
- * - 池容器（pool:today/inbox）：over 自身就是根行，root = overId。
+ * - 池容器（pool:today/inbox）：over 自身就是根行，root = overTaskId。
  * - parent 容器（parent:<X>）：root = X（无论 over 是子任务行还是落点区）。
- * - hand 容器：**仅当拖拽来源也是 hand 时** root = overId；否则 null。
+ * - hand 容器：**仅当拖拽来源也是 hand 时** root = overTaskId；否则 null。
+ * - project 容器：**仅当拖拽来源是同一个 project 组时** root = overTaskId；否则 null。
  * 无法归属（非法/缺失容器、upcoming 等）返回 null。
  *
- * 第三参既是容器解析失败时的兜底，也是「拖拽来源」判据。收纳只在手头区内成立——
- * 外区任务要归到手头某件活底下，正确路径是先入手头再在区内收敛。这道守卫必须落在本函数，
+ * 第二参收的是**任务 id**（调用方从 `over.data.current.taskId` 取），不是 dnd item id——
+ * 项目区的行另编了带前缀的 dnd id（同一条任务同屏出现两次会撞 id），两者不再等价。
+ *
+ * 第三参既是容器解析失败时的兜底，也是「拖拽来源」判据。收纳只在区内 / 组内成立——
+ * 外区任务要归到某件活底下，正确路径是先进那个区 / 那个组再收敛。这道守卫必须落在本函数，
  * 因为收纳高亮（handleDragOver）与落库判定共用它；只拦落库会留下「亮了高亮却无事发生」。
  */
 export function hoveredRootIdFromOver(
   overContainerId: string,
-  overId: string,
+  overTaskId: string,
   activeContainerId?: string,
 ): string | null {
   // 投递坞不是缩进落点:dock id 解析不进 TodoContainer,会 fall 到 activeContainerId(通常是池)
   // 把 dock id 字符串当「根行 id」返回,下游拿它拼 parent:<dock:…> 落成垃圾 move-to-parent。
-  if (parseTodoDockId(overContainerId) !== null || parseTodoDockId(overId) !== null) return null;
+  if (parseTodoDockId(overContainerId) !== null || parseTodoDockId(overTaskId) !== null) return null;
+  // 容器级 droppable（项目组卡片）落点没有 taskId。不早退就会把容器 id 当根行 id 返回，
+  // 与上面那条坞守卫是同一类事故。
+  if (!overTaskId) return null;
   const container = parseTodoContainerId(overContainerId) ?? parseTodoContainerId(activeContainerId);
   if (!container) return null;
-  // 项目区没有可作缩进父的根行，恒返回 null 让缩进系统对它让位。
-  if (container.kind === "project") return null;
-  if (container.kind === "hand") {
-    return parseTodoContainerId(activeContainerId)?.kind === "hand" ? overId : null;
+  if (container.kind === "project") {
+    // hand 是单例容器，比 kind 就够；项目区有 N 个容器，只比 kind 会放行跨组收纳
+    // ——拖到隔壁组的行上照样亮高亮、照样落库，而那是一次静默的归属变更。
+    const active = parseTodoContainerId(activeContainerId);
+    return active?.kind === "project" && active.goalId === container.goalId ? overTaskId : null;
   }
-  if (container.kind === "pool") return overId;
+  if (container.kind === "hand") {
+    return parseTodoContainerId(activeContainerId)?.kind === "hand" ? overTaskId : null;
+  }
+  if (container.kind === "pool") return overTaskId;
   return container.parentId;
 }
 
 export interface ResolveTodoDragWithIndentInput {
   activeContainerId: string;
   activeParentId: string | null;
+  /** 见 `ResolveTodoDragInput` 同名字段；本函数只负责透传给 `resolveTodoDragOperation`。 */
+  activeParentProjectGoalId?: string | null;
   activeId: string;
   activeHasChildren: boolean;
   indentLevel: TodoIndentLevel;
@@ -465,27 +526,36 @@ export interface ResolveTodoDragWithIndentInput {
 export function resolveTodoDragWithIndent({
   activeContainerId,
   activeParentId,
+  activeParentProjectGoalId = null,
   activeId,
   activeHasChildren,
   indentLevel,
   rootAboveId,
   targetContainer,
 }: ResolveTodoDragWithIndentInput): TodoDragOperation | null {
+  const activeContainer = parseTodoContainerId(activeContainerId);
   const canBecomeChild =
     indentLevel === "child" &&
     !activeHasChildren &&
     rootAboveId !== null &&
     rootAboveId !== activeId &&
-    // 项目组不是缩进落点。第二道保险：hoveredRootIdFromOver 已让项目容器恒返回 null，
-    // 但那是调用方传进来的值，斜着拖进项目组不该因为一个错传就变成拆/接父子关系。
-    targetContainer?.kind !== "project";
+    // 项目组只在**组内**是缩进落点。第二道保险：hoveredRootIdFromOver 的同组守卫已经让跨组
+    // 算不出 rootAboveId，但那是调用方传进来的值，斜着拖进隔壁组不该因为一个错传
+    // 就变成拆 / 接父子关系。
+    (targetContainer?.kind !== "project" ||
+      (activeContainer?.kind === "project" && activeContainer.goalId === targetContainer.goalId));
   const targetContainerId = canBecomeChild
     ? `parent:${rootAboveId}`
     : targetContainer
       ? todoContainerId(targetContainer)
       : "";
 
-  return resolveTodoDragOperation({ activeContainerId, targetContainerId, activeParentId });
+  return resolveTodoDragOperation({
+    activeContainerId,
+    targetContainerId,
+    activeParentId,
+    activeParentProjectGoalId,
+  });
 }
 
 /** 给一个 task 计算它在拖拽系统中所属的容器 id。 */
@@ -522,12 +592,21 @@ export function preferProjectCollisions({
   pointerHits,
   fallback,
   dockAllowed,
+  activeProjectGoalId = null,
 }: {
   pointerHits: Collision[];
   /** 惰性：指针已落在项目卡内时 closestCenter 的结果注定被丢弃，没必要每帧遍历全部 droppable。 */
   fallback: () => Collision[];
   /** 当前是否在 dock 车道；false 时坞不参与命中（排序/收纳因此不被坞拦）。 */
   dockAllowed: boolean;
+  /**
+   * 被拖行来自哪个项目组；非项目区来源为 null。
+   *
+   * 项目区来源时**同组的行优先于组卡片**：卡片是几百像素的大块、行浮在它里面，沿用
+   * 「落在卡内只认卡」会把组内行的碰撞整个吞掉，组内收纳永远命中不到行。只认同组行——
+   * 隔壁组的行不进这一档，与「跨组不认」是同一条规则的第二处落点。
+   */
+  activeProjectGoalId?: string | null;
 }): Collision[] {
   const isDock = (collision: Collision) => String(collision.id).startsWith("dock:");
   // 坞药丸浮在列表之上:指针同时落在药丸与其下方行/项目组的矩形内时只认坞。
@@ -536,6 +615,11 @@ export function preferProjectCollisions({
     if (dock.length > 0) return dock;
   }
   const hits = dockAllowed ? pointerHits : pointerHits.filter((collision) => !isDock(collision));
+  if (activeProjectGoalId !== null) {
+    const prefix = todoProjectRowIdPrefix(activeProjectGoalId);
+    const rows = hits.filter((collision) => String(collision.id).startsWith(prefix));
+    if (rows.length > 0) return rows;
+  }
   const projects = hits.filter((collision) => String(collision.id).startsWith("project:"));
   if (projects.length > 0) return projects;
   const rest = fallback();

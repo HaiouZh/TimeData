@@ -1,4 +1,4 @@
-import type { Modifier } from "@dnd-kit/core";
+import type { Collision, Modifier } from "@dnd-kit/core";
 import type { Transform } from "@dnd-kit/utilities";
 import { describe, expect, it } from "vitest";
 import {
@@ -27,6 +27,7 @@ import {
   todoContainerId,
   todoDockId,
   todoDockTargets,
+  todoProjectRowId,
 } from "./todoDnd.js";
 
 /** 只喂 transform 调用 modifier（其余 ModifierArguments 字段本实现用不到）。 */
@@ -424,6 +425,25 @@ describe("hoveredRootIdFromOver", () => {
   it("同父子任务排序时 over 缺 containerId，兜底使用 active 的 parent 容器", () => {
     expect(hoveredRootIdFromOver("", "child-2", "parent:root-1")).toBe("root-1");
   });
+
+  it("项目容器：同组来源才认，跨组返回 null", () => {
+    expect(hoveredRootIdFromOver("project:g1", "member-b", "project:g1")).toBe("member-b");
+    // 只比 kind 不比 goalId 的写法在这一条上原样通过——必须比 goalId
+    expect(hoveredRootIdFromOver("project:g1", "member-b", "project:g2")).toBeNull();
+  });
+
+  it("项目容器：外区来源不认（收纳只在组内成立）", () => {
+    expect(hoveredRootIdFromOver("project:g1", "member-b", "pool:inbox")).toBeNull();
+    expect(hoveredRootIdFromOver("project:g1", "member-b", "hand")).toBeNull();
+    expect(hoveredRootIdFromOver("project:g1", "member-b")).toBeNull();
+  });
+
+  it("组卡片本身不是根行：overTaskId 为空时返回 null", () => {
+    // 组卡片自己就是 droppable，指针落在卡片空白处时它的 data 里没有 taskId。
+    // 不早退的话会把 "project:g1" 这个容器 id 当成根行 id 返回，下游拼出 parent:project:g1。
+    expect(hoveredRootIdFromOver("project:g1", "", "project:g1")).toBeNull();
+    expect(hoveredRootIdFromOver("pool:today", "", "pool:today")).toBeNull();
+  });
 });
 
 const baseIndentInput = {
@@ -609,6 +629,7 @@ describe("project 容器（P3 拖拽归入）", () => {
         activeContainerId: "parent:p1",
         targetContainerId: "project:g1",
         activeParentId: "p1",
+        activeParentProjectGoalId: null, // 父不属于任何 active project → 仍是跨区复合动作，仍拒绝
       }),
     ).toBeNull();
   });
@@ -623,22 +644,77 @@ describe("project 容器（P3 拖拽归入）", () => {
     ).toBeNull();
   });
 
-  it("active 是项目容器 → null：项目区的行不注册 draggable，这是防御闸", () => {
-    // 注意：本例当前**不**能证明那道防御闸存在——把 resolveTodoDragOperation 里
-    // `if (active.kind === "project") return null;` 整行删掉，本文件照样全绿（下面四个分支都要求
-    // active 是 pool/parent，落到函数末尾同样 return null）。它锁的是**返回值契约**，
-    // 将来给项目容器新增分支时才会变成真闸。
+  it("hoveredRootIdFromOver 对项目容器恒返回 null（项目区无可作缩进父的根行）", () => {
+    expect(hoveredRootIdFromOver("project:g1", "g1")).toBeNull();
+  });
+
+  it("项目区的行 → 同组某行的 parent 容器 = 组内收纳", () => {
     expect(
       resolveTodoDragOperation({
         activeContainerId: "project:g1",
-        targetContainerId: "pool:inbox",
+        targetContainerId: "parent:member-a",
         activeParentId: null,
+      }),
+    ).toEqual({ kind: "move-to-parent", parentId: "member-a" });
+  });
+
+  // 这条同时是「新分支没被哨兵短路」的定向闸：把 `if (active.kind === "project") return null`
+  // 挪回两条 project 分支之前，本例立刻红。没有它，那次挪动零成本（行为没变、整套测试照绿），
+  // 真机上只表现为「项目区的行拖了没反应」。
+  it("组内收纳分支必须排在 project 哨兵之前", () => {
+    expect(
+      resolveTodoDragOperation({
+        activeContainerId: "project:g1",
+        targetContainerId: "parent:member-a",
+        activeParentId: null,
+      }),
+    ).not.toBeNull();
+  });
+
+  it("组内子任务 → 本组 = 升根回组", () => {
+    expect(
+      resolveTodoDragOperation({
+        activeContainerId: "parent:member-a",
+        targetContainerId: "project:g1",
+        activeParentId: "member-a",
+        activeParentProjectGoalId: "g1",
+      }),
+    ).toEqual({ kind: "promote-to-project", goalId: "g1" });
+  });
+
+  it("子任务的父属于**别的**组 → null：跨组不做升根入组", () => {
+    expect(
+      resolveTodoDragOperation({
+        activeContainerId: "parent:member-a",
+        targetContainerId: "project:g2",
+        activeParentId: "member-a",
+        activeParentProjectGoalId: "g1",
       }),
     ).toBeNull();
   });
 
-  it("hoveredRootIdFromOver 对项目容器恒返回 null（项目区无可作缩进父的根行）", () => {
-    expect(hoveredRootIdFromOver("project:g1", "g1")).toBeNull();
+  it("项目容器作 active 的其余组合仍 null（哨兵还在挡）", () => {
+    expect(
+      resolveTodoDragOperation({
+        activeContainerId: "project:g1",
+        targetContainerId: "pool:today",
+        activeParentId: null,
+      }),
+    ).toBeNull();
+    expect(
+      resolveTodoDragOperation({
+        activeContainerId: "project:g1",
+        targetContainerId: "project:g2",
+        activeParentId: null,
+      }),
+    ).toBeNull();
+    expect(
+      resolveTodoDragOperation({
+        activeContainerId: "project:g1",
+        targetContainerId: "hand",
+        activeParentId: null,
+      }),
+    ).toBeNull();
   });
 });
 
@@ -675,6 +751,35 @@ describe("resolveTodoDragWithIndent × 项目容器", () => {
   it("目标容器为 null 时行为不变，仍返回 null", () => {
     expect(
       resolveTodoDragWithIndent({ ...base, indentLevel: "root", rootAboveId: null, targetContainer: null }),
+    ).toBeNull();
+  });
+
+  it("同组内可缩进成 child", () => {
+    expect(
+      resolveTodoDragWithIndent({
+        activeContainerId: "project:g1",
+        activeParentId: null,
+        activeId: "member-a",
+        activeHasChildren: false,
+        indentLevel: "child",
+        rootAboveId: "member-b",
+        targetContainer: { kind: "project", goalId: "g1" },
+      }),
+    ).toEqual({ kind: "move-to-parent", parentId: "member-b" });
+  });
+
+  it("跨组不可缩进成 child：第二道保险独立成立，不靠上游过滤", () => {
+    expect(
+      resolveTodoDragWithIndent({
+        activeContainerId: "project:g1",
+        activeParentId: null,
+        activeId: "member-a",
+        activeHasChildren: false,
+        indentLevel: "child",
+        // 上游被绕过、rootAboveId 被错传进来时，这一层仍不许把它变成拆/接父子关系
+        rootAboveId: "other-member",
+        targetContainer: { kind: "project", goalId: "g2" },
+      }),
     ).toBeNull();
   });
 });
@@ -1038,10 +1143,11 @@ describe("resetTodoDragRefs（拖拽状态 ref 组复位单点）", () => {
       keyboard: { current: true },
       dragStartPoint: { current: { x: 12, y: 34 } },
       pointerPos: { current: { x: 56, y: 78 } },
+      activeProjectGoalId: { current: "g1" },
     };
   }
 
-  it("五个 ref 全部回到初始值（lane/indentBase=root,其余 null/false）", () => {
+  it("六个 ref 全部回到初始值（lane/indentBase=root,其余 null/false）", () => {
     const refs = dirtyRefs();
     resetTodoDragRefs(refs);
     expect(refs.lane.current).toBe("root");
@@ -1049,6 +1155,7 @@ describe("resetTodoDragRefs（拖拽状态 ref 组复位单点）", () => {
     expect(refs.keyboard.current).toBe(false);
     expect(refs.dragStartPoint.current).toBeNull();
     expect(refs.pointerPos.current).toBeNull();
+    expect(refs.activeProjectGoalId.current).toBeNull();
   });
 
   it("初始值上再调一次也稳定（幂等）", () => {
@@ -1057,5 +1164,80 @@ describe("resetTodoDragRefs（拖拽状态 ref 组复位单点）", () => {
     resetTodoDragRefs(refs);
     expect(refs.lane.current).toBe("root");
     expect(refs.pointerPos.current).toBeNull();
+    expect(refs.activeProjectGoalId.current).toBeNull();
+  });
+});
+
+describe("项目区行 id 域", () => {
+  it("前缀不与 project: 容器域相撞", () => {
+    const id = todoProjectRowId("g1", "t1");
+    expect(id).toBe("project-row:g1:t1");
+    // 关键：若写成 `project:g1:t1`，下面这句会解析出 goalId="g1:t1" 的假容器
+    expect(parseTodoContainerId(id)).toBeNull();
+    expect(id.startsWith("project:")).toBe(false);
+  });
+});
+
+describe("preferProjectCollisions · 项目区来源", () => {
+  // 本文件既有的 preferProjectCollisions 用例已有同款碰撞构造 helper——复用它，别并排再造一个。
+  const hit = (id: string) => ({ id }) as unknown as Collision;
+
+  it("来源是本组时同组行优先于组卡片", () => {
+    const result = preferProjectCollisions({
+      pointerHits: [hit("project:g1"), hit("project-row:g1:t2")],
+      fallback: () => [],
+      dockAllowed: false,
+      activeProjectGoalId: "g1",
+    });
+    expect(result.map((c) => String(c.id))).toEqual(["project-row:g1:t2"]);
+  });
+
+  it("隔壁组的行不进优先档（跨组不认的第二处落点）", () => {
+    const result = preferProjectCollisions({
+      pointerHits: [hit("project:g2"), hit("project-row:g2:t9")],
+      fallback: () => [],
+      dockAllowed: false,
+      activeProjectGoalId: "g1",
+    });
+    expect(result.map((c) => String(c.id))).toEqual(["project:g2"]);
+  });
+
+  it("组内没命中行时仍认本组卡片（子任务往左拖落在卡片空白处）", () => {
+    const result = preferProjectCollisions({
+      pointerHits: [hit("project:g1")],
+      fallback: () => [],
+      dockAllowed: false,
+      activeProjectGoalId: "g1",
+    });
+    expect(result.map((c) => String(c.id))).toEqual(["project:g1"]);
+  });
+
+  it("外区来源行为一字不变：卡片优先，行不参与", () => {
+    const result = preferProjectCollisions({
+      pointerHits: [hit("project:g1"), hit("project-row:g1:t2")],
+      fallback: () => [],
+      dockAllowed: false,
+    });
+    expect(result.map((c) => String(c.id))).toEqual(["project:g1"]);
+  });
+});
+
+describe("投递坞对项目区整区关闭", () => {
+  it("项目区源不出任何药丸", () => {
+    expect(todoDockTargets("project:g1", [{ goalId: "g1" }, { goalId: "g2" }])).toEqual([]);
+  });
+
+  it("父在项目组的子任务同样不出坞", () => {
+    expect(todoDockTargets("parent:member-a", [{ goalId: "g1" }], true)).toEqual([]);
+  });
+
+  it("父不在任何不出坞区的子任务，坞照常", () => {
+    expect(todoDockTargets("parent:p1", [{ goalId: "g1" }]).length).toBeGreaterThan(0);
+  });
+
+  it("项目区源投坞一律 invalid（隐藏规则漏了时的兜底）", () => {
+    expect(
+      resolveTodoDockDrop({ dockId: "dock:pool:today", activeContainerId: "project:g1", activeParentId: null }),
+    ).toEqual({ kind: "invalid", target: { kind: "pool", pool: "today" } });
   });
 });
