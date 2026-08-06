@@ -81,13 +81,13 @@ last-reviewed: 2026-08-05
 | 变量 | 必填 | 用途 |
 |---|---|---|
 | `AUTH_TOKEN` | 生产必填 | API 鉴权。所有 `/api/*` 请求都要带 `Authorization: Bearer <TOKEN>`，除了 `/api/health` 和 `/api/version` |
-| `AGENT_TOKEN` | 否 | 窄域 agent 鉴权。仅 `/api/agent/*` 接受，当前用于任务状态回写与任务轨道 ingest；未设置时该作用域仍可用 `AUTH_TOKEN`。生成用 `openssl rand -base64 32`，写进服务器 `.env` 后 `docker compose up -d` 重启一次即长期生效（`.env` 不随镜像更新变动，无需每次部署重配）。2026-07-28 前 compose 未转发此变量，`.env` 里配了也不进容器——若 agent 一直在用 master token 即此因，修复后把 agent/脚本侧逐个换成这把,master 从 agent 场景退出 |
+| `AGENT_TOKEN` | 否 | 窄域 agent 鉴权。仅 `/api/agent/*` 接受，当前用于任务状态回写与任务轨道 ingest；未设置时该作用域仍可用 `AUTH_TOKEN`。生成用 `openssl rand -base64 32`，写进服务器 `.env` 后 `docker compose up -d` 重启一次即长期生效（`.env` 不随镜像更新变动，无需每次部署重配） |
 | `ALLOW_UNAUTHENTICATED_DEV` | 否 | 鉴权旁路。设为 `1` 且 `AUTH_TOKEN` 缺失时，放行所有 `/api/*` 并打印一次 warning；生产不要设置。**本仓约定本地开发也不用它**（理由见 §9.1），只留给临时排查 |
 | `ALLOWED_ORIGINS` | 生产必填 | CORS 允许来源白名单，逗号分隔；未配置时所有跨域 `/api/*` 请求会被拒绝（fail-closed） |
 | `MAX_BODY_BYTES` | 否 | `/api/*` 请求体大小上限（字节），默认 `5242880`（5 MB）；超出返回 HTTP 413 |
 | `SYNC_RATE_MAX` | 否 | `/api/sync/*` 每 60 秒最大请求次数（按 token 标识），默认 `60`；超出返回 HTTP 429 |
-| `ADMIN_RATE_MAX` | 否 | `/api/admin/*` 每 60 秒最大请求次数，默认 `120`；超出返回 HTTP 429。`/api/admin/sync-logs` 的读写清空和 `/api/admin/request-logs` 的只读查询都使用该限流，其中 sync logs 清空必须发送 `X-Confirm: true` |
-| `UPDATE_RATE_MAX` | 否 | `POST /api/update`（自更新触发）每 60 秒最大次数，默认 `6`。状态轮询端点 `/api/update/status` 不计入 |
+| `ADMIN_RATE_MAX` | 否 | `/api/admin/*` 每 60 秒最大请求次数，默认 `120`；超出返回 HTTP 429。`/api/admin/sync-logs` 的读写清空和 `/api/admin/request-logs` 的只读查询都使用该限流 |
+| `UPDATE_RATE_MAX` | 否 | `POST /api/update`（自更新触发）每 60 秒最大次数，默认 `6` |
 | `DB_PATH` | 否 | 容器内 SQLite 路径，默认 `/app/data/timedata.db` |
 | `GEOIP_DIR` | 否 | GeoLite2 mmdb（City + ASN）所在目录，默认 `/app/data/geoip`。两个库都缺时归属地降级为「位置未知」、陌生来源按网段收敛；单缺一个只半降级（缺 City：有运营商无地名，收敛按 ASN；缺 ASN：有地名无运营商，收敛按网段），服务在任何一种情况下照常工作。两库读进内存常驻，全就绪约多占 70 MB RSS。语义见 [security](security.md#security-new-ip-alert) |
 | `PORT` | 否 | 监听端口，默认 3000 |
@@ -99,19 +99,19 @@ last-reviewed: 2026-08-05
 | `UPDATE_STATE_DIR` | 否 | 自更新状态文件目录，默认 `/app/data`；一般不需要配置 |
 | `DIARY_VAULT_DIR` | 否 | 日记功能的 vault 目录（容器内路径）。compose 在变量未定义时注入 `/app/vault`，显式设为空时保留空值并让日记 API 返回未启用；宿主机 `${DIARY_VAULT_HOST_DIR:-./vault}` 仍挂载到 `/app/vault`。vault 内容从 PC 同步到宿主机目录由部署方自理；容器启动时会递归校正固定挂载根 `/app/vault` 为应用 UID/GID 1000 可写 |
 
-`AUTH_TOKEN` 缺失时：auth 中间件默认对受保护的 `/api/*` 返回 HTTP 500，不再按 `NODE_ENV` 区分开发/生产。只有显式设置 `ALLOW_UNAUTHENTICATED_DEV=1` 时，才会放行所有 `/api/*` 并且每个进程只输出一次警告；这个旁路只用于本地开发，不能用于生产部署。
+`AUTH_TOKEN` 缺失时的 fail-closed 行为与 `ALLOW_UNAUTHENTICATED_DEV` 旁路的机制见 [security](security.md)。
 
-日记 vault 与 `data/` 一样由 entrypoint 在降权前修复所有权。entrypoint 只创建并改权固定挂载根 `/app/vault`；`DIARY_VAULT_DIR` 的子目录由降权后的应用按需创建。自动改权只接受最近存在祖先解析后仍位于 `/app/vault` 子树、且不含 `.` / `..` 路径段的配置；误配路径只告警，不在挂载根外创建目录或递归改权。宿主机挂载文件系统若不支持 `chown`，启动日志会出现 `[diary] warning`，保存返回 503 `diary-vault-not-writable`；此时需要在宿主机让挂载目录对 UID/GID 1000 可写，或按所用网络文件系统配置等效权限。
+日记 vault 由 entrypoint 在降权前修复所有权（机制见 [diary](diary.md)）；自动改权只接受最近存在祖先解析后仍位于 `/app/vault` 子树、且不含 `.` / `..` 路径段的配置。宿主机挂载文件系统若不支持 `chown`（启动日志出现 `[diary] warning`，保存返回 503 `diary-vault-not-writable`），需要在宿主机让挂载目录对 UID/GID 1000 可写，或按所用网络文件系统配置等效权限。
 
 受保护业务路由包括 `/api/categories`、`/api/entries`、`/api/quick-notes`、`/api/sync/*`、`/api/export`、`/api/update`、`/api/data/*` 和 `/api/admin/*`；只有 `/api/health` 与 `/api/version` 在 auth middleware 前注册。`/api/agent/*` 在全局 auth 前单独挂 scoped auth，接受 `AUTH_TOKEN` 或 `AGENT_TOKEN`，但只暴露封闭的 agent 动作集合。
 
-`ALLOWED_ORIGINS` 由 `packages/server/src/middleware/cors.ts` 解析，`packages/server/src/index.ts` 在 `/api/*` CORS 中间件里使用。自 2026-05-19 起，未配置时解析为**空数组**，所有跨域 `/api/*` 请求都会被拒绝；生产部署必须显式填写 Web 前端域名，例如 `ALLOWED_ORIGINS=https://timedata.example.com`。多域名用逗号分隔，例如 `ALLOWED_ORIGINS=https://timedata.example.com,https://timedata-staging.example.com`。Android/Capacitor 壳（`androidScheme: "https"`）的 origin 是 `https://localhost`，必须显式加入白名单；兼容旧 scheme 时一并加 `capacitor://localhost`。保留 `ALLOWED_ORIGINS=*` 可以通配来源，但 `*` 配合 `credentials: true` 等于反射任意来源请求，server 启动期会打印 WARN，不推荐用于生产环境。
+`ALLOWED_ORIGINS` 由 `packages/server/src/middleware/cors.ts` 解析，`packages/server/src/index.ts` 在 `/api/*` CORS 中间件里使用。未配置时解析为**空数组**，所有跨域 `/api/*` 请求都会被拒绝；生产部署必须显式填写 Web 前端域名，例如 `ALLOWED_ORIGINS=https://timedata.example.com`。多域名用逗号分隔，例如 `ALLOWED_ORIGINS=https://timedata.example.com,https://timedata-staging.example.com`。Android/Capacitor 壳（`androidScheme: "https"`）的 origin 是 `https://localhost`，必须显式加入白名单；兼容旧 scheme 时一并加 `capacitor://localhost`。保留 `ALLOWED_ORIGINS=*` 可以通配来源，但 `*` 配合 `credentials: true` 等于反射任意来源请求，server 启动期会打印 WARN，不推荐用于生产环境。
 
-Android `resume` 同步的 `/api/sync/status` 与增量 `/api/sync/pull` 可由客户端显式选择 Capacitor 原生 HTTP；这两类请求不经过浏览器 CORS 预检，但只限该同步路径，且仍然使用 Bearer/TOTP 鉴权与 HTTPS。push、SSE、force-push、健康诊断、管理/日记/备份和其他 Web API 继续由 WebView `fetch` 发出，因此 `https://localhost` 仍必须在 `ALLOWED_ORIGINS` 中；原生通道不构成 CORS 配置的替代品。客户端不启用全局 `CapacitorHttp` fetch/XHR patch，避免改变 SSE 的流式与取消语义。
+Android `resume` 同步的原生通道（`/api/sync/status` 与增量 `/api/sync/pull`）与其余 WebView 通道的划分、`https://localhost` 必须留在 `ALLOWED_ORIGINS` 的规则见 [deployment/android-apk](deployment/android-apk.md)；原生通道仍使用 Bearer/TOTP 鉴权与 HTTPS，客户端不启用全局 `CapacitorHttp` fetch/XHR patch，避免改变 SSE 的流式与取消语义。
 
 服务端 CORS 允许的请求头由 `packages/server/src/middleware/cors.ts` 的 `ALLOWED_REQUEST_HEADERS` 单点定义，`index.ts` 的 CORS 中间件直接消费：`Content-Type`、`Authorization`、`X-Confirm`、`X-TimeData-Client`、`X-TimeData-Client-Build`、`X-TOTP-Code`。`X-Confirm` 供 `/api/admin/sync-logs` 清空确认使用，`X-TimeData-Client` 供请求审计记录 client hint，`X-TimeData-Client-Build` 是 `apiFetch` 给每个请求带的构建观测头（见 [`sync`](sync.md#sync-row-granularity)），`X-TOTP-Code` 供危险操作补码重试。**客户端新增任何跨域自定义 header 必须同步这份白名单**——漏掉会让 Capacitor 壳的每个请求预检失败，而同源网页版毫无感知。`cors.test.ts` 有一条跨包闸机检 `client/src/lib/api.ts` 里 `headers.set` 的 `X-` 头是否都在白名单内。
 
-CORS 中间件的完整配置由 `cors.ts` 的 `corsOptions()` 单点构造，`index.ts` 只做 `cors(corsOptions(allowedOrigins))` 接线。其中 `maxAge` 取 `CORS_PREFLIGHT_MAX_AGE_SECONDS`（86400 秒 = 1 天）：仍走 WebView 的 Capacitor 请求带 `Authorization`，属于非简单请求、必须预检，而不发 `Access-Control-Max-Age` 时 Chromium/WebView 只缓存 5 秒，于是这些安卓 API 调用实际是两个整往返；Android resume 的原生 status/增量 pull 不经过该浏览器预检。移动网络上预检翻倍很贵——2026-07-30 生产取证，一次冷启动里客户端测得 status 阶段 5311ms，同一请求服务端只花了 5ms。同源网页版不走预检，所以这个开销在电脑上复现不出来。
+CORS 中间件的完整配置由 `cors.ts` 的 `corsOptions()` 单点构造，`index.ts` 只做 `cors(corsOptions(allowedOrigins))` 接线。其中 `maxAge` 取 `CORS_PREFLIGHT_MAX_AGE_SECONDS`（86400 秒 = 1 天）：仍走 WebView 的 Capacitor 请求带 `Authorization`，属于非简单请求、必须预检，而不发 `Access-Control-Max-Age` 时 Chromium/WebView 只缓存 5 秒，于是这些安卓 API 调用实际是两个整往返；Android resume 的原生 status/增量 pull 不经过该浏览器预检。移动网络上预检翻倍很贵——生产取证：一次冷启动里客户端测得 status 阶段 5311ms，同一请求服务端只花了 5ms。同源网页版不走预检，所以这个开销在电脑上复现不出来。
 
 **部署陷阱**：`docker-compose.yml` 的 `environment:` 块**必须**显式列出 `- ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-}`，否则就算 `.env` 写了值，变量也进不到容器里。Web 前端走同源不触发 CORS，所以这种漏配通常要等到 Android App 第一次跨域请求 `/api/sync/status` 才会暴露，表现为 App 内提示"网络请求失败：无法连接 https://&lt;your-host&gt;/api/sync/status"。
 
@@ -125,7 +125,7 @@ curl -sS -i -X OPTIONS https://<your-host>/api/health \
 ```
 
 1. **origin 未放行**：响应缺 `access-control-allow-origin: https://localhost`。多是 `.env` 漏了 `https://localhost`，或 `docker-compose.yml` 漏了 `- ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-}` 那一行。修改后 `docker compose up -d` 重建容器（不需要 `down`），用 `docker compose exec timedata sh -c 'echo $ALLOWED_ORIGINS'` 确认变量已注入。
-2. **自定义请求头未放行**：`access-control-allow-headers` 缺客户端实际发送的某个 `X-` 头。这是纯代码问题，与部署配置无关，改 `ALLOWED_REQUEST_HEADERS` 后需重新发版。2026-07-28 踩过一次：client 加了 `X-TimeData-Client-Build` 但白名单没同步，安卓端全线断连而网页版（同源、不预检）无感。
+2. **自定义请求头未放行**：`access-control-allow-headers` 缺客户端实际发送的某个 `X-` 头。这是纯代码问题，与部署配置无关，改 `ALLOWED_REQUEST_HEADERS` 后需重新发版。曾踩过：client 加了 `X-TimeData-Client-Build` 但白名单没同步，安卓端全线断连而网页版（同源、不预检）无感。
 
 ### 2.1 GeoLite2 归属地库（可选，但装了才有国外地址）
 
@@ -142,9 +142,9 @@ GeoLite2 许可要求不长期使用过期数据；更新方式就是换这两�
 
 **自动更新（可选）**：`docker-compose.yml` 带一个 profile 为 `geoip` 的 `geoipupdate` 容器（`ghcr.io/maxmind/geoipupdate`），每月拉取新版 GeoLite2 落盘到 `./data/geoip`。启用方式：`.env` 里填 `COMPOSE_PROFILES=geoip`、`GEOIPUPDATE_ACCOUNT_ID`、`GEOIPUPDATE_LICENSE_KEY` 三个变量（账号在 maxmind.com 注册免费获得），然后 `docker compose up -d`。**库更新后要等 timedata 容器下次重启才生效**：`geoip.ts` 在首次归属地查询时才把 mmdb 读进内存（懒加载）、之后不重读，本仓发版频繁（Watchtower 常态重启），因此不实现热重载。未配凭据时容器报错退出、且随 `restart: unless-stopped` 不断重启——先填齐三个变量再启动。**首次部署启用 geoip profile 时，若容器启动早于 geoipupdate 首轮下载完成，库就位后需 `docker compose restart timedata` 才生效**。
 
-**中国归属地（内置，无需配置）**：中国 IP 的省 / 市 / 运营商走随镜像发布的内置段表 `assets/china-geo.bin`（约 750KB），不依赖 MaxMind、不需要往服务器传文件。表由 `scripts/gen-china-geo.mjs` 从 ip2region 原始数据离线生成，重新生成方法见 `packages/server/assets/README.md`。中国表命中即中国（中文省市 + 运营商，ASN 号仍取自 GeoLite2-ASN）；表缺失时中国 IP 降级为只有国家，不影响国外路径。
+**中国归属地（内置，无需配置）**：中国 IP 的省 / 市 / 运营商走随镜像发布的内置段表 `assets/china-geo.bin`（约 750KB），不依赖 MaxMind、不需要往服务器传文件。表由 `scripts/gen-china-geo.mjs` 从 ip2region 原始数据离线生成，重新生成方法见 `packages/server/assets/README.md`。中国表命中即中国（中文省市 + 运营商，ASN 号仍取自 GeoLite2-ASN）；表缺失时中国 IP 回落 GeoLite2（可能显示英文地名），不影响国外路径。
 
-装好后的自检：打开设置 →「服务端数据洞察」，看页面顶部有没有归属地库提示条。**没有提示条**即三个数据源都读到了（告警卡与日志行会显示地名加运营商，如「江苏省 南京市」+「中国移动」）。提示条会写明缺的是哪个库/表，据此检查路径与文件名大小写。不要用「有没有显示位置未知」判断库是否读到：只缺 City 库时 ASN 库其实读到了，地名仍是「位置未知」；地名取 `zh-CN` 缺失时回落 `en`，某些地区本就显示英文名。
+装好后的自检：打开设置 →「服务端数据洞察」，看页面顶部有没有归属地库提示条。**没有提示条**即三个数据源都读到了（告警卡与日志行会显示地名加运营商，如「江苏省 南京市」+「中国移动」）。提示条会写明缺的是哪个库/表，据此检查路径与文件名大小写。缺库时的降级形态与就绪判定见 [security](security.md)，不要用「有没有显示位置未知」判断库是否读到。
 
 **首次装库或换库会触发一次性重报**：库就绪前按 `net:` 档确认过的范围成为死数据，同一批来源会按新算出的 `asn:` 档键各报一次新来源。反向（把库撤掉）同理。这是收敛键变了的预期结果，不是漏报也不是故障。
 
@@ -157,35 +157,18 @@ git push main
   → push 到 ghcr.io/haiouzh/timedata:latest（带 GIT_SHA tag）
 ```
 
-Dockerfile 构建镜像时先从根 `packageManager` 读取并安装对应 pnpm 11，再临时安装构建工具（python3、make、g++），从源码重建 better-sqlite3 的原生 `.node` 绑定，验证产物存在后立即卸载构建工具。这是因为 pnpm install 在 Alpine 上拉取的预编译二进制可能与容器 musl libc 不兼容，需要针对当前容器环境从源码编译。运行时阶段不安装 Python：服务端没有 Python 子进程，镜像不含 Python 运行时依赖。相关代码入口：`packages/server/Dockerfile`。
+Dockerfile 构建镜像时临时安装构建工具（python3、make、g++），从源码重建 better-sqlite3 的原生 `.node` 绑定，验证产物存在后立即卸载构建工具。这是因为 pnpm install 在 Alpine 上拉取的预编译二进制可能与容器 musl libc 不兼容，需要针对当前容器环境从源码编译。运行时阶段不安装 Python：服务端没有 Python 子进程，镜像不含 Python 运行时依赖。pnpm 版本统一从根 `packageManager` 读取（见 [development](development.md)）。相关代码入口：`packages/server/Dockerfile`。
 
 具体 workflow yaml 文件名和构建参数详见 `.github/workflows/`。其中：
 
 - `ci.yml`：push / PR 的基础 CI，`pnpm/action-setup` 从根 `packageManager` 读取 pnpm 11 版本并安装依赖后，先运行 `pnpm audit --audit-level=high --prod`，生产依赖存在 high/critical advisory 时直接阻断；随后按 `pnpm lint` → 四道静态闸（`check:ui`、`check:design`、`check:test`、`check:diary`，**都排在 typecheck 之前**，让廉价的闸先失败）→ `pnpm -r typecheck` → 测试 → evergreen 文档四道检查 → `pnpm build` 的顺序跑，不发布产物。**测试分两个 job**：主 job 跑 `pnpm -r --parallel --filter '!@timedata/client' test`（非 client 包）、`pnpm test:scripts` 与 client e2e；client 单测由独立的 `client-unit` 矩阵 job 用 `--shard=i/4` 切四片并行（`fail-fast: false`，一眼定位是哪片挂）。文档一致性检查只在 `pull_request` 事件下运行（main 的 push 不重跑，因为同样的 diff 在 PR 阶段已经查过），按发起人区分：依赖 bot（`dependabot[bot]` / `renovate[bot]`）触发的 PR 走 `pnpm check:docs`（warn，不阻塞），其余走 `pnpm check:docs:strict`。体量棘轮不依赖 PR diff，push 和 PR 都会跑，要求 `scripts/evergreen-size-baseline.json` 覆盖当前所有 evergreen 文档，且字符数 / `covers:` 不超过基线。`ci.yml` 配有 `concurrency`（按 ref 取消被顶掉的旧跑批）。
 - `build.yml`：main 分支发布镜像到 GHCR，自更新机制读取它的成功运行记录。
-- `mobile-release.yml`：一条 workflow 出 Android + iOS + Windows 三包——`prepare` 算版本号并建 `v<code>` Release，`android` job 上传签名 APK 并打 latest，`ios` job 上传未签名 IPA、`windows` job 上传 NSIS 安装包（两者都不碰 latest）；`pnpm/action-setup`（v6，自身运行在 Node 24）必须先于 `actions/setup-node`，因为 setup-node v5 的 pnpm 缓存逻辑会在步骤执行时查找 `pnpm`。此 workflow 和 `ci.yml` 都从根 `packageManager` 读取 pnpm 11 版本。细节见子文档 [deployment/android-apk](deployment/android-apk.md)、[deployment/ios-ipa](deployment/ios-ipa.md) 与 [deployment/windows-desktop](deployment/windows-desktop.md)。
+- `mobile-release.yml`：一条 workflow 出 Android + iOS + Windows 三包，版本号与 latest 契约细节见子文档 [deployment/android-apk](deployment/android-apk.md)、[deployment/ios-ipa](deployment/ios-ipa.md) 与 [deployment/windows-desktop](deployment/windows-desktop.md)；`pnpm/action-setup`（v6，自身运行在 Node 24）必须先于 `actions/setup-node`，因为 setup-node v5 的 pnpm 缓存逻辑会在步骤执行时查找 `pnpm`。
 - `secret-scan.yml`：push main / PR 上用 gitleaks 扫全历史找泄漏的密钥；误报白名单维护在根目录 `.gitleaks.toml`（`regexTarget = "match"`）。
 
 依赖升级由 Renovate 承担（配置在根目录 `renovate.json5`，需在 GitHub 安装 Renovate App），替代原 dependabot：原生支持 `pnpm-workspace.yaml` 的 catalog，`rangeStrategy: bump` 保证 spec 与 lockfile 同步（否则 `--frozen-lockfile` 拒绝），`minimumReleaseAge: 7 days` 与 pnpm 11 供应链发布龄闸对齐；Capacitor major 被禁用，升级需人工评估。
 
-## 3.1 Android APK 发布
-
-Android 签名 release APK 的 workflow、keystore、Capacitor / Gradle 版本、安全配置与移动端排错，已外提到子文档 [deployment/android-apk](deployment/android-apk.md)。主线关系只有两条：
-
-- APK 只包含构建时的 client/mobile 代码；自托管服务器镜像由 `build.yml` 另行发布和自更新。
-- 客户端新增 API 调用后，最新 APK 可能要求服务器也更新到对应版本；移动端“连不上服务器”的 HTTPS、CORS、旧镜像排查见 [deployment/android-apk](deployment/android-apk.md)。
-
-## 3.2 iOS 未签名 IPA
-
-iOS 原生工程不入库、由 CI 现场生成，产出未签名 IPA 供 SideStore 自签装机，细节在子文档 [deployment/ios-ipa](deployment/ios-ipa.md)。主线上只有一条：**latest 只由含 APK 的发布步骤打**——`prepare` 创建 Release 时显式 `--latest=false`，`android` 上传成功后落位；否则设置页「APK 更新」读到的最新 Release 会变成 Android 装不了的 `.ipa`。
-
-## 3.3 Windows 桌面壳
-
-Tauri 壳内嵌 client 的 `mode=mobile` 产物，产出不签名的 NSIS 安装包，细节在子文档 [deployment/windows-desktop](deployment/windows-desktop.md)。主线上只有两条：`windows` job 与 `ios` 同规矩不碰 latest；桌面壳吃的是 `mode=mobile` 产物（不注册 service worker），选型依据见 [ADR 0029](../adr/0029-desktop-shell-embeds-frontend.md)。
-
 ## 4. 版本检查（`/api/version`）
-
-**不需要鉴权**（在 auth middleware 之前注册）。
 
 逻辑（`packages/server/src/lib/version.ts`）：
 
@@ -271,7 +254,7 @@ docker version
 - `failed`：Watchtower token、URL、网络或 HTTP 响应失败；此时看 `update.log` 和 `docker compose ps` 排查。
 - `unknown`：还没有状态文件。
 
-如果 `POST /api/update` 返回 `409 Conflict`，说明已有更新锁；不要手动重复触发。**等 15 分钟即可**——过期锁会被下一次请求自动接管，容器重启时 `reconcileInterruptedUpdate` 也会补写状态并释放它。手删 `data/update.lock` 只在这两条自愈路径都没生效时才考虑，且要先确认 `update.log` 显示流程已结束、没有正在重启的容器。
+如果 `POST /api/update` 返回 `409 Conflict`，说明已有更新锁；不要手动重复触发——过期锁会被下一次请求自动接管（见上）。手删 `data/update.lock` 只在这两条自愈路径都没生效时才考虑，且要先确认 `update.log` 显示流程已结束、没有正在重启的容器。
 
 ## 6. 静态前端服务
 
@@ -280,19 +263,17 @@ docker version
 - `/index.html` 是客户端入口
 - `*.js` / `*.css` 是 Vite 打包产物
 - 所有未匹配 API 的路径 fallback 到 `index.html`（SPA 路由）
-- 设置页的 `/settings/admin-insights` 是服务端数据洞察入口，会调用 `/api/admin/*` 读取服务器概览、最近记录、分类汇总、同步诊断、服务端备份、健康检查、基础分析和请求审计；它仍受 `AUTH_TOKEN` 保护。
+- 设置页的 `/settings/admin-insights` 是服务端数据洞察入口，只读、受 `AUTH_TOKEN` 保护，端点与打开方式见 [admin](admin.md)。
 
-打开方式：先在客户端 `设置 → 服务器配置` 保存 API 地址和 Token，再进入 `设置 → 服务端数据洞察`，或直接访问前端域名下的 `/settings/admin-insights`。该面板不提供任意 SQL。**诊断数据只读，备份管理是例外**——同页的备份区块会保存备份设置、立即触发日备、删除备份，这几个是受控维护端点，其余读取一律不写 SQLite；请求审计区块读取 `/api/admin/request-logs`，仅用于展示和排查认证/限流/客户端提示分布。
+`SettingsPage` 是共享设置入口：部署文档只拥有其中服务器配置、同步摘要、服务端数据洞察、APK/服务端/前端更新这些行；轨道看板信号、导航配置等领域设置归各自主题文档。设置首页顶部先渲染 `ServerStatusCard`（不属任何分组），其下按「记录偏好 / 统计 / 导航与界面 / 高级与更新」四个 `SettingsSection` 组织；`/settings/insights` 行显示为“记录偏好”但路由名保留历史兼容；具体 key 契约见 [categories-settings/settings-catalog](categories-settings/settings-catalog.md)。代码入口：`packages/client/src/pages/SettingsPage.tsx`、`packages/client/src/pages/settings/SettingsAdminInsightsPage.tsx`、`packages/client/src/lib/adminApi.ts`、`packages/server/src/routes/admin/`
 
-`SettingsPage` 是共享设置入口：部署文档只拥有其中服务器配置、同步摘要、服务端数据洞察、APK/服务端/前端更新这些行；轨道看板信号、导航配置等领域设置归各自主题文档。设置首页顶部先渲染 `ServerStatusCard`（不属任何分组），其下按「记录偏好 / 统计 / 导航与界面 / 高级与更新」四个 `SettingsSection` 组织；`/settings/insights` 行显示为“记录偏好”但路由名保留历史兼容。设置首页的「更多功能」入口列出未放进手机底栏的页面，「导航」入口配置手机底栏入口归属与桌面侧栏；具体 key 契约见 [categories-settings/settings-catalog](categories-settings/settings-catalog.md)。主入口里的服务器配置、同步摘要和更新动作消费 [design-language](design-language.md) 的 `surface/border/ink/accent/status` token，不使用独立渐变卡片或旧 Tailwind 展示色。代码入口：`packages/client/src/pages/SettingsPage.tsx`、`packages/client/src/pages/settings/SettingsAdminInsightsPage.tsx`、`packages/client/src/lib/adminApi.ts`、`packages/server/src/routes/admin/`
-
-相关测试：`packages/client/src/pages/SettingsPage.test.tsx`、`packages/client/src/pages/settings/SettingsAdminInsightsPage.test.tsx`、`packages/client/src/lib/adminApi.test.ts`、`packages/server/src/routes/admin.test.ts`
+相关测试：`packages/client/src/pages/SettingsPage.test.tsx`；管理洞察相关测试见 [admin](admin.md)。
 
 `public/` 里的内容来自 Dockerfile：构建时把 `packages/client/dist/*` 拷过来。所以**部署一次同时更新前端和后端**。
 
-Web PWA 的 Workbox 配置只预缓存静态资源，并把 `/api/**` 配置为 `NetworkOnly`。同步、导出、自更新和管理接口不能被 service worker 返回陈旧缓存；相关入口是 `packages/client/vite.config.ts` 的 `createPwaOptions()`，测试在 `packages/client/src/lib/pwaConfig.test.ts`。
+Web PWA 的 Workbox 缓存边界（只预缓存静态资源、`/api/**` 走 `NetworkOnly`）见 [security](security.md)；相关入口是 `packages/client/vite.config.ts` 的 `createPwaOptions()`，测试在 `packages/client/src/lib/pwaConfig.test.ts`。
 
-Web/PWA 构建还会通过 Vite `define` 注入 `__TIMEDATA_BUILD_ID__`（优先读 `TIMEDATA_BUILD_ID` 环境变量，否则使用构建时毫秒时间戳），并在 `dist/` 根目录输出同值的 `version.json`。`version.json` 是 JSON 文件，不在 Workbox `globPatterns` 内，因此不会被 precache；客户端用 `fetch("/version.json", { cache: "no-store" })` 做网络版本比对。`AppUpdateProvider` 在页面加载、从后台切回可见和窗口重新聚焦时检查 buildId，发现服务端前端版本更新后会注销已有 service worker、清空 Cache Storage 并 reload，绕开 iOS standalone PWA 偶发不刷新缓存的问题。设置页的「刷新到最新前端」走同一条硬刷新路径，作为手动逃生口。Android mobile 构建不注册 PWA service worker，这套网页前端刷新机制对 APK 壳无副作用。
+Web/PWA 构建通过 Vite `define` 注入 `__TIMEDATA_BUILD_ID__` 并输出 `version.json`，客户端据此做网络版本比对与硬刷新，机制见 [development](development.md)。Android mobile 构建不注册 PWA service worker，这套网页前端刷新机制对 APK 壳无副作用。
 
 ## 7. 反向代理（HTTPS）
 
@@ -306,7 +287,7 @@ timedata.example.com {
 
 客户端设置页填 `https://timedata.example.com`（不要带 `/api`）。**API 地址只填域名根**，因为客户端会自动拼 `/api/...`。
 
-生产实际链路：`客户端 → Cloudflare（橙云，h2/h3 已启用）→ 源站 nginx 1.24（h2）→ 127.0.0.1:3000`。源站 nginx 要点（`/etc/nginx/nginx.conf`，2026-07-23 起）：`gzip_types` 含 `application/json`（Ubuntu 默认只压 text/html，JSON 载荷跨太平洋回源必须压）、`gzip_vary on`、`gzip_proxied any`。SSE 反缓冲不靠 nginx 配置——服务端 `/api/sync/stream` 响应自带 `X-Accel-Buffering: no`（见 [sync](sync.md)）。nginx 1.24 的 `http2` 是 443 端口级开关，该机多站共用同一 listen 行——改它会连带影响同机其他站点。
+生产实际链路：`客户端 → Cloudflare（橙云，h2/h3 已启用）→ 源站 nginx 1.24（h2）→ 127.0.0.1:3000`。源站 nginx 要点（`/etc/nginx/nginx.conf`，2026-07-23 起）：`gzip_types` 含 `application/json`（Ubuntu 默认只压 text/html，JSON 载荷跨太平洋回源必须压）、`gzip_vary on`、`gzip_proxied any`。SSE 反缓冲不靠 nginx 配置——服务端 `/api/sync/stream` 响应自带 `X-Accel-Buffering: no`（见 [sync/realtime-and-scheduler](sync/realtime-and-scheduler.md)）。nginx 1.24 的 `http2` 是 443 端口级开关，该机多站共用同一 listen 行——改它会连带影响同机其他站点。
 
 ## 8. 数据卷与备份
 
@@ -331,11 +312,11 @@ data/
 
 - `data/` 目录是所有用户数据所在，定期 host 侧备份。
 - 升级前备份这整个目录最稳。唯一例外是 `geoip/`：约 70 MB 的第三方库文件，可从 maxmind 重新下载（见 §2.1），不是用户数据，备份时可以排除。
-- `backups/` 是服务端自动生成的，服务启动时会跑一次清理，每次创建 server backup 后也会异步清理旧普通备份；具体保留窗口见 [`backup.md` 第 6 节](./backup.md#backup-server-write-path)。
+- `backups/` 是服务端自动生成的，保留与清理策略见 [`backup.md` 第 6 节](./backup.md#backup-server-write-path)。
 
 ## 9. 本地开发环境（不走 Docker）
 
-本地跑的是两个进程：`pnpm dev:server`（Hono，默认 3000）+ `pnpm dev:client`（Vite，5174，把 `/api` 代理到 3000）。与容器部署的差别只有两处：**环境变量怎么进去**、**vault 根目录是宿主机绝对路径而非 `/app/vault`**。
+本地跑的是两个进程（`pnpm dev:server` + `pnpm dev:client`，端口与 `/api` 代理见 [development](development.md)）。与容器部署的差别只有两处：**环境变量怎么进去**、**vault 根目录是宿主机绝对路径而非 `/app/vault`**。
 
 ### 9.1 环境变量必须在启动命令里给，且一律带鉴权
 
@@ -347,7 +328,7 @@ PowerShell：
 $env:AUTH_TOKEN='devtoken'; $env:DIARY_VAULT_DIR='D:\OneDrive\Obsidian\Time'; pnpm dev:server
 ```
 
-然后去 `/settings/server` 把同一个串填进「API Token」——前端存 localStorage（`STORAGE_KEYS.apiToken`），`lib/api.ts` 的 `apiFetch` 据此拼 `Authorization: Bearer`。**这一步不做，前端所有请求都会 401**。
+然后去 `/settings/server` 把同一个串填进「API Token」——前端存 localStorage、`apiFetch` 据此拼 `Authorization: Bearer`（机制见 [security](security.md)）。**这一步不做，前端所有请求都会 401**。
 
 **本仓约定：本地开发也必须带 `AUTH_TOKEN`，不用 `ALLOW_UNAUTHENTICATED_DEV=1` 旁路。** 旁路虽然存在（不设 `AUTH_TOKEN` 时 `/api/*` 直接返回 500 `Server misconfigured: AUTH_TOKEN not set`，**故意 fail-closed**，见 `middleware/auth.ts`；加上旁路变量才放行，并打一行 `[auth] AUTH_TOKEN unset — all /api/* endpoints are open`），但它让**鉴权中间件、token 分级、401 分支全部走不到**——旁路下验过的东西不构成"能用"的证据，上生产可能照样挂。旁路只留给"确认某个问题与鉴权无关"这类临时排查，用完即走。
 
@@ -358,7 +339,7 @@ $env:AUTH_TOKEN='devtoken'; $env:DIARY_VAULT_DIR='D:\OneDrive\Obsidian\Time'; pn
 | 本地开发 | 宿主机绝对路径，如 `D:\OneDrive\Obsidian\Time`（Windows 下正反斜杠都行，`path.resolve` 会归一） |
 | 容器 | 恒为 `/app/vault`，宿主机目录靠 `DIARY_VAULT_HOST_DIR` 挂进去 |
 
-**路径模板两边完全一样**——它存在 `server_config` 表里（不是环境变量），且 `expandDiaryTemplate` 强制要求**相对路径、只能用 `/`**：反斜杠、绝对路径、盘符、`..`、未知占位符全部拒绝（只认 `{yyyy}` / `{MM}` / `{dd}`）。所以模板填一次就能跨环境复用，这是有意为之。
+**路径模板两边完全一样**——模板存 `server_config` 表、语法校验（只认 `{yyyy}` / `{MM}` / `{dd}`、拒绝反斜杠/绝对路径/盘符/`..`）见 [diary](diary.md)。所以模板填一次就能跨环境复用，这是有意为之。
 
 例：vault 根 `D:\OneDrive\Obsidian\Time`、模板 `日记_{yyyy}/Day/{yyyy}年{MM}月/{yyyy}-{MM}-{dd}.md` → `2026-07-24` 解析为 `D:\OneDrive\Obsidian\Time\日记_2026\Day\2026年07月\2026-07-24.md`，跨月跨年自动跟随。缺失的目录在保存时由 `mkdirSync(recursive)` 自动创建。
 
@@ -374,7 +355,7 @@ $env:AUTH_TOKEN='devtoken'; $env:DIARY_VAULT_DIR='D:\OneDrive\Obsidian\Time'; pn
 | 400 带具体原因 | 模板语法违规（反斜杠 / 绝对路径 / `..` / 未知占位符） |
 | 400 `路径越出 vault 目录` | 模板展开后跑到 vault 之外 |
 
-**没有报错但读不到内容**是最容易误判的一种：模板本身合法、只是指错了地方，此时 `GET /:date` 把「文件不存在」当正常情况返回 `{content:"", mtime:null}`，页面显示空白。**验证方法是读一个已经存在的历史日期**——读得出正文说明 vault 根、模板、日期口径三者全对；这一步不写盘，配错也不会在 vault 里留下垃圾文件。
+**没有报错但读不到内容**是最容易误判的一种：模板本身合法、只是指错了地方，此时 `GET /:date` 把「文件不存在」当正常情况返回 `{content:"", mtime:null}`，正文区预填一条空列表项、看起来像空白。**验证方法是读一个已经存在的历史日期**——读得出正文说明 vault 根、模板、日期口径三者全对；这一步不写盘，配错也不会在 vault 里留下垃圾文件。
 
 > 用命令行 `curl` 灌含中文的模板时注意：Windows 终端的 GBK 编码会把中文打成替换字符，存进去是合法但错误的模板，表现正是上面这种「不报错、读不到」。把 JSON 写成 UTF-8 文件再 `--data-binary @file`，或者干脆在浏览器设置页里填。
 

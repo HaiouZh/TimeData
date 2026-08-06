@@ -81,3 +81,4 @@ last-reviewed: 2026-08-05
 | admin router | `packages/server/src/routes/admin/index.ts` |
 | 洞察端点 | `routes/admin/{summary,entries,categories,sync,health,analytics}.ts` |
 | 聚合 helper | `routes/admin/_helpers.ts` |
+| 相关测试 | `SettingsAdminInsightsPage.test.tsx`、`adminApi.test.ts`、`routes/admin.test.ts` |

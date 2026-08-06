@@ -25,7 +25,7 @@ last-reviewed: 2026-08-03
 
 ## 1. 前台 SSE 实时通知通道
 
-服务端提供只读接口 `GET /api/sync/stream`（`packages/server/src/routes/sync.ts`）。挂在 `/api/*` 鉴权之后，客户端 fetch 流式读取、header 带 token。连接成功立刻发 `event: hello`（`{"latestSeq": ...}`），之后每 30 秒一条 `: ping` 注释心跳。
+服务端提供只读接口 `GET /api/sync/stream`（`packages/server/src/routes/sync.ts`）。挂在 `/api/*` 鉴权之后，客户端 fetch 流式读取、header 带 token。连接成功立刻发 `event: hello`（`{"latestSeq": ...}`），之后每 30 秒一条 `: ping` 注释心跳。响应头自带 `X-Accel-Buffering: no`，让前端代理不对该流做缓冲。
 
 `packages/server/src/sync/notifier.ts` 维护进程内连接集合，广播函数为 `notifySyncChange(latestSeq, payload?)`；`event: bump` 的 data 形状是 `SyncStreamBumpSchema`（`{latestSeq, fromSeq?, changes?}`，`packages/shared/src/schemas.ts`）——`fromSeq`/`changes` 成对出现时收端可就地 apply，缺省即纯通知。**仅 `/api/sync/push` 构造带数据的载荷**：apply 事务结束后用 `buildBumpPayload` 读出本次 push 造成的 `(fromSeq, latestSeqAfter]` 区间 changes；超过 `BUMP_MAX_CHANGES`（50 条）或序列化后超过 `BUMP_MAX_BYTES`（32KB）任一上限就放弃 payload、退化为纯 `{latestSeq}`（常量与 `buildBumpPayload` 均在 `packages/server/src/routes/sync.ts`）。**其余写路径一律只调 `notifySyncChange(getLatestSeq())`，保持纯 bump**——`/api/sync/force-push`、CLI `/api/entries` 创建、agent `POST /api/quick-notes` 投递、agent `POST /api/agent/tasks/:id/status`（回写状态 / tags，也可带 `note` 建 child）、agent `POST /api/agent/tracks/:id/steps` 轨道续写、`POST /api/tasks/:id/schedule` 排期、`POST /api/data/reset` 数据重置。判据不是清单而是**有没有传 payload**：只有 `/api/sync/push` 调 `buildBumpPayload`，新写路径默认落在纯 bump 这侧。决策与退化规则见 [ADR 0021](../../adr/0021-sse-bump-carries-changes.md)。
 
