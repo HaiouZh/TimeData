@@ -1,6 +1,6 @@
 import type { Goal, Task } from "@timedata/shared";
 import { db } from "../db/index.js";
-import { removeGoalMemberInCurrentTransaction, sameGoalMember } from "./goals.js";
+import { assignTaskToProject, removeGoalMemberInCurrentTransaction, sameGoalMember } from "./goals.js";
 import { grabTaskToHand } from "./sessions.js";
 import { moveTaskToParentInCurrentTransaction, promoteToRoot } from "./tasks.js";
 
@@ -55,4 +55,33 @@ export async function promoteTaskToHand(
 ): Promise<Task> {
   await promoteToRoot(taskId, "inbox", sortOrder, now);
   return grabTaskToHand(taskId, { now });
+}
+
+/**
+ * 子任务升为根任务并**回到它爹所在的那个项目组**。
+ *
+ * 与 `promoteTaskToHand` 同形，两条设计都照抄它的理由：
+ * - 落 `"inbox"` 而非 `"today"`：`promoteToRoot` 会按 pool 写 `scheduledAt`，给 `"today"`
+ *   等于替用户排了期，而「回到项目」的语义里没有排期这一项。
+ * - **串行两步、不合事务**：中途失败是「升了根、落回它自身字段决定的分区」——通常是收件箱，
+ *   看得见、能重拖，不是收纳那种投影层查不到的幽灵态。合成一个事务要把 `assignTaskToProject`
+ *   的先摘后加拆开重写，收益不抵风险。
+ *
+ * `assignTaskToProject` 的 `subtask` 准入闸不会被这条路径触发——进它时任务已经是根任务。
+ * 但 `recurring` 那支会：降级不清能力字段，子任务可能带休眠 `recurrence`，升根后规则复活。
+ * 那种情形下它升根成功、入组被拒，落的是重复管理区而不是收件箱，调用方的失败文案要分开说。
+ *
+ * 不调 `prerequisiteLossOnAssign`：子任务不持有归属，摘不到任何源组，预测函数恒返回 null。
+ *
+ * **返回 void 而不是升根后的 Task**：入组会再改一次该行的 `updatedAt`，
+ * 第一步的返回值此刻已经过时，交出去只会被误当成最新快照。
+ */
+export async function promoteTaskToProject(
+  taskId: string,
+  goalId: string,
+  sortOrder: number,
+  now: Date = new Date(),
+): Promise<void> {
+  await promoteToRoot(taskId, "inbox", sortOrder, now);
+  await assignTaskToProject(goalId, taskId, { now });
 }

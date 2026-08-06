@@ -1,9 +1,10 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { db, resetDb } from "../test/dbReset.js";
-import { addGoal, addGoalMember } from "./goals.js";
+import { addGoal, addGoalMember, ProjectAssignError, updateGoal } from "./goals.js";
 import { grabTaskToHand } from "./sessions.js";
 import { addTask, createChildTask } from "./tasks.js";
-import { nestTaskUnderParent, promoteTaskToHand } from "./taskNesting.js";
+import { GOAL_MEMBERS_MAX } from "./tasks/goalMembership.js";
+import { nestTaskUnderParent, promoteTaskToHand, promoteTaskToProject } from "./taskNesting.js";
 
 beforeEach(resetDb);
 
@@ -89,5 +90,58 @@ describe("promoteTaskToHand", () => {
 
     expect(await db.sessions.count()).toBe(1);
     expect((await db.tasks.get(child.id))?.sessionId).toBe((await db.sessions.toArray())[0]?.id);
+  });
+});
+
+describe("promoteTaskToProject", () => {
+  it("升为根任务并回到指定项目组，不顺手排今天", async () => {
+    const p1 = await addGoal({ title: "P1", kind: "project" });
+    const parent = await addTask({ title: "爹" });
+    await addGoalMember(p1.id, { kind: "task", id: parent.id });
+    const child = await createChildTask(parent.id, "子步骤");
+
+    await promoteTaskToProject(child.id, p1.id, 7);
+
+    const row = await db.tasks.get(child.id);
+    expect(row?.parentId ?? null).toBeNull();
+    // 抓回组与排期正交：promoteToRoot 落 "inbox"，不写 scheduledAt
+    expect(row?.scheduledAt ?? null).toBeNull();
+    expect(row?.sortOrder).toBe(7);
+    const members = (await db.goals.get(p1.id))?.members ?? [];
+    expect(members.some((m) => m.id === child.id)).toBe(true);
+  });
+
+  it("子任务的 subtask 准入闸不会被触发（进 assign 时它已经是根任务）", async () => {
+    const p1 = await addGoal({ title: "P1", kind: "project" });
+    const parent = await addTask({ title: "爹" });
+    const child = await createChildTask(parent.id, "子步骤");
+
+    await expect(promoteTaskToProject(child.id, p1.id, 0)).resolves.toBeUndefined();
+  });
+
+  it("目标组已归档 → 抛 ProjectAssignError，任务停在「已升根、未入组」的可见态", async () => {
+    const p1 = await addGoal({ title: "P1", kind: "project" });
+    const parent = await addTask({ title: "爹" });
+    const child = await createChildTask(parent.id, "子步骤");
+    await updateGoal(p1.id, { status: "archived" });
+
+    await expect(promoteTaskToProject(child.id, p1.id, 0)).rejects.toBeInstanceOf(ProjectAssignError);
+
+    // 第一步已生效且可见：它是收件箱里一条独立任务，不是投影层查不到的幽灵态
+    const row = await db.tasks.get(child.id);
+    expect(row?.parentId ?? null).toBeNull();
+    expect((await db.goals.get(p1.id))?.members ?? []).toHaveLength(0);
+  });
+
+  it("目标组满员 → 抛 full", async () => {
+    const p1 = await addGoal({ title: "P1", kind: "project" });
+    const parent = await addTask({ title: "爹" });
+    const child = await createChildTask(parent.id, "子步骤");
+    // 500 个悬空 track ref：成员数看的是原始数组长度，不要求这些 track 真实存在
+    await db.goals.update(p1.id, {
+      members: Array.from({ length: GOAL_MEMBERS_MAX }, (_, i) => ({ kind: "track" as const, id: `tr-${i}` })),
+    });
+
+    await expect(promoteTaskToProject(child.id, p1.id, 0)).rejects.toMatchObject({ block: "full" });
   });
 });
