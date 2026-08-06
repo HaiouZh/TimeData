@@ -218,7 +218,25 @@ def check_backlog(root: Path, report, today=None):
                    f"backlog.md:{i} 这行像条目但不是合法条目——条目必须以 '- ' "
                    f"（横线 + 一个空格）开头（rules.md §5.1）：{line[:40]}")
 
-    for lineno, item in split_backlog_items(lines):
+    items = split_backlog_items(lines)
+
+    # 末尾禁挂块（8.1，rules.md §5.1「整份文件只有三部分」）：已关闭的 checklist、
+    # 历史结论、遗留提醒都爱藏在最后一条之后——它们躲得过全部条目判据，因为
+    # split_backlog_items 只认 '- ' 开头的行（Run 2026-08-06 实测：一个「上线前
+    # checklist 已关闭」块就这样躲过了 88 条 ERROR 的整改与 38 项验收）。
+    # 只报第一处，一个块不刷十行。
+    if items:
+        last_start, last_item = items[-1]
+        last_end = last_start + len(last_item.splitlines()) - 1  # 条目占到的末行
+        for i, line in enumerate(lines[last_end:], last_end + 1):
+            if line.strip():
+                report("error", "backlog-trailing-content",
+                       f"backlog.md:{i} 最后一条条目之后还有内容——backlog 只有"
+                       f"「标题 + 引言 + 条目列表」三部分；有价值的按三分法送出去，"
+                       f"没价值的直接删（rules.md §5.1）：{line.strip()[:40]}")
+                break
+
+    for lineno, item in items:
         head = item.split("\n", 1)[0]
         owner = head[2:].split(" ", 1)[0]
         if owner not in BACKLOG_OWNERS:
