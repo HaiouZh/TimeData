@@ -26,6 +26,9 @@ data/
 .superpowers/
 .worktrees/
 .codegraph/
+.dispatch/
+.reasonix/
+reasonix.toml
 
 # Local-only development documents
 docs_local/
