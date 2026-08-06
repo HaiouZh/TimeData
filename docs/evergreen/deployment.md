@@ -30,7 +30,7 @@ contracts:
   - packages/server/Dockerfile
   - packages/server/docker-entrypoint.sh
   - .env.example
-last-reviewed: 2026-08-05
+last-reviewed: 2026-08-06
 ---
 
 # 部署与自更新
@@ -287,7 +287,7 @@ timedata.example.com {
 
 客户端设置页填 `https://timedata.example.com`（不要带 `/api`）。**API 地址只填域名根**，因为客户端会自动拼 `/api/...`。
 
-生产实际链路：`客户端 → Cloudflare（橙云，h2/h3 已启用）→ 源站 nginx 1.24（h2）→ 127.0.0.1:3000`。源站 nginx 要点（`/etc/nginx/nginx.conf`，2026-07-23 起）：`gzip_types` 含 `application/json`（Ubuntu 默认只压 text/html，JSON 载荷跨太平洋回源必须压）、`gzip_vary on`、`gzip_proxied any`。SSE 反缓冲不靠 nginx 配置——服务端 `/api/sync/stream` 响应自带 `X-Accel-Buffering: no`（见 [sync/realtime-and-scheduler](sync/realtime-and-scheduler.md)）。nginx 1.24 的 `http2` 是 443 端口级开关，该机多站共用同一 listen 行——改它会连带影响同机其他站点。
+生产实际链路：`客户端 → Cloudflare（橙云，h2/h3 已启用）→ 源站 nginx 1.24（h2）→ 127.0.0.1:3000`。源站 nginx 要点（`/etc/nginx/nginx.conf`）：`gzip_types` 含 `application/json`（Ubuntu 默认只压 text/html，JSON 载荷跨太平洋回源必须压）、`gzip_vary on`、`gzip_proxied any`。SSE 反缓冲不靠 nginx 配置——服务端 `/api/sync/stream` 响应自带 `X-Accel-Buffering: no`（见 [sync/realtime-and-scheduler](sync/realtime-and-scheduler.md)）。nginx 1.24 的 `http2` 是 443 端口级开关，该机多站共用同一 listen 行——改它会连带影响同机其他站点。
 
 ## 8. 数据卷与备份
 
