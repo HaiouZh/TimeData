@@ -43,6 +43,7 @@ fn main() {
             commands::desktop_ready,
             commands::notify_user,
             commands::show_main,
+            commands::hide_capture_window,
         ])
         .setup(|app| {
             let show_item = MenuItem::with_id(app, "show", "打开 TimeData", true, None::<&str>)?;
@@ -98,7 +99,7 @@ fn main() {
                 // 开机自启：标记文件里记的是「上次注册时的 exe 路径」，不是一个布尔。
                 // 判定见 shell::resolve_autostart_action——它同时保证「默认开」「换路径能自愈」
                 // 和「用户关掉后不回弹」三条。关闭意图来自 desktop-config.json（设置页写入）。
-                let marker = app.path().app_config_dir()?.join("autostart-initialized");
+                let marker = app.path().app_config_dir()?.join(shell::AUTOSTART_MARKER);
                 let recorded = std::fs::read_to_string(&marker).ok().map(|s| s.trim().to_owned());
                 let current_exe = std::env::current_exe()
                     .map(|p| p.to_string_lossy().into_owned())
@@ -128,12 +129,17 @@ fn main() {
                 let _ = commands::apply_bindings(app.handle(), &desktop_config.hotkeys, &registry);
             }
 
-            // 被开机自启拉起时不弹窗口，直接躲托盘。
+            // 被开机自启拉起时不弹主窗口，直接躲托盘。浮窗则**任何情况下**都起手隐藏：
+            // 它只由 capture 热键唤起，配置里 visible:false 已是这个意思，这里是双保险
+            // （改配置漏改一处时不至于让浮窗糊在屏幕正中）。
             let args: Vec<String> = std::env::args().collect();
             if !should_show_on_startup(&args) {
-                if let Some(window) = app.get_webview_window("main") {
+                if let Some(window) = app.get_webview_window(shell::MAIN_WINDOW) {
                     let _ = window.hide();
                 }
+            }
+            if let Some(window) = app.get_webview_window(shell::CAPTURE_WINDOW) {
+                let _ = window.hide();
             }
 
             Ok(())

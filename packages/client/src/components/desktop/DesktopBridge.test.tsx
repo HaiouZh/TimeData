@@ -168,6 +168,22 @@ describe("热键打点分流", () => {
     expect(await db.timeEntries.count()).toBe(1);
   });
 
+  // 只靠 show_main 不够：Windows 前台锁会把它降级成任务栏闪烁，用户不知道有卡在等他。
+  // 后缀也不是装饰——通知本身没有按钮，不说去哪确认就等于没说。
+  it("needsConfirm 也发通知，且文案带「到 TimeData 窗口里确认」后缀", async () => {
+    await configurePunchCategory();
+    const { io, invoke } = makeIo();
+
+    const asked = await punchFromHotkey(PRESSED_AT_MS, io, IDLE_BRIDGE_STATE);
+
+    expect(invoke).toHaveBeenCalledWith("notify_user", {
+      title: "TimeData",
+      body: "要把 00:00–12:00 记为打点吗？（到 TimeData 窗口里确认）",
+    });
+    // 卡片上的文案**不带**后缀：卡本来就在窗口里，再说一次「到窗口里确认」是废话。
+    expect(asked.confirm?.message).toBe("要把 00:00–12:00 记为打点吗？");
+  });
+
   // T5 修复波 Critical 的桥接侧真闸：用户批准的那个长度必须随「记录」一起传回去，
   // 否则批准 1 小时能闷头落库 12 小时。
   it("确认期间区间变长（同步删了记录）：一个字都不写，改弹新区间的卡并标成重试", async () => {

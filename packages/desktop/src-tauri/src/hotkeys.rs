@@ -1,5 +1,5 @@
 use serde::Serialize;
-use std::collections::VecDeque;
+use std::collections::{HashMap, HashSet, VecDeque};
 
 /// 热键事件名：Rust `emit` 与前端 `listen` 之间唯一的约定，两端没有共享类型。
 /// **Rust 侧的字面量只准出现在这一处**——`commands.rs` 有两处 emit（实时投递、就绪后补投），
@@ -28,30 +28,34 @@ pub struct RegistrationOutcome {
 }
 
 /// WebView 就绪前把事件排队，就绪后直投。调用方持 Mutex，本体单线程逻辑。
+///
+/// **按 label 分组**：两个窗口各有各的就绪时刻，共用一个 ready 标志会让先起来的那个
+/// 窗口替另一个「宣布就绪」，另一个窗口的事件就直投给了还没挂监听的 WebView——
+/// 表现是开机头几秒按热键静默丢失，正是上一批花力气堵的那类「按了没反应也没提示」。
 pub struct HotkeyDispatcher {
-    ready: bool,
-    queue: VecDeque<HotkeyEventPayload>,
+    ready: HashSet<String>,
+    queues: HashMap<String, VecDeque<HotkeyEventPayload>>,
 }
 
 impl HotkeyDispatcher {
     pub fn new() -> Self {
-        Self { ready: false, queue: VecDeque::new() }
+        Self { ready: HashSet::new(), queues: HashMap::new() }
     }
 
-    /// ready 前入队返回 None；ready 后返回 Some，由调用方立即 emit。
-    pub fn accept(&mut self, payload: HotkeyEventPayload) -> Option<HotkeyEventPayload> {
-        if self.ready {
+    /// 该 label 就绪前入队返回 None；就绪后返回 Some，由调用方立即 emit_to 该 label。
+    pub fn accept(&mut self, label: &str, payload: HotkeyEventPayload) -> Option<HotkeyEventPayload> {
+        if self.ready.contains(label) {
             Some(payload)
         } else {
-            self.queue.push_back(payload);
+            self.queues.entry(label.to_owned()).or_default().push_back(payload);
             None
         }
     }
 
-    /// 置 ready 并按按键序取出积压；再次调用返回空。
-    pub fn mark_ready(&mut self) -> Vec<HotkeyEventPayload> {
-        self.ready = true;
-        self.queue.drain(..).collect()
+    /// 置该 label 为就绪并按按键序取出它的积压；再次调用返回空。
+    pub fn mark_ready(&mut self, label: &str) -> Vec<HotkeyEventPayload> {
+        self.ready.insert(label.to_owned());
+        self.queues.remove(label).map(Vec::from).unwrap_or_default()
     }
 }
 
@@ -63,34 +67,57 @@ mod tests {
         HotkeyEventPayload { action: "punch".to_owned(), pressed_at_ms: ms }
     }
 
+    fn capture_at(ms: u64) -> HotkeyEventPayload {
+        HotkeyEventPayload { action: "capture".to_owned(), pressed_at_ms: ms }
+    }
+
     #[test]
     fn queues_before_ready() {
         let mut d = HotkeyDispatcher::new();
-        assert_eq!(d.accept(punch_at(100)), None);
-        assert_eq!(d.accept(punch_at(200)), None);
+        assert_eq!(d.accept("main", punch_at(100)), None);
+        assert_eq!(d.accept("main", punch_at(200)), None);
     }
 
     #[test]
     fn mark_ready_drains_in_press_order() {
         let mut d = HotkeyDispatcher::new();
-        d.accept(punch_at(100));
-        d.accept(punch_at(200));
-        let drained = d.mark_ready();
-        assert_eq!(drained, vec![punch_at(100), punch_at(200)]);
+        d.accept("main", punch_at(100));
+        d.accept("main", punch_at(200));
+        assert_eq!(d.mark_ready("main"), vec![punch_at(100), punch_at(200)]);
     }
 
     #[test]
     fn delivers_directly_after_ready() {
         let mut d = HotkeyDispatcher::new();
-        d.mark_ready();
-        assert_eq!(d.accept(punch_at(300)), Some(punch_at(300)));
+        d.mark_ready("main");
+        assert_eq!(d.accept("main", punch_at(300)), Some(punch_at(300)));
     }
 
     #[test]
     fn mark_ready_is_idempotent() {
         let mut d = HotkeyDispatcher::new();
-        d.accept(punch_at(100));
-        assert_eq!(d.mark_ready().len(), 1);
-        assert!(d.mark_ready().is_empty());
+        d.accept("main", punch_at(100));
+        assert_eq!(d.mark_ready("main").len(), 1);
+        assert!(d.mark_ready("main").is_empty());
+    }
+
+    #[test]
+    fn one_window_ready_does_not_release_another_queue() {
+        // 两个窗口各有各的就绪时刻。共用一个 ready 标志时，主窗口先起来就会让浮窗那批
+        // 「直投」——投给一个还没挂监听的 WebView，等于开机头几秒按 capture 全丢。
+        let mut d = HotkeyDispatcher::new();
+        d.accept("capture", capture_at(100));
+        assert!(d.mark_ready("main").is_empty());
+        assert_eq!(d.accept("capture", capture_at(200)), None);
+        assert_eq!(d.mark_ready("capture"), vec![capture_at(100), capture_at(200)]);
+    }
+
+    #[test]
+    fn queues_are_per_label() {
+        let mut d = HotkeyDispatcher::new();
+        d.accept("main", punch_at(1));
+        d.accept("capture", capture_at(2));
+        assert_eq!(d.mark_ready("main"), vec![punch_at(1)]);
+        assert_eq!(d.mark_ready("capture"), vec![capture_at(2)]);
     }
 }

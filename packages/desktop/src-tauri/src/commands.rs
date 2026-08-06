@@ -13,13 +13,8 @@ use tauri_plugin_notification::NotificationExt;
 use crate::config::{self, action_id, DesktopConfig, HotkeyAction, HotkeyBinding};
 use crate::hotkeys::{HotkeyDispatcher, HotkeyEventPayload, RegistrationOutcome, HOTKEY_EVENT};
 use crate::shell::{
-    resolve_toggle_from_window, AncestorRoot, ForegroundRaw, Minimized, SelfHwnd, ToggleAction, Visible,
+    self, resolve_toggle_from_window, AncestorRoot, ForegroundRaw, Minimized, SelfHwnd, ToggleAction, Visible,
 };
-
-/// 配置文件写锁：所有 load→modify→save 形态的命令先拿它再动文件。
-/// 没有它，两个并发写命令（如设置页同时改阈值与热键）会交错成
-/// 「都基于旧文件各改各的、后写者静默抹掉先写者」的丢更新竞态。
-static CONFIG_WRITE_LOCK: Mutex<()> = Mutex::new(());
 
 /// 热键**注册表**写锁。注册表与配置文件是两份独立资源，各要各的锁：
 /// `set_hotkeys` / `suspend_hotkeys` / `resume_hotkeys` 三个命令改的是同一份注册表
@@ -56,7 +51,7 @@ fn now_ms() -> u64 {
 }
 
 pub fn show_main_window(app: &AppHandle) {
-    if let Some(window) = app.get_webview_window("main") {
+    if let Some(window) = app.get_webview_window(shell::MAIN_WINDOW) {
         let _ = window.show();
         let _ = window.unminimize();
         let _ = window.set_focus();
@@ -93,7 +88,7 @@ fn foreground_handles() -> (ForegroundRaw, AncestorRoot) {
 }
 
 fn toggle_main_window(app: &AppHandle) {
-    let Some(window) = app.get_webview_window("main") else { return };
+    let Some(window) = app.get_webview_window(shell::MAIN_WINDOW) else { return };
     #[cfg(windows)]
     let self_hwnd = SelfHwnd(window.hwnd().map(|h| h.0 as isize).unwrap_or(0));
     #[cfg(not(windows))]
@@ -119,20 +114,40 @@ fn toggle_main_window(app: &AppHandle) {
     }
 }
 
+/// 凡是要落到 WebView 的动作，**一律走这里**。
+///
+/// 它把两件事绑在一起：先过就绪队列（WebView 没起来时排队，避免开机头几秒的按键静默丢失），
+/// 再按 label 点名投递（不广播）。上一批时这两步以内联代码的形式只存在于 `Punch` 那一臂里，
+/// 于是新动作照着 `ToggleMain` 那一臂（纯 Rust 操作、不过队列）写就会悄悄绕开队列。
+/// 封装之后「绕开」得显式不调用本函数才做得到。
+fn deliver_to_webview(app: &AppHandle, label: &str, payload: HotkeyEventPayload) {
+    let state: State<HotkeyState> = app.state();
+    let deliver = state.0.lock().expect("hotkey dispatcher poisoned").accept(label, payload);
+    if let Some(payload) = deliver {
+        let _ = app.emit_to(label, HOTKEY_EVENT, payload);
+    }
+}
+
+fn show_capture_window(app: &AppHandle) {
+    let Some(window) = app.get_webview_window(shell::CAPTURE_WINDOW) else { return };
+    let _ = window.show();
+    let _ = window.unminimize();
+    let _ = window.set_focus();
+}
+
 fn handle_hotkey(app: &AppHandle, action: &HotkeyAction) {
+    // 窗口操作先做（要让用户看见），再投事件（让 WebView 干活）。
     match action {
         HotkeyAction::ToggleMain => toggle_main_window(app),
-        HotkeyAction::Punch => {
-            let payload = HotkeyEventPayload {
-                action: action_id(action).to_owned(),
-                pressed_at_ms: now_ms(),
-            };
-            let state: State<HotkeyState> = app.state();
-            let deliver = state.0.lock().expect("hotkey dispatcher poisoned").accept(payload);
-            if let Some(payload) = deliver {
-                let _ = app.emit(HOTKEY_EVENT, payload);
-            }
-        }
+        HotkeyAction::Capture => show_capture_window(app),
+        HotkeyAction::Punch => {}
+    }
+    if let Some(label) = shell::target_window(action) {
+        deliver_to_webview(
+            app,
+            label,
+            HotkeyEventPayload { action: action_id(action).to_owned(), pressed_at_ms: now_ms() },
+        );
     }
 }
 
@@ -175,11 +190,16 @@ pub fn get_desktop_config(app: AppHandle) -> Result<DesktopConfig, String> {
     config::load_config(&app)
 }
 
-/// 三个写命令都是 load→改→**全量覆盖**写回：`load_config` 一旦读失败就必须在这里止步，
+/// 三个写命令都是 load→改→**全量覆盖**写回：`load_config` 一旦读失败就必须当场止步，
 /// 绝不能拿伪造的默认值（`hotkeys: []`、`autostartDisabled: false`）覆盖真文件。
+///
+/// 纯读改写的那个（`set_punch_confirm_hours`）走 `config::update_config`，早退和锁都在
+/// 那里面。另两个要在同一把锁内多做一件事——`set_hotkeys` 写盘后还要注册热键，
+/// `set_autostart_enabled` 写盘前还要开关系统自启——单闭包的 `update_config` 装不下这个
+/// 形状，故各自保留编排、显式拿 `config::config_write_guard`。
 #[tauri::command]
 pub fn set_hotkeys(app: AppHandle, bindings: Vec<HotkeyBinding>) -> Result<Vec<RegistrationOutcome>, String> {
-    let _guard = CONFIG_WRITE_LOCK.lock().expect("config write lock poisoned");
+    let _guard = config::config_write_guard();
     let mut cfg = config::load_config(&app)?;
     cfg.hotkeys = bindings;
     config::save_config(&app, &cfg)?;
@@ -192,10 +212,7 @@ pub fn set_punch_confirm_hours(app: AppHandle, hours: f64) -> Result<(), String>
     if !hours.is_finite() || hours <= 0.0 {
         return Err("阈值必须是大于 0 的小时数".to_owned());
     }
-    let _guard = CONFIG_WRITE_LOCK.lock().expect("config write lock poisoned");
-    let mut cfg = config::load_config(&app)?;
-    cfg.punch_confirm_hours = hours;
-    config::save_config(&app, &cfg)
+    config::update_config(&app, |cfg| cfg.punch_confirm_hours = hours).map(|_| ())
 }
 
 #[tauri::command]
@@ -210,7 +227,7 @@ pub fn get_autostart_state(app: AppHandle) -> Result<AutostartState, String> {
 /// 矛盾态——错误信息把两半都讲清楚，设置页原样展示即可让用户知道现状。
 #[tauri::command]
 pub fn set_autostart_enabled(app: AppHandle, enabled: bool) -> Result<(), String> {
-    let _guard = CONFIG_WRITE_LOCK.lock().expect("config write lock poisoned");
+    let _guard = config::config_write_guard();
     // 先读、读不到就走人：这一步在 enable()/disable() **之前**，读失败时系统状态一个字没改。
     let mut cfg = config::load_config(&app)?;
     if enabled {
@@ -220,7 +237,7 @@ pub fn set_autostart_enabled(app: AppHandle, enabled: bool) -> Result<(), String
         // 与批 1 的路径标记文件保持同步，换 exe 自愈逻辑照旧。
         if let (Ok(dir), Ok(exe)) = (app.path().app_config_dir(), std::env::current_exe()) {
             let _ = std::fs::create_dir_all(&dir);
-            let _ = std::fs::write(dir.join("autostart-initialized"), exe.to_string_lossy().as_bytes());
+            let _ = std::fs::write(dir.join(shell::AUTOSTART_MARKER), exe.to_string_lossy().as_bytes());
         }
     } else {
         app.autolaunch().disable().map_err(|e| e.to_string())?;
@@ -243,7 +260,8 @@ pub fn suspend_hotkeys(app: AppHandle) {
 /// 在锁外读配置时，`resume` 可以读到 `set_hotkeys` 落盘之前的旧表，然后一路排队等锁；等它拿到
 /// 锁，`set_hotkeys` 已经写完文件、装好新表并全部释放——`resume` 这才按旧表 `unregister_all`
 /// 加重注册，抹掉新表装回旧表。终态正是这把锁本来要防的那一个：文件里是新表、页面显示全绿、
-/// 系统里跑的是旧表。锁内读不会死锁：`load_config` 只读文件、不碰 `CONFIG_WRITE_LOCK`，两把锁无环。
+/// 系统里跑的是旧表。锁内读不会死锁：`load_config` 只读文件、不碰配置写锁（那把锁在
+/// `config.rs`，只有 `update_config` / `config_write_guard` 会取），两把锁无环。
 #[tauri::command]
 pub fn resume_hotkeys(app: AppHandle) -> Result<Vec<RegistrationOutcome>, String> {
     let registry = lock_registry();
@@ -251,11 +269,14 @@ pub fn resume_hotkeys(app: AppHandle) -> Result<Vec<RegistrationOutcome>, String
     Ok(apply_bindings(&app, &cfg.hotkeys, &registry))
 }
 
+/// **label 取自 `window.label()` 而不是前端传参**：前端传错 label 会让某个窗口的积压
+/// 永远排不出去，而这是权威来源、错不了。
 #[tauri::command]
-pub fn desktop_ready(app: AppHandle, state: State<HotkeyState>) {
-    let drained = state.0.lock().expect("hotkey dispatcher poisoned").mark_ready();
+pub fn desktop_ready(app: AppHandle, window: tauri::Window, state: State<HotkeyState>) {
+    let label = window.label().to_owned();
+    let drained = state.0.lock().expect("hotkey dispatcher poisoned").mark_ready(&label);
     for payload in drained {
-        let _ = app.emit(HOTKEY_EVENT, payload);
+        let _ = app.emit_to(&label, HOTKEY_EVENT, payload);
     }
 }
 
@@ -267,4 +288,14 @@ pub fn notify_user(app: AppHandle, title: String, body: String) {
 #[tauri::command]
 pub fn show_main(app: AppHandle) {
     show_main_window(&app);
+}
+
+/// 收起速记浮窗。**没有它浮窗就永远关不掉**——浮窗 `decorations: false` 没有标题栏和关闭
+/// 按钮，`skipTaskbar: true` 也不在任务栏里，前端的「存完隐藏」与 Esc 全靠这条命令落地。
+/// 与 `show_capture_window` 成对，缺一半的后果是一个 `alwaysOnTop` 的输入条永久钉在屏幕正中。
+#[tauri::command]
+pub fn hide_capture_window(app: AppHandle) {
+    if let Some(window) = app.get_webview_window(shell::CAPTURE_WINDOW) {
+        let _ = window.hide();
+    }
 }

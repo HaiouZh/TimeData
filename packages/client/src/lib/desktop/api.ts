@@ -5,7 +5,7 @@ import { isDesktopShell } from "./shell.js";
 
 export interface DesktopHotkeyBinding {
   shortcut: string;
-  action: "punch" | "toggleMain";
+  action: "punch" | "toggleMain" | "capture";
 }
 
 export interface DesktopConfigDto {

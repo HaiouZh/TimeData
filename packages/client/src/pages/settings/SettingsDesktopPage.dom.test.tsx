@@ -224,6 +224,49 @@ describe("SettingsDesktopPage 接线", () => {
     expect(host.textContent).toContain("改动要保存才生效");
   });
 
+  it("保存成功后未保存标记消失、按钮变回禁用", async () => {
+    const { host } = await mount();
+    await act(async () => {
+      buttonNamed(host, "删除").click();
+    });
+    await settle();
+    expect(host.textContent).toContain("改动要保存才生效");
+
+    await act(async () => {
+      buttonNamed(host, "保存快捷键").click();
+    });
+    await settle();
+
+    expect(host.textContent).not.toContain("改动要保存才生效");
+    expect(buttonNamed(host, "保存快捷键").disabled).toBe(true);
+  });
+
+  // 与上一条成对。保存失败还把标记清掉 = 告诉用户「存好了」，而壳里注册着的仍是旧绑定。
+  it("保存失败后未保存标记还在，改动没丢", async () => {
+    const { host } = await mount();
+    ipc.invoke.mockImplementation(async (cmd: string) => {
+      calls.push(cmd);
+      if (cmd === "set_hotkeys") throw "被其他程序占用";
+      if (cmd === "get_desktop_config") return CONFIG;
+      if (cmd === "get_autostart_state") return { enabled: true, userDisabled: false };
+      if (cmd === "resume_hotkeys") return RESUMED;
+      return undefined;
+    });
+
+    await act(async () => {
+      buttonNamed(host, "删除").click();
+    });
+    await settle();
+    await act(async () => {
+      buttonNamed(host, "保存快捷键").click();
+    });
+    await settle();
+
+    expect(host.textContent).toContain("被其他程序占用");
+    expect(host.textContent).toContain("改动要保存才生效");
+    expect(buttonNamed(host, "保存快捷键").disabled).toBe(false);
+  });
+
   // 读屏取可访问名时 aria-label 会盖掉按钮文字。写死「快捷键」的话读出来永远是
   // 「快捷键，按钮」——当前绑的是什么、是不是正在录，一概听不出来。
   it("录入框的可访问名带上当前值与录入状态", async () => {
@@ -307,5 +350,30 @@ describe("SettingsDesktopPage 接线", () => {
     expect(calls.slice(after)).toContain("set_punch_confirm_hours");
     expect(host.querySelector<HTMLInputElement>('input[aria-label="打点确认阈值（小时）"]')?.value).toBe("2.5");
     expect(host.textContent).not.toContain("已改回");
+  });
+
+  // 队列是 promise 链：某一环 reject 会让 queue.current 变成 rejected，此后每个 .then
+  // 都被跳过——录入态永久静音，且屏幕上毫无异常。catch 必须在回调**内部**吞掉。
+  it("一次挂起失败不截断录入队列，下一次照常发得出去", async () => {
+    const { host } = await mount();
+    let failNext = true;
+    ipc.invoke.mockImplementation(async (cmd: string) => {
+      calls.push(cmd);
+      if (cmd === "suspend_hotkeys" && failNext) {
+        failNext = false;
+        throw "挂起失败";
+      }
+      if (cmd === "get_desktop_config") return CONFIG;
+      if (cmd === "get_autostart_state") return { enabled: true, userDisabled: false };
+      if (cmd === "resume_hotkeys") return RESUMED;
+      return undefined;
+    });
+
+    const button = shortcutButton(host);
+    await focusInput(button);
+    await pressOn(button, { key: "Escape", code: "Escape" });
+    await focusInput(button);
+
+    expect(calls.filter((cmd) => cmd === "suspend_hotkeys").length).toBe(2);
   });
 });

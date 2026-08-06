@@ -9,6 +9,7 @@
   "dirty-in-clean-bucket:appUpdate.test.tsx",
   "dirty-in-clean-bucket:appUpdate.versionCheck.test.tsx",
   "dirty-in-clean-bucket:backup/fileDownload.test.ts",
+  "dirty-in-clean-bucket:capture/CaptureApp.test.tsx",
   "dirty-in-clean-bucket:components/AndroidBackButtonHandler.test.tsx",
   "dirty-in-clean-bucket:components/CircularTimeline.test.tsx",
   "dirty-in-clean-bucket:components/DateNav.test.tsx",

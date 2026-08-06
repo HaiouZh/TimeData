@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
+use std::sync::Mutex;
 use tauri::{AppHandle, Manager};
 
 pub const DEFAULT_PUNCH_CONFIRM_HOURS: f64 = 4.0;
@@ -16,12 +17,14 @@ pub const DEFAULT_PUNCH_CONFIRM_HOURS: f64 = 4.0;
 pub enum HotkeyAction {
     Punch,
     ToggleMain,
+    Capture,
 }
 
 pub fn action_id(action: &HotkeyAction) -> &'static str {
     match action {
         HotkeyAction::Punch => "punch",
         HotkeyAction::ToggleMain => "toggleMain",
+        HotkeyAction::Capture => "capture",
     }
 }
 
@@ -141,6 +144,51 @@ pub fn load_config(app: &AppHandle) -> Result<DesktopConfig, String> {
 pub fn save_config(app: &AppHandle, config: &DesktopConfig) -> Result<(), String> {
     let path = config_path(app).ok_or_else(|| "无法取得配置目录，配置未保存".to_owned())?;
     write_config_at(&path, config)
+}
+
+/// 配置文件写锁：所有 load→改→写回形态的命令先拿它再动文件。没有它，两个并发写命令
+/// （如设置页同时改阈值与热键）会交错成「都基于旧文件各改各的、后写者静默抹掉先写者」
+/// 的丢更新竞态。
+///
+/// **锁放在被保护资源这一侧**，不放在 `commands.rs`：走 `update_config` 的调用方根本
+/// 不必「记得拿锁」，而将来在这个文件里加第五个写入口的人一眼就能看见它。
+///
+/// 需要自己编排读—改—写回（中途还要做别的副作用，比如开关系统自启、注册热键）的命令
+/// 用 `config_write_guard` 显式拿。**持有 guard 期间不许再调 `update_config`**——
+/// std 的 `Mutex` 不可重入，会当场死锁。
+static CONFIG_WRITE_LOCK: Mutex<()> = Mutex::new(());
+
+pub fn config_write_guard() -> std::sync::MutexGuard<'static, ()> {
+    CONFIG_WRITE_LOCK.lock().expect("config write lock poisoned")
+}
+
+/// 读—改—写回的一站式入口，全程在写锁内。
+///
+/// `read_config_at` 失败时**直接往上抛、`mutate` 一次都不跑**。这不是省事，是要害：
+/// 读失败（杀软/OneDrive 短暂独占文件）时若拿默认值继续走完 mutate 与写回，就会把
+/// 用户全部快捷键抹成空表、把他关掉的自启重新打开，全程返回 Ok、零提示。
+/// 详见 `read_config_at` 的三态说明。
+pub fn update_config_at<F>(path: &Path, mutate: F) -> Result<DesktopConfig, String>
+where
+    F: FnOnce(&mut DesktopConfig),
+{
+    let mut cfg = read_config_at(path)?;
+    mutate(&mut cfg);
+    write_config_at(path, &cfg)?;
+    Ok(cfg)
+}
+
+pub fn update_config<F>(app: &AppHandle, mutate: F) -> Result<DesktopConfig, String>
+where
+    F: FnOnce(&mut DesktopConfig),
+{
+    let _guard = config_write_guard();
+    // 取不到配置目录时早退。与旧写法（load_config 回默认值、save_config 报这句错）
+    // 外部可观察行为一致：同样的 Err、同样一个字没写。
+    let Some(path) = config_path(app) else {
+        return Err("无法取得配置目录，配置未保存".to_owned());
+    };
+    update_config_at(&path, mutate)
 }
 
 #[cfg(test)]
@@ -334,5 +382,35 @@ mod tests {
         write_config_at(&path, &loaded).expect("原样存回");
         assert_eq!(read_config_at(&path).expect("再读").hotkeys.len(), 1);
         assert!(!std::fs::read_to_string(&path).expect("读原文").contains("navigate"));
+    }
+
+    #[test]
+    fn 读失败时不跑mutate也不写文件() {
+        // 用一个**目录**冒充配置文件路径：read_to_string 一个目录必然失败，
+        // 且错误 kind 不是 NotFound——正好造出 read_config_at 的「读失败」那一档。
+        let dir = temp_dir_for("update-read-fail");
+        // 写入痕迹落在 dir 的**兄弟**路径上，`temp_dir_for` 的 remove_dir_all 扫不到它。
+        // 断言前先清一次：否则某一次失败（或对本函数做变异验证）留下的 tmp 会让这条测试
+        // 此后永远红——而清理若只写在结尾，第一次 panic 就再也执行不到了。
+        let write_trace = dir.with_extension("json.tmp");
+        let _ = std::fs::remove_file(&write_trace);
+
+        let mut mutate_ran = false;
+        let err = update_config_at(&dir, |cfg| {
+            mutate_ran = true;
+            cfg.punch_confirm_hours = 9.0;
+        })
+        .expect_err("读失败必须往上抛，不许当成默认值继续");
+
+        // 这条断言排在最前面是有意的：把 `?` 换成 `.unwrap_or_default()` 时，写回同样会
+        // 失败、函数照旧返回 Err，只是错误换了来源——若先断错误文案，报出来的是「文案不对」
+        // 这种次要现象。先断 mutate，退化的性质才会直接写在失败信息里。
+        assert!(
+            !mutate_ran,
+            "读失败时 mutate 一次都不许跑——跑了就意味着后面还会拿这份伪造的配置全量写回，\
+             用户的快捷键和自启意图会被静默抹掉"
+        );
+        assert!(err.contains("读取配置文件"), "错误信息要指明是读取失败，实际：{err}");
+        assert!(!write_trace.exists(), "读失败时不许产生任何写入痕迹");
     }
 }

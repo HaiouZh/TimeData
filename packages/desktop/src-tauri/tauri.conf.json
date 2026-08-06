@@ -11,12 +11,26 @@
   "app": {
     "windows": [
       {
+        "label": "main",
         "title": "TimeData",
         "width": 1100,
         "height": 800,
         "minWidth": 380,
         "minHeight": 480,
         "visible": true,
+        "center": true
+      },
+      {
+        "label": "capture",
+        "url": "index.html?window=capture",
+        "title": "TimeData 速记",
+        "width": 600,
+        "height": 120,
+        "visible": false,
+        "decorations": false,
+        "skipTaskbar": true,
+        "alwaysOnTop": true,
+        "resizable": false,
         "center": true
       }
     ],

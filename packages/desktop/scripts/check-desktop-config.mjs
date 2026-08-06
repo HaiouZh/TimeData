@@ -26,11 +26,43 @@ if (!Array.isArray(targets) || targets.length !== 1 || targets[0] !== "nsis") {
   throw new Error(`[desktop-config] bundle.targets 必须恰好是 ["nsis"]，当前：${JSON.stringify(targets)}`);
 }
 
+// 按 label 取窗口，**不按下标**——加了浮窗之后 windows[0] 可能是浮窗，
+// 主窗口的 visible 断言会静默跑到错误的对象上。
+const windows = config.app?.windows ?? [];
+const byLabel = new Map(windows.map((w) => [w.label, w]));
+
+const mainWindow = byLabel.get("main");
+if (!mainWindow) {
+  throw new Error('[desktop-config] 找不到 label 为 "main" 的窗口。两个窗口都必须显式写 label，闸按 label 取。');
+}
 // 手动启动必须看得见窗口——否则首次安装后用户找不到入口去填服务器地址。
 // 开机自启的隐藏走 --hidden 参数，不靠这个配置。
-const mainWindow = config.app?.windows?.[0];
-if (mainWindow?.visible !== true) {
+if (mainWindow.visible !== true) {
   throw new Error("[desktop-config] 主窗口 visible 必须为 true（开机自启的隐藏走 --hidden 参数，不改这里）");
+}
+
+// 速记浮窗：热键唤起的临时输入条。四条属性任缺一条都会让它变成一个普通窗口——
+// 有标题栏、占任务栏、被别的窗口盖住、启动时糊在屏幕上。
+const captureWindow = byLabel.get("capture");
+if (!captureWindow) {
+  throw new Error('[desktop-config] 找不到 label 为 "capture" 的速记浮窗。');
+}
+for (const [key, expected] of [
+  ["visible", false],
+  ["decorations", false],
+  ["skipTaskbar", true],
+  ["alwaysOnTop", true],
+  ["resizable", false],
+]) {
+  if (captureWindow[key] !== expected) {
+    throw new Error(`[desktop-config] 浮窗 capture.${key} 必须是 ${expected}，当前：${JSON.stringify(captureWindow[key])}`);
+  }
+}
+if (captureWindow.url !== "index.html?window=capture") {
+  throw new Error(
+    `[desktop-config] 浮窗 url 必须是 index.html?window=capture，当前：${JSON.stringify(captureWindow.url)}。` +
+      "前端靠这个 query 分流到极简入口；改了它浮窗会加载完整应用，于是挂上第二个热键桥、一次打点落两条记录。",
+  );
 }
 
 // ---- 跨语言契约：热键事件名两端必须逐字相同 ----
@@ -53,14 +85,22 @@ if (!declared) {
 }
 const HOTKEY_EVENT_NAME = declared[1];
 
-const rustCommands = readFileSync(new URL("../src-tauri/src/commands.rs", import.meta.url), "utf8");
-const literalEmits = [...rustCommands.matchAll(/app\.emit\(\s*"([^"]+)"/g)].map((match) => match[1]);
-if (literalEmits.length > 0) {
-  throw new Error(
-    `[desktop-config] packages/desktop/src-tauri/src/commands.rs 里有裸字面量 emit：${JSON.stringify(literalEmits)}。` +
-      "事件名一律用 hotkeys.rs 的 HOTKEY_EVENT 常量——本文件有两处 emit，各写一遍字面量时改名很容易漏掉补投那处，" +
-      "而漏掉的表现是「开机第一秒按下的那批永远收不到」，没有任何报错。",
-  );
+// 扫描面是 src-tauri/src 下所有 .rs，不只 commands.rs：投递已经挪进了 deliver_to_webview，
+// 将来还可能再挪。正则也从只认 `app.emit(` 放宽到三种发射形态——原正则只认 emit，
+// 而本批的改法字面就是 emit_to，正好绕开它，闸会静默失效。
+const RUST_SRC = new URL("../src-tauri/src/", import.meta.url);
+const EMIT_CALL = /\b\w+\.(?:emit|emit_to|emit_filter)\(\s*(?:&?\w+\s*,\s*)?"([^"]+)"/g;
+for (const entry of readdirSync(RUST_SRC, { withFileTypes: true })) {
+  if (!entry.isFile() || !entry.name.endsWith(".rs")) continue;
+  const source = readFileSync(new URL(entry.name, RUST_SRC), "utf8");
+  const literalEmits = [...source.matchAll(EMIT_CALL)].map((match) => match[1]);
+  if (literalEmits.length > 0) {
+    throw new Error(
+      `[desktop-config] packages/desktop/src-tauri/src/${entry.name} 里有裸字面量 emit：${JSON.stringify(literalEmits)}。` +
+        "事件名一律用 hotkeys.rs 的 HOTKEY_EVENT 常量——发射点不止一处，各写一遍字面量时改名很容易漏掉补投那处，" +
+        "而漏掉的表现是「开机第一秒按下的那批永远收不到」，没有任何报错。",
+    );
+  }
 }
 
 const clientApi = readFileSync(new URL("../../client/src/lib/desktop/api.ts", import.meta.url), "utf8");

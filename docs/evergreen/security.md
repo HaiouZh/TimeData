@@ -35,7 +35,7 @@ contracts:
   - packages/server/src/middleware/auth.ts
   - packages/server/src/middleware/totp.ts
   - packages/client/src/lib/storageKeys.ts
-last-reviewed: 2026-08-05
+last-reviewed: 2026-08-06
 ---
 
 # 安全与凭据处理
@@ -51,11 +51,13 @@ last-reviewed: 2026-08-05
 | 档 | 内容 | 敏感度 |
 |---|---|---|
 | 凭据与连接 | `apiToken`（见上两段）、`apiUrl` | **敏感**：明文存本机 |
-| **用户内容** | **`quickNoteComposerDraft`** —— 用户尚未发出的速记正文 | **含用户内容**：纯本地，不进同步域、不进备份 |
+| **用户内容** | **`quickNoteComposerDraft`**（速记页）、**`captureComposerDraft`**（桌面速记浮窗）—— 用户尚未发出的速记正文 | **含用户内容**：纯本地，不进同步域、不进备份 |
 | 业务 id 引用 | `sleepCategoryId`（睡眠分类 id） | 引用 id，不含内容 |
 | 同步游标 / 诊断 / UI 偏好 | `lastSyncedSeq`、`clockSkewMs`、`syncFailureCount`、`syncPhaseTimings`、`schemaNormalizationVersion`、各页分栏比例与折叠态、`goalsViewMode`、`galaxyEngine`（`/goals` 星图用确定性还是本地 settle 引擎）等 | 不含用户内容、不含凭据 |
 
-`quickNoteComposerDraft` 是唯一把用户正文落到 localStorage 的 key——清本机数据、共享设备场景要按"含用户内容"对待，不能套用"UI 偏好无所谓"的判断。
+两个 `…ComposerDraft` 是仅有的把用户正文落到 localStorage 的 key——清本机数据、共享设备场景要按"含用户内容"对待，不能套用"UI 偏好无所谓"的判断。两者是**各自独立的 key**（共用会让浮窗里打了一半的话凭空出现在速记页）。
+
+**已知缺口**：`resetLocalDataToDefaults`（「清空本地数据」）两个都不清，用户执行清空后未发出的速记正文仍留在本机；共享设备上它会在下一次唤起输入框时直接显示出来。
 
 待办翻牌「已过目表」在同步 `settings` key `todo.gravity.review.v1`，只保存任务 id 到 ISO 时间戳，不保存任务正文或 Token；轨道看板信号词表也走同步 `settings` 表，不放在本地 storage key 里。
 
