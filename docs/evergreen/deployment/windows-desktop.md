@@ -7,16 +7,17 @@ covers:
   - packages/client/src/lib/desktop/**
   - packages/client/src/components/desktop/**
   - packages/client/src/pages/settings/SettingsDesktopPage.tsx
+  - packages/client/src/capture/**
 contracts:
   - packages/desktop/src-tauri/tauri.conf.json
   - .github/workflows/mobile-release.yml
   - packages/desktop/src-tauri/src/config.rs
-last-reviewed: 2026-08-04
+last-reviewed: 2026-08-06
 ---
 
 # 部署 · Windows 桌面壳
 
-> [deployment](../deployment.md) 的 Windows 发布子文档：Tauri 壳的构成、托盘与关窗语义、开机自启判定、全局热键与热键打点、NSIS 安装包发布链路、桌面壳的数据边界。
+> [deployment](../deployment.md) 的 Windows 发布子文档：Tauri 壳的构成、托盘与关窗语义、开机自启判定、全局热键与热键打点、速记浮窗与双窗口、NSIS 安装包发布链路、桌面壳的数据边界。
 > 不讲 Android 签名与 Gradle（见 [deployment/android-apk](android-apk.md)）、iOS 原生补丁（见 [deployment/ios-ipa](ios-ipa.md)），也不讲服务器镜像与自更新（见 [deployment](../deployment.md)）。
 
 ## 承上启下
@@ -66,13 +67,13 @@ NSIS 安装新版本时先卸载旧版本，会一并清掉启动项。该情形
 | `punchConfirmHours` | 打点确认阈值（小时），默认 4；非有限值或 `<= 0` 被拒 |
 | `autostartDisabled` | 用户在设置页关过自启的意图记录，见 §3 |
 
-`shortcut` 是 Tauri accelerator 字符串，修饰键顺序由前端 `normalizeShortcutFromKeyboardEvent` 钉死为 `Ctrl→Alt→Shift→Super`，与用户按下的先后无关——存进配置的串必须与回显注册结果时用来匹配的串逐字一致。字母 / 数字必须带修饰键（裸键会让正常打字触发全局动作），F1–F24 例外可裸录。`action` 是带参枚举，枚举成员为 `punch` 与 `toggleMain`，序列化格式预留参数位（如 `{ "action": "navigate", "target": "/diary" }`）。
+`shortcut` 是 Tauri accelerator 字符串，修饰键顺序由前端 `normalizeShortcutFromKeyboardEvent` 钉死为 `Ctrl→Alt→Shift→Super`，与用户按下的先后无关——存进配置的串必须与回显注册结果时用来匹配的串逐字一致。字母 / 数字必须带修饰键（裸键会让正常打字触发全局动作），F1–F24 例外可裸录。`action` 是带参枚举，枚举成员为 `punch` / `toggleMain` / `capture`，序列化格式预留参数位（如 `{ "action": "navigate", "target": "/diary" }`）。
 
 **读配置分三态**：文件不存在 → 默认配置（首次启动的正常路径）；**读失败 → `Err`**；读到了 → 解析结果。读失败与文件不存在必须分开——杀软 / OneDrive / 备份工具短暂独占文件的那一瞬，若被当成「还没配过任何东西」，写命令就会拿全默认值（`hotkeys: []`、`autostartDisabled: false`）去做 load→改→**全量覆盖**写回，一次保存抹掉全部快捷键、把关掉的自启重新打开，还返回成功。因此：三个写命令拿到 `Err` 一律**拒绝保存**并把原因抛给前端；`resume_hotkeys` 拿到 `Err` **不碰注册表**（否则一次读不到就等于把当前活着的热键全注销）；启动路径拿到 `Err` 时既不动自启也不注册热键，改发一条系统通知说明本次启动什么都没做（重启即恢复，比上面两件都轻）。
 
 解析两层容错：整个文件坏掉视为默认空配置，不崩溃；单条 `hotkeys` 里认不出的动作跳过、其余照用。**「坏文件在下次保存时被整体覆盖」说的是解析失败（内容真坏了），与上面的读失败不是一回事。**认不出的条目的前向兼容只在**读**路径成立：旧版本的任何一次保存都是全量覆盖，跳过的条目就此永久消失——这是当前接受的行为（Rust 是唯一写者，跨版本回退属罕见操作），`config.rs` 有一条用例把它明写在纸面上。
 
-落盘走原子写（临时文件 + rename），中途断电不会留下半截 JSON。所有 `load → 改 → save` 形态的 IPC 命令先拿同一把进程内写锁，否则两条并发写命令会交错成「各自基于旧文件改、后写者静默抹掉先写者」。字段定义与解析在 `packages/desktop/src-tauri/src/config.rs`。
+落盘走原子写（临时文件 + rename），中途断电不会留下半截 JSON。所有 `load → 改 → save` 形态的 IPC 命令先拿同一把进程内写锁，否则两条并发写命令会交错成「各自基于旧文件改、后写者静默抹掉先写者」。**锁与它保护的资源同在 `config.rs`**：纯读改写走 `update_config`（调用方不必记得拿锁），需要在锁内多做一件事的（`set_hotkeys` 写盘后要注册热键、`set_autostart_enabled` 写盘前要开关系统自启）显式取 `config_write_guard`。字段定义与解析在 `packages/desktop/src-tauri/src/config.rs`。
 
 `autostart-initialized` 标记文件与本文件职责不同（它记「上次注册自启时的 exe 路径」，见 §3），两者互不覆盖。
 
@@ -85,7 +86,7 @@ NSIS 安装新版本时先卸载旧版本，会一并清掉启动项。该情形
 - **热键注册表另有一把锁**，与配置文件写锁分开：注册表有三个写者（`set_hotkeys` / `suspend_hotkeys` / `resume_hotkeys`），而只护配置文件不够——点一次「保存快捷键」这个动作本身就会先 blur 录入框发出 `resume_hotkeys`、再发出 `set_hotkeys`，两条 promise 互不等待。交错时 `resume` 的 `unregister_all` 会落在 `set_hotkeys` 注册完之后，抹掉新表装回旧表：文件里是新表、页面显示全绿、系统里跑的是旧表。碰注册表的函数收 `RegistryGuard` 引用，**漏拿锁编译不过**。前端把录入态的 `suspend` / `resume` 串成一条链是必要配套，但不充分。
 - **拿到锁只是一半：`resume_hotkeys` 的读也必须在注册表锁内。**互斥只保证两条命令不交错，**不保证顺序**——`resume_hotkeys` 若在锁外先 `load_config`，读到的可能是 `set_hotkeys` 落盘前的旧表；等它排到锁，`set_hotkeys` 早已写完文件、装好新表并全部释放，`resume` 这才按旧表 `unregister_all` 加重注册，把上面那个终态原样复现一遍。所以它**先 `lock_registry()` 再 `load_config`**，这两句的顺序不能倒。
     另两个写者各是各的形状，不存在「三个写者同一条锁序」这回事：`suspend_hotkeys` 只拿注册表锁注销，根本不读配置；`set_hotkeys` 在**配置写锁**内走 load→改→全量写回，之后才拿注册表锁按刚落盘的新表重注册——它装的就是自己刚写的那份，不存在读到旧表的窗口。`RegistryGuard` 拦得住「漏拿锁」，拦不住「在锁外先读」——后者没有编译期或测试期的闸，只有这一条与 `resume_hotkeys` 上的注释记着。锁内读不会死锁：`load_config` 只读文件、不碰配置写锁，两把锁之间无环。`main.rs` 的 `setup` 同样是配置在上、锁在下，但它跑在事件循环启动之前，三个写注册表的命令此刻一条都派发不出来，别把这个顺序照搬进命令里。
-- 事件名 `desktop-hotkey` 是 Rust `emit` 与前端 `listen` 之间唯一的约定。**Rust 侧的字面量只准出现在 `hotkeys.rs` 的 `HOTKEY_EVENT` 常量里**（`commands.rs` 有两处 emit，各写一遍字面量时改名极易漏掉补投那处），由配置闸全匹配比对（§7）。
+- 事件名 `desktop-hotkey` 是 Rust `emit` 与前端 `listen` 之间唯一的约定。**Rust 侧的字面量只准出现在 `hotkeys.rs` 的 `HOTKEY_EVENT` 常量里**（`commands.rs` 有两处 emit，各写一遍字面量时改名极易漏掉补投那处），由配置闸全匹配比对（§8）。
 - WebView 未就绪时 punch 事件在 Rust 侧 **FIFO 排队**；前端桥挂好监听后 `invoke("desktop_ready")`，Rust 收到即按序补投。`pressedAtMs` 随事件走，因此**执行晚了不影响封口时刻**——开机第一秒按打点，记录的就是那一秒。`toggleMain` 不排队。
 - 设置页的快捷键录入框进入录入态时先 `suspend_hotkeys`（注销全部），失焦 / 录完再 `resume_hotkeys`。不挂起的话，录一个本应用已注册的组合时按键会被全局热键吃掉、永远录不上；挂起后不恢复则按一次 Esc 全局热键就永久失效。
 
@@ -100,7 +101,7 @@ NSIS 安装新版本时先卸载旧版本，会一并清掉启动项。该情形
 | 区间时长 > `punchConfirmHours` | 不写，`show_main` 提起主窗口 + 一条通知，显示确认卡「要把 HH:mm–HH:mm 记为打点吗？」[记录 / 算了] |
 | 阈值内 | 调 `punchNow(pressedAt)` 写入，系统通知「已打点 HH:mm–HH:mm」+ 主窗口挂撤销条 |
 
-**每条出口都要有一个不经通知通道的落点**：系统通知两端各吞一次（Rust 的 `let _ = …show()`、桥的 `quietly`），专注助手开着或通知权限关了就是屏幕上零变化。只有通知的话，全新装机必然撞上的那条（§6 首次启动是空数据 → 没配打点分类 → 按热键走第二条）就是不写库、不提窗、无红字，用户会去查热键注册（设置页全绿），真正的原因被静默丢掉。`needsConfirm` 也发通知：Windows 的前台锁会把 `set_focus` 降级成任务栏闪烁，只靠 `show_main` 时这次按键可以是零可观察结果。队列里抛出的失败同样两条路都给（提示条 + 通知），原因文本用 `messageOf` 读——**Tauri 的 invoke 失败 reject 的是字符串**（Rust 的 `Err(String)`），只认 `Error` 的写法会把 Rust 写的原因换成一句无信息的兜底词。
+**每条出口都要有一个不经通知通道的落点**：系统通知两端各吞一次（Rust 的 `let _ = …show()`、桥的 `quietly`），专注助手开着或通知权限关了就是屏幕上零变化。只有通知的话，全新装机必然撞上的那条（§7 首次启动是空数据 → 没配打点分类 → 按热键走第二条）就是不写库、不提窗、无红字，用户会去查热键注册（设置页全绿），真正的原因被静默丢掉。`needsConfirm` 也发通知：Windows 的前台锁会把 `set_focus` 降级成任务栏闪烁，只靠 `show_main` 时这次按键可以是零可观察结果。队列里抛出的失败同样两条路都给（提示条 + 通知），原因文本用 `messageOf` 读——**Tauri 的 invoke 失败 reject 的是字符串**（Rust 的 `Err(String)`），只认 `Error` 的写法会把 Rust 写的原因换成一句无信息的兜底词。
 
 「不写」的两条出口清掉停留中的确认卡：卡上的区间是按下那一刻算的，走到这两条说明当下数据已经不支持它了，留着就是「通知说没时间可记、屏幕上却挂着一张要你记 00:00–12:00 的卡」。
 
@@ -143,10 +144,68 @@ NSIS 安装新版本时先卸载旧版本，会一并清掉启动项。该情形
 | 事件桥 / 撤销条 / 确认卡 | `packages/client/src/components/desktop/DesktopBridge.tsx`、`DesktopPunchLayer.tsx` |
 | 快捷键录入与规范化 | `packages/client/src/components/desktop/ShortcutInput.tsx` |
 | 设置二级页（`/settings/desktop`，仅桌面壳渲染入口行） | `packages/client/src/pages/settings/SettingsDesktopPage.tsx` |
+| 速记浮窗与草稿 | `packages/client/src/capture/CaptureApp.tsx`、`captureDraft.ts` |
 
-Rust 单测用 `cargo test` 在 `packages/desktop/src-tauri` 下手动跑，**不挂进 `pnpm --filter @timedata/desktop test`**——门禁机器没有 Rust 工具链。
+Rust 单测不在 `pnpm gate` 里（门禁机器没有 Rust 工具链），走 `pnpm check:desktop`——碰了 `packages/desktop/**` 必跑，见 §5.6。
 
-## 5. 构建与发布
+## 5. 速记浮窗与双窗口
+
+壳里有两个窗口，都在 `tauri.conf.json` 里静态声明，进程起来就都在（不是「用时才建」）：
+
+| label | 加载 | 起手可见 | 收哪些动作 |
+|---|---|---|---|
+| `main` | `index.html` | 是（`--hidden` 启动时隐藏，§3） | `punch` |
+| `capture` | `index.html?window=capture` | 否 | `capture` |
+
+`toggleMain` 不投任何窗口——`shell::target_window` 对它返回 `None`，Rust 侧直办。
+
+浮窗是一条无边框、置顶、不进任务栏、不可缩放的输入框（600×120）。按 capture 热键唤起、打字、回车存进速记，窗口闪一下「已记下」随即隐藏；存失败则窗口不走、红字报错、字留在框里。Esc 直接隐藏，没存完的半句留在草稿里。
+
+### 5.1 一份产物、两个角色
+
+`main.tsx` 顶层按 `isCaptureWindow()` 分流，两条分支是**互斥的整棵树**：浮窗分支只渲染 `CaptureApp`，不含 `AppUpdateProvider` / `DesktopBridge` / `SyncProvider` / 路由，也不跑 `runStartupTasks()`；主窗口分支照旧。
+
+**分流必须在 `main.tsx` 这一层，不能挪进 `App` 内部。** `DesktopBridge` 挂在 `App.tsx` 里、条件是 `isDesktopShell()`——浮窗同样满足这个条件，一旦它走到 `App` 就会挂上第二个桥。届时一次 `punch` 热键被两个桥各收一次（Rust 的 `app.emit` 是广播），落两条重复记录。下一节的点名投递是这件事的第二道保险，两道都在，少一道都不该。
+
+`isCaptureWindow()` 先判 `isDesktopShell()` 再看 query：三端吃的是同一份产物，浏览器里手敲 `/?window=capture` 必须渲染完整应用而非浮窗（`shell.test.ts` 有这条闸）。
+
+`CaptureApp` 是静态 import 进 `main.tsx` 的，因而进入口 chunk——源码 7.3 KB、gzip 后约 2 KB，占入口 chunk 的 3–4%。**不改 `lazy()`**：动态加载要给浮窗多一次 import 往返，而浮窗的全部价值就是「按下即出」。判据是它在入口 chunk 里的占比，不是它自己的绝对大小。
+
+### 5.2 点名投递与按 label 分组的就绪队列
+
+Rust 侧不广播热键事件，按 `shell::target_window` 的映射表**点名投递**到目标窗口（`deliver_to_webview` 把「排队」与 `emit_to` 绑在一起，两者不会走岔）。
+
+就绪队列按 label 分组（`HotkeyDispatcher` 的 `ready: HashSet<String>` + `queues: HashMap<String, VecDeque<_>>`）：某个窗口的 WebView 还没就绪时，投给它的事件排进它自己那条队，`desktop_ready` 到达时只冲它自己那条。不分组的话，先就绪的窗口会把另一个窗口的积压一并领走。
+
+**`desktop_ready` 的 label 取自 `window.label()`，不是前端传参**——前端传错会让某个窗口的积压永远排不出去，而 `window.label()` 是权威来源、错不了。
+
+### 5.3 已知界限：浮窗写的速记最多 60 秒后才同步
+
+`syncScheduler` 是**模块级单例**，每个 WebView 各有一份，而浮窗那份不跑（它没挂 `SyncProvider`）。浮窗写进 IndexedDB 的速记因此不会立刻触发上行同步，捞它的是主窗口那份的兜底轮询（`SYNC_FALLBACK_INTERVAL_MS`，60 秒）。
+
+也就是说：浮窗记完，最坏 60 秒后手机上才看得到。这是**已知并接受的界限**，不是待修的 bug。让浮窗自己起一套同步栈，与「按下即出、存完即走」的取向冲突。
+
+### 5.4 草稿是独立的 key
+
+浮窗草稿存 `captureComposerDraft`，**与速记页的草稿 key 不共用**。共用的话，浮窗里打了一半按 Esc 收起，再打开速记页会看到那半句凭空出现在输入框里，反之亦然。
+
+### 5.5 焦点与前台锁
+
+「按下热键 → 浮窗拿到键盘焦点」这条在 Windows 上**不是必然的**：前台锁会把 `set_focus` 降级成任务栏闪烁（§4.3 的确认卡撞过同一件事）。实现是直白的 `show` + `set_focus`，能不能真拿到焦点由系统裁决，三种场景各不相同：别的应用正在接收键盘输入、别的应用全屏、短时间内连续唤起。
+
+抢不到焦点时的兜底判据是**宁可不显示窗口 + 发通知，也不留半开状态**：半开的浮窗看着能打字、键入却进了别的应用，比不出现更糟。
+
+### 5.6 三道闸各守什么
+
+| 闸 | 守什么 | 何时跑 |
+|---|---|---|
+| `check-desktop-config.mjs` | 两个窗口按 label 的属性快照、跨语言事件名全匹配、禁静态 import Tauri（§8） | `pnpm --filter @timedata/desktop test` |
+| `check-hotkey-actions.mjs` | 动作名在三处一致：Rust `action_id` / `api.ts` 联合类型 / 设置页 `ACTION_OPTIONS` | 同上 |
+| `pnpm check:desktop` | 上面两道 + `cargo test` + `cargo clippy -D warnings` | 手动，碰了 `packages/desktop/**` 必跑 |
+
+`check-hotkey-actions.mjs` 存在的理由：设置页的 `ACTION_OPTIONS` 漏一个动作时**没有任何测试会红**，但用户在「桌面设置」里根本选不到那个动作——热键配不上。
+
+## 6. 构建与发布
 
 `windows` job 跑在 `windows-latest` runner 上，与 `android` / `ios` 同为 `needs: prepare` 的平台 job，先到先上架。`workflow_dispatch` 的 `platform` 选项含 `windows`，`both` 含全部三个平台。**`push` 触发不区分平台**：`mobile-release` 的 push paths 是三个壳共用的一大串（`packages/{client,mobile,desktop,shared}/**`、根 `package.json` / lockfile / workspace / tsconfig、各版本与图标脚本、workflow 自身），且 push 时 `inputs.platform` 为空串、`prepare` 显式把它当 `both`——**改 client 或 shared 照样会跑 Windows job**，不是只有 `packages/desktop/**` 与 `scripts/desktop-version.mjs` 两条路径才触发。想让 Windows 只随 desktop 变更发布，得改 workflow 的 paths 或 prepare 判定，光改文档不解决。
 
@@ -156,13 +215,13 @@ Rust 单测用 `cargo test` 在 `packages/desktop/src-tauri` 下手动跑，**�
 
 `windows` job 不执行 `gh release edit --latest`——latest 归属规则见 [deployment/ios-ipa](ios-ipa.md#deployment-ios-ipa-s4)。
 
-## 6. 数据边界
+## 7. 数据边界
 
 Tauri 用独立的 WebView2 用户数据目录，与 Edge / Chrome 的 profile 不互通。桌面壳因此是本机上又一份独立的 IndexedDB，与浏览器里访问同一站点的数据互不可见，两者只能通过服务器同步汇合——与 Capacitor 壳和 PWA 的关系同构（见 [deployment/ios-ipa](ios-ipa.md#deployment-ios-ipa-s5)）。首次启动是空数据，需在设置里填 API 地址与 Token。
 
 同一个 Tauri 应用内的多个窗口共享同一个 WebView2 用户数据目录，因此共用同一份 IndexedDB。
 
-## 7. 配置闸
+## 8. 配置闸
 
 `packages/desktop/scripts/check-desktop-config.mjs` 随 `pnpm --filter @timedata/desktop test` 运行，守三类「配错了没有任何其他门禁会红」的约定：
 
@@ -170,7 +229,7 @@ Tauri 用独立的 WebView2 用户数据目录，与 Edge / Chrome 的 profile �
 2. **跨语言事件名（全匹配）**：`hotkeys.rs` 必须声明 `pub const HOTKEY_EVENT: &str = "…";`；`commands.rs` 里**一处裸字面量 emit 都不许有**（正则抓 `app.emit("…"`，集合必须为空）；`api.ts` 里 `listen<…>("…")` 的名字集合必须恰好等于那个常量的值。闸不能写成「文件里出现过一次」——`commands.rs` 有两处 emit（实时投递、就绪后补投），那种写法在改名时只改到第一处就照绿：日常按键正常，唯独「WebView 就绪前排队的那批」发的是旧名字、前端永远收不到，正好打掉 §4.2 承诺的「开机第一秒按下也生效」。两端之间没有共享类型，typecheck 管不到字符串字面量。
 3. **禁静态 import Tauri API**：扫 `packages/client/src/**/*.{ts,tsx}`，任何 `from "@tauri-apps/api…"` / `import "@tauri-apps/api…"` 形态（含 type-only 与单引号）都报红，只准 `await import(...)`。这是三端 bundle 不加载 Tauri 运行时的唯一保证。需要类型就在 `lib/desktop/api.ts` 里自己声明。
 
-## 8. 排错
+## 9. 排错
 
 - **开机自启指向了旧路径**：标记文件与启动项不同步。删除 `%APPDATA%\icu.yanzhou.timedata\autostart-initialized` 后重新运行一次即可重建。
 - **在任务管理器里关了自启，下次启动又回来了**：这是 §3 的判定语义。持久关闭的路径只有一条——应用的「设置 → 桌面设置」，它会把意图记进 `desktop-config.json`。
@@ -182,4 +241,4 @@ Tauri 用独立的 WebView2 用户数据目录，与 Edge / Chrome 的 profile �
 - **`tauri dev` 下打点没有系统通知**：dev 运行的 exe 没有带 AppUserModelID 的开始菜单快捷方式，Windows 会丢掉这条 toast。通知行为以 NSIS 装机版本为准。
 - **开始菜单里看不到条目**：快捷方式在 `%APPDATA%\Microsoft\Windows\Start Menu\Programs\TimeData.lnk`，Windows 开始菜单列表存在索引延迟，搜索能直接命中。
 - **NSIS 打包步骤找不到产物**：`bundle.targets` 被改动时 bundler 会产出到别的子目录，`Rename installer` 步骤据 `*-setup.exe` 匹配。
-- **桌面版看不到浏览器里记的数据**：不是故障，见 §6。
+- **桌面版看不到浏览器里记的数据**：不是故障，见 §7。
