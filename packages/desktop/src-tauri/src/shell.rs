@@ -13,6 +13,10 @@ use crate::config::HotkeyAction;
 pub const MAIN_WINDOW: &str = "main";
 pub const CAPTURE_WINDOW: &str = "capture";
 
+/// 自启标记文件名。文件内容记的是「上次注册时的 exe 路径」，不是一个布尔——
+/// 判定见 `resolve_autostart_action`。
+pub const AUTOSTART_MARKER: &str = "autostart-initialized";
+
 /// 动作落到哪个 WebView。`None` = Rust 直办、不投窗口。
 ///
 /// **这张表是「一次 punch 只落一条」的第二道保险**（第一道是前端入口分流）。

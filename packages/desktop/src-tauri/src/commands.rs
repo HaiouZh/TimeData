@@ -16,11 +16,6 @@ use crate::shell::{
     self, resolve_toggle_from_window, AncestorRoot, ForegroundRaw, Minimized, SelfHwnd, ToggleAction, Visible,
 };
 
-/// 配置文件写锁：所有 load→modify→save 形态的命令先拿它再动文件。
-/// 没有它，两个并发写命令（如设置页同时改阈值与热键）会交错成
-/// 「都基于旧文件各改各的、后写者静默抹掉先写者」的丢更新竞态。
-static CONFIG_WRITE_LOCK: Mutex<()> = Mutex::new(());
-
 /// 热键**注册表**写锁。注册表与配置文件是两份独立资源，各要各的锁：
 /// `set_hotkeys` / `suspend_hotkeys` / `resume_hotkeys` 三个命令改的是同一份注册表
 /// （`apply_bindings` = `unregister_all` + 逐条注册），而后两个此前全程在锁外。
@@ -195,11 +190,16 @@ pub fn get_desktop_config(app: AppHandle) -> Result<DesktopConfig, String> {
     config::load_config(&app)
 }
 
-/// 三个写命令都是 load→改→**全量覆盖**写回：`load_config` 一旦读失败就必须在这里止步，
+/// 三个写命令都是 load→改→**全量覆盖**写回：`load_config` 一旦读失败就必须当场止步，
 /// 绝不能拿伪造的默认值（`hotkeys: []`、`autostartDisabled: false`）覆盖真文件。
+///
+/// 纯读改写的那个（`set_punch_confirm_hours`）走 `config::update_config`，早退和锁都在
+/// 那里面。另两个要在同一把锁内多做一件事——`set_hotkeys` 写盘后还要注册热键，
+/// `set_autostart_enabled` 写盘前还要开关系统自启——单闭包的 `update_config` 装不下这个
+/// 形状，故各自保留编排、显式拿 `config::config_write_guard`。
 #[tauri::command]
 pub fn set_hotkeys(app: AppHandle, bindings: Vec<HotkeyBinding>) -> Result<Vec<RegistrationOutcome>, String> {
-    let _guard = CONFIG_WRITE_LOCK.lock().expect("config write lock poisoned");
+    let _guard = config::config_write_guard();
     let mut cfg = config::load_config(&app)?;
     cfg.hotkeys = bindings;
     config::save_config(&app, &cfg)?;
@@ -212,10 +212,7 @@ pub fn set_punch_confirm_hours(app: AppHandle, hours: f64) -> Result<(), String>
     if !hours.is_finite() || hours <= 0.0 {
         return Err("阈值必须是大于 0 的小时数".to_owned());
     }
-    let _guard = CONFIG_WRITE_LOCK.lock().expect("config write lock poisoned");
-    let mut cfg = config::load_config(&app)?;
-    cfg.punch_confirm_hours = hours;
-    config::save_config(&app, &cfg)
+    config::update_config(&app, |cfg| cfg.punch_confirm_hours = hours).map(|_| ())
 }
 
 #[tauri::command]
@@ -230,7 +227,7 @@ pub fn get_autostart_state(app: AppHandle) -> Result<AutostartState, String> {
 /// 矛盾态——错误信息把两半都讲清楚，设置页原样展示即可让用户知道现状。
 #[tauri::command]
 pub fn set_autostart_enabled(app: AppHandle, enabled: bool) -> Result<(), String> {
-    let _guard = CONFIG_WRITE_LOCK.lock().expect("config write lock poisoned");
+    let _guard = config::config_write_guard();
     // 先读、读不到就走人：这一步在 enable()/disable() **之前**，读失败时系统状态一个字没改。
     let mut cfg = config::load_config(&app)?;
     if enabled {
@@ -240,7 +237,7 @@ pub fn set_autostart_enabled(app: AppHandle, enabled: bool) -> Result<(), String
         // 与批 1 的路径标记文件保持同步，换 exe 自愈逻辑照旧。
         if let (Ok(dir), Ok(exe)) = (app.path().app_config_dir(), std::env::current_exe()) {
             let _ = std::fs::create_dir_all(&dir);
-            let _ = std::fs::write(dir.join("autostart-initialized"), exe.to_string_lossy().as_bytes());
+            let _ = std::fs::write(dir.join(shell::AUTOSTART_MARKER), exe.to_string_lossy().as_bytes());
         }
     } else {
         app.autolaunch().disable().map_err(|e| e.to_string())?;
@@ -263,7 +260,8 @@ pub fn suspend_hotkeys(app: AppHandle) {
 /// 在锁外读配置时，`resume` 可以读到 `set_hotkeys` 落盘之前的旧表，然后一路排队等锁；等它拿到
 /// 锁，`set_hotkeys` 已经写完文件、装好新表并全部释放——`resume` 这才按旧表 `unregister_all`
 /// 加重注册，抹掉新表装回旧表。终态正是这把锁本来要防的那一个：文件里是新表、页面显示全绿、
-/// 系统里跑的是旧表。锁内读不会死锁：`load_config` 只读文件、不碰 `CONFIG_WRITE_LOCK`，两把锁无环。
+/// 系统里跑的是旧表。锁内读不会死锁：`load_config` 只读文件、不碰配置写锁（那把锁在
+/// `config.rs`，只有 `update_config` / `config_write_guard` 会取），两把锁无环。
 #[tauri::command]
 pub fn resume_hotkeys(app: AppHandle) -> Result<Vec<RegistrationOutcome>, String> {
     let registry = lock_registry();
