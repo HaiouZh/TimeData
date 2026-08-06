@@ -5,6 +5,9 @@ covers:
   - packages/client/src/lib/tasks/goalMembership.ts
   - packages/client/src/lib/tasks/projectZone.ts
   - packages/client/src/pages/todo/TodoProjectSection.tsx
+contracts:
+  - packages/client/src/lib/tasks/projectZone.ts
+  - packages/client/src/lib/goals.ts
 last-reviewed: 2026-08-06
 ---
 
@@ -49,11 +52,11 @@ last-reviewed: 2026-08-06
 
 1. 只收根任务（`parentId === null`），且 `recurrence === null && ruleId === null`——重复模板与 occurrence 不参与归属。
 2. **排他与归集共用同一个布尔量**。这是红线：若排他单独判 `projectMemberIndex.has(id)`，一条被写进 `members` 的 occurrence 会既被归集守卫挡在项目区外、又被踢出收件箱，整条消失。
-3. 未完成成员进 `group.tasks`；已完成成员**只折成计数**，不再保留 `Task[]`。**标题行的三个数都含子任务**（与 [todo/at-hand](todo/at-hand.md) 的 `atHandPendingTotal` 同源）——把几条活收成父子只是整理结构，活一件没少，数字就不该跟着掉。子任务不在任何投影桶里（`listTasks` 主循环按 `parentId` 早退），故由 `listTasks` 另建 `parentId → 子任务[]` 索引交给 `buildTodoProjectGroups`，`skipped` 一律剔除：
+3. 未完成成员进 `group.tasks`；已完成成员**只折成计数**，不保留 `Task[]`。**标题行的三个数都含子任务**（与 [todo/at-hand](todo/at-hand.md) 的 `atHandPendingTotal` 同源）——把几条活收成父子只是整理结构，活一件没少，数字就不该跟着掉。子任务不在任何投影桶里（`listTasks` 主循环按 `parentId` 早退），故由 `listTasks` 另建 `parentId → 子任务[]` 索引交给 `buildTodoProjectGroups`，`skipped` 一律剔除：
    - `pendingChildCount` 只数**未完成成员**名下的未完成子任务，与 `atHandPendingTotal` 的 `pendingRootIds.has(t.parentId)` 逐字同源。标题的「还剩 N」= `tasks.length + pendingChildCount`。
    - `doneCount` / `recentDoneCount` 反过来数**全部成员**名下的已完成子任务。**两侧刻意不对称，不是笔误**：前者答「展开组你还能数出几条」，而已完成成员在组内不渲染，把看不见的活数进「还剩」，用户展开组数不出 N，比少报更糟；后者答「这个组总共完成了多少」，而已完成成员本身也从不渲染却照样计入，按同一把尺子它名下的已完成子任务也该计入。
-   - 已知边角：**爹已完成、子任务未完成**的那几条两个数都不进。这是上一条的直接推论，别当 bug 改掉。
-   - 三个数口径不同，不得互相派生。`allDone` 判据（`remaining === 0 && doneCount > 0`）不变——无未完成成员时 `pendingChildCount` 恒 0，与旧行为等价。
+   - 已知边角：**爹已完成、子任务未完成**的那几条两个数都不进。这是有意的——上一条的直接推论。
+   - 三个数口径不同，不得互相派生。`allDone` 判据是 `remaining === 0 && doneCount > 0`；无未完成成员时 `pendingChildCount` 恒 0，不参与该判据。
 4. `memberCount` 取 `goal.members?.length ?? 0` 的**原始数组长度**，含 track 成员与悬空 ref，**不含子任务**（子任务从不进名单）。它只服务 500 上限预警，不能用 `tasks.length + doneCount` 近似：后者只数可解析 task 成员，会漏掉真实容量占用；也不能掺进子任务——那是给上限闸喂假数。
 5. 组间按**全部可解析成员（含已完成）**的 `max(updatedAt)` 倒序，并列按 `goal.createdAt` 倒序 —— 已完成成员参与排序键，故「某组全部完成」不会让它掉到末尾。
 6. 组内未完成成员由 `sortProjectMembers` 排成「在手头 → 今天 → 躺着 → 已排期」。前三段内保持传入顺序（即 `listTasks` 的 `sortOrder`）；已排期段按 `scheduledAt` 升序。已排期沉底是刻意的：项目组展开是为了挑下一条能动手的，未来有主的先让位。逾期一次性任务由 `placementForTask` 回落 inbox，自然归入 idle 段，不单开逾期态。
@@ -72,7 +75,7 @@ last-reviewed: 2026-08-06
 - **摘/加复用既有两个函数而不是自己读改写**：它们已负担幂等、`prerequisites` 边清理、`goalLayoutPins` 回收、成员 touch + syncLog 四件事。Dexie 的嵌套事务在表是父集子集时并入父事务，故任一步抛错整包回滚。**没有外层事务会怎样是实测过的**：摘除已提交而加入失败 → 任务从两个组里同时消失，是静默的归属丢失。
 - **目标组必须仍是 active project**（`status`/`kind` 双判，与读侧 `projectMemberIndex` 逐字同一个表达式）。缺这道闸时，目标组在另一端被归档/改 theme 后拖入会照常摘除、照常写入，而读侧只认 active project → 这条任务不再属于任何组。判据与读侧同源是构造性保证：**凡能被渲染成落点的组必然通过这道闸**。
 - **只摘 active project**：theme 归属走绿竖条那条独立通道（§2），归档目标读侧本来就不认，摘它只是白写一行 syncLog。
-- **读侧仲裁仍是长期承重件，不得当死代码删**：单一归属只在这一个入口上成立。归档组被**解档**（goals 页 5 处入口）、goals 页的 `addGoalMember`/`updateGoal({members})`、跨设备并发、存量数据、缺 `status` 字段的老行，都能重新造出多重归属。
+- **读侧仲裁是长期承重件，不是死代码**：单一归属只在这一个入口上成立。归档组被**解档**（goals 页 5 处入口）、goals 页的 `addGoalMember`/`updateGoal({members})`、跨设备并发、存量数据、缺 `status` 字段的老行，都能重新造出多重归属。
 - **摘除的连带删除是 schema 硬后果**：成员一走，源组里引用它的 `prerequisites` 边就非法（superRefine 要求 prerequisite 必须指向成员），不删则整行 parse 失败、整个目标从 UI 与同步里消失。所以它不是可选副作用。触发门槛在待办页降到了「手滑一拖」，故拖拽路径落库前用 `prerequisiteLossOnAssign` 先问一句（§6）。
 
 项目标题行的 `+` 不直接改 `Goal.members`，而是走 `createTaskForProject(goalId, { title })`：先用 `buildNewRootTask({ toInbox: true })` 生成根任务，再在覆盖 `goals/goalLayoutPins/tasks/tracks/syncLog` 的外层事务里 `insertNewTaskInCurrentTransaction`，随后调用 `assignTaskToProject`。因此 active project 闸、任务侧准入、500 上限、先摘后加、touch 与 syncLog 仍只有一份实现；任何一步失败都会回滚任务 create 与目标成员更新，不留下孤立任务。
@@ -90,25 +93,25 @@ last-reviewed: 2026-08-06
 ## 5. 呈现契约
 
 - **位置**：收件箱正上方（两种布局都是）。零 active project 时整区不渲染。
-- **组三态**：0 可解析成员 → 不进项目区；有成员且全部完成 → `已完成 · M 条` + 「去归档」深链 `/goals/:id`；有未完成 → `还剩 N`，若近 7 天有完成则追加 `· 近 7 天 +M`。`+0` 不画，长期项目不再显示总数分母。全完成态**不特殊置顶**（置顶会让已完成项目抢占进行中项目的注意力）。
-- **组内已完成不再渲染**：已完成成员退出组内列表，标题行只回答「总共完成多少」与「最近推进多少」。当前没有等价的项目内已完成清单；低频出口是更多菜单的「在 goals 页打开」。
+- **组三态**：0 可解析成员 → 不进项目区；有成员且全部完成 → `已完成 · M 条` + 「去归档」深链 `/goals/:id`；有未完成 → `还剩 N`，若近 7 天有完成则追加 `· 近 7 天 +M`。`+0` 不画，长期项目不显示总数分母。全完成态**不特殊置顶**（置顶会让已完成项目抢占进行中项目的注意力）。
+- **组内已完成不渲染**：已完成成员退出组内列表，标题行只回答「总共完成多少」与「最近推进多少」。没有等价的项目内已完成清单；低频出口是更多菜单的「在 goals 页打开」。
 - **组内行可拖**：`TaskList` 接 `sortable` + `containerId = projectContainerId(goalId)` + `dndIdPrefix`，`childrenModeOverride` 从 `"static"` 改 `"draggable"`（升根手势的前提）。拖柄、缩进高亮环（`data-indent-target`）、收纳后展开父行的落点反馈（`revealChildren`）全部由页面透传的判定结果驱动，**组件不自己判**——跨组不亮高亮是页面侧 `hoveredRootIdFromOver` 就已过滤掉的结果，组件手上并没有「当前拖拽来自哪个组」这份信息。手势语义见 §6.1。
-- **内容区限高**：展开态内容区使用 `.todo-project-group-body` 语义类承载 `max-height: 45vh` 与 `overflow-anchor: none`，组件另挂 `overflow-y-auto`；限高加在内容区而不是组块外框。外框仍是 droppable 落点，内容区限高让落点 rect 有界且稳定，收件箱（唯一拖入源）不再被大组推出视口。已知限制：落点反馈滚到组外框，不保证滚到内部那条成员；语义仍是「告诉你它在哪个组」。
+- **内容区限高**：展开态内容区使用 `.todo-project-group-body` 语义类承载 `max-height: 45vh` 与 `overflow-anchor: none`，组件另挂 `overflow-y-auto`；限高加在内容区而不是组块外框。外框仍是 droppable 落点，内容区限高让落点 rect 有界且稳定，收件箱（唯一拖入源）不被大组推出视口。已知限制：落点反馈滚到组外框，不保证滚到内部那条成员；语义仍是「告诉你它在哪个组」。
 - **标题行操作**：未全完成组显示 `+`，点击后展开组并在内容区顶部显示就地输入框；Enter 以 trim 后标题调用 `createTaskForProject`，成功清空输入并保持打开，Esc 关闭。全完成组不显示 `+`，仍显示「去归档」。所有失败由页面 action toast 报原因，输入框保留草稿；筛选激活时，创建成功但新任务不匹配筛选条件会提示「任务已创建，但当前筛选未显示它」，写入结果不受筛选影响。
 - **更多菜单**：每组标题行有 `⋯`（Phosphor `DotsThree`，role=menu/menuitem），提供「改名」与「在 goals 页打开」。菜单沿用 QuickNoteActionMenu 的交互：打开时首项聚焦，Escape / 外点关闭并把焦点还给触发按钮；菜单按钮和输入框点击不得穿透成展开/折叠。改名走 `updateGoal(id, { title })`，空标题不提交、失焦/Escape 恢复原名；打开目标跳 `/goals/:id`。
 - **上限预警**：`memberCount >= Math.ceil(GOAL_MEMBERS_MAX * 0.9)` 且组未全完成时显示轻量「接近上限」提示。阈值从上限推导，不写死 450；预警不改变写入行为，真正撞线仍由 `ProjectAssignError("full")` 拒绝。
-- **展开态记忆**：组件内 `Map<goalId, boolean>` 覆盖表，不持久化。无筛选时默认全折叠，展开由用户点击或 `revealGoals`（落点反馈 / chip 回跳）驱动；筛选激活时匹配组强制展开，但不改写覆盖表，清除筛选后恢复用户偏好。曾有一档「存量提示条未读时首次全展开」，2026-07-27 随提示条一并退役。
+- **展开态记忆**：组件内 `Map<goalId, boolean>` 覆盖表，不持久化。无筛选时默认全折叠，展开由用户点击或 `revealGoals`（落点反馈 / chip 回跳）驱动；筛选激活时匹配组强制展开，但不改写覆盖表，清除筛选后恢复用户偏好。
 - **成员状态点**：`projectMemberState` 判四态——`at-hand`（焦点轴优先于时间轴）/ `today` / `scheduled` / `idle`。`idle` 是默认多数态，渲染层不画胶囊：没有胶囊本身就是答案。**没有「逾期」态**：`placementForTask` 只对重复模板与 occurrence 给 `overdue`，一次性任务过期会被退回 `inbox`，而项目区的归集守卫恰好把前两类挡在门外——项目区成员拿不到 overdue。
 - **成员行动作按两根轴各自渲染**：组内列表按 `pool="inbox"` 铺（组内不排序也不换池），但行右端的换池箭头与「抓到手头」各走自己的轴——`projectMemberRowActions` 同时给出 `atHand`（焦点轴）与 `pool`（时间轴：在今天 → `today` 显示「回收件箱」，其余含排到未来 → `inbox` 显示「排进今天」），经 `TaskList` 的 `rowPool` / `atHandIds` 落到行上，悬停按钮与滑动菜单共用这同一份判定。**项目区是唯一会撞上这件事的区域**：别处 `listTasks` 早把在手头 / 在今天的行截去各自的区，只有这里按 §1「一条被抓到手头、或排到今天的成员仍留在项目区」原样留着，跟着列表级 `pool` 走就会给它们挂上空动作（已在手头的还显示「抓到手头」、已排今天的还显示「排进今天」）。与 `projectMemberState` 的四态互斥刻意不同：那个答的是「当前在哪」（焦点轴压过时间轴）、只用来画胶囊，拿它开关按钮会把「在手头且已排今天」判成没排今天、箭头指反。时间轴刻意不给 `upcoming`——`TaskRow` 拿到它会再画一枚排期日胶囊，与状态胶囊重复。
 - **项目名 chip**：只出现在**手头 / 今天 / 已排期（含水下尾）**。它与绿竖条**不得同屏**——chip 说得出是哪个项目（携带该项目的身份色）、点得开，竖条只说「有去处」（全场同一个绿），同屏出现时后者是前者的冗余——`goalBarTaskIds` 把有 chip 的行从竖条集合里裁掉，竖条退回只表达 theme 归属。chip 需 `relative z-20` 才能压过行左 2/5 的 `z-10` 拖拽 activator。裁剪后的 `goalLinkedIds` 同时也喂给了翻牌区 / 水下收件箱 / 收件箱这三个**不渲染 chip** 的分区，看着像多裁了，其实零语义损失：「chip 集合 ∩ 收件箱 = ∅」是**构造性**成立的——`projectChipIndex` 的输入是 `buckets.projects`，而它与 inbox 排他共用同一个 `ownedByProject`（§3 第 2 条），进得了 chip 索引的就一定进不了 inbox——这行不是笔误。chip 与组卡片标题行各画一个同色圆点，色取自 `TodoBuckets.projectTints`（集合内避撞分配，见 [design-language](design-language.md#design-language-s1)），构成「点↔点」的同一项目认同；两处都不自行取色——避撞只有拿着全部 active project 才算得出，组件手上只有显示出来的组；组卡片不另加左侧色条——同一张卡片上两个颜色信号与本条的「chip / 竖条不得同屏」是同一条裁剪规则。
 - **退出项目**：行内动作调 `removeGoalMember`，任务浮在水上回落收件箱。组内最后一条成员退出后 **Goal 保留不自动归档**（归档是 goals 页的显式动作）。**另有一条不经表层 API 的退出路径**：把任务收纳为子任务（`lib/taskNesting.ts: nestTaskUnderParent`）会遍历所有 goal，静默清空该任务在其中的成员资格——子任务不持有任何归属指针（见 [todo](todo.md#todo-s2-2)）。
-- **落点反馈**：排他打开后「回到 inbox 池」不再等于「出现在收件箱」——项目成员会落进项目区里一个默认折叠的组，而组 header 的「还剩 N / 共 M」本来就把它算在内、数字纹丝不动，全屏零反馈，体感是「任务凭空消失」。故凡是让成员回落 inbox 池的路径，动作后都要复用 chip 的回跳机制（`revealProjectHome`）展开它的归属组并滚过去：行尾/左滑「回收件箱」、拖进 `pool:inbox`、移出手头、子任务升根、详情抽屉改「重复与时间」、取消勾选。**「拖入项目」不在此列**——它是把成员送**进**组、不是回落 inbox 池，落点就在手指下方，自动展开反而会在连续拖入第二条时改变布局；它的反馈走 toast（§6）。
-  - **判据只在 `revealProjectHome` 一处判，入参是写入后的 `Task`**。调用方各自判必然分裂成「动作前的行 / 拖拽意图 / `choice.kind`」几种口径，每种都漏一半（详情抽屉尤其：`choice.kind === "none"` 漏掉「仅某天」选到过去日期那支，又误报已完成 / 在手头的任务）。三道闸：① 归集守卫里 placement 判不出的两条（子任务、`ruleId` 非空的混合体行——它们 scheduledAt 为空照样被判 inbox，但投影层根本不收，展开的是不含它的组）；② 焦点轴压过落点（`listTasks` 把未完成的手头成员截进 `atHand` 并 `continue`，它在页面最顶上、本来就看得见）；③ `placementForTask(...).pool === "inbox"`。`done` 与 `recurrence` 不必单列——placement 首行就把它们判成 `completed` / `today`·`recurring`；**已完成成员现在只计入标题行计数、组内没有可展开行，展开组也看不到它，给的是错误指认、比零反馈更糟**，正是靠 placement 这一支挡住。
+- **落点反馈**：「回到 inbox 池」不等于「出现在收件箱」——项目成员会落进项目区里一个默认折叠的组，而组 header 的「还剩 N / 共 M」本来就把它算在内、数字纹丝不动，全屏零反馈，体感是「任务凭空消失」。故凡是让成员回落 inbox 池的路径，动作后都要复用 chip 的回跳机制（`revealProjectHome`）展开它的归属组并滚过去：行尾/左滑「回收件箱」、拖进 `pool:inbox`、移出手头、子任务升根、详情抽屉改「重复与时间」、取消勾选。**「拖入项目」不在此列**——它是把成员送**进**组、不是回落 inbox 池，落点就在手指下方，自动展开反而会在连续拖入第二条时改变布局；它的反馈走 toast（§6）。
+  - **判据只在 `revealProjectHome` 一处判，入参是写入后的 `Task`**。调用方各自判必然分裂成「动作前的行 / 拖拽意图 / `choice.kind`」几种口径，每种都漏一半（详情抽屉尤其：`choice.kind === "none"` 漏掉「仅某天」选到过去日期那支，又误报已完成 / 在手头的任务）。三道闸：① 归集守卫里 placement 判不出的两条（子任务、`ruleId` 非空的混合体行——它们 scheduledAt 为空照样被判 inbox，但投影层根本不收，展开的是不含它的组）；② 焦点轴压过落点（`listTasks` 把未完成的手头成员截进 `atHand` 并 `continue`，它在页面最顶上、本来就看得见）；③ `placementForTask(...).pool === "inbox"`。`done` 与 `recurrence` 不必单列——placement 首行就把它们判成 `completed` / `today`·`recurring`；**已完成成员只计入标题行计数、组内没有可展开行，展开组也看不到它，给的是错误指认、比零反馈更糟**，正是靠 placement 这一支挡住。
   - **写入失败不反馈**：详情抽屉的 `onTimeChanged` 只在写入成功时报，交出去的是写入结果。若不管成败都报，任务被并发删除时会一边弹错一边把页面滚去展开一个空组（查归属认 `members` 原始事实，不校验 task 行还在不在）。
-  - 查归属分两级：先查 `projectChipIndex`（渲染期闭包，覆盖"动作前就是未完成根成员"的情形），未命中再 `findActiveProjectGoalIdForTask` 读一次库——**子任务不在任何客户端投影里**；已完成成员现在只计入 `doneCount`、不在 `projectChipIndex`，两者都得查库才补得上归属。查库要 `catch` 后静默降级：`TaskRow` 的 `onToggle` 是裸调用，抛出去没人接。
+  - 查归属分两级：先查 `projectChipIndex`（渲染期闭包，覆盖"动作前就是未完成根成员"的情形），未命中再 `findActiveProjectGoalIdForTask` 读一次库——**子任务不在任何客户端投影里**；已完成成员只计入 `doneCount`、不在 `projectChipIndex`，两者都得查库才补得上归属。查库要 `catch` 后静默降级：`TaskRow` 的 `onToggle` 是裸调用，抛出去没人接。
   - **reveal 是待消费意图，不是脉冲**：`revealProjectHome` 只等一次 `db.goals.toArray()`，而项目区要等整轮 `listTasks` 才产出新组，前者几乎必然先落——若置位后立刻消费，那一帧 `rowRefs` 上还没有节点，`scrollIntoView` 静默跳过且永不重试（展开那一半却生效了，成了「展开了但没滚到」）。故宿主持一份待消费 `goalId` **集合**（单槽会被 React 自动批处理合并、丢掉先置位的那个），组件只消费**这一帧真的渲染出来**的组、其余留到下一轮 `groups` 变化时补上，消费后回报宿主清空。**清空是硬要求**：不清的话，跨 1024px 断点时项目区整棵重挂（换了父容器），mount effect 会把上一次的意图重放一遍——用户手动折叠的状态丢失、页面被滚走。
 - **项目区标签与搜索筛选（`filterActive`）**：项目区支持全域标签与关键字筛选。当筛选激活时，项目组内部按筛选规则过滤任务，包含匹配任务的项目组自动展开，无匹配任务的组隐去；筛选期间收到的 `revealGoals` 仍会滚动并消费，但不写入展开覆盖表，筛选清除后恢复用户原有的折叠/展开偏好。零 active project 时整区仍不渲染；有 active project 但全部组均无匹配任务时显示项目区空态。手头区（AtHand）维持焦点隔离，不受筛选影响；`tagOptions` 的来源包含项目区成员。
-- **存量提示条已退役**（2026-07-27）：排他上线时收件箱顶部那条「N 条任务已归入 M 个项目」连同它挂着的「首次默认展开」一起删除，`ProjectZoneIntroBar`、`timedata_todo_project_zone_intro_dismissed` 与两个 `workbenchPrefs` 读写函数均已移除。**没有替代物**——排他语义已被用户吸收，不需要常驻解释。老浏览器里的残留 localStorage 值不再被任何代码读取。
+- **排他语义无常驻解释**，是刻意的：收件箱顶部不挂「N 条任务已归入 M 个项目」这类提示条，项目区也不因此首次全展开。
 
 <a id="project-zone-drag-in"></a>
 
@@ -125,7 +128,7 @@ last-reviewed: 2026-08-06
   - **满员 / 目标组失效**由**写入侧**抛（`ProjectAssignError`），组件判不了：它手上只有 `TodoProjectGroup`，既无 `goal.status`/`kind`，也无 `members` 数组长度（500 闸看的是含 track 成员与悬空 ref 的整个数组，拿可解析成员数近似会撒谎）。
   - 因此存在一个**刻意窗口**：组在拖拽途中于另一端被归档时仍显示「可落」高亮，松手才弹拒绝。它换掉的是「高亮 → 静默吞掉归属」，方向是净改善。
 - **成功也要给反馈**（`已归入「X」`）。组间排序键是组内成员 `max(updatedAt)`（§3 规则 5），而归入恰好刷新它——**目标组必然跳到项目区第一位**。「不展开组」挡不住这种布局变化：三张折叠卡外观一样，用户按视觉位置拖第二条就会落进别的组，且成功路径若无反馈，误归入几乎不可见（组不展开、任务同时因排他从收件箱消失）。
-- **拒绝也要说原因**。子任务那支走的是 `resolveTodoDragOperation` 返回 null 的路径，`handleDragEnd` 在 `if (!op) return` 就早退了，toast 分支根本到不了，必须在早退处补。无声失败会被读成「应用坏了」。
+- **拒绝也要说原因**。子任务那支走的是 `resolveTodoDragOperation` 返回 null 的路径，`handleDragEnd` 在 `if (!op)` 就早退，走不到正常的 toast 分支——拒绝提示因此发在那个早退分支内部（`projectAssignBlockMessage("subtask", …)`）。无声失败会被读成「应用坏了」。
 - **兜底 toast 不可省**：目标组的裸行过不了 `GoalSchema.parse` 时抛的是 `ZodError` 而非 `ProjectAssignError`。红线「读裸行不 parse」保证这种组**照常渲染成落点**，用户拖多少次都一样——静默吞掉等于应用坏了。文案要中性（真正坏掉的常是任务**原来所在**的源组，指认目标组会让用户换组反复重试）。
 - **前置边确认**：`prerequisiteLossOnAssign(taskId, nextGoalId)` 读裸行算出「摘除会连带删掉几条边、来自几个组」，非空则落库前 `useConfirm` 问一句。判据与 `removeGoalMember` 内那句 filter 同源（跳过目标组自身、只认 active project、`blocker`/`blocked` 双侧）。多源组时文案只说组数与总条数、不点名（`count` 是各组之和而 `goalTitle` 取边最多那组，点名会把总数栽给单个组）。**它在准入闸之前调用**，故满员/归档/occurrence 等被拒场景会「先警告后失败」——方向是过度警告，不是数据丢失。
 
@@ -149,7 +152,7 @@ last-reviewed: 2026-08-06
 组内行的 dnd id 是 `project-row:<goalId>:<taskId>`（`todoProjectRowIdPrefix` / `todoProjectRowId`），**不是裸 task uuid**。因为焦点轴与时间轴正交（§1）：一条被抓到手头 / 排了今天的成员**同屏出现两次**——那个区一份、项目区一份。两处都用裸 id 会在 dnd-kit 里撞 id。
 
 - **前缀形状不能写成 `project:<goalId>:<taskId>`**：`parseTodoContainerId` 会把它误解析成 `goalId = "<goalId>:<taskId>"` 的项目容器，静默拼出一个不存在的组；`preferProjectCollisions` 里的 `startsWith("project:")` 也会把行当成卡片。带 `-row` 的形状对两者都天然不匹配。
-- **任务 id 一律从 `over.data.current.taskId` / `active.data.current.taskId` 取**，不再拿 `active.id` / `over.id` 当任务 id 用。全部各区的行注册都带了 `taskId`，让「取任务 id」只有一条路。漏改的症状是「拖了没反应」而非报错——拿带前缀的 id 查任务恒为 null。
+- **任务 id 一律从 `over.data.current.taskId` / `active.data.current.taskId` 取**，不拿 `active.id` / `over.id` 当任务 id 用。全部各区的行注册都带了 `taskId`，让「取任务 id」只有一条路。漏改的症状是「拖了没反应」而非报错——拿带前缀的 id 查任务恒为 null。
 - **`hoveredRootIdFromOver` 的第二参收的是任务 id，非行落点必须传空串**。组卡片自己也是 droppable，它的 data 里没有 `taskId`；不早退就会把 `"project:g1"` 这个容器 id 当成根行 id 返回，下游拼出 `parent:project:g1` 这种垃圾落点（与坞那条守卫是同一类事故）。
 
 ## 7. 多选建组 / 批量归入（动作一）
@@ -179,7 +182,7 @@ last-reviewed: 2026-08-06
 
 **组内收纳 / 升根回组的真落点用例写不出来，这是刻意留白不是遗漏**：① jsdom 里组卡片的 `useDroppable` 先于组内行挂载，`over` 恒是卡片、永远不是某一行；② 车道判定对键盘拖拽恒返回基线档，而 `keyboardDrag` 是该文件唯一的拖拽 helper（`MouseSensor` 有 180ms 激活延迟，仓库禁真实定时等待），拖根成员时收纳档结构性不可达。故落库证据落在 `todoDnd.test.ts` 的判定层用例与 `lib/taskNesting.test.ts` 的落库用例上，手势本身由真机验收——不写恒绿用例充数。页面级只测「拖起那一刻页面进入了什么状态」（项目区源坞恒空，各带一条收件箱对照断言，否则坞没渲染时结论也成立）。
 
-## 9. 当前的归属路径边界
+## 9. 归属路径边界
 
 **只有 `pool:today` / `pool:inbox` 两个拖拽源能归入项目**——已排期（非今天）与手头的任务没有归入路径，绕法是先清日期或等它到期。另有第三条进组路径但只在组内可达：组内子任务升根回本组（§6.1），它不接受任何外区来源。
 
