@@ -50,7 +50,7 @@ import {
   type TodoBuckets,
   unscheduleTask,
 } from "../lib/tasks.js";
-import { toggleTaskDoneWithTrackConclude, undoToggleWithTrackConclude } from "../lib/taskTrackPromote.js";
+import { buildTrackConcludeUndo, toggleTaskDoneWithTrackConclude } from "../lib/taskTrackPromote.js";
 import { nestTaskUnderParent, promoteTaskToHand } from "../lib/taskNesting.js";
 import { goalBarTaskIds, landsInCollapsedProjectGroup, projectChipIndex } from "../lib/tasks/projectZone.js";
 import { applyOptimisticOrder } from "../lib/tasks/reorderDisplay.js";
@@ -315,17 +315,16 @@ export function TodoPage() {
     hapticToggle();
     // 传写入后的行：勾选重复模板时 toggleTaskDone 返回的是被完成的那一发（另一条任务），
     // 落点要按它判，不能按动作前的 t 判。
-    const { task: next, concludedTrack } = await toggleTaskDoneWithTrackConclude(t.id);
+    const result = await toggleTaskDoneWithTrackConclude(t.id);
     // 归档是勾选的附带动作，不给提示的话它在屏幕上零痕迹。撤销走完整回退（取消勾选 + 轨道重开）。
-    if (concludedTrack !== null) {
+    const undoState = buildTrackConcludeUndo(result);
+    if (undoState) {
       showActionToast({
-        message: `已归档轨道「${concludedTrack.title}」`,
-        actions: [
-          { label: "撤销", onClick: () => void undoToggleWithTrackConclude(next.id, concludedTrack.id) },
-        ],
+        message: undoState.message,
+        actions: [{ label: "撤销", onClick: () => void undoState.onUndo() }],
       });
     }
-    await revealProjectHome(next);
+    await revealProjectHome(result.task);
   };
   const remove = async (t: Task) => {
     hapticDestructive();

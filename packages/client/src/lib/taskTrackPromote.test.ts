@@ -4,6 +4,7 @@ import { addTask, updateTask } from "./tasks.js";
 import { addTrack, listTrackSteps, setTrackStatus } from "./tracks.js";
 import type { Track } from "@timedata/shared";
 import {
+  buildTrackConcludeUndo,
   promoteTaskToTrack,
   toggleTaskDoneWithTrackConclude,
   undoToggleWithTrackConclude,
@@ -149,6 +150,36 @@ describe("undoToggleWithTrackConclude", () => {
     // 此刻点旧提示上的「撤销」。
     await undoToggleWithTrackConclude(done.id, (concludedTrack as Track).id);
     expect((await db.tasks.get(done.id))?.done).toBe(false);
+    expect((await db.tracks.get(track.id))?.status).toBe("active");
+  });
+});
+
+describe("buildTrackConcludeUndo", () => {
+  it("没真归档（concludedTrack 为 null）时返回 null", async () => {
+    const task = await addTask({ title: "小活" });
+    const result = await toggleTaskDoneWithTrackConclude(task.id);
+    expect(buildTrackConcludeUndo(result)).toBeNull();
+  });
+
+  it("真归档时 message 是全串「已归档轨道「<轨道标题>」」（中文标题逐字断言）", async () => {
+    const task = await addTask({ title: "中文标题活" });
+    const track = await promoteTaskToTrack(task);
+    const result = await toggleTaskDoneWithTrackConclude(task.id);
+    const undoState = buildTrackConcludeUndo(result);
+    expect(undoState).not.toBeNull();
+    expect(undoState?.message).toBe(`已归档轨道「${track.title}」`);
+  });
+
+  it("onUndo() 以 (task.id, concludedTrack.id) 完整回退：任务回未完成 + 轨道重开 active", async () => {
+    const task = await addTask({ title: "手滑勾掉的活" });
+    const track = await promoteTaskToTrack(task);
+    const result = await toggleTaskDoneWithTrackConclude(task.id);
+    const undoState = buildTrackConcludeUndo(result);
+    expect(undoState).not.toBeNull();
+
+    // 参数传错任何一边，对应的效果都不会发生（轨道不重开 / 任务不回未完成），效果断言即参数断言。
+    await undoState!.onUndo();
+    expect((await db.tasks.get(task.id))?.done).toBe(false);
     expect((await db.tracks.get(track.id))?.status).toBe("active");
   });
 });

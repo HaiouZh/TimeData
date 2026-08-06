@@ -30,6 +30,9 @@ vi.mock("../../lib/tasks.js", () => ({ toggleTaskDone: toggleTaskDoneMock }));
 // 完成入口已换线勾选联动归档（taskTrackPromote）；上面 tasks.js 的 mock 保留，继续挡树内间接依赖。
 vi.mock("../../lib/taskTrackPromote.js", () => ({
   toggleTaskDoneWithTrackConclude: toggleTaskDoneWithTrackConcludeMock,
+  // 恒 null = 本文件不验撤销提示（文案与回退口径已在 lib/taskTrackPromote.test.ts 测透，这里只验画布交互）。
+  // 但这个键必须在：组件勾完会无条件调它，缺了就抛 unhandled rejection——用例照样绿，错误却飘在断言之外。
+  buildTrackConcludeUndo: () => null,
 }));
 vi.mock("../../lib/goals.js", () => ({
   addGoalMember: addGoalMemberMock,

@@ -22,9 +22,9 @@ import {
 } from "../../lib/tasks.js";
 import { findActiveTrackForTask } from "../../lib/taskTrackIndex.js";
 import {
+  buildTrackConcludeUndo,
   promoteTaskToTrack,
   toggleTaskDoneWithTrackConclude,
-  undoToggleWithTrackConclude,
 } from "../../lib/taskTrackPromote.js";
 import { getDateString } from "../../lib/time.js";
 import { listTracks } from "../../lib/tracks.js";
@@ -195,12 +195,12 @@ export function TaskDetailSheet({ id, onClose, onTagsChange, onTimeChanged }: Ta
   function toggleDone(taskId: string): void {
     void (async () => {
       const result = await run(() => toggleTaskDoneWithTrackConclude(taskId));
-      const concludedTrack = result?.concludedTrack ?? null;
-      if (!result || concludedTrack === null) return;
-      const doneTaskId = result.task.id;
+      if (!result) return;
+      const undoState = buildTrackConcludeUndo(result);
+      if (undoState === null) return;
       showTrackToast({
-        message: `已归档轨道「${concludedTrack.title}」`,
-        actions: [{ label: "撤销", onClick: () => void undoToggleWithTrackConclude(doneTaskId, concludedTrack.id) }],
+        message: undoState.message,
+        actions: [{ label: "撤销", onClick: () => void undoState.onUndo() }],
       });
     })();
   }

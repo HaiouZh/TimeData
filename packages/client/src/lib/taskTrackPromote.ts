@@ -87,3 +87,21 @@ export async function undoToggleWithTrackConclude(
   if (current?.done === true) await toggleTaskDone(taskId, options);
   await setTrackStatus(trackId, "active", { now: options.now });
 }
+
+export interface TrackConcludeUndo {
+  message: string;
+  onUndo: () => Promise<void>;
+}
+
+/**
+ * 把「勾选附带归档」的结果翻译成撤销提示所需的文案与回退动作；没真归档时返回 null。
+ * 三个调用点（待办列表 / 目标图编辑器 / 目标星图）共用它，文案与回退口径只有这一份。
+ */
+export function buildTrackConcludeUndo(result: ToggleWithTrackConcludeResult): TrackConcludeUndo | null {
+  const { task, concludedTrack } = result;
+  if (concludedTrack === null) return null;
+  return {
+    message: `已归档轨道「${concludedTrack.title}」`,
+    onUndo: () => undoToggleWithTrackConclude(task.id, concludedTrack.id),
+  };
+}

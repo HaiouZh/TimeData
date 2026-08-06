@@ -38,7 +38,7 @@ import {
 import { buildGoalOverview } from "../../lib/goalsView.js";
 import { useTrackActionTags } from "../../lib/settings/trackActionTagsSetting.js";
 import { useTodoDefaultDestination } from "../../lib/settings/todoDefaultDestinationSetting.js";
-import { toggleTaskDoneWithTrackConclude } from "../../lib/taskTrackPromote.js";
+import { buildTrackConcludeUndo, toggleTaskDoneWithTrackConclude } from "../../lib/taskTrackPromote.js";
 import { useIsCoarsePointer } from "../../lib/useIsCoarsePointer.js";
 import { useIsWideScreen } from "../../lib/useIsWideScreen.js";
 import { actionsForEdge, actionsForNode, type GoalAction, type GoalActionId } from "./goalGraphActions.js";
@@ -330,7 +330,8 @@ function GoalGraphEditorInner({ goal, tasks, tracks, steps, layoutPins, onNaviga
       return;
     }
     if (actionId === "toggle-complete" && ref?.kind === "task") {
-      await toggleTaskDoneWithTrackConclude(ref.id);
+      const undoState = buildTrackConcludeUndo(await toggleTaskDoneWithTrackConclude(ref.id));
+      if (undoState) setUndo(undoState);
       return;
     }
     if (actionId === "connect") {

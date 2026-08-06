@@ -43,6 +43,8 @@ vi.mock("../../lib/tasks.js", () => ({ toggleTaskDone: toggleTaskDoneMock }));
 // 完成入口已换线勾选联动归档（taskTrackPromote）；上面 tasks.js 的 mock 保留，继续挡树内间接依赖。
 vi.mock("../../lib/taskTrackPromote.js", () => ({
   toggleTaskDoneWithTrackConclude: toggleTaskDoneWithTrackConcludeMock,
+  // 同 GoalGalaxyCanvas.test.tsx：键必须在（组件无条件调），恒 null 因为本文件不验提示。
+  buildTrackConcludeUndo: () => null,
 }));
 vi.mock("../../lib/goals.js", () => ({
   addGoalMember: addGoalMemberMock,

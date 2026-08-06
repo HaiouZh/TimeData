@@ -44,7 +44,7 @@ import {
 import { buildGoalOverview } from "../../lib/goalsView.js";
 import { unassignedTasks, unassignedTracks } from "../../lib/goalUnassigned.js";
 import { useTrackActionTags } from "../../lib/settings/trackActionTagsSetting.js";
-import { toggleTaskDoneWithTrackConclude } from "../../lib/taskTrackPromote.js";
+import { buildTrackConcludeUndo, toggleTaskDoneWithTrackConclude, type TrackConcludeUndo } from "../../lib/taskTrackPromote.js";
 import { useIsCoarsePointer } from "../../lib/useIsCoarsePointer.js";
 import { useIsWideScreen } from "../../lib/useIsWideScreen.js";
 import { buildGalaxySettleInput } from "./buildGalaxySettleInput.js";
@@ -55,6 +55,7 @@ import { GoalGalaxyEngineToggle } from "./GoalGalaxyEngineToggle.js";
 import { GoalGalaxyHud } from "./GoalGalaxyHud.js";
 import { GoalGraphEdge as GoalGraphEdgeView } from "./GoalGraphEdge.js";
 import { GoalGraphNodeView } from "./GoalGraphNodeView.js";
+import { GoalGraphUndoToast } from "./GoalGraphUndoToast.js";
 import { type GoalIndexItem, GoalIndexPanel } from "./GoalIndexPanel.js";
 import { GoalStarNode, type GoalStarNodeData } from "./GoalStarNode.js";
 import { GoalUnassignedTray } from "./GoalUnassignedTray.js";
@@ -465,6 +466,7 @@ function GoalGalaxyCanvasInner({
   const [connectDraft, setConnectDraft] = useState<ConnectDraft | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [noticeMessage, setNoticeMessage] = useState<string | null>(null);
+  const [undo, setUndo] = useState<TrackConcludeUndo | null>(null);
   const [dropTargetGoalId, setDropTargetGoalId] = useState<string | null>(null);
   const [addMemberGoalId, setAddMemberGoalId] = useState<string | null>(null);
   const [goalMenuGoalId, setGoalMenuGoalId] = useState<string | null>(null);
@@ -997,7 +999,10 @@ function GoalGalaxyCanvasInner({
       return;
     }
     if (action.id === "toggle-complete" && selectedGraphNode.ref?.kind === "task") {
-      void toggleTaskDoneWithTrackConclude(selectedGraphNode.ref.id);
+      void toggleTaskDoneWithTrackConclude(selectedGraphNode.ref.id).then((result) => {
+        const undoState = buildTrackConcludeUndo(result);
+        if (undoState) setUndo(undoState);
+      });
       return;
     }
     if (action.id === "connect") {
@@ -1320,6 +1325,17 @@ function GoalGalaxyCanvasInner({
           {settleHint}
         </div>
       )}
+      <GoalGraphUndoToast
+        open={undo !== null}
+        message={undo?.message ?? ""}
+        actionLabel="撤销"
+        onAction={() => {
+          const undoAction = undo?.onUndo;
+          setUndo(null);
+          if (undoAction) void undoAction();
+        }}
+        onDismiss={() => setUndo(null)}
+      />
       <ConfirmSheet
         open={pendingRemoveMember !== null}
         title="移除成员"
