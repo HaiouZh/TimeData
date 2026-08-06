@@ -248,14 +248,19 @@ function ChildRowBody({
 export interface SortableChildRowProps extends ChildRowCallbacks {
   child: Task;
   editing?: boolean;
+  /**
+   * dnd-kit 里的身份，默认 = 子任务自己的 id。项目区要传带前缀的：组内某个成员同时在
+   * 手头 / 今天区渲染时，它名下的子任务会被渲染两次，两处都用裸 id 会撞。
+   */
+  dndId?: string;
 }
 
 /** draggable 模式：包裹 useSortable，带拖柄。 */
 export function SortableChildRow(props: SortableChildRowProps) {
   const { child } = props;
   const { attributes, listeners, setActivatorNodeRef, setNodeRef, transform, transition, isDragging } = useSortable({
-    id: child.id,
-    data: { containerId: `parent:${child.parentId ?? ""}` },
+    id: props.dndId ?? child.id,
+    data: { containerId: `parent:${child.parentId ?? ""}`, taskId: child.id },
   });
   const style: CSSProperties = {
     transform: CSS.Transform.toString(transform),
@@ -268,6 +273,8 @@ export function SortableChildRow(props: SortableChildRowProps) {
     <li
       ref={setNodeRef}
       style={style}
+      data-dnd-id={props.dndId ?? child.id}
+      data-task-id={child.id}
       // 拖拽中高亮选中框：ring 用 inset，外侧 box-shadow 会被滑动容器 overflow 裁掉
       className={`group flex items-start gap-1 rounded-row ${isDragging ? "bg-surface-hover ring-1 ring-inset ring-accent" : ""}`}
     >

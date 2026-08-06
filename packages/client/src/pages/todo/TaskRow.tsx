@@ -77,6 +77,8 @@ export interface TaskRowProps {
   selectionMode?: boolean;
   selected?: boolean;
   onToggleSelect?: (t: Task) => void;
+  /** 透传给内部的子任务列表，见 `InlineChildren.dndIdPrefix`。 */
+  dndIdPrefix?: string;
 }
 
 const FRESH_OCCURRENCE_MS = 4000;
@@ -128,6 +130,7 @@ export function TaskRow({
   selectionMode,
   selected,
   onToggleSelect,
+  dndIdPrefix,
 }: TaskRowProps) {
   const [expanded, setExpanded] = useState(false);
   const taskCreatedAt = task.createdAt;
@@ -255,6 +258,7 @@ export function TaskRow({
   return (
     <div
       data-in-goal={inGoal ? "true" : undefined}
+      data-indent-target={indentTargetActive ? "true" : undefined}
       data-fresh-occurrence={freshOccurrence ? "true" : undefined}
       onPointerDownCapture={captureExpandedAtPress}
       className={`group w-full rounded-row bg-surface transition hover:bg-surface-hover ${
@@ -510,6 +514,7 @@ export function TaskRow({
             copyDisabled={selectionMode}
             onCopyTitle={onCopyTitle}
             onEmptyDismiss={childTotal === 0 ? () => setExpanded(false) : undefined}
+            dndIdPrefix={dndIdPrefix}
           />
         </div>
       )}

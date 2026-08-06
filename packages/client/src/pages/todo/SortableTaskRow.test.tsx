@@ -114,3 +114,33 @@ describe("SortableTaskRow · freezeShift", () => {
     await unmount(root);
   });
 });
+
+describe("SortableTaskRow · dnd id 与 task id 解耦", () => {
+  it("默认 dnd id = 任务 id，data 里带 taskId", async () => {
+    const { host, root } = await renderDom(
+      <DndContext>
+        <SortableTaskRow id="t1" containerId="pool:inbox">
+          {() => <div>行</div>}
+        </SortableTaskRow>
+      </DndContext>,
+    );
+    const el = host.querySelector("[data-dnd-id]");
+    expect(el?.getAttribute("data-dnd-id")).toBe("t1");
+    expect(el?.getAttribute("data-task-id")).toBe("t1");
+    await unmount(root);
+  });
+
+  it("传 dndId 时 dnd 身份用它，任务 id 仍是裸 id", async () => {
+    const { host, root } = await renderDom(
+      <DndContext>
+        <SortableTaskRow id="t1" dndId="project-row:g1:t1" containerId="project:g1">
+          {() => <div>行</div>}
+        </SortableTaskRow>
+      </DndContext>,
+    );
+    const el = host.querySelector("[data-dnd-id]");
+    expect(el?.getAttribute("data-dnd-id")).toBe("project-row:g1:t1");
+    expect(el?.getAttribute("data-task-id")).toBe("t1");
+    await unmount(root);
+  });
+});

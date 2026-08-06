@@ -22,6 +22,11 @@ export interface InlineChildrenProps {
   onCopyTitle?: (child: Task) => void;
   /** 宿主在多选态断掉子行复制：置 true 时 Shift+单击子任务标题回落为普通单击（进编辑）。 */
   copyDisabled?: boolean;
+  /**
+   * 子任务行的 dnd id 前缀（默认空 = 用裸 task id）。项目区要传——组内某个成员同时在手头 /
+   * 今天区渲染时，它名下的子任务会被渲染两次，两处都用裸 id 会撞。
+   */
+  dndIdPrefix?: string;
 }
 
 /**
@@ -41,6 +46,7 @@ export function InlineChildren({
   onEmptyDismiss,
   onCopyTitle,
   copyDisabled = false,
+  dndIdPrefix,
 }: InlineChildrenProps) {
   const children = useTaskChildren(parentId);
   const [drafting, setDrafting] = useState(autoDraft);
@@ -108,6 +114,7 @@ export function InlineChildren({
     ) : (
       <SortableChildRow
         key={child.id}
+        dndId={dndIdPrefix ? `${dndIdPrefix}${child.id}` : undefined}
         child={child}
         editing={editingChildId === child.id}
         onToggleDone={(c) => void handleToggle(c)}
@@ -149,7 +156,10 @@ export function InlineChildren({
   }
 
   return (
-    <SortableContext items={children.map((child) => child.id)} strategy={verticalListSortingStrategy}>
+    <SortableContext
+      items={children.map((child) => (dndIdPrefix ? `${dndIdPrefix}${child.id}` : child.id))}
+      strategy={verticalListSortingStrategy}
+    >
       <ul className="space-y-1">
         {rows}
         {draftRow}

@@ -33,7 +33,9 @@ export interface TaskListProps {
    * TaskList 会在 sortable+containerId 时自行渲染 SortableContext（不再挂 DndContext）。
    */
   sortable?: boolean;
-  containerId?: "pool:today" | "pool:inbox";
+  containerId?: "pool:today" | "pool:inbox" | `project:${string}`;
+  /** 行与子任务行的 dnd id 前缀（项目区用，见 SortableTaskRow.dndId）。 */
+  dndIdPrefix?: string;
   indentTargetId?: string | null;
   revealChildren?: { id: string; nonce: number } | null;
   /** 已归入某 active 目标的 task id 集合：命中的行渲染「已有去处」外圈。 */
@@ -91,6 +93,7 @@ export function TaskList(props: TaskListProps) {
         selectionMode={props.selectionMode}
         selected={props.selectedIds?.has(task.id) ?? false}
         onToggleSelect={props.onToggleSelect}
+        dndIdPrefix={props.dndIdPrefix}
       />
     );
   }
@@ -144,7 +147,12 @@ export function TaskList(props: TaskListProps) {
         {canSort && containerId ? (
           // 缩进态（indentTargetId 非空）下冻结全行避让，只留高亮环——理由见 SortableTaskRow 的
           // freezeShift 注释。indentTargetId 本身已经是"是否处于缩进态"的现成信号，不必另开一个。
-          <SortableTaskRow id={task.id} containerId={containerId} freezeShift={props.indentTargetId != null}>
+          <SortableTaskRow
+            id={task.id}
+            dndId={props.dndIdPrefix ? `${props.dndIdPrefix}${task.id}` : undefined}
+            containerId={containerId}
+            freezeShift={props.indentTargetId != null}
+          >
             {(handle) => renderTaskRow(task, handle)}
           </SortableTaskRow>
         ) : (
@@ -165,7 +173,10 @@ export function TaskList(props: TaskListProps) {
   if (!canSort || !containerId) return list;
 
   return (
-    <SortableContext items={tasks.map((t) => t.id)} strategy={verticalListSortingStrategy}>
+    <SortableContext
+      items={tasks.map((t) => (props.dndIdPrefix ? `${props.dndIdPrefix}${t.id}` : t.id))}
+      strategy={verticalListSortingStrategy}
+    >
       {list}
     </SortableContext>
   );

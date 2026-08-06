@@ -252,3 +252,49 @@ describe("TaskList 多选态", () => {
     await unmount(root);
   });
 });
+
+describe("TaskList · dndIdPrefix", () => {
+  it("dndIdPrefix 同时作用于 SortableContext 与行注册", async () => {
+    // 两处必须同源：items 用裸 id 而行注册用前缀 id 时，dnd-kit 认不出这行属于本 context，
+    // 表现为「拖起来没有避让动画、松手落点乱跳」。
+    const { host, root } = await renderDom(
+      <DndContext>
+        <TaskList
+          pool="inbox"
+          tasks={[task({ id: "t1" }), task({ id: "t2" })]}
+          sortable
+          containerId="project:g1"
+          dndIdPrefix="project-row:g1:"
+          onToggle={vi.fn()}
+          onEdit={vi.fn()}
+          onDelete={vi.fn()}
+          onToToday={vi.fn()}
+          onToInbox={vi.fn()}
+        />
+      </DndContext>,
+    );
+    const ids = [...host.querySelectorAll("[data-dnd-id]")].map((el) => el.getAttribute("data-dnd-id"));
+    expect(ids).toEqual(["project-row:g1:t1", "project-row:g1:t2"]);
+    await unmount(root);
+  });
+
+  it("不传 dndIdPrefix 时其余各区的行 id 一字不变", async () => {
+    const { host, root } = await renderDom(
+      <DndContext>
+        <TaskList
+          pool="inbox"
+          tasks={[task({ id: "t1" })]}
+          sortable
+          containerId="pool:inbox"
+          onToggle={vi.fn()}
+          onEdit={vi.fn()}
+          onDelete={vi.fn()}
+          onToToday={vi.fn()}
+          onToInbox={vi.fn()}
+        />
+      </DndContext>,
+    );
+    expect(host.querySelector("[data-dnd-id]")?.getAttribute("data-dnd-id")).toBe("t1");
+    await unmount(root);
+  });
+});

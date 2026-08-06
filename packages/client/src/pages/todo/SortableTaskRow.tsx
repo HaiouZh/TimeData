@@ -9,12 +9,19 @@ import type { RowDragHandle } from "./TaskRow.js";
  */
 export function SortableTaskRow({
   id,
+  dndId,
   containerId,
   freezeShift = false,
   children,
 }: {
+  /** 任务 id。落库判定一律用它。 */
   id: string;
-  containerId: "pool:today" | "pool:inbox" | "hand";
+  /**
+   * dnd-kit 里的身份，默认 = 任务 id。**项目区必须另编一套**：在手头 / 排了今天的成员
+   * 同屏出现两次（那个区一次、项目区一次），两处都用裸 task id 会在 dnd-kit 里撞 id。
+   */
+  dndId?: string;
+  containerId: "pool:today" | "pool:inbox" | "hand" | `project:${string}`;
   /**
    * 缩进态下（`indentTargetId` 命中某一行）冻结本行的避让位移：`verticalListSortingStrategy`
    * 认为「要插到这儿」而让开，与高亮环表达的「钻到它底下当子任务」是两个互相打架的反馈
@@ -27,8 +34,10 @@ export function SortableTaskRow({
   children: (handle: RowDragHandle) => ReactNode;
 }) {
   const { attributes, listeners, setActivatorNodeRef, setNodeRef, transform, transition, isDragging } = useSortable({
-    id,
-    data: { containerId },
+    id: dndId ?? id,
+    // taskId 必须进 data：页面从这里取任务 id，不再拿 active.id / over.id 当任务 id 用
+    // （项目区的 id 带前缀，拿它查任务恒为 null，表现为「拖了没反应」）。
+    data: { containerId, taskId: id },
   });
   const shouldFreeze = freezeShift && !isDragging;
   const style: CSSProperties = {
@@ -40,7 +49,7 @@ export function SortableTaskRow({
   };
 
   return (
-    <div ref={setNodeRef} style={style} className="w-full">
+    <div ref={setNodeRef} style={style} className="w-full" data-dnd-id={dndId ?? id} data-task-id={id}>
       {children({
         setActivatorNodeRef,
         attributes,
