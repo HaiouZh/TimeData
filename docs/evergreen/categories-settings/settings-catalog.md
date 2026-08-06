@@ -12,7 +12,7 @@ covers:
   - packages/client/src/pages/settings/SettingsMorePage.tsx
 contracts:
   - packages/client/src/lib/settings/index.ts
-last-reviewed: 2026-08-04
+last-reviewed: 2026-08-06
 ---
 
 # 设置 · 同步键值表
@@ -37,6 +37,9 @@ last-reviewed: 2026-08-04
 - 各具体设置用「包装文件」封装 key + 序列化 + sanitize，不直接散调 `getSetting`。
 
 ## 2. settings key 全表
+
+> 本表与代码的双向一致由 `pnpm check:settings`（`scripts/check-settings-catalog.mjs`）机检：`packages/{client,shared}/src` 里以 `= "<key>"` 定义的键常量与本表登记两侧必须都有，任一侧缺失即 error，豁免走 `scripts/settings-catalog-allowlist.json`。
+> **覆盖面止于带 `.v<n>` 后缀的键**：`sleep.categoryId` 无版本后缀、且以内联字符串消费（没有包装常量），代码侧与文档侧都扫不到它，它的登记漂了机检不响。
 
 | key | 值结构 | 包装文件 | 消费域 |
 |---|---|---|---|

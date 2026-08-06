@@ -93,6 +93,7 @@ export const GATE_STEPS = [
   { name: "check:design", command: "pnpm", args: ["check:design"] },
   { name: "check:test", command: "pnpm", args: ["check:test"] },
   { name: "check:diary", command: "pnpm", args: ["check:diary"] },
+  { name: "check:settings", command: "pnpm", args: ["check:settings"] },
   { name: "typecheck", command: "pnpm", args: ["typecheck"] },
   { name: "test", command: "pnpm", args: ["test"] },
   { name: "test:e2e", command: "pnpm", args: ["--filter", "@timedata/client", "test:e2e"] },

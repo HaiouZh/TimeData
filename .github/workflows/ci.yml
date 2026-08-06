@@ -56,6 +56,9 @@ jobs:
       - name: Diary date boundary guard
         run: pnpm check:diary
 
+      - name: Settings catalog registry guard
+        run: pnpm check:settings
+
       - name: Typecheck
         run: pnpm -r typecheck
 

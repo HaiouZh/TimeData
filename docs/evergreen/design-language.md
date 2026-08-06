@@ -26,7 +26,7 @@ contracts:
   - scripts/check-design-language.mjs
   - scripts/design-language-allowlist.json
   - packages/client/src/lib/navigation/navRegistry.ts
-last-reviewed: 2026-08-05
+last-reviewed: 2026-08-06
 ---
 
 # 设计语言
@@ -102,6 +102,7 @@ last-reviewed: 2026-08-05
 - 禁止 UI chrome 新增裸 hex / rgb / rgba / hsl / oklch / lab；测试 fixture、用户内容色、图表色和 scoped 特殊场景由脚本/allowlist 显式区分。
 - 禁止 UI chrome 用裸 `white`/`black` 命名色（`bg-black/50`、`text-white`、`bg-[white]`、`border-t-white` 等）：规则 `bare-black-white`，遮罩用 `bg-backdrop/*`，accent 反白字用 `text-accent-contrast`（测试文件豁免）。
 - **token 定义与图表镜像不算「裸色」**：`index.css` 里 `--color-*` / `--galaxy-*` / `--shadow-*` 的 token 定义本身（值含 hex/rgba）是颜色的唯一事实源，脚本直接跳过；token 镜像文件（`pages/stats/chartColors.ts` 图表 chrome、`lib/navigation/routeFavicon.ts` favicon SVG data-URI——recharts / SVG data-URI 不解析 `var()`，故把 token 镜像成 JS 常量）整文件跳过 `bare-raw-color`。镜像文件登记在脚本的 `TOKEN_MIRROR_FILES`，新增镜像文件需登记；长期 allowlist 不是维持图表裸 hex 的手段。
+- 禁止 `index.css` 未定义的语义色 utility：规则 `unknown-semantic-color`，合法名集合运行时从 `@theme` 的 `--color-*` 解析（不硬编码第二份清单），覆盖 `text/bg/border/ring/outline/fill/stroke/divide/decoration/placeholder/caret/accent` 前缀并穿透变体前缀。这类拼错在 Tailwind 下**静默失效**——类名不生成、元素继承父级颜色、页面看不出异常，肉眼与 typecheck 都发现不了，这道闸是唯一途径。Tailwind 内置的非颜色用法（`text-center`、`border-2`、`bg-cover` 等）走白名单放行；裸调色板名归 `bare-*` 系列管，不重复报。
 - 禁止交互控件用文字字符或 emoji 伪装图标：规则 `interactive-text-icon`，判定 =「字符命中白名单」×「同行或前后 8 行内是交互上下文」（`<button` / `<a` / `<Link` / `<NavLink` / `role="button"` / `onClick=`），测试文件不豁免。形态认三种：同行 `>符号<`、同行 `{"符号"}`，以及**跨行的纯文本子节点**——`>` 与下一个 `<` 之间的内容整体就是一个符号（符号独占一行）或是只含伪装字符字面量的表达式（如 `{expanded ? "▢" : "⤢"}`）。字符白名单是**穷举式**的：明细分组与「哪些标点刻意不收」的判据见 [controls §2](design-language/controls.md#design-language-controls-s2)，白名单外的新符号仍会放行，所以这道闸是辅助不是保证。
 - 禁止业务时间/数字/统计值直接用 `font-mono`；代码、日志、ID、debug 标识应优先放在 `code/pre/kbd/samp` 或专用技术文本组件中，确有遗留例外必须进 allowlist。
 - 禁止原生圆角 `rounded-md/lg/xl/2xl/3xl/full` 及其方向变体、以及 `rounded-[…px|rem]` 任意值：规则 `bare-card-radius`，生产代码使用 `rounded-ctl/row/card/pill`，仅发丝级/小型原子细节保留 `rounded/rounded-sm`（测试文件豁免）。

@@ -65,7 +65,7 @@ export function SettingsTracksPage() {
           />
           <button
             type="submit"
-            className="shrink-0 rounded-ctl bg-accent px-3 td-text-label font-medium text-page transition hover:bg-accent-hover"
+            className="shrink-0 rounded-ctl bg-accent px-3 td-text-label font-medium text-page transition hover:bg-accent-strong"
           >
             添加
           </button>
@@ -114,7 +114,7 @@ export function SettingsTracksPage() {
           />
           <button
             type="submit"
-            className="shrink-0 rounded-ctl bg-accent px-3 td-text-label text-page transition hover:bg-accent-hover"
+            className="shrink-0 rounded-ctl bg-accent px-3 td-text-label text-page transition hover:bg-accent-strong"
           >
             添加
           </button>

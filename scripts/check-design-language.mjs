@@ -8,6 +8,65 @@ const ALLOWLIST = join(ROOT, "scripts", "design-language-allowlist.json");
 const COLOR_PREFIXES =
   "bg|text|border(?:-[trblxy]{1,2})?|ring|from|to|via|divide|placeholder|ring-offset|fill|stroke|outline|caret|accent|shadow|decoration";
 const TAILWIND_VARIANTS = "(?:[a-z][a-z0-9-]*:)*!?";
+// unknown-semantic-color 只审计这 12 个颜色 utility 前缀（COLOR_PREFIXES 里 from/to/via/shadow
+// 是渐变/阴影词、ring-offset 归 offset-* 形态，不产生「拼错 token 静默失效」类问题）。
+const SEMANTIC_COLOR_PREFIXES =
+  "text|bg|border|ring|outline|fill|stroke|divide|decoration|placeholder|caret|accent";
+// `(?<![a-z0-9-])` 拒绝 `td-text-caption` / `data-ring-*` 这类连字符合成词——它们不是颜色 utility。
+// 变体前缀照收（hover:text-ink、md:bg-surface、dark:border-danger 都合法）；name 必须小写开头，
+// 纯数字档（border-2、ring-1）与数字开头的字号档（text-2xl）天然匹配不上，无需白名单。
+const UNKNOWN_SEMANTIC_COLOR_RE = new RegExp(
+  `(?<![a-z0-9-])(?:[a-z][a-z0-9-]*:)*(?:${SEMANTIC_COLOR_PREFIXES})-([a-z][a-z0-9-]*)`,
+  "g",
+);
+// Tailwind 内置调色板（slate-400、blue-600 等）是「裸色」，已由既有 bare-* 规则管辖，
+// 本规则不重复报；判据是「调色板名 + 数字档」形态。black/white 无数字档、裸写
+// `text-white`/`bg-black` 由 bare-black-white 管辖，同样放行不重复报。
+const BUILTIN_PALETTE_NAME_RE = new RegExp(
+  "^(?:slate|gray|zinc|neutral|stone|red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose)-\\d+$|^(?:black|white)(?:-\\d+)?$",
+);
+// Tailwind 内置「非颜色」工具类里恰好落在 `<前缀>-<名字>` 形态的合法用法。
+// 这份清单是 Tailwind v4 框架 API 的一部分，不是项目内手抄清单；新增合法用法在此补登记。
+const BUILTIN_UTIL_NAMES = {
+  all: new Set(["transparent", "current", "inherit"]), // 全前缀通用：透明 / 当前色 / 继承
+  text: new Set([
+    // 对齐 / 换行 / 溢出
+    "left", "center", "right", "justify", "start", "end", "wrap", "nowrap", "balance", "pretty",
+    "ellipsis", "clip",
+    // 字号档（xs/sm/base/lg/xl；2xl-9xl 数字开头匹配不上扫描正则，天然豁免）
+    "xs", "sm", "base", "lg", "xl",
+  ]),
+  bg: new Set([
+    // 背景尺寸 / 位置 / 重复 / 附着
+    "none", "cover", "contain", "auto", "fixed", "local", "scroll",
+    "center", "top", "bottom", "left", "right", "repeat", "no-repeat",
+  ]),
+  border: new Set([
+    // 边框样式 / 表格边框 / box-sizing 讨论词（`border-box` 是 CSS 属性值，注释与文档里常见）
+    "solid", "dashed", "dotted", "double", "hidden", "none", "collapse", "separate", "spacing", "box",
+  ]),
+  ring: new Set(["inset", "none", "solid", "dashed", "dotted", "double"]),
+  outline: new Set(["none", "solid", "dashed", "dotted", "double"]),
+  divide: new Set(["none", "solid", "dashed", "dotted", "double"]),
+  decoration: new Set(["none", "solid", "dashed", "dotted", "double", "wavy"]),
+  fill: new Set(["none"]),
+  stroke: new Set([
+    // SVG presentation 属性名（stroke-dasharray 等，JSX 属性/注释里常见）
+    "none", "dasharray", "dashoffset", "linecap", "linejoin", "miterlimit", "width",
+  ]),
+  caret: new Set(["auto"]),
+  accent: new Set(["auto"]),
+  placeholder: new Set([]),
+};
+// 形态白名单：带子功能的复合 utility，只按形态放行不穷举后缀。
+const BUILTIN_UTIL_NAME_PATTERNS = [
+  /^origin-[\w-]+$/, // bg-origin-*（background-origin）
+  /^clip-[\w-]+$/, // bg-clip-*（background-clip）
+  /^blend-[\w-]+$/, // bg-blend-*（混合模式）
+  /^gradient-to-[a-z]+$/, // bg-gradient-to-*（渐变方向）
+  /^offset-[\w-]+$/, // ring/outline/decoration 的 offset-*
+  /^[trblxyse](?:-\d+)?$/, // border 方位（border-t、border-l-2）；divide-x/y 同理
+];
 const LEGAL_RULE_IDS = new Set();
 
 // 「文本字符冒充图标」白名单。收录判据：该字符在 UI 里几乎只可能当图标用（关闭/勾选、尖角、
@@ -111,6 +170,7 @@ const COLOR_FIXTURE_RULES = new Set([
   "bare-slate-chrome",
   "bare-black-white",
   "bare-raw-color",
+  "unknown-semantic-color",
 ]);
 
 const RULES = [
@@ -246,6 +306,9 @@ for (const rule of RULES) {
 }
 // 跨行才判得了（td-text-* 落在普通元素上完全合法），不进 RULES；id 在此登记以便 allowlist 校验。
 LEGAL_RULE_IDS.add("input-font-size-override");
+// 合法颜色名要运行时读 index.css @theme 的 --color-* 集合（硬编码就是又一份会漂的手抄清单），
+// 不进静态 RULES；id 在此登记以便 allowlist 校验。
+LEGAL_RULE_IDS.add("unknown-semantic-color");
 
 const INPUT_TAG_RE = /<(?:input|textarea|select)\b[\s\S]*?\/?>/g;
 const TD_TEXT_CLASS_RE = new RegExp(TD_TEXT_STEP);
@@ -329,6 +392,38 @@ function normalizePath(file) {
   return file.replace(/\\/g, "/");
 }
 
+// index.css @theme 的 --color-<name> 集合（运行时读取，唯一事实源）。
+// null = 未加载；懒加载避免测试里 import 模块时就被文件系统绑定。
+let semanticColorNames = null;
+const THEME_COLOR_RE = /^\s*--color-([a-z][a-z0-9-]*):/;
+
+export function getSemanticColorNames() {
+  if (semanticColorNames === null) {
+    semanticColorNames = new Set();
+    const cssPath = join(ROOT, "packages", "client", "src", "index.css");
+    if (existsSync(cssPath)) {
+      for (const line of readFileSync(cssPath, "utf8").split(/\r?\n/)) {
+        const match = THEME_COLOR_RE.exec(line);
+        if (match) semanticColorNames.add(match[1]);
+      }
+    }
+  }
+  return semanticColorNames;
+}
+
+/** 测试注入：传 null 恢复真实文件读取。 */
+export function setSemanticColorNamesForTests(names) {
+  semanticColorNames = names === null ? null : new Set(names);
+}
+
+/** name 是否 Tailwind 内置非颜色工具类（否则就是「看起来像语义色、实际不存在」的拼错 token）。 */
+function isBuiltinNonColorUtil(prefix, name) {
+  if (BUILTIN_PALETTE_NAME_RE.test(name)) return true;
+  if (BUILTIN_UTIL_NAMES.all.has(name)) return true;
+  if (BUILTIN_UTIL_NAMES[prefix]?.has(name)) return true;
+  return BUILTIN_UTIL_NAME_PATTERNS.some((pattern) => pattern.test(name));
+}
+
 function isTestFile(file) {
   return /\.test\.[jt]sx?$/.test(normalizePath(file));
 }
@@ -379,7 +474,32 @@ export function classifyLine(file, line) {
     }
   }
 
+  // unknown-semantic-color：颜色 token 集合是运行时读取的，不进 RULES 静态数组。
+  // 只扫 .tsx/.ts（class 名使用处）；.css 里的 text-transform/border-radius 等是 CSS 属性名不是 class。
+  // 测试文件跳过（fixture 断言字符串不算代码审计对象，与 COLOR_FIXTURE_RULES 同一惯例）。
+  if (!testFile && !normalized.endsWith(".css")) {
+    const colorNames = getSemanticColorNames();
+    UNKNOWN_SEMANTIC_COLOR_RE.lastIndex = 0;
+    let match = UNKNOWN_SEMANTIC_COLOR_RE.exec(line);
+    while (match !== null) {
+      const name = match[1];
+      if (!colorNames.has(name) && !isBuiltinNonColorUtil(unknownColorPrefix(match[0]), name)) {
+        violations.push({
+          rule: "unknown-semantic-color",
+          message: `语义色 utility「${match[0]}」在本项目不存在（index.css @theme 无 --color-${name}）——Tailwind 不报错、类静默失效，元素继承父级颜色；去 packages/client/src/index.css 核对 token 名或补 token`,
+        });
+      }
+      match = UNKNOWN_SEMANTIC_COLOR_RE.exec(line);
+    }
+  }
+
   return violations;
+}
+
+// 匹配串里去掉变体前缀后的颜色前缀（hover:text-inkk → text）。
+function unknownColorPrefix(fullMatch) {
+  const core = fullMatch.slice(fullMatch.lastIndexOf(":") + 1);
+  return core.slice(0, core.indexOf("-"));
 }
 
 function walk(dir, files = []) {
@@ -519,7 +639,7 @@ function main() {
     );
     process.exit(1);
   }
-  console.log("✓ 设计语言：无未豁免违规（裸色/退役色/退役 token/黑白命名色/裸字号/输入控件字号/裸圆角/裸 z-index/裸任意值/散装图标/业务 font-mono）");
+  console.log("✓ 设计语言：无未豁免违规（裸色/退役色/退役 token/黑白命名色/裸字号/输入控件字号/裸圆角/裸 z-index/裸任意值/散装图标/业务 font-mono/未知语义色）");
 }
 
 if (resolve(process.argv[1] ?? "") === fileURLToPath(import.meta.url)) {

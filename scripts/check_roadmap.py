@@ -64,6 +64,17 @@ BACKLOG_MALFORMED_RE = re.compile(r"^(?:[*+][ \t]|[-*+]\S|@)")
 BACKLOG_HRULE_RE = re.compile(r"^([-*_])\1{2,}[ \t]*$")
 BACKLOG_GROUP_RE = re.compile(r"^[ \t]{0,3}#{2,6}[ \t]")
 BACKLOG_FENCE_RE = re.compile(r"^[ \t]*(?:```|~~~)")   # 围栏内是代码，不参与结构判据
+# ---- 8.1：backlog 条目禁复述全局工程纪律（rules.md §5.1）----
+# 词面匹配；每条带正本出处（都是仓库根 AGENTS.md），加条目照此扩展。
+# 判据是词面不是语义：宁可漏报个别说法，不误伤正常条目。
+BACKLOG_GLOBAL_DISCIPLINE_PATTERNS = [
+    # 正本：AGENTS.md「Git」节——worktree 槽位/固定槽位纪律
+    re.compile(r"固定槽位|worktree\s*槽位|槽位实施"),
+    # 正本：AGENTS.md「命令」节——收工/合并前跑 pnpm gate 全量门禁
+    re.compile(r"pnpm\s*gate"),
+    # 正本：AGENTS.md「Git」节——提交信息禁 AI 署名行
+    re.compile(r"Co-Authored-By|AI\s*署名"),
+]
 
 TOPIC_TITLE_RE = re.compile(r"^主题[：:]\s*(.+)$")
 PHASE_LINE_RE = re.compile(r"^\s*\d+\.\s*\[([^\]]+)\]")
@@ -165,6 +176,18 @@ def split_backlog_items(lines):
     return items
 
 
+def _body_lines(item):
+    """条目内围栏（代码）行不算正文，词面检查跳过——与平铺检查同一套 fence 判据。"""
+    in_fence = False
+    for line in item.split("\n"):
+        if BACKLOG_FENCE_RE.match(line):
+            in_fence = not in_fence
+            continue
+        if in_fence:
+            continue
+        yield line
+
+
 def check_backlog(root: Path, report, today=None):
     """backlog.md 的条目协议（8.0，rules.md §5.1）。文件不存在则整组跳过。"""
     p = root / "backlog.md"
@@ -202,6 +225,16 @@ def check_backlog(root: Path, report, today=None):
             report("error", "backlog-owner",
                    f"backlog.md:{lineno} 条目缺归属标记——行首 '- ' 后须紧跟 "
                    f"{' / '.join(BACKLOG_OWNERS)} 之一（rules.md §5.1）：{head[:40]}")
+
+        # 8.1：复述全局工程纪律 = 两处漂移；正本在 AGENTS.md，这里只登记「这件事本身」。
+        # WARN 不挡门：文风治理，误报代价不该是阻断（rules.md §5.1）。
+        for line in _body_lines(item):
+            for pattern in BACKLOG_GLOBAL_DISCIPLINE_PATTERNS:
+                m = pattern.search(line)
+                if m:
+                    report("warn", "backlog-global-discipline",
+                           f"backlog.md:{lineno} 条目复述了全局纪律「{m.group(0)}」——"
+                           f"正本在 AGENTS.md，backlog 只登记这一件事本身（rules.md §5.1）：{head[:40]}")
 
         if len(item) > BACKLOG_ITEM_CAP:
             report("error", "backlog-item-size",

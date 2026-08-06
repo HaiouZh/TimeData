@@ -1,6 +1,16 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { classifyLine, collectViolations, isAllowed, loadAllowlist } from "./check-design-language.mjs";
+import {
+  classifyLine,
+  collectViolations,
+  isAllowed,
+  loadAllowlist,
+  setSemanticColorNamesForTests,
+} from "./check-design-language.mjs";
+
+function hasRule(violations, rule) {
+  return violations.some((violation) => violation.rule === rule);
+}
 
 test("flags retired module colors", () => {
   assert.equal(
@@ -835,4 +845,108 @@ test("flags h1 without title size and allows title/display sized h1", () => {
     ),
     false,
   );
+});
+
+test("flags unknown semantic color utilities (typo tokens)", () => {
+  // 拼错 / 不存在于 index.css @theme 的语义色类名会静默失效——这是本规则要抓的核心形态
+  for (const line of [
+    'className="text-nonexistenttoken"',
+    'className="bg-non-token"',
+    'className="hover:text-inkk"',
+    'className="md:bg-sureface"',
+    'className="border-typo"',
+    'className="ring-accentt"',
+    'className="fill-inkk"',
+    'className="placeholder:caret-inkk"',
+  ]) {
+    const violation = classifyLine("x.tsx", line).find((v) => v.rule === "unknown-semantic-color");
+    assert.ok(violation, `should flag: ${line}`);
+    assert.match(violation.message, /index\.css/);
+    assert.match(violation.message, /静默失效/);
+  }
+});
+
+test("does not flag known tokens or Tailwind builtin non-color utilities", () => {
+  for (const line of [
+    // 项目内真实 token
+    'className="text-ink bg-surface border-border"',
+    'className="hover:bg-accent-soft dark:border-danger text-track-agent"',
+    'className="bg-accent/40 text-ink-2 ring-accent/30"',
+    // Tailwind 内置非颜色用法
+    'className="text-center text-left text-right"',
+    'className="border-2 border-t-2 border-x"',
+    'className="bg-cover bg-none bg-fixed"',
+    'className="bg-gradient-to-r from-surface to-transparent"',
+    'className="ring-1 ring-inset ring-offset-2 ring-offset-page"',
+    'className="divide-x-2 divide-y divide-border"',
+    'className="focus:outline-none outline-dashed"',
+    'className="text-transparent text-current placeholder:text-ink-3"',
+    'className="stroke-dasharray fill-none stroke-accent"',
+    'className="decoration-wavy caret-accent accent-auto"',
+    'className="text-xs sm:text-base md:text-lg"',
+    'className="bg-origin-border bg-clip-text bg-blend-multiply"',
+    // td- 语义类不是颜色 utility
+    'className="td-text-caption text-ink"',
+    'className="td-text-title text-page"',
+  ]) {
+    assert.equal(hasRule(classifyLine("x.tsx", line), "unknown-semantic-color"), false, line);
+  }
+});
+
+test("does not double-report bare Tailwind palette utilities", () => {
+  // 内置调色板裸色（slate-400 / blue-600 等）已由 bare-status-color / bare-action-blue 等管辖
+  for (const line of [
+    'className="text-slate-400"',
+    'className="bg-blue-600/10"',
+    'className="border-red-500"',
+    'className="fill-emerald-400 stroke-rose-500"',
+    'className="text-white bg-black/50"',
+  ]) {
+    assert.equal(hasRule(classifyLine("x.tsx", line), "unknown-semantic-color"), false, line);
+  }
+});
+
+test("skips unknown semantic color checks in test files and css", () => {
+  assert.equal(
+    hasRule(classifyLine("x.test.tsx", 'expect(html).not.toContain("text-nonexistenttoken")'), "unknown-semantic-color"),
+    false,
+  );
+  // index.css 里的 text-transform / border-radius 是 CSS 属性名不是 class
+  assert.equal(
+    hasRule(classifyLine("packages/client/src/index.css", "  text-transform: uppercase;"), "unknown-semantic-color"),
+    false,
+  );
+  assert.equal(
+    hasRule(classifyLine("packages/client/src/index.css", "  border-radius: var(--radius-pill);"), "unknown-semantic-color"),
+    false,
+  );
+});
+
+test("unknown semantic color uses the runtime token set, not a hardcoded list", () => {
+  // 注入空集合后连 text-ink 都算未知——证明合法集合来自 index.css @theme 的运行时读取
+  setSemanticColorNamesForTests([]);
+  try {
+    assert.equal(hasRule(classifyLine("x.tsx", 'className="text-ink"'), "unknown-semantic-color"), true);
+    // 内置非颜色用法不受 token 集合影响
+    assert.equal(hasRule(classifyLine("x.tsx", 'className="text-center"'), "unknown-semantic-color"), false);
+  } finally {
+    setSemanticColorNamesForTests(null);
+  }
+  assert.equal(hasRule(classifyLine("x.tsx", 'className="text-ink"'), "unknown-semantic-color"), false);
+});
+
+test("collectViolations reports unknown semantic colors with file and line", () => {
+  const result = collectViolations({
+    files: [
+      {
+        file: "packages/client/src/pages/x.tsx",
+        content: 'export function X() {\n  return <div className="text-nonexistenttoken" />;\n}\n',
+      },
+    ],
+    allowlist: loadAllowlist({ entries: [] }),
+  });
+  const hits = result.violations.filter((violation) => violation.rule === "unknown-semantic-color");
+  assert.equal(hits.length, 1);
+  assert.equal(hits[0].file, "packages/client/src/pages/x.tsx");
+  assert.equal(hits[0].line, 2);
 });
