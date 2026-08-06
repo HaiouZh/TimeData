@@ -85,14 +85,22 @@ if (!declared) {
 }
 const HOTKEY_EVENT_NAME = declared[1];
 
-const rustCommands = readFileSync(new URL("../src-tauri/src/commands.rs", import.meta.url), "utf8");
-const literalEmits = [...rustCommands.matchAll(/app\.emit\(\s*"([^"]+)"/g)].map((match) => match[1]);
-if (literalEmits.length > 0) {
-  throw new Error(
-    `[desktop-config] packages/desktop/src-tauri/src/commands.rs 里有裸字面量 emit：${JSON.stringify(literalEmits)}。` +
-      "事件名一律用 hotkeys.rs 的 HOTKEY_EVENT 常量——本文件有两处 emit，各写一遍字面量时改名很容易漏掉补投那处，" +
-      "而漏掉的表现是「开机第一秒按下的那批永远收不到」，没有任何报错。",
-  );
+// 扫描面是 src-tauri/src 下所有 .rs，不只 commands.rs：投递已经挪进了 deliver_to_webview，
+// 将来还可能再挪。正则也从只认 `app.emit(` 放宽到三种发射形态——原正则只认 emit，
+// 而本批的改法字面就是 emit_to，正好绕开它，闸会静默失效。
+const RUST_SRC = new URL("../src-tauri/src/", import.meta.url);
+const EMIT_CALL = /\b\w+\.(?:emit|emit_to|emit_filter)\(\s*(?:&?\w+\s*,\s*)?"([^"]+)"/g;
+for (const entry of readdirSync(RUST_SRC, { withFileTypes: true })) {
+  if (!entry.isFile() || !entry.name.endsWith(".rs")) continue;
+  const source = readFileSync(new URL(entry.name, RUST_SRC), "utf8");
+  const literalEmits = [...source.matchAll(EMIT_CALL)].map((match) => match[1]);
+  if (literalEmits.length > 0) {
+    throw new Error(
+      `[desktop-config] packages/desktop/src-tauri/src/${entry.name} 里有裸字面量 emit：${JSON.stringify(literalEmits)}。` +
+        "事件名一律用 hotkeys.rs 的 HOTKEY_EVENT 常量——发射点不止一处，各写一遍字面量时改名很容易漏掉补投那处，" +
+        "而漏掉的表现是「开机第一秒按下的那批永远收不到」，没有任何报错。",
+    );
+  }
 }
 
 const clientApi = readFileSync(new URL("../../client/src/lib/desktop/api.ts", import.meta.url), "utf8");

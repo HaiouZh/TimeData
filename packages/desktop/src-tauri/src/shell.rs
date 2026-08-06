@@ -6,6 +6,26 @@ pub enum CloseBehavior {
     ReallyClose,
 }
 
+use crate::config::HotkeyAction;
+
+/// 窗口 label。两个字面量同时活在 tauri.conf.json、capabilities/default.json 与前端的
+/// `?window=capture` 判据里，Rust 侧只准在这里各出现一次。
+pub const MAIN_WINDOW: &str = "main";
+pub const CAPTURE_WINDOW: &str = "capture";
+
+/// 动作落到哪个 WebView。`None` = Rust 直办、不投窗口。
+///
+/// **这张表是「一次 punch 只落一条」的第二道保险**（第一道是前端入口分流）。
+/// 改成广播就意味着两个 WebView 各跑一遍 punch，各自在对方写库前读到同一条锚点记录，
+/// 写出两条完全重叠的假记录，编译不报错、测试一条不红。
+pub fn target_window(action: &HotkeyAction) -> Option<&'static str> {
+    match action {
+        HotkeyAction::Punch => Some(MAIN_WINDOW),
+        HotkeyAction::Capture => Some(CAPTURE_WINDOW),
+        HotkeyAction::ToggleMain => None,
+    }
+}
+
 pub fn resolve_close_behavior(quitting: bool) -> CloseBehavior {
     if quitting {
         CloseBehavior::ReallyClose
@@ -165,6 +185,23 @@ pub fn resolve_toggle_from_window(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn punch_goes_to_main_capture_goes_to_capture_toggle_goes_nowhere() {
+        use crate::config::HotkeyAction;
+        assert_eq!(target_window(&HotkeyAction::Punch), Some(MAIN_WINDOW));
+        assert_eq!(target_window(&HotkeyAction::Capture), Some(CAPTURE_WINDOW));
+        // toggleMain 由 Rust 直办，不投给任何 WebView——投了就是白白唤醒一个不处理它的桥。
+        assert_eq!(target_window(&HotkeyAction::ToggleMain), None);
+    }
+
+    #[test]
+    fn window_labels_match_tauri_conf() {
+        // 这两个字面量同时出现在 tauri.conf.json、capabilities/default.json 与前端的
+        // ?window=capture 判据里。改这里就要改那三处。
+        assert_eq!(MAIN_WINDOW, "main");
+        assert_eq!(CAPTURE_WINDOW, "capture");
+    }
 
     #[test]
     fn 普通关窗只隐藏不退出() {

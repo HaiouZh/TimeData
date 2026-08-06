@@ -13,7 +13,7 @@ use tauri_plugin_notification::NotificationExt;
 use crate::config::{self, action_id, DesktopConfig, HotkeyAction, HotkeyBinding};
 use crate::hotkeys::{HotkeyDispatcher, HotkeyEventPayload, RegistrationOutcome, HOTKEY_EVENT};
 use crate::shell::{
-    resolve_toggle_from_window, AncestorRoot, ForegroundRaw, Minimized, SelfHwnd, ToggleAction, Visible,
+    self, resolve_toggle_from_window, AncestorRoot, ForegroundRaw, Minimized, SelfHwnd, ToggleAction, Visible,
 };
 
 /// 配置文件写锁：所有 load→modify→save 形态的命令先拿它再动文件。
@@ -56,7 +56,7 @@ fn now_ms() -> u64 {
 }
 
 pub fn show_main_window(app: &AppHandle) {
-    if let Some(window) = app.get_webview_window("main") {
+    if let Some(window) = app.get_webview_window(shell::MAIN_WINDOW) {
         let _ = window.show();
         let _ = window.unminimize();
         let _ = window.set_focus();
@@ -93,7 +93,7 @@ fn foreground_handles() -> (ForegroundRaw, AncestorRoot) {
 }
 
 fn toggle_main_window(app: &AppHandle) {
-    let Some(window) = app.get_webview_window("main") else { return };
+    let Some(window) = app.get_webview_window(shell::MAIN_WINDOW) else { return };
     #[cfg(windows)]
     let self_hwnd = SelfHwnd(window.hwnd().map(|h| h.0 as isize).unwrap_or(0));
     #[cfg(not(windows))]
@@ -119,20 +119,40 @@ fn toggle_main_window(app: &AppHandle) {
     }
 }
 
+/// 凡是要落到 WebView 的动作，**一律走这里**。
+///
+/// 它把两件事绑在一起：先过就绪队列（WebView 没起来时排队，避免开机头几秒的按键静默丢失），
+/// 再按 label 点名投递（不广播）。上一批时这两步以内联代码的形式只存在于 `Punch` 那一臂里，
+/// 于是新动作照着 `ToggleMain` 那一臂（纯 Rust 操作、不过队列）写就会悄悄绕开队列。
+/// 封装之后「绕开」得显式不调用本函数才做得到。
+fn deliver_to_webview(app: &AppHandle, label: &str, payload: HotkeyEventPayload) {
+    let state: State<HotkeyState> = app.state();
+    let deliver = state.0.lock().expect("hotkey dispatcher poisoned").accept(label, payload);
+    if let Some(payload) = deliver {
+        let _ = app.emit_to(label, HOTKEY_EVENT, payload);
+    }
+}
+
+fn show_capture_window(app: &AppHandle) {
+    let Some(window) = app.get_webview_window(shell::CAPTURE_WINDOW) else { return };
+    let _ = window.show();
+    let _ = window.unminimize();
+    let _ = window.set_focus();
+}
+
 fn handle_hotkey(app: &AppHandle, action: &HotkeyAction) {
+    // 窗口操作先做（要让用户看见），再投事件（让 WebView 干活）。
     match action {
         HotkeyAction::ToggleMain => toggle_main_window(app),
-        HotkeyAction::Punch => {
-            let payload = HotkeyEventPayload {
-                action: action_id(action).to_owned(),
-                pressed_at_ms: now_ms(),
-            };
-            let state: State<HotkeyState> = app.state();
-            let deliver = state.0.lock().expect("hotkey dispatcher poisoned").accept(payload);
-            if let Some(payload) = deliver {
-                let _ = app.emit(HOTKEY_EVENT, payload);
-            }
-        }
+        HotkeyAction::Capture => show_capture_window(app),
+        HotkeyAction::Punch => {}
+    }
+    if let Some(label) = shell::target_window(action) {
+        deliver_to_webview(
+            app,
+            label,
+            HotkeyEventPayload { action: action_id(action).to_owned(), pressed_at_ms: now_ms() },
+        );
     }
 }
 
@@ -251,11 +271,14 @@ pub fn resume_hotkeys(app: AppHandle) -> Result<Vec<RegistrationOutcome>, String
     Ok(apply_bindings(&app, &cfg.hotkeys, &registry))
 }
 
+/// **label 取自 `window.label()` 而不是前端传参**：前端传错 label 会让某个窗口的积压
+/// 永远排不出去，而这是权威来源、错不了。
 #[tauri::command]
-pub fn desktop_ready(app: AppHandle, state: State<HotkeyState>) {
-    let drained = state.0.lock().expect("hotkey dispatcher poisoned").mark_ready();
+pub fn desktop_ready(app: AppHandle, window: tauri::Window, state: State<HotkeyState>) {
+    let label = window.label().to_owned();
+    let drained = state.0.lock().expect("hotkey dispatcher poisoned").mark_ready(&label);
     for payload in drained {
-        let _ = app.emit(HOTKEY_EVENT, payload);
+        let _ = app.emit_to(&label, HOTKEY_EVENT, payload);
     }
 }
 

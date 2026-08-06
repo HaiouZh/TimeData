@@ -16,12 +16,14 @@ pub const DEFAULT_PUNCH_CONFIRM_HOURS: f64 = 4.0;
 pub enum HotkeyAction {
     Punch,
     ToggleMain,
+    Capture,
 }
 
 pub fn action_id(action: &HotkeyAction) -> &'static str {
     match action {
         HotkeyAction::Punch => "punch",
         HotkeyAction::ToggleMain => "toggleMain",
+        HotkeyAction::Capture => "capture",
     }
 }
 

@@ -133,11 +133,11 @@ fn main() {
             // （改配置漏改一处时不至于让浮窗糊在屏幕正中）。
             let args: Vec<String> = std::env::args().collect();
             if !should_show_on_startup(&args) {
-                if let Some(window) = app.get_webview_window("main") {
+                if let Some(window) = app.get_webview_window(shell::MAIN_WINDOW) {
                     let _ = window.hide();
                 }
             }
-            if let Some(window) = app.get_webview_window("capture") {
+            if let Some(window) = app.get_webview_window(shell::CAPTURE_WINDOW) {
                 let _ = window.hide();
             }
 
