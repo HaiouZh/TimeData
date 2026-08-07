@@ -18,6 +18,8 @@ import type { Category } from "@timedata/shared";
 import { useState } from "react";
 import { useNavigate, useParams } from "react-router";
 import SortableCategoryItem from "../../components/SortableCategoryItem.tsx";
+import { ConfirmSheet } from "../../components/ui/ConfirmSheet.js";
+import { Sheet } from "../../components/ui/Sheet.js";
 import { useCategories } from "../../hooks/useCategories.ts";
 import { CATEGORY_COLOR_PALETTES, type CategoryColorPaletteId } from "../../lib/categoryColors.ts";
 import SettingsDetailPage from "./SettingsDetailPage.tsx";
@@ -285,214 +287,176 @@ export default function SettingsCategoryDetailPage() {
         {deleteError && !deleting && <p className="td-text-label text-danger">{deleteError}</p>}
       </section>
 
-      {editingName && (
-        <div
-          className="fixed inset-0 z-[var(--z-modal)] flex items-center justify-center bg-backdrop/50"
-          onClick={() => setEditingName(false)}
-        >
-          <div className="w-80 space-y-3 rounded-card bg-surface-elevated p-5" onClick={(event) => event.stopPropagation()}>
-            <h3 className="font-medium">重命名分类</h3>
-            <input
-              type="text"
-              value={nameValue}
-              onChange={(event) => {
-                setNameValue(event.target.value);
-                setNameError(null);
-              }}
-              placeholder="分类名称"
-              className="w-full rounded bg-surface px-3 py-2"
-            />
-            {nameError && <p className="td-text-label text-danger">{nameError}</p>}
-            <div className="flex gap-2">
-              <button
-                type="button"
-                onClick={handleSaveName}
-                className="flex-1 rounded bg-accent py-2 td-text-label font-medium text-page hover:bg-accent-strong"
-              >
-                保存
-              </button>
-              <button
-                type="button"
-                onClick={() => setEditingName(false)}
-                className="rounded bg-surface-hover px-4 py-2 td-text-label text-ink-2"
-              >
-                取消
-              </button>
-            </div>
+      <Sheet open={editingName} onClose={() => setEditingName(false)} title="重命名分类">
+        <div className="space-y-3 px-4 pb-4">
+          <input
+            type="text"
+            value={nameValue}
+            onChange={(event) => {
+              setNameValue(event.target.value);
+              setNameError(null);
+            }}
+            placeholder="分类名称"
+            className="w-full rounded bg-surface px-3 py-2"
+          />
+          {nameError && <p className="td-text-label text-danger">{nameError}</p>}
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={handleSaveName}
+              className="flex-1 rounded bg-accent py-2 td-text-label font-medium text-page hover:bg-accent-strong"
+            >
+              保存
+            </button>
+            <button
+              type="button"
+              onClick={() => setEditingName(false)}
+              className="rounded bg-surface-hover px-4 py-2 td-text-label text-ink-2"
+            >
+              取消
+            </button>
           </div>
         </div>
-      )}
+      </Sheet>
 
-      {colorEditing && (
-        <div
-          className="fixed inset-0 z-[var(--z-modal)] flex items-center justify-center bg-backdrop/50"
-          onClick={() => setColorEditing(false)}
-        >
-          <div className="w-96 space-y-4 rounded-card bg-surface-elevated p-5" onClick={(event) => event.stopPropagation()}>
-            <h3 className="font-medium">修改分类颜色</h3>
-            <div className="flex items-center gap-3">
-              <span
-                className="h-8 w-8 rounded-pill border border-border"
-                style={{ backgroundColor: selectedColor }}
+      <Sheet open={colorEditing} onClose={() => setColorEditing(false)} title="修改分类颜色">
+        <div className="max-h-96 space-y-4 overflow-y-auto px-4 pb-4">
+          <div className="flex items-center gap-3">
+            <span
+              className="h-8 w-8 rounded-pill border border-border"
+              style={{ backgroundColor: selectedColor }}
+            />
+            <span className="td-text-label text-ink-2">{category.name}</span>
+            <input
+              type="color"
+              aria-label="分类颜色"
+              value={selectedColor}
+              onChange={(event) => setSelectedColor(event.target.value)}
+              className="ml-auto h-8 w-10"
+            />
+          </div>
+          <div className="flex gap-2">
+            {(Object.keys(CATEGORY_COLOR_PALETTES) as CategoryColorPaletteId[]).map((paletteId) => (
+              <button
+                key={paletteId}
+                type="button"
+                onClick={() => setSelectedPalette(paletteId)}
+                className={`rounded px-3 py-1 td-text-label ${selectedPalette === paletteId ? "bg-accent text-page" : "bg-surface-hover text-ink-2 hover:bg-surface"}`}
+              >
+                {CATEGORY_COLOR_PALETTES[paletteId].label}
+              </button>
+            ))}
+          </div>
+          <div className="grid grid-cols-7 gap-2">
+            {CATEGORY_COLOR_PALETTES[selectedPalette].colors.map((color) => (
+              <button
+                key={color}
+                type="button"
+                aria-label={`选择颜色 ${color}`}
+                onClick={() => setSelectedColor(color)}
+                className={`h-8 w-8 rounded-pill border ${selectedColor.toUpperCase() === color ? "border-ink" : "border-border"}`}
+                style={{ backgroundColor: color }}
               />
-              <span className="td-text-label text-ink-2">{category.name}</span>
-              <input
-                type="color"
-                aria-label="分类颜色"
-                value={selectedColor}
-                onChange={(event) => setSelectedColor(event.target.value)}
-                className="ml-auto h-8 w-10"
-              />
-            </div>
-            <div className="flex gap-2">
-              {(Object.keys(CATEGORY_COLOR_PALETTES) as CategoryColorPaletteId[]).map((paletteId) => (
-                <button
-                  key={paletteId}
-                  type="button"
-                  onClick={() => setSelectedPalette(paletteId)}
-                  className={`rounded px-3 py-1 td-text-label ${selectedPalette === paletteId ? "bg-accent text-page" : "bg-surface-hover text-ink-2 hover:bg-surface"}`}
-                >
-                  {CATEGORY_COLOR_PALETTES[paletteId].label}
-                </button>
-              ))}
-            </div>
-            <div className="grid grid-cols-7 gap-2">
-              {CATEGORY_COLOR_PALETTES[selectedPalette].colors.map((color) => (
-                <button
-                  key={color}
-                  type="button"
-                  aria-label={`选择颜色 ${color}`}
-                  onClick={() => setSelectedColor(color)}
-                  className={`h-8 w-8 rounded-pill border ${selectedColor.toUpperCase() === color ? "border-ink" : "border-border"}`}
-                  style={{ backgroundColor: color }}
-                />
-              ))}
-            </div>
-            {colorError && <p className="td-text-label text-danger">{colorError}</p>}
-            <div className="flex gap-2">
-              <button
-                type="button"
-                onClick={handleSaveColor}
-                className="flex-1 rounded bg-accent py-2 td-text-label font-medium text-page hover:bg-accent-strong"
-              >
-                保存
-              </button>
-              <button
-                type="button"
-                onClick={() => setColorEditing(false)}
-                className="rounded bg-surface-hover px-4 py-2 td-text-label text-ink-2"
-              >
-                取消
-              </button>
-            </div>
+            ))}
+          </div>
+          {colorError && <p className="td-text-label text-danger">{colorError}</p>}
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={handleSaveColor}
+              className="flex-1 rounded bg-accent py-2 td-text-label font-medium text-page hover:bg-accent-strong"
+            >
+              保存
+            </button>
+            <button
+              type="button"
+              onClick={() => setColorEditing(false)}
+              className="rounded bg-surface-hover px-4 py-2 td-text-label text-ink-2"
+            >
+              取消
+            </button>
           </div>
         </div>
-      )}
+      </Sheet>
 
-      {addingChild && (
-        <div
-          className="fixed inset-0 z-[var(--z-modal)] flex items-center justify-center bg-backdrop/50"
-          onClick={() => setAddingChild(false)}
-        >
-          <div className="w-80 space-y-3 rounded-card bg-surface-elevated p-5" onClick={(event) => event.stopPropagation()}>
-            <h3 className="font-medium">添加子分类</h3>
-            <input
-              type="text"
-              value={childName}
-              onChange={(event) => {
-                setChildName(event.target.value);
-                setChildAddError(null);
-              }}
-              placeholder="子分类名称"
-              className="w-full rounded bg-surface px-3 py-2"
-            />
-            {childAddError && <p className="td-text-label text-danger">{childAddError}</p>}
-            <div className="flex gap-2">
-              <button
-                type="button"
-                onClick={handleAddChild}
-                className="flex-1 rounded bg-accent py-2 td-text-label font-medium text-page hover:bg-accent-strong"
-              >
-                添加
-              </button>
-              <button
-                type="button"
-                onClick={() => setAddingChild(false)}
-                className="rounded bg-surface-hover px-4 py-2 td-text-label text-ink-2"
-              >
-                取消
-              </button>
-            </div>
+      <Sheet open={addingChild} onClose={() => setAddingChild(false)} title="添加子分类">
+        <div className="space-y-3 px-4 pb-4">
+          <input
+            type="text"
+            value={childName}
+            onChange={(event) => {
+              setChildName(event.target.value);
+              setChildAddError(null);
+            }}
+            placeholder="子分类名称"
+            className="w-full rounded bg-surface px-3 py-2"
+          />
+          {childAddError && <p className="td-text-label text-danger">{childAddError}</p>}
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={handleAddChild}
+              className="flex-1 rounded bg-accent py-2 td-text-label font-medium text-page hover:bg-accent-strong"
+            >
+              添加
+            </button>
+            <button
+              type="button"
+              onClick={() => setAddingChild(false)}
+              className="rounded bg-surface-hover px-4 py-2 td-text-label text-ink-2"
+            >
+              取消
+            </button>
           </div>
         </div>
-      )}
+      </Sheet>
 
-      {renamingChild && (
-        <div
-          className="fixed inset-0 z-[var(--z-modal)] flex items-center justify-center bg-backdrop/50"
-          onClick={() => setRenamingChild(null)}
-        >
-          <div className="w-80 space-y-3 rounded-card bg-surface-elevated p-5" onClick={(event) => event.stopPropagation()}>
-            <h3 className="font-medium">重命名子分类</h3>
-            <input
-              type="text"
-              value={childRenameName}
-              onChange={(event) => {
-                setChildRenameName(event.target.value);
-                setChildRenameError(null);
-              }}
-              placeholder="子分类名称"
-              className="w-full rounded bg-surface px-3 py-2"
-            />
-            {childRenameError && <p className="td-text-label text-danger">{childRenameError}</p>}
-            <div className="flex gap-2">
-              <button
-                type="button"
-                onClick={handleRenameChild}
-                className="flex-1 rounded bg-accent py-2 td-text-label font-medium text-page hover:bg-accent-strong"
-              >
-                保存
-              </button>
-              <button
-                type="button"
-                onClick={() => setRenamingChild(null)}
-                className="rounded bg-surface-hover px-4 py-2 td-text-label text-ink-2"
-              >
-                取消
-              </button>
-            </div>
+      <Sheet open={renamingChild !== null} onClose={() => setRenamingChild(null)} title="重命名子分类">
+        <div className="space-y-3 px-4 pb-4">
+          <input
+            type="text"
+            value={childRenameName}
+            onChange={(event) => {
+              setChildRenameName(event.target.value);
+              setChildRenameError(null);
+            }}
+            placeholder="子分类名称"
+            className="w-full rounded bg-surface px-3 py-2"
+          />
+          {childRenameError && <p className="td-text-label text-danger">{childRenameError}</p>}
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={handleRenameChild}
+              className="flex-1 rounded bg-accent py-2 td-text-label font-medium text-page hover:bg-accent-strong"
+            >
+              保存
+            </button>
+            <button
+              type="button"
+              onClick={() => setRenamingChild(null)}
+              className="rounded bg-surface-hover px-4 py-2 td-text-label text-ink-2"
+            >
+              取消
+            </button>
           </div>
         </div>
-      )}
+      </Sheet>
 
-      {deleting && (
-        <div
-          className="fixed inset-0 z-[var(--z-modal)] flex items-center justify-center bg-backdrop/50"
-          onClick={() => setDeleting(null)}
-        >
-          <div className="w-96 space-y-3 rounded-card bg-surface-elevated p-5" onClick={(event) => event.stopPropagation()}>
-            <h3 className="font-medium text-danger">删除分类</h3>
-            <p className="td-text-body text-ink-2">{deleteMessage()}</p>
-            {deleteError && <p className="td-text-label text-danger">{deleteError}</p>}
-            <div className="flex gap-2">
-              <button
-                type="button"
-                onClick={handleDelete}
-                className="flex-1 rounded bg-danger py-2 td-text-label font-medium text-page hover:bg-danger/80"
-              >
-                确认删除
-              </button>
-              <button
-                type="button"
-                onClick={() => setDeleting(null)}
-                className="rounded bg-surface-hover px-4 py-2 td-text-label text-ink-2"
-              >
-                取消
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <ConfirmSheet
+        open={deleting !== null}
+        title="删除分类"
+        body={
+          <>
+            {deleteMessage()}
+            {deleteError && <span className="mt-2 block td-text-label text-danger">{deleteError}</span>}
+          </>
+        }
+        confirmLabel="确认删除"
+        danger
+        onConfirm={handleDelete}
+        onCancel={() => setDeleting(null)}
+      />
     </SettingsDetailPage>
   );
 }
