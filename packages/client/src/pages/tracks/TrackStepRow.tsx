@@ -1,6 +1,7 @@
 import type { TrackStep } from "@timedata/shared";
-import { PencilSimple, X } from "@phosphor-icons/react";
+import { PencilSimple } from "@phosphor-icons/react";
 import { useState } from "react";
+import { ConfirmDeleteButton } from "../../components/ui/ConfirmDeleteButton.js";
 import { Icon } from "../../components/Icon.js";
 import { formatAppDateTime, formatRelativeTime } from "../../lib/time.js";
 import { formatStepDuration, stepSourceText } from "../../lib/tracksView.js";
@@ -40,7 +41,6 @@ export function TrackStepRow({
   const [expanded, setExpanded] = useState(false);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(step.content);
-  const [confirmingDelete, setConfirmingDelete] = useState(false);
   const canFold = !isCurrent && step.content.length > LONG_CONTENT_CHARS;
   const collapsed = canFold && !expanded && !editing;
   const canEdit = step.source === "user" && onEdit !== undefined;
@@ -50,16 +50,6 @@ export function TrackStepRow({
     if (!onEdit) return;
     await onEdit(step.id, draft);
     setEditing(false);
-    setConfirmingDelete(false);
-  }
-
-  async function deleteStep(): Promise<void> {
-    if (!onDelete) return;
-    if (!confirmingDelete) {
-      setConfirmingDelete(true);
-      return;
-    }
-    await onDelete(step.id);
   }
 
   return (
@@ -94,7 +84,6 @@ export function TrackStepRow({
                 onClick={() => {
                   setDraft(step.content);
                   setEditing(true);
-                  setConfirmingDelete(false);
                 }}
                 className="inline-flex h-7 w-7 items-center justify-center rounded-ctl bg-surface-elevated text-ink-2 hover:text-accent"
               >
@@ -102,16 +91,7 @@ export function TrackStepRow({
               </button>
             )}
             {canDelete && (
-              <button
-                type="button"
-                aria-label={confirmingDelete ? "确认删除步骤" : "删除步骤"}
-                onClick={() => void deleteStep()}
-                className={`inline-flex h-7 items-center justify-center rounded-ctl bg-surface-elevated px-2 text-ink-2 hover:text-danger ${
-                  confirmingDelete ? "td-text-caption text-danger" : "w-7"
-                }`}
-              >
-                {confirmingDelete ? "确认删除" : <Icon icon={X} size={15} />}
-              </button>
+              <ConfirmDeleteButton target="步骤" resetKey={editing} onConfirm={() => onDelete?.(step.id)} />
             )}
           </div>
         )}

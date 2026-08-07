@@ -1,6 +1,7 @@
-import { PencilSimple, X } from "@phosphor-icons/react";
+import { PencilSimple } from "@phosphor-icons/react";
 import type { TrackStep } from "@timedata/shared";
 import { useState } from "react";
+import { ConfirmDeleteButton } from "../../components/ui/ConfirmDeleteButton.js";
 import { Icon } from "../../components/Icon.js";
 import { formatAppDateTime, formatRelativeTime } from "../../lib/time.js";
 import { stepSourceText } from "../../lib/tracksView.js";
@@ -21,7 +22,6 @@ export function CurrentFrameCard({
 }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(step.content);
-  const [confirmingDelete, setConfirmingDelete] = useState(false);
   const activityAt = step.endedAt ?? step.startedAt;
   const canEdit = step.source === "user" && onEdit !== undefined;
   const canDelete = step.source === "user" && onDelete !== undefined;
@@ -30,16 +30,6 @@ export function CurrentFrameCard({
     if (!onEdit) return;
     await onEdit(step.id, draft);
     setEditing(false);
-    setConfirmingDelete(false);
-  }
-
-  async function deleteStep(): Promise<void> {
-    if (!onDelete) return;
-    if (!confirmingDelete) {
-      setConfirmingDelete(true);
-      return;
-    }
-    await onDelete(step.id);
   }
 
   return (
@@ -66,7 +56,6 @@ export function CurrentFrameCard({
                 onClick={() => {
                   setDraft(step.content);
                   setEditing(true);
-                  setConfirmingDelete(false);
                 }}
                 className="inline-flex h-7 w-7 items-center justify-center rounded-ctl bg-surface-elevated text-ink-2 hover:text-accent"
               >
@@ -74,16 +63,7 @@ export function CurrentFrameCard({
               </button>
             )}
             {canDelete && (
-              <button
-                type="button"
-                aria-label={confirmingDelete ? "确认删除步骤" : "删除步骤"}
-                onClick={() => void deleteStep()}
-                className={`inline-flex h-7 items-center justify-center rounded-ctl bg-surface-elevated px-2 text-ink-2 hover:text-danger ${
-                  confirmingDelete ? "td-text-caption text-danger" : "w-7"
-                }`}
-              >
-                {confirmingDelete ? "确认删除" : <Icon icon={X} size={15} />}
-              </button>
+              <ConfirmDeleteButton target="步骤" resetKey={editing} onConfirm={() => onDelete?.(step.id)} />
             )}
           </span>
         )}
