@@ -19,6 +19,7 @@ import { useMemo, useState } from "react";
 import { useNavigate } from "react-router";
 import { Icon } from "../../components/Icon.js";
 import SortableCategoryItem from "../../components/SortableCategoryItem.tsx";
+import { Sheet } from "../../components/ui/Sheet.js";
 import { useCategories } from "../../hooks/useCategories.ts";
 import { CATEGORY_COLOR_PALETTES, type CategoryColorPaletteId } from "../../lib/categoryColors.ts";
 import SettingsDetailPage from "./SettingsDetailPage.tsx";
@@ -134,60 +135,49 @@ export default function SettingsCategoriesPage() {
         </SortableContext>
       </DndContext>
 
-      {adding && (
-        <div
-          className="fixed inset-0 z-[var(--z-modal)] flex items-center justify-center bg-backdrop/50"
-          onClick={() => setAdding(false)}
-        >
-          <div className="w-80 space-y-3 rounded-card bg-surface-elevated p-5" onClick={(event) => event.stopPropagation()}>
-            <h3 className="font-medium">新增分类</h3>
+      <Sheet open={adding} onClose={() => setAdding(false)} title="新增分类">
+        <div className="space-y-3 px-4 pb-4">
+          <input
+            type="text"
+            value={newName}
+            onChange={(event) => {
+              setNewName(event.target.value);
+              setAddError(null);
+            }}
+            placeholder="分类名称"
+            className="w-full rounded bg-surface px-3 py-2"
+          />
+          <div className="flex items-center gap-2">
+            <label className="td-text-label text-ink-3">颜色</label>
             <input
-              type="text"
-              value={newName}
-              onChange={(event) => {
-                setNewName(event.target.value);
-                setAddError(null);
-              }}
-              placeholder="分类名称"
-              className="w-full rounded bg-surface px-3 py-2"
+              type="color"
+              aria-label="分类颜色"
+              value={newColor}
+              onChange={(event) => setNewColor(event.target.value)}
+              className="h-8 w-8"
             />
-            <div className="flex items-center gap-2">
-              <label className="td-text-label text-ink-3">颜色</label>
-              <input
-                type="color"
-                aria-label="分类颜色"
-                value={newColor}
-                onChange={(event) => setNewColor(event.target.value)}
-                className="h-8 w-8"
-              />
-            </div>
-            {addError && <p className="td-text-label text-danger">{addError}</p>}
-            <div className="flex gap-2">
-              <button
-                type="button"
-                onClick={handleAdd}
-                className="flex-1 rounded bg-accent py-2 td-text-label text-page hover:bg-accent-strong"
-              >
-                添加
-              </button>
-              <button type="button" onClick={() => setAdding(false)} className="rounded bg-surface-hover px-4 py-2 td-text-label">
-                取消
-              </button>
-            </div>
+          </div>
+          {addError && <p className="td-text-label text-danger">{addError}</p>}
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={handleAdd}
+              className="flex-1 rounded bg-accent py-2 td-text-label text-page hover:bg-accent-strong"
+            >
+              添加
+            </button>
+            <button type="button" onClick={() => setAdding(false)} className="rounded bg-surface-hover px-4 py-2 td-text-label">
+              取消
+            </button>
           </div>
         </div>
-      )}
+      </Sheet>
 
-      {paletteDialogOpen && (
-        <div
-          className="fixed inset-0 z-[var(--z-modal)] flex items-center justify-center bg-backdrop/50"
-          onClick={() => setPaletteDialogOpen(false)}
-        >
-          <div className="w-96 space-y-4 rounded-card bg-surface-elevated p-5" onClick={(event) => event.stopPropagation()}>
-            <h3 className="font-medium">一键配色</h3>
-            <p className="td-text-label text-ink-3">将按当前一级分类顺序循环应用配色方案，子分类会跟随父分类颜色。</p>
-            <div className="space-y-2">
-              {(Object.keys(CATEGORY_COLOR_PALETTES) as CategoryColorPaletteId[]).map((paletteId) => (
+      <Sheet open={paletteDialogOpen} onClose={() => setPaletteDialogOpen(false)} title="一键配色">
+        <div className="space-y-4 px-4 pb-4">
+          <p className="td-text-label text-ink-3">将按当前一级分类顺序循环应用配色方案，子分类会跟随父分类颜色。</p>
+          <div className="max-h-80 space-y-2 overflow-y-auto">
+            {(Object.keys(CATEGORY_COLOR_PALETTES) as CategoryColorPaletteId[]).map((paletteId) => (
                 <button
                   key={paletteId}
                   type="button"
@@ -241,8 +231,7 @@ export default function SettingsCategoriesPage() {
               </button>
             </div>
           </div>
-        </div>
-      )}
+      </Sheet>
     </SettingsDetailPage>
   );
 }
