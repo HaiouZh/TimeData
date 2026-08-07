@@ -28,6 +28,7 @@
   "dirty-in-clean-bucket:components/app-shell/MobileNavigationPlacement.test.tsx",
   "dirty-in-clean-bucket:components/desktop/DesktopBridge.dom.test.tsx",
   "dirty-in-clean-bucket:components/ui/Checkbox.test.tsx",
+  "dirty-in-clean-bucket:components/ui/ConfirmDeleteButton.test.tsx",
   "dirty-in-clean-bucket:components/ui/ConfirmSheet.test.tsx",
   "dirty-in-clean-bucket:components/ui/DateField.test.tsx",
   "dirty-in-clean-bucket:components/ui/EmptyState.test.tsx",
