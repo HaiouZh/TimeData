@@ -568,4 +568,21 @@ describe("TrackDetailPage", () => {
     await waitForText(host, "轨道列表");
     expect(await getTrack(track.id)).toBeUndefined();
   });
+
+  it("轨道操作失败时错误条带 role=alert", async () => {
+    // 触发点：把轨道标题改成纯空白再保存，updateTrack 的 trimRequired 抛「轨道标题不能为空」，
+    // saveMeta 捕获后 setActionError —— 这正是 actionError 唯一可测的失败路径。
+    const track = await seedTrack();
+    const host = await renderDetail(track.id);
+    await waitForText(host, "全马破三");
+
+    await clickButton(host, "编辑轨道");
+    await typeInput(host, "轨道标题", "   ");
+    await clickButton(host, "保存轨道");
+
+    await waitForText(host, "轨道标题不能为空");
+    const banner = host.querySelector('[data-tone="danger"]');
+    expect(banner).toBeInstanceOf(HTMLElement);
+    expect(banner?.getAttribute("role")).toBe("alert");
+  });
 });

@@ -135,8 +135,10 @@ html[data-platform="android"] {
 @keyframes overlay-fade { from { opacity: 0; } to { opacity: 1; } }
 @keyframes sheet-rise { from { transform: translateY(6%); opacity: 0.5; } to { transform: none; opacity: 1; } }
 .sheet-overlay { animation: overlay-fade 150ms ease-out; }
-/* 面板限高与动画同属弹层外壳，一处声明；调用方不传 max-h，故留在顶层不进 components 层。 */
-.sheet-panel { animation: sheet-rise 200ms ease-out; max-height: 88vh; }
+/* 面板限高与动画同属弹层外壳，一处声明；调用方不传 max-h，故留在顶层不进 components 层。
+   限高要有滚动配套：面板从屏幕底部锚定、内容超高时尾部（确认/取消按钮）会溢出屏幕点不到，
+   overflow-y: auto 让内容在 88vh 内可滚。 */
+.sheet-panel { animation: sheet-rise 200ms ease-out; max-height: 88vh; overflow-y: auto; }
 @media (prefers-reduced-motion: reduce) {
   .sheet-overlay, .sheet-panel { animation: none; }
 }

@@ -45,4 +45,45 @@ describe("ConfirmDeleteButton", () => {
     expect(host.querySelector('button[aria-label="确认删除步骤"]')).toBeNull();
     await unmount(root);
   });
+
+  it("进入待确认态时 live region 播报提示，常态为空", async () => {
+    const onConfirm = vi.fn();
+    const { host, root } = await renderDom(createElement(ConfirmDeleteButton, { onConfirm, target: "步骤" }));
+    const live = host.querySelector<HTMLSpanElement>("[aria-live='polite']");
+    expect(live).toBeInstanceOf(HTMLSpanElement);
+    expect(live?.textContent).toBe("");
+    await click(host.querySelector('button[aria-label="删除步骤"]'));
+    expect(host.querySelector<HTMLSpanElement>("[aria-live='polite']")?.textContent).toBe("再按一次确认删除步骤");
+    await unmount(root);
+  });
+
+  it("确认在途期间再次点击不会重复触发 onConfirm", async () => {
+    let resolveConfirm: (() => void) | undefined;
+    const onConfirm = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          resolveConfirm = resolve;
+        }),
+    );
+    const { host, root } = await renderDom(createElement(ConfirmDeleteButton, { onConfirm, target: "步骤" }));
+    await click(host.querySelector('button[aria-label="删除步骤"]'));
+    await click(host.querySelector('button[aria-label="确认删除步骤"]'));
+    await click(host.querySelector('button[aria-label="确认删除步骤"]'));
+    await click(host.querySelector('button[aria-label="确认删除步骤"]'));
+    expect(onConfirm).toHaveBeenCalledTimes(1);
+    await act(async () => resolveConfirm?.());
+    await unmount(root);
+  });
+
+  it("onConfirm reject 后按钮退回常态、不卡死", async () => {
+    const onConfirm = vi.fn().mockRejectedValue(new Error("boom"));
+    const { host, root } = await renderDom(createElement(ConfirmDeleteButton, { onConfirm, target: "步骤" }));
+    await click(host.querySelector('button[aria-label="删除步骤"]'));
+    await click(host.querySelector('button[aria-label="确认删除步骤"]'));
+    await act(async () => {});
+    expect(host.querySelector('button[aria-label="确认删除步骤"]')).toBeNull();
+    expect(host.querySelector('button[aria-label="删除步骤"]')).not.toBeNull();
+    expect(onConfirm).toHaveBeenCalledTimes(1);
+    await unmount(root);
+  });
 });

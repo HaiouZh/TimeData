@@ -20,6 +20,7 @@ import { useNavigate, useParams } from "react-router";
 import SortableCategoryItem from "../../components/SortableCategoryItem.tsx";
 import { ConfirmSheet } from "../../components/ui/ConfirmSheet.js";
 import { Sheet } from "../../components/ui/Sheet.js";
+import { StatusBanner } from "../../components/ui/StatusBanner.js";
 import { useCategories } from "../../hooks/useCategories.ts";
 import { CATEGORY_COLOR_PALETTES, type CategoryColorPaletteId } from "../../lib/categoryColors.ts";
 import SettingsDetailPage from "./SettingsDetailPage.tsx";
@@ -284,7 +285,7 @@ export default function SettingsCategoryDetailPage() {
         >
           删除分类
         </button>
-        {deleteError && !deleting && <p className="td-text-label text-danger">{deleteError}</p>}
+        {deleteError && !deleting && <StatusBanner tone="danger">{deleteError}</StatusBanner>}
       </section>
 
       <Sheet open={editingName} onClose={() => setEditingName(false)} title="重命名分类">

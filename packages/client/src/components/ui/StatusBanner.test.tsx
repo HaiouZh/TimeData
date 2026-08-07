@@ -10,28 +10,29 @@ describe("StatusBanner", () => {
   it("info tone 类名", async () => {
     const { host, root } = await renderDom(createElement(StatusBanner, { tone: "info" }, "提示"));
     const el = host.querySelector("div");
-    expect(el?.className).toContain("rounded-card");
-    expect(el?.className).toContain("border-border");
-    expect(el?.className).toContain("bg-surface/95");
-    expect(el?.className).toContain("text-ink-2");
+    // 按空格切分后比对，避免 bg-ok/10 之类前缀类被更长的合法类（如 bg-ok/100）蒙混过关。
+    expect(el?.className.split(" ")).toContain("rounded-card");
+    expect(el?.className.split(" ")).toContain("border-border");
+    expect(el?.className.split(" ")).toContain("bg-surface/95");
+    expect(el?.className.split(" ")).toContain("text-ink-2");
     await unmount(root);
   });
 
   it("warn tone 类名", async () => {
     const { host, root } = await renderDom(createElement(StatusBanner, { tone: "warn" }, "警告"));
     const el = host.querySelector("div");
-    expect(el?.className).toContain("border-warn/40");
-    expect(el?.className).toContain("bg-warn/10");
-    expect(el?.className).toContain("text-warn");
+    expect(el?.className.split(" ")).toContain("border-warn/40");
+    expect(el?.className.split(" ")).toContain("bg-warn/10");
+    expect(el?.className.split(" ")).toContain("text-warn");
     await unmount(root);
   });
 
   it("danger tone 类名", async () => {
     const { host, root } = await renderDom(createElement(StatusBanner, { tone: "danger" }, "错误"));
     const el = host.querySelector("div");
-    expect(el?.className).toContain("border-danger/40");
-    expect(el?.className).toContain("bg-danger/10");
-    expect(el?.className).toContain("text-danger");
+    expect(el?.className.split(" ")).toContain("border-danger/40");
+    expect(el?.className.split(" ")).toContain("bg-danger/10");
+    expect(el?.className.split(" ")).toContain("text-danger");
     await unmount(root);
   });
 
@@ -44,9 +45,9 @@ describe("StatusBanner", () => {
   it("ok 档：成功态的边框/底色/文字色", async () => {
     const { host, root } = await renderDom(createElement(StatusBanner, { tone: "ok" }, "已生成"));
     const el = host.querySelector("[data-tone='ok']");
-    expect(el?.className).toContain("border-ok/40");
-    expect(el?.className).toContain("bg-ok/10");
-    expect(el?.className).toContain("text-ok");
+    expect(el?.className.split(" ")).toContain("border-ok/40");
+    expect(el?.className.split(" ")).toContain("bg-ok/10");
+    expect(el?.className.split(" ")).toContain("text-ok");
     await unmount(root);
   });
 
@@ -55,9 +56,9 @@ describe("StatusBanner", () => {
       createElement(StatusBanner, { tone: "danger", variant: "bar" }, "日记已被其他窗口修改"),
     );
     const el = host.querySelector("[data-tone='danger']");
-    expect(el?.className).toContain("border-b");
+    expect(el?.className.split(" ")).toContain("border-b");
     // 贴边横条不能有圆角卡片形态，否则日记页顶部会冒出一个悬空的圆角块。
-    expect(el?.className).not.toContain("rounded-card");
+    expect(el?.className.split(" ")).not.toContain("rounded-card");
     await unmount(root);
   });
 

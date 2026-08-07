@@ -304,7 +304,7 @@ export default function StyleguidePage() {
               <LoadingState label="正在加载…" className="rounded-card bg-surface-elevated px-4 py-8" />
             </div>
             <div>
-              <span className="block mb-1.5 td-text-label text-ink-2">StatusBanner（info / warn / danger）</span>
+              <span className="block mb-1.5 td-text-label text-ink-2">StatusBanner（info / ok / warn / danger；card / bar）</span>
               <div className="space-y-2">
                 <StatusBanner tone="info">同步进行中</StatusBanner>
                 <StatusBanner tone="warn">部分记录未同步</StatusBanner>

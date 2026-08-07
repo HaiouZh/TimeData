@@ -602,6 +602,29 @@ describe("GoalGraphEditor", () => {
     expect(sheetError?.textContent).toContain("这条前置已存在");
   });
 
+  it("连前置失败的错误条带 role=alert", async () => {
+    const members: GoalMemberRef[] = [
+      { kind: "task", id: "t1" },
+      { kind: "task", id: "t2" },
+    ];
+    const goalValue = goal({ members, prerequisites: [{ blocker: members[0], blocked: members[1] }] });
+    const first = task("t1", { title: "A" });
+    const second = task("t2", { title: "B" });
+    await seed(goalValue, [first, second]);
+
+    const { host } = await renderEditor({ goal: goalValue, tasks: [first, second] });
+
+    await click(nodeButton(host, "task:t1"));
+    await click(buttonByLabel(document.body, "连前置 A"));
+    await click(buttonByText(document.body, "让它先于别人"));
+    await click(buttonByLabel(document.body, "选择前置目标 B"));
+    await tick();
+
+    const sheetError = document.body.querySelector("[data-connect-sheet-error]");
+    expect(sheetError).toBeInstanceOf(HTMLElement);
+    expect(sheetError?.getAttribute("role")).toBe("alert");
+  });
+
   it("连前置方向按钮有选中态，候选列表标题复述语义", async () => {
     const members: GoalMemberRef[] = [
       { kind: "task", id: "t1" },

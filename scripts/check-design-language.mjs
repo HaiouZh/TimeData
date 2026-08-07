@@ -313,7 +313,6 @@ const RULES = [
     msg: "需要用户注意/处理的状态必须使用 StatusBanner（info/ok/warn/danger 四档，card/bar 两形态）；手写三件套是历史遗留形态，新代码不得复制",
     skip: (file, line) =>
       isTestFile(file) ||
-      /StatusBanner/.test(line) ||
       normalizePath(file).endsWith("/components/ui/StatusBanner.tsx") ||
       // 危险按钮：交互态 utility 是它的识别特征，状态条没有交互态
       /hover:|disabled:/.test(line) ||
