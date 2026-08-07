@@ -309,7 +309,7 @@ const RULES = [
   {
     id: "handwritten-status-banner",
     // 三件套：同一个 tone 的 border-X/N + bg-X/10 + text-X。反向引用 \1 锁住「同一个 tone」。
-    re: /border-(warn|danger|ok)\/\d+[^"]*bg-\1\/10[^"]*text-\1\b/,
+    re: /border-(warn|danger|ok)\/\d+[^"]*bg-\1\/\d+[^"]*text-\1\b/,
     msg: "需要用户注意/处理的状态必须使用 StatusBanner（info/ok/warn/danger 四档，card/bar 两形态）；手写三件套是历史遗留形态，新代码不得复制",
     skip: (file, line) =>
       isTestFile(file) ||
