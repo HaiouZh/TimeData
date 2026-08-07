@@ -158,6 +158,7 @@ describe("DiaryReviewPage · 骨架 + 模式 A（那年今日）", () => {
     expect(host.textContent).toContain("网络错误");
     const retryButton = Array.from(host.querySelectorAll("button")).find((b) => b.textContent === "重试");
     expect(retryButton).toBeTruthy();
+    expect(host.querySelector("[data-tone='danger']")).toBeInstanceOf(HTMLElement);
 
     fetchDiaryBatch.mockResolvedValueOnce({ dates: {}, weeks: {}, weeklyConfigured: true });
     await click(retryButton ?? null);

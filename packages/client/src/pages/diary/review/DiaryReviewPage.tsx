@@ -7,6 +7,7 @@ import { DateField } from "../../../components/ui/DateField.js";
 import { PageBackButton } from "../../../components/ui/PageBackButton.js";
 import { PageHeader } from "../../../components/ui/PageHeader.js";
 import { SegmentedControl } from "../../../components/ui/SegmentedControl.js";
+import { StatusBanner } from "../../../components/ui/StatusBanner.js";
 import { useNowMinute } from "../../../hooks/useNowMinute.js";
 import { type DiaryBatchResult, fetchDiaryBatch } from "../../../lib/diary/diaryApi.js";
 import { resolveDiaryDate } from "../../../lib/diary/diaryDate.js";
@@ -231,16 +232,22 @@ export default function DiaryReviewPage() {
 
       {/* 错误条叠加在内容之上，不替换内容区：batch 失败时已有卡片继续可读。 */}
       {error && (
-        <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-danger/40 bg-danger/10 px-4 py-2 td-text-body text-danger">
-          <span className="flex-1">{error}</span>
-          <button
-            type="button"
-            onClick={handleRetry}
-            className="rounded-ctl border border-danger/40 bg-surface px-3 py-1 td-text-body font-medium text-danger"
-          >
-            重试
-          </button>
-        </div>
+        <StatusBanner
+          tone="danger"
+          variant="bar"
+          className="shrink-0"
+          actions={
+            <button
+              type="button"
+              onClick={handleRetry}
+              className="rounded-ctl border border-danger/40 bg-surface px-3 py-1 td-text-body font-medium text-danger"
+            >
+              重试
+            </button>
+          }
+        >
+          {error}
+        </StatusBanner>
       )}
       {/* 单块渲染失败（畸形 markdown 等）不掀整页：内容区套 ErrorBoundary。
           key 随模式/日期/重试变化 → 边界重挂、hasError 复位，换一天就能恢复，

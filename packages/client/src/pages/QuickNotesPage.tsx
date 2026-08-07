@@ -30,6 +30,7 @@ import { ActionToastBar } from "../components/ui/ActionToastBar.tsx";
 import { DateField } from "../components/ui/DateField.js";
 import { EmptyState } from "../components/ui/EmptyState.js";
 import { LoadingState } from "../components/ui/LoadingState.js";
+import { StatusBanner } from "../components/ui/StatusBanner.js";
 import { BOTTOM_NAV_HEIGHT_PX, useBottomNav } from "../contexts/BottomNavContext.tsx";
 import { useConfirm } from "../hooks/useConfirm.tsx";
 import { useDebouncedValue } from "../hooks/useDebouncedValue.ts";
@@ -1585,8 +1586,9 @@ export default function QuickNotesPage() {
       )}
 
       {error && (
-        <p
-          className="fixed left-4 right-4 mx-auto max-w-3xl rounded-card border border-danger/40 bg-danger/10 px-3 py-2 td-text-body text-danger shadow-elev1 [bottom:var(--bottom-offset)]"
+        <StatusBanner
+          tone="danger"
+          className="fixed left-4 right-4 mx-auto max-w-3xl shadow-elev1 [bottom:var(--bottom-offset)]"
           // 兜底类 [bottom:var(--bottom-offset)]：见「最新」按钮同款注释。
           style={
             {
@@ -1596,11 +1598,12 @@ export default function QuickNotesPage() {
           }
         >
           {error}
-        </p>
+        </StatusBanner>
       )}
       {status && (
-        <p
-          className="fixed left-4 right-4 mx-auto max-w-3xl rounded-card border border-border bg-surface/95 px-3 py-2 td-text-body text-ink-2 shadow-elev1 [bottom:var(--bottom-offset)]"
+        <StatusBanner
+          tone="info"
+          className="fixed left-4 right-4 mx-auto max-w-3xl shadow-elev1 [bottom:var(--bottom-offset)]"
           style={
             {
               "--bottom-offset": `${floatBottomInsetPx}px`,
@@ -1609,7 +1612,7 @@ export default function QuickNotesPage() {
           }
         >
           {status}
-        </p>
+        </StatusBanner>
       )}
       {!searchOpen && !selectionMode && (
         <form

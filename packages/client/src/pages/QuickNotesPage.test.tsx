@@ -252,6 +252,7 @@ describe("QuickNotesPage", () => {
     expect(input(host).value).toBe("写了一半");
     // 必须说一声：否则用户不知道输入框为什么有字，也不知道左键此刻是「存为待办」不是「搜索」
     expect(host.textContent).toContain("已恢复未发出的草稿");
+    expect(host.querySelector("[data-tone='info']")).toBeInstanceOf(HTMLElement);
     expect(composerButton(host, "存为待办")).toBeInstanceOf(HTMLButtonElement);
 
     await unmount(root);

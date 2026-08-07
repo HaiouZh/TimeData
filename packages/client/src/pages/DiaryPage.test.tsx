@@ -269,6 +269,7 @@ describe("DiaryPage", () => {
       (button) => button.textContent === "仍然覆盖",
     );
     expect(overwriteButton).toBeInstanceOf(HTMLButtonElement);
+    expect(host.querySelector("[data-tone='danger']")).toBeInstanceOf(HTMLElement);
 
     await click(overwriteButton ?? null);
 
@@ -1493,6 +1494,7 @@ describe("DiaryPage", () => {
     await typeInto(textarea(host), "1. y");
     await click(host.querySelector('button[aria-label="保存"]'));
     expect(host.textContent).toContain("网络断开");
+    expect(host.querySelector("[data-tone='danger']")).toBeInstanceOf(HTMLElement);
 
     await typeInto(textarea(host), "1. y2");
     await click(host.querySelector('button[aria-label="保存"]'));

@@ -6,6 +6,7 @@ import { Icon } from "../components/Icon.js";
 import { PageBackButton } from "../components/ui/PageBackButton.js";
 import { PageHeader } from "../components/ui/PageHeader.js";
 import { LoadingState } from "../components/ui/LoadingState.js";
+import { StatusBanner } from "../components/ui/StatusBanner.js";
 import { useConfirm } from "../hooks/useConfirm.tsx";
 import { useNowMinute } from "../hooks/useNowMinute.js";
 import { useUnsavedChangesGuard } from "../hooks/useUnsavedChangesGuard.js";
@@ -504,29 +505,39 @@ export default function DiaryPage() {
       )}
 
       {conflict && (
-        <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-danger/40 bg-danger/10 px-4 py-2 td-text-body text-danger">
-          <span className="flex-1">日记已被其他窗口修改</span>
-          <button
-            type="button"
-            disabled={saving || reloading}
-            onClick={() => void handleReload()}
-            className="rounded-ctl border border-danger/40 bg-surface px-3 py-1 td-text-body font-medium text-danger disabled:cursor-not-allowed disabled:border-border disabled:text-ink-3"
-          >
-            刷新重载
-          </button>
-          <button
-            type="button"
-            disabled={saving || reloading}
-            onClick={() => void handleSave({ force: true })}
-            className="rounded-ctl bg-danger px-3 py-1 td-text-body font-medium text-page disabled:cursor-not-allowed disabled:bg-surface-hover disabled:text-ink-3"
-          >
-            仍然覆盖
-          </button>
-        </div>
+        <StatusBanner
+          tone="danger"
+          variant="bar"
+          className="shrink-0"
+          actions={
+            <>
+              <button
+                type="button"
+                disabled={saving || reloading}
+                onClick={() => void handleReload()}
+                className="rounded-ctl border border-danger/40 bg-surface px-3 py-1 td-text-body font-medium text-danger disabled:cursor-not-allowed disabled:border-border disabled:text-ink-3"
+              >
+                刷新重载
+              </button>
+              <button
+                type="button"
+                disabled={saving || reloading}
+                onClick={() => void handleSave({ force: true })}
+                className="rounded-ctl bg-danger px-3 py-1 td-text-body font-medium text-page disabled:cursor-not-allowed disabled:bg-surface-hover disabled:text-ink-3"
+              >
+                仍然覆盖
+              </button>
+            </>
+          }
+        >
+          日记已被其他窗口修改
+        </StatusBanner>
       )}
 
       {error && (
-        <p className="shrink-0 border-b border-danger/40 bg-danger/10 px-4 py-2 td-text-body text-danger">{error}</p>
+        <StatusBanner tone="danger" variant="bar" className="shrink-0">
+          {error}
+        </StatusBanner>
       )}
 
       {loading ? (
