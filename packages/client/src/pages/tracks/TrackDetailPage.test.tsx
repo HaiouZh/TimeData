@@ -561,7 +561,9 @@ describe("TrackDetailPage", () => {
 
     await clickButton(host, "删除轨道");
     expect(await getTrack(track.id)).toBeDefined();
-    await clickButton(host, "确认删除轨道");
+    // 升档后点一下只是开弹层，真删要在弹层里再确认一次。
+    expect(host.querySelector('[role="dialog"]')).toBeInstanceOf(HTMLElement);
+    await clickButton(host, "确认");
 
     await waitForText(host, "轨道列表");
     expect(await getTrack(track.id)).toBeUndefined();

@@ -22,6 +22,7 @@ import { type DragEvent, useCallback, useEffect, useMemo, useRef, useState } fro
 import { Icon } from "../../components/Icon.js";
 import { ConfirmSheet } from "../../components/ui/ConfirmSheet.js";
 import { Sheet } from "../../components/ui/Sheet.js";
+import { StatusBanner } from "../../components/ui/StatusBanner.js";
 import { useGalaxyEngineMode } from "../../lib/galaxyEngineMode.js";
 import { computeEdgeRoutings, type HandleBox, type EdgeRouting } from "../../lib/goalEdgeRouting.js";
 import { goalGalaxyLayout, type XY } from "../../lib/goalGalaxyLayout.js";
@@ -1307,9 +1308,9 @@ function GoalGalaxyCanvasInner({
         onClose={clearSelection}
       />
       {errorMessage && (
-        <div className="absolute bottom-3 right-3 z-20 rounded-card border border-danger/40 bg-danger/10 px-3 py-2 td-text-body text-danger">
+        <StatusBanner tone="danger" className="absolute bottom-3 right-3 z-20">
           {errorMessage}
-        </div>
+        </StatusBanner>
       )}
       {noticeMessage && !errorMessage && (
         <div

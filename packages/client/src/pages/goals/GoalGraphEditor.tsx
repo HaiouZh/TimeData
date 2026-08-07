@@ -17,6 +17,7 @@ import type { Goal, GoalLayoutPin, GoalMemberRef, GoalPrerequisite, Task, Track,
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ConfirmSheet } from "../../components/ui/ConfirmSheet.js";
 import { Sheet } from "../../components/ui/Sheet.js";
+import { StatusBanner } from "../../components/ui/StatusBanner.js";
 import { computeEdgeRoutings, type HandleBox } from "../../lib/goalEdgeRouting.js";
 import { addPrerequisiteEdge, removePrerequisiteEdge, validatePrerequisiteEdge } from "../../lib/goalGraphEdges.js";
 import type { GoalGraphOrientation } from "../../lib/goalGraphLayout.js";
@@ -525,9 +526,9 @@ function GoalGraphEditorInner({ goal, tasks, tracks, steps, layoutPins, onNaviga
       />
 
       {errorMessage && (
-        <div className="absolute bottom-3 right-3 z-10 rounded-card border border-danger/40 bg-danger/10 px-3 py-2 td-text-body text-danger">
+        <StatusBanner tone="danger" className="absolute bottom-3 right-3 z-10">
           {errorMessage}
-        </div>
+        </StatusBanner>
       )}
 
       <GoalAddMemberSheet
@@ -707,13 +708,9 @@ function ConnectSheet({
           </button>
         </div>
         {errorMessage && (
-          <p
-            data-connect-sheet-error
-            role="alert"
-            className="rounded-row border border-danger/40 bg-danger/10 px-3 py-2 td-text-body text-danger"
-          >
+          <StatusBanner tone="danger" role="alert" data-connect-sheet-error="">
             {errorMessage}
-          </p>
+          </StatusBanner>
         )}
         {draft?.direction && (
           <div className="grid gap-2">

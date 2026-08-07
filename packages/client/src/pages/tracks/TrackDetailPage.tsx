@@ -5,6 +5,8 @@ import { useLocation, useNavigate, useParams } from "react-router";
 import { Icon } from "../../components/Icon.js";
 import { LoadingState } from "../../components/ui/LoadingState.js";
 import { PageBackButton } from "../../components/ui/PageBackButton.js";
+import { StatusBanner } from "../../components/ui/StatusBanner.js";
+import { useConfirm } from "../../hooks/useConfirm.tsx";
 import { useTrackActionTags } from "../../lib/settings/trackActionTagsSetting.js";
 import {
   appendUserStep,
@@ -37,7 +39,7 @@ export default function TrackDetailPage() {
   const [titleDraft, setTitleDraft] = useState("");
   const [summaryDraft, setSummaryDraft] = useState("");
   const [actionError, setActionError] = useState<string | null>(null);
-  const [confirmingDeleteTrack, setConfirmingDeleteTrack] = useState(false);
+  const { confirm, dialog } = useConfirm();
 
   const isActive = track != null && track.status === "active";
   const hasOpenStep = currentStepId(steps) !== null;
@@ -104,10 +106,15 @@ export default function TrackDetailPage() {
 
   async function removeTrack(): Promise<void> {
     if (!track) return;
-    if (!confirmingDeleteTrack) {
-      setConfirmingDeleteTrack(true);
+    // 删轨道会连带删掉它下面所有步骤，误触一次就没了——比「删一条步骤」重得多，走弹层。
+    if (
+      !(await confirm({
+        title: "删除轨道？",
+        body: `「${track.title}」及其下全部步骤将一并删除，无法恢复。`,
+        danger: true,
+      }))
+    )
       return;
-    }
     try {
       await deleteTrack(track.id);
       setActionError(null);
@@ -141,6 +148,7 @@ export default function TrackDetailPage() {
 
   return (
     <div className="min-h-full bg-page text-ink">
+      {dialog}
       <div className="mx-auto w-full max-w-3xl px-4 py-4 pb-24">
         <div className="mb-3">
           <PageBackButton to="/tracks" label="轨道" />
@@ -203,11 +211,9 @@ export default function TrackDetailPage() {
                     <button
                       type="button"
                       onClick={() => void removeTrack()}
-                      className={`inline-flex h-8 shrink-0 items-center justify-center rounded-ctl bg-surface-elevated px-2 td-text-caption text-ink-2 hover:text-danger ${
-                        confirmingDeleteTrack ? "text-danger" : ""
-                      }`}
+                      className="inline-flex h-8 shrink-0 items-center justify-center rounded-ctl bg-surface-elevated px-2 td-text-caption text-ink-2 hover:text-danger"
                     >
-                      {confirmingDeleteTrack ? "确认删除轨道" : "删除轨道"}
+                      删除轨道
                     </button>
                     <span className="rounded-pill bg-surface-hover px-2 py-0.5 td-text-caption text-ink-2">
                       {STATUS_LABEL[track.status] ?? track.status}
@@ -246,12 +252,9 @@ export default function TrackDetailPage() {
               </div>
             </header>
             {actionError && (
-              <p
-                role="alert"
-                className="mb-3 rounded-card border border-danger/40 bg-danger/10 px-3 py-2 td-text-caption text-danger"
-              >
+              <StatusBanner tone="danger" role="alert" className="mb-3">
                 {actionError}
-              </p>
+              </StatusBanner>
             )}
             {latest ? (
               <CurrentFrameCard key={latest.id} step={latest} onEdit={editStep} onDelete={removeStep} />
