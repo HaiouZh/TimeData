@@ -21,7 +21,7 @@ covers:
 contracts:
   - .github/workflows/mobile-release.yml
   - packages/mobile/capacitor.config.ts
-last-reviewed: 2026-08-05
+last-reviewed: 2026-08-07
 ---
 
 # 部署 · Android APK 发布
@@ -73,7 +73,7 @@ Android 端依赖的 Capacitor 插件清单：`@capacitor/app`（返回键）、
 
 Android 生产 Manifest 显式设置 `android:usesCleartextTraffic="false"`，并且 `packages/mobile/capacitor.config.ts` 保持 `server.cleartext: false`、`android.allowMixedContent: false`。App 内服务器配置在原生 Android 环境会拒绝保存 `http://` API 地址；自托管服务器需要先通过 Caddy / Nginx / Tunnel 等方式暴露 HTTPS，再在 App 中填写 `https://` 地址。`pnpm --filter @timedata/mobile test` 会静态检查这些安全配置，避免 release APK 默认允许 HTTP 明文流量或混合内容。
 
-同步客户端不启用 `CapacitorHttp` 的全局 fetch/XHR patch。仅 Android 回前台时，`/api/sync/status` 与增量 `/api/sync/pull` 可由 client 显式调用 Capacitor 7 内置 `CapacitorHttp`；它使用系统 `HttpURLConnection`，不经过浏览器 CORS 预检，但仍受设备 DNS、VPN、代理、TLS 与服务器 HTTPS 链路影响，也没有逐请求取消能力。push、SSE、force-push、健康诊断、管理/日记/备份继续走 WebView `fetch`，所以部署仍需把 `https://localhost` 放入 `ALLOWED_ORIGINS`；原生路径不是放宽 CORS 或 cleartext 的理由。该内置能力无需新增 npm 依赖、Manifest 权限或原生插件注册。
+同步客户端不启用 `CapacitorHttp` 的全局 fetch/XHR patch。仅 Android 回前台时，`/api/sync/status` 与增量 `/api/sync/pull` 可由 client 显式调用 Capacitor 7 内置 `CapacitorHttp`；它使用系统 `HttpURLConnection`，不经过浏览器 CORS 预检，但仍受设备 DNS、VPN、代理、TLS 与服务器 HTTPS 链路影响，也没有逐请求取消能力。push、SSE、force-push、健康诊断、管理/日记/备份继续走 WebView `fetch`，所以 `https://localhost` 必须能过 CORS——它由服务端代码内置放行（[ADR 0030](../../adr/0030-shell-origins-allowed-by-server-code.md)），不必写进 `ALLOWED_ORIGINS`；原生路径不是放宽 CORS 或 cleartext 的理由。该内置能力无需新增 npm 依赖、Manifest 权限或原生插件注册。
 
 `packages/mobile/capacitor.config.ts` 是两个平台共用的：`android` 段与 `server` 段归本文档，`ios` 段（背景色）与 iOS 构建链路归 [deployment/ios-ipa](ios-ipa.md)。`server.androidScheme` 只作用于 Android；iOS 走 Capacitor 默认的 `capacitor://localhost`，两个壳的本地库不同源。`android.backgroundColor` 与 `ios.backgroundColor` 均为 `#0e1320`（= client `--color-page`），原生背景露出时（启动瞬间、旋转过渡、滚动越界回弹）与网页底色一致。`plugins.Keyboard.resize` 同样两平台共用，值为 `none`（webview 不因键盘 reflow）——该配置项与网页层键盘避让机制的关系讲在 [deployment/ios-ipa](ios-ipa.md#deployment-ios-ipa-s3-3)。
 

@@ -30,7 +30,7 @@ contracts:
   - packages/server/Dockerfile
   - packages/server/docker-entrypoint.sh
   - .env.example
-last-reviewed: 2026-08-06
+last-reviewed: 2026-08-07
 ---
 
 # 部署与自更新
@@ -83,7 +83,7 @@ last-reviewed: 2026-08-06
 | `AUTH_TOKEN` | 生产必填 | API 鉴权。所有 `/api/*` 请求都要带 `Authorization: Bearer <TOKEN>`，除了 `/api/health` 和 `/api/version` |
 | `AGENT_TOKEN` | 否 | 窄域 agent 鉴权。仅 `/api/agent/*` 接受，当前用于任务状态回写与任务轨道 ingest；未设置时该作用域仍可用 `AUTH_TOKEN`。生成用 `openssl rand -base64 32`，写进服务器 `.env` 后 `docker compose up -d` 重启一次即长期生效（`.env` 不随镜像更新变动，无需每次部署重配） |
 | `ALLOW_UNAUTHENTICATED_DEV` | 否 | 鉴权旁路。设为 `1` 且 `AUTH_TOKEN` 缺失时，放行所有 `/api/*` 并打印一次 warning；生产不要设置。**本仓约定本地开发也不用它**（理由见 §9.1），只留给临时排查 |
-| `ALLOWED_ORIGINS` | 生产必填 | CORS 允许来源白名单，逗号分隔；未配置时所有跨域 `/api/*` 请求会被拒绝（fail-closed） |
+| `ALLOWED_ORIGINS` | 网页版必填 | **网页域名**的 CORS 白名单，逗号分隔；壳（手机/桌面）的 origin 由代码内置放行，未配置时其余跨域 `/api/*` 一律拒绝（fail-closed） |
 | `MAX_BODY_BYTES` | 否 | `/api/*` 请求体大小上限（字节），默认 `5242880`（5 MB）；超出返回 HTTP 413 |
 | `SYNC_RATE_MAX` | 否 | `/api/sync/*` 每 60 秒最大请求次数（按 token 标识），默认 `60`；超出返回 HTTP 429 |
 | `ADMIN_RATE_MAX` | 否 | `/api/admin/*` 每 60 秒最大请求次数，默认 `120`；超出返回 HTTP 429。`/api/admin/sync-logs` 的读写清空和 `/api/admin/request-logs` 的只读查询都使用该限流 |
@@ -105,26 +105,28 @@ last-reviewed: 2026-08-06
 
 受保护业务路由包括 `/api/categories`、`/api/entries`、`/api/quick-notes`、`/api/sync/*`、`/api/export`、`/api/update`、`/api/data/*` 和 `/api/admin/*`；只有 `/api/health` 与 `/api/version` 在 auth middleware 前注册。`/api/agent/*` 在全局 auth 前单独挂 scoped auth，接受 `AUTH_TOKEN` 或 `AGENT_TOKEN`，但只暴露封闭的 agent 动作集合。
 
-`ALLOWED_ORIGINS` 由 `packages/server/src/middleware/cors.ts` 解析，`packages/server/src/index.ts` 在 `/api/*` CORS 中间件里使用。未配置时解析为**空数组**，所有跨域 `/api/*` 请求都会被拒绝；生产部署必须显式填写 Web 前端域名，例如 `ALLOWED_ORIGINS=https://timedata.example.com`。多域名用逗号分隔，例如 `ALLOWED_ORIGINS=https://timedata.example.com,https://timedata-staging.example.com`。Android 壳（`androidScheme: "https"`）的 origin 是 `https://localhost`，iOS 壳走 Capacitor 默认 scheme、origin 是 `capacitor://localhost`——**两条都是必配项**，漏配哪条，对应平台壳内的全部 `/api/*` 请求就被 CORS 拒。iOS 尤其没有退路：Android 那条原生 HTTP 通道在 `packages/client/src/lib/api.ts` 里显式限定 `getPlatform() === "android"`，iOS 全部请求都过 WebView fetch，漏配即同步全废。保留 `ALLOWED_ORIGINS=*` 可以通配来源，但 `*` 配合 `credentials: true` 等于反射任意来源请求，server 启动期会打印 WARN，不推荐用于生产环境。
+`ALLOWED_ORIGINS` 由 `packages/server/src/middleware/cors.ts` 解析，`packages/server/src/index.ts` 在 `/api/*` CORS 中间件里使用。它**只用来填网页域名**，例如 `ALLOWED_ORIGINS=https://timedata.example.com`，多域名用逗号分隔。未配置时解析为**空数组**，除下述壳 origin 外所有跨域 `/api/*` 请求都被拒绝。保留 `ALLOWED_ORIGINS=*` 可以通配来源，但 `*` 配合 `credentials: true` 等于反射任意来源请求，server 启动期会打印 WARN，不推荐用于生产环境。
 
-Android `resume` 同步的原生通道（`/api/sync/status` 与增量 `/api/sync/pull`）与其余 WebView 通道的划分、`https://localhost` 必须留在 `ALLOWED_ORIGINS` 的规则见 [deployment/android-apk](deployment/android-apk.md)；原生通道仍使用 Bearer/TOTP 鉴权与 HTTPS，客户端不启用全局 `CapacitorHttp` fetch/XHR patch，避免改变 SSE 的流式与取消语义。
+三个壳的 origin——Android（`androidScheme: "https"`）的 `https://localhost`、iOS（Capacitor 默认 scheme）的 `capacitor://localhost`、桌面版（Tauri v2）的 `http://tauri.localhost` / `https://tauri.localhost` / `tauri://localhost`——由壳运行时写死、部署者无从得知，已由 `cors.ts` 的 `SHELL_ORIGINS_BY_SHELL` **内置放行**，不必也不用写进 `ALLOWED_ORIGINS`。这三条以前是必配项，三个壳各因漏配踩过一次「壳内 `/api/*` 全线被拒而同源网页版毫无异常」，最后一次是 2026-08-07 的桌面版。决策与安全论证见 [ADR 0030](../adr/0030-shell-origins-allowed-by-server-code.md)；`cors.test.ts` 有两条闸守它，其一要求 `packages/` 下每个新包都表态是不是壳。
+
+Android `resume` 同步的原生通道（`/api/sync/status` 与增量 `/api/sync/pull`）与其余 WebView 通道的划分见 [deployment/android-apk](deployment/android-apk.md)；原生通道仍使用 Bearer/TOTP 鉴权与 HTTPS，客户端不启用全局 `CapacitorHttp` fetch/XHR patch，避免改变 SSE 的流式与取消语义。
 
 服务端 CORS 允许的请求头由 `packages/server/src/middleware/cors.ts` 的 `ALLOWED_REQUEST_HEADERS` 单点定义，`index.ts` 的 CORS 中间件直接消费：`Content-Type`、`Authorization`、`X-Confirm`、`X-TimeData-Client`、`X-TimeData-Client-Build`、`X-TOTP-Code`。`X-Confirm` 供 `/api/admin/sync-logs` 清空确认使用，`X-TimeData-Client` 供请求审计记录 client hint，`X-TimeData-Client-Build` 是 `apiFetch` 给每个请求带的构建观测头（见 [`sync`](sync.md#sync-row-granularity)），`X-TOTP-Code` 供危险操作补码重试。**客户端新增任何跨域自定义 header 必须同步这份白名单**——漏掉会让 Capacitor 壳的每个请求预检失败，而同源网页版毫无感知。`cors.test.ts` 有一条跨包闸机检 `client/src/lib/api.ts` 里 `headers.set` 的 `X-` 头是否都在白名单内。
 
 CORS 中间件的完整配置由 `cors.ts` 的 `corsOptions()` 单点构造，`index.ts` 只做 `cors(corsOptions(allowedOrigins))` 接线。其中 `maxAge` 取 `CORS_PREFLIGHT_MAX_AGE_SECONDS`（86400 秒 = 1 天）：仍走 WebView 的 Capacitor 请求带 `Authorization`，属于非简单请求、必须预检，而不发 `Access-Control-Max-Age` 时 Chromium/WebView 只缓存 5 秒，于是这些安卓 API 调用实际是两个整往返；Android resume 的原生 status/增量 pull 不经过该浏览器预检。移动网络上预检翻倍很贵——生产取证：一次冷启动里客户端测得 status 阶段 5311ms，同一请求服务端只花了 5ms。同源网页版不走预检，所以这个开销在电脑上复现不出来。
 
-**部署陷阱**：`docker-compose.yml` 的 `environment:` 块**必须**显式列出 `- ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-}`，否则就算 `.env` 写了值，变量也进不到容器里。Web 前端走同源不触发 CORS，所以这种漏配通常要等到 Android App 第一次跨域请求 `/api/sync/status` 才会暴露，表现为 App 内提示"网络请求失败：无法连接 https://&lt;your-host&gt;/api/sync/status"。
+**部署陷阱**：`docker-compose.yml` 的 `environment:` 块**必须**显式列出 `- ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-}`，否则就算 `.env` 写了值，变量也进不到容器里。壳 origin 内置放行后这条漏配不再影响手机与桌面版，但把网页版部署在与 API 不同的域名上时，网页端的全部 `/api/*` 会被拒。
 
-**自部署排错**：当 Android App 报上述错误而 PC 浏览器访问正常时，原因只有两类，都在同一个预检响应里能看出来——发一次带安卓 origin 的 OPTIONS 预检即可同时验两项：
+**自部署排错**：壳内（手机 / 桌面版）报「网络请求失败：无法连接 https://&lt;your-host&gt;/api/…」而 PC 浏览器访问正常时，发一次带该壳 origin 的 OPTIONS 预检，两类原因在同一个响应里都看得出来（手机把 `Origin` 换成 `https://localhost` 或 `capacitor://localhost`）：
 
 ```bash
 curl -sS -i -X OPTIONS https://<your-host>/api/health \
-  -H "Origin: https://localhost" \
+  -H "Origin: http://tauri.localhost" \
   -H "Access-Control-Request-Method: GET" \
   -H "Access-Control-Request-Headers: content-type,authorization,x-timedata-client-build"
 ```
 
-1. **origin 未放行**：响应缺 `access-control-allow-origin: https://localhost`。多是 `.env` 漏了 `https://localhost`，或 `docker-compose.yml` 漏了 `- ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-}` 那一行。修改后 `docker compose up -d` 重建容器（不需要 `down`），用 `docker compose exec timedata sh -c 'echo $ALLOWED_ORIGINS'` 确认变量已注入。
+1. **origin 未放行**：响应缺 `access-control-allow-origin: <该 origin>`。壳 origin 自 [ADR 0030](../adr/0030-shell-origins-allowed-by-server-code.md) 起内置放行，还出现这种情况说明服务端镜像早于该版本：升级镜像，或临时把该 origin 填进 `.env` 的 `ALLOWED_ORIGINS`。网页域名漏配、或 `docker-compose.yml` 漏了 `- ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-}` 那行也是同一个表现。改完 `docker compose up -d` 重建容器（不需要 `down`），用 `docker compose exec timedata sh -c 'echo $ALLOWED_ORIGINS'` 确认变量已注入。
 2. **自定义请求头未放行**：`access-control-allow-headers` 缺客户端实际发送的某个 `X-` 头。这是纯代码问题，与部署配置无关，改 `ALLOWED_REQUEST_HEADERS` 后需重新发版。曾踩过：client 加了 `X-TimeData-Client-Build` 但白名单没同步，安卓端全线断连而网页版（同源、不预检）无感。
 
 ### 2.1 GeoLite2 归属地库（可选，但装了才有国外地址）

@@ -262,6 +262,7 @@ Tauri 用独立的 WebView2 用户数据目录，与 Edge / Chrome 的 profile �
 
 ## 9. 排错
 
+- **桌面版报「网络请求失败：无法连接 …」而同一台电脑的浏览器访问正常**：桌面壳的 WebView origin 是 `http://tauri.localhost`（Windows；macOS/Linux 为 `tauri://localhost`），访问服务端一律**跨域**，所有请求都要过 CORS。该 origin 由服务端代码内置放行（[ADR 0030](../../adr/0030-shell-origins-allowed-by-server-code.md)），但服务端镜像早于该改动时会被拒——判据是 `curl -sS -i -X OPTIONS https://<host>/api/health -H "Origin: http://tauri.localhost" -H "Access-Control-Request-Method: GET"` 的响应里有没有 `access-control-allow-origin`。缺就升级服务端镜像，或临时把该 origin 填进服务器 `.env` 的 `ALLOWED_ORIGINS`（见 [deployment](../deployment.md) 的 `ALLOWED_ORIGINS` 段落）。fetch 失败分不清「被 CORS 拒」和「真连不上」，所以文案会同时提这两件事。
 - **开机自启指向了旧路径**：标记文件与启动项不同步。删除 `%APPDATA%\icu.yanzhou.timedata\autostart-initialized` 后重新运行一次即可重建。
 - **在任务管理器里关了自启，下次启动又回来了**：这是 §3 的判定语义。持久关闭的路径只有一条——应用的「设置 → 桌面设置」，它会把意图记进 `desktop-config.json`。
 - **窗口关不掉 / 关了进程还在**：这是设计语义（§2），托盘菜单「退出」才是唯一退出口。

@@ -48,8 +48,9 @@ if (allowedOrigins.includes("*")) {
 }
 if (allowedOrigins.length === 0) {
   console.warn(
-    "[cors] ALLOWED_ORIGINS not configured. All cross-origin /api/* requests will be rejected. " +
-    "Set ALLOWED_ORIGINS in the environment to enable client connectivity.",
+    "[cors] ALLOWED_ORIGINS not configured. App shell origins (Capacitor / Tauri) stay allowed, " +
+    "but every other cross-origin /api/* request will be rejected. " +
+    "Set ALLOWED_ORIGINS in the environment to allow your web origin.",
   );
 }
 

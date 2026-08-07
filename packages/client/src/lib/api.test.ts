@@ -1,3 +1,4 @@
+import { Capacitor } from "@capacitor/core";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ApiError, apiFetch, buildApiUrl } from "./api.js";
 
@@ -214,5 +215,83 @@ describe("apiFetch hedging", () => {
     vi.spyOn(globalThis, "fetch").mockRejectedValue(new TypeError("fetch failed"));
     await expect(apiFetch("/api/sync/status")).rejects.toThrow();
     expect(globalThis.fetch).toHaveBeenCalledTimes(1);
+  });
+});
+
+// 2026-08-07：桌面版被 CORS 拒时报的是这条兜底文案，而它当时写着「请确认手机能打开服务器」——
+// 在电脑上排查同步问题的人被这句直接带偏。fetch reject 分不清「CORS 被拒」和「真连不上」，
+// 文案只能把两种都覆盖，那就至少要说对本平台该查什么。
+describe("fetch 失败文案按壳分平台", () => {
+  // node 桶写法，同 desktop/shell.test.ts：直接在 globalThis 上装/卸一个最小 window，
+  // 不用 jsdom 指令也不用 defineProperty（两者都是脏标记，会被挡在 unit-clean 快桶外）。
+  // 桌面壳判定走真的 isDesktopShell（读 window.__TAURI_INTERNALS__），不 mock。
+  function setDesktopShell(present: boolean) {
+    if (present) {
+      (globalThis as Record<string, unknown>).window = { __TAURI_INTERNALS__: {} };
+    } else {
+      delete (globalThis as Record<string, unknown>).window;
+    }
+  }
+
+  beforeEach(() => {
+    localStorage.clear();
+    vi.restoreAllMocks();
+    setDesktopShell(false);
+  });
+
+  afterEach(() => {
+    setDesktopShell(false);
+  });
+
+  async function failureMessage(): Promise<string> {
+    localStorage.setItem("timedata_api_url", "https://example.com");
+    vi.spyOn(globalThis, "fetch").mockRejectedValue(new TypeError("Failed to fetch"));
+
+    return await apiFetch("/api/sync/push", { method: "POST" }).then(
+      () => {
+        throw new Error("这个请求本该失败");
+      },
+      (error: Error) => error.message,
+    );
+  }
+
+  it("桌面壳：点明桌面版来源要被服务端放行，不提手机", async () => {
+    setDesktopShell(true);
+
+    const message = await failureMessage();
+
+    expect(message).toContain("http://tauri.localhost");
+    expect(message).not.toContain("手机");
+  });
+
+  it("手机壳：仍然说手机与 https://localhost", async () => {
+    vi.spyOn(Capacitor, "getPlatform").mockReturnValue("android");
+
+    const message = await failureMessage();
+
+    expect(message).toContain("手机");
+    expect(message).toContain("https://localhost");
+    expect(message).not.toContain("tauri.localhost");
+  });
+
+  it("网页版：既不提手机也不提桌面壳 origin", async () => {
+    const message = await failureMessage();
+
+    expect(message).not.toContain("手机");
+    expect(message).not.toContain("tauri.localhost");
+  });
+
+  // 三条文案都必须带上失败的 URL，否则排查时连打的是哪个地址都看不到
+  it("三个平台的文案都带上请求 URL", async () => {
+    const web = await failureMessage();
+    setDesktopShell(true);
+    const desktop = await failureMessage();
+    setDesktopShell(false);
+    vi.spyOn(Capacitor, "getPlatform").mockReturnValue("ios");
+    const mobile = await failureMessage();
+
+    for (const message of [web, desktop, mobile]) {
+      expect(message).toContain("https://example.com/api/sync/push");
+    }
   });
 });

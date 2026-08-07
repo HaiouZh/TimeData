@@ -9,8 +9,19 @@
 export const messages = {
   /** Network / API */
   network: {
-    fetchFailed: (url: string): string =>
-      `网络请求失败：无法连接 ${url}。请确认手机能打开服务器 HTTPS 地址、服务器证书有效，并且 API 地址只填写域名根地址（例如 https://timedata.yanzhou.icu，不要带 /api）。自托管时还需确认服务端 ALLOWED_ORIGINS 已包含 https://localhost。`,
+    /**
+     * fetch reject 分不清「跨域被服务端 CORS 拒」和「真的连不上」，一条文案要同时覆盖两种；
+     * 按壳分开是因为三端该查的东西不同，混着说会把人带偏——2026-08-07 桌面版就是被
+     * 「请确认手机能打开服务器」这句绕进去的。选哪条见 `api.ts` 的 `describeFetchFailure`。
+     */
+    fetchFailed: {
+      desktop: (url: string): string =>
+        `网络请求失败：无法连接 ${url}。请确认这台电脑能打开服务器 HTTPS 地址、服务器证书有效，并且 API 地址只填写域名根地址（例如 https://timedata.yanzhou.icu，不要带 /api）。自托管时还需确认服务端放行了桌面版来源 http://tauri.localhost——较早的服务端版本要手动把它加进 ALLOWED_ORIGINS。`,
+      mobile: (url: string): string =>
+        `网络请求失败：无法连接 ${url}。请确认手机能打开服务器 HTTPS 地址、服务器证书有效，并且 API 地址只填写域名根地址（例如 https://timedata.yanzhou.icu，不要带 /api）。自托管时还需确认服务端 ALLOWED_ORIGINS 已包含 https://localhost。`,
+      web: (url: string): string =>
+        `网络请求失败：无法连接 ${url}。请确认浏览器能打开服务器 HTTPS 地址、服务器证书有效，并且 API 地址只填写域名根地址（例如 https://timedata.yanzhou.icu，不要带 /api）。填的是另一个域名的服务端时，该域名还要在服务端 ALLOWED_ORIGINS 里。`,
+    },
     timeout: (timeoutMs: number, url: string): string => `网络请求超时（${timeoutMs}ms）：${url}`,
     invalidJson: (url: string, snippet: string): string => `API 返回的 JSON 无法解析：${url} - ${snippet}`,
   },

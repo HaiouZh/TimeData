@@ -58,7 +58,7 @@ export default function SettingsServerPage() {
             className={inputClassName}
           />
           <p className="mt-2 td-text-caption text-ink-3">Android App 保持 HTTPS-only；自托管服务器请配置 HTTPS 反向代理后填写 https:// 地址。</p>
-          <p className="mt-1 td-text-caption text-ink-3">自托管：服务端 <code className="font-mono">ALLOWED_ORIGINS</code> 必须包含 <code className="font-mono">https://localhost</code>，否则 Android 跨域请求会被 CORS 拒绝。</p>
+          <p className="mt-1 td-text-caption text-ink-3">自托管：手机与桌面壳的来源已由服务端内置放行；若服务端版本较早，仍需把 <code className="font-mono">https://localhost</code>（桌面版另加 <code className="font-mono">http://tauri.localhost</code>）填进 <code className="font-mono">ALLOWED_ORIGINS</code>，否则壳内跨域请求会被 CORS 拒绝。</p>
         </div>
         <div>
           <label className="mb-1 block td-text-caption text-ink-3">Token</label>

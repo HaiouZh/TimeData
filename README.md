@@ -42,7 +42,7 @@ docker compose up -d
 |------|------|--------|------|
 | `AUTH_TOKEN` | 生产必填 | — | API 鉴权密钥，所有 API 请求需携带 `Authorization: Bearer <TOKEN>`；Docker 部署会以 `NODE_ENV=production` 运行，未设置时服务端会拒绝启动 |
 | `AGENT_TOKEN` | 否 | — | 窄域 agent 令牌，仅允许调用 `/api/agent/*` 任务状态回写；未设置时该作用域仍可用 `AUTH_TOKEN` |
-| `ALLOWED_ORIGINS` | 生产必填 | 空数组（拒绝跨域） | CORS 允许来源白名单，多个来源用英文逗号分隔；Web 部署填网页域名，移动壳按实际来源追加 `https://localhost,capacitor://localhost` |
+| `ALLOWED_ORIGINS` | 网页版必填 | 空数组（拒绝跨域） | CORS 允许来源白名单，多个来源用英文逗号分隔；只需填网页域名，手机壳与桌面壳的来源由服务端内置放行 |
 | `DB_PATH` | 否 | `/app/data/timedata.db` | SQLite 数据库路径 |
 | `PORT` | 否 | `3000` | 服务监听端口 |
 | `UPDATE_REPO` | 否 | `HaiouZh/TimeData` | GitHub owner/repo，用于查询最新版本 |
@@ -75,7 +75,7 @@ API 地址：https://你的域名 或 http://服务器IP:3000
 Token：.env 中 AUTH_TOKEN 的值
 ```
 
-保存后即可使用同步、数据导出和服务端数据洞察功能。生产环境必须设置 `ALLOWED_ORIGINS`，把网页域名和 Android/Capacitor 壳实际来源加入白名单；未设置时跨域 `/api/*` 请求会被拒绝。
+保存后即可使用同步、数据导出和服务端数据洞察功能。网页版部署在与 API 不同的域名上时必须设置 `ALLOWED_ORIGINS`（手机壳与桌面壳的来源由服务端内置放行，不用填）；未设置时其余跨域 `/api/*` 请求会被拒绝。
 
 ## 服务端数据洞察
 
@@ -151,7 +151,7 @@ GitHub Actions 发布的是稳定 release keystore 签名的 APK。首次从旧 
 
 GitHub Release 与 APK 同版本附带 `TimeData-unsigned.ipa`。该 IPA **未签名**，不能直接安装：在手机上用 SideStore（推荐，可离机自行续签）或 AltStore 导入，安装时用你自己的 Apple ID 签名。免费 Apple ID 的签名 7 天到期，到期重签即可，应用数据不丢；同时最多 3 个自签应用。
 
-iOS 壳与 Safari 里的 PWA **不同源**（壳是 `capacitor://localhost`），两者本地数据互不可见。装好后先在设置里填 API 地址与 Token，靠服务器同步把数据拉下来。服务端 `ALLOWED_ORIGINS` 必须包含 `capacitor://localhost`，否则壳内所有 `/api/*` 请求都会被 CORS 拒。
+iOS 壳与 Safari 里的 PWA **不同源**（壳是 `capacitor://localhost`），两者本地数据互不可见。装好后先在设置里填 API 地址与 Token，靠服务器同步把数据拉下来。壳的 origin `capacitor://localhost` 由服务端内置放行，不需要写进 `ALLOWED_ORIGINS`。
 
 装机步骤、构建链路与排错见 [docs/evergreen/deployment/ios-ipa.md](docs/evergreen/deployment/ios-ipa.md)。
 

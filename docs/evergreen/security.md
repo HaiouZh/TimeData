@@ -35,7 +35,7 @@ contracts:
   - packages/server/src/middleware/auth.ts
   - packages/server/src/middleware/totp.ts
   - packages/client/src/lib/storageKeys.ts
-last-reviewed: 2026-08-06
+last-reviewed: 2026-08-07
 ---
 
 # 安全与凭据处理
@@ -63,7 +63,7 @@ last-reviewed: 2026-08-06
 
 `schemaNormalizationVersion`（`timedata_schema_normalization_version`）是纯本地、不同步、非敏感的版本闸，只记录客户端 schema 归一 pass 已跑到的版本号。
 
-Android 原生环境保持 HTTPS-only：`packages/mobile/capacitor.config.ts` 的 `server.cleartext: false` / `android.allowMixedContent: false` 与 Manifest 的 `android:usesCleartextTraffic="false"` 共同禁止明文 API 请求。服务器设置页在原生环境会拒绝保存 `http://` API 地址，并提示用户改用 HTTPS 反向代理地址；Web/PWA 环境不做这层 Android 专属拦截。设置页还会提示自托管用户：服务端 `ALLOWED_ORIGINS` 必须包含 `https://localhost`，否则 Android（Capacitor `androidScheme: "https"`）的跨域请求会被 CORS fail-closed 中间件拒绝；具体配置位置和验证方法见 [部署与自更新](deployment.md) 的 `ALLOWED_ORIGINS` 段落。
+Android 原生环境保持 HTTPS-only：`packages/mobile/capacitor.config.ts` 的 `server.cleartext: false` / `android.allowMixedContent: false` 与 Manifest 的 `android:usesCleartextTraffic="false"` 共同禁止明文 API 请求。服务器设置页在原生环境会拒绝保存 `http://` API 地址，并提示用户改用 HTTPS 反向代理地址；Web/PWA 环境不做这层 Android 专属拦截。壳（Android `https://localhost`、iOS `capacitor://localhost`、桌面版 Tauri）的 origin 由服务端代码内置放行而非部署者手填，理由与安全论证见 [ADR 0030](../adr/0030-shell-origins-allowed-by-server-code.md)：这些 origin 只有本机安装的壳能占据，而真正的恶意本地应用根本不受 CORS 约束，守 API 的是 Bearer token。设置页仍提示自托管用户，服务端版本早于该改动时要把 origin 填进 `ALLOWED_ORIGINS`；配置位置与验证方法见 [部署与自更新](deployment.md) 的 `ALLOWED_ORIGINS` 段落。
 
 ## 服务端认证与审计
 

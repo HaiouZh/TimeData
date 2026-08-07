@@ -1,4 +1,5 @@
 import { Capacitor, CapacitorHttp } from "@capacitor/core";
+import { isDesktopShell } from "./desktop/shell.js";
 import { CURRENT_BUILD_ID } from "./frontendUpdate.js";
 import { messages } from "./messages.ts";
 import { safeGetItem } from "./safeStorage.js";
@@ -32,7 +33,14 @@ export function getToken(): string {
 }
 
 function describeFetchFailure(url: string): Error {
-  return new Error(messages.network.fetchFailed(url));
+  if (isDesktopShell()) {
+    return new Error(messages.network.fetchFailed.desktop(url));
+  }
+  const platform = Capacitor.getPlatform();
+  if (platform === "android" || platform === "ios") {
+    return new Error(messages.network.fetchFailed.mobile(url));
+  }
+  return new Error(messages.network.fetchFailed.web(url));
 }
 
 export interface ApiFetchOptions extends RequestInit {
