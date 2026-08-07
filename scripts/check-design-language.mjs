@@ -319,8 +319,6 @@ const RULES = [
       /hover:|disabled:/.test(line) ||
       // 徽章
       /rounded-pill/.test(line) ||
-      // 内容容器（装着标题+说明+按钮的危险操作区）；状态条是单行文字，不需要垂直间距
-      /space-y-/.test(line) ||
       // tone 映射常量表（`good: "…"` 这种键值对），不是 JSX className
       /^\s*[A-Za-z_$][\w$]*:\s*"/.test(line),
   },

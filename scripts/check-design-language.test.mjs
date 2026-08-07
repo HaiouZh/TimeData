@@ -969,7 +969,7 @@ test("flags handwritten centered modal and allows Sheet's bottom drawer", () => 
   );
 });
 
-test("flags handwritten status banner triplet and allows the five legit forms", () => {
+test("flags handwritten status banner triplet and allows the four legit forms", () => {
   // 命中：完整三件套的状态条
   assert.equal(
     classifyLine(
@@ -994,21 +994,25 @@ test("flags handwritten status banner triplet and allows the five legit forms", 
     ).some((v) => v.rule === "handwritten-status-banner"),
     false,
   );
-  // 放行 3：内容容器（危险操作区，装着标题+说明+按钮）
+  // 命中：带垂直间距的状态条同样要拦。曾经这里放行 `space-y-`（想放过「装标题+说明+按钮的
+  // 危险操作区容器」），但同 tone 三件套收紧后全仓零依赖——那条 skip 一行都没在守，
+  // 却给「带标题的手写状态条」留了条现成的出路，故删掉。
+  // 注意这行必须带 text-danger：少了它连正则都匹配不上，断言就成了空转（原样例正是如此）。
   assert.equal(
-    classifyLine("x.tsx", '<section className="space-y-3 rounded-card border border-danger/40 bg-danger/10 p-4">').some(
-      (v) => v.rule === "handwritten-status-banner",
-    ),
-    false,
+    classifyLine(
+      "x.tsx",
+      '<section className="space-y-3 rounded-card border border-danger/40 bg-danger/10 p-4 td-text-body text-danger">',
+    ).some((v) => v.rule === "handwritten-status-banner"),
+    true,
   );
-  // 放行 4：tone 映射常量表
+  // 放行 3：tone 映射常量表
   assert.equal(
     classifyLine("x.tsx", '    good: "border-ok/30 bg-ok/10 text-ok",').some(
       (v) => v.rule === "handwritten-status-banner",
     ),
     false,
   );
-  // 放行 5：组件自身
+  // 放行 4：组件自身
   assert.equal(
     classifyLine(
       "packages/client/src/components/ui/StatusBanner.tsx",
