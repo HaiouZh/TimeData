@@ -363,6 +363,7 @@ describe("SettingsPage", () => {
     expect(html).toContain("time_entries/entry-conflict");
     expect(html).toContain("overlap");
     expect(html).toContain("entry overlaps existing entry server-entry");
+    expect(html).toContain('data-tone="warn"');
   });
 
   it("shows a clock skew warning when local and server time differ too much", () => {

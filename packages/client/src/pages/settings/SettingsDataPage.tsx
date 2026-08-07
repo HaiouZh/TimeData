@@ -8,6 +8,7 @@ import { importBackup } from "../../backup/importBackup.ts";
 import { validateBackup } from "../../backup/validateBackup.ts";
 import { Checkbox } from "../../components/ui/Checkbox.js";
 import { DateField } from "../../components/ui/DateField.js";
+import { StatusBanner } from "../../components/ui/StatusBanner.js";
 import { Switch } from "../../components/ui/Switch.js";
 import { useSyncContext } from "../../contexts/SyncContext.tsx";
 import { resetLocalDataToDefaults } from "../../db/index.ts";
@@ -491,9 +492,9 @@ export default function SettingsDataPage() {
         </summary>
         <div className="space-y-5 p-4 pt-0">
           {needsSyncDiagnostics && (
-            <div className="rounded-ctl border border-warn/40 bg-warn/10 p-3 td-text-caption text-warn">
+            <StatusBanner tone="warn">
               普通同步已连续失败 {syncFailureCount} 次。建议先运行诊断，再决定使用云端覆盖本地或本地覆盖云端。
-            </div>
+            </StatusBanner>
           )}
 
           <section className="space-y-3">

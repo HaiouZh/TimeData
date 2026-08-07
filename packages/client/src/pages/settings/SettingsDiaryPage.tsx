@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { StatusBanner } from "../../components/ui/StatusBanner.js";
 import { ApiError } from "../../lib/api.js";
 import { fetchDiaryConfig, saveDiaryTemplate, saveDiaryWeeklyTemplate } from "../../lib/diary/diaryApi.js";
 import SettingsDetailPage from "./SettingsDetailPage.tsx";
@@ -84,9 +85,9 @@ export default function SettingsDiaryPage() {
       ) : (
         <div className="space-y-4">
           {!enabled && (
-            <div className="rounded-row border border-warn/40 bg-warn/10 p-3 td-text-body text-warn">
+            <StatusBanner tone="warn">
               服务器未挂载日记 vault（DIARY_VAULT_DIR），保存的模板暂时不会生效
-            </div>
+            </StatusBanner>
           )}
 
           <div className="space-y-3 rounded-card border border-border bg-surface p-4">
@@ -115,12 +116,8 @@ export default function SettingsDiaryPage() {
             {saving ? "保存中…" : "保存"}
           </button>
 
-          {message && (
-            <div className="rounded-row border border-ok/40 bg-ok/10 p-3 td-text-body text-ok">{message}</div>
-          )}
-          {error && (
-            <div className="rounded-row border border-danger/40 bg-danger/10 p-3 td-text-body text-danger">{error}</div>
-          )}
+          {message && <StatusBanner tone="ok">{message}</StatusBanner>}
+          {error && <StatusBanner tone="danger">{error}</StatusBanner>}
 
           <div className="space-y-3 rounded-card border border-border bg-surface p-4">
             <label className="block">
@@ -148,14 +145,8 @@ export default function SettingsDiaryPage() {
             {weeklySaving ? "保存中…" : "保存"}
           </button>
 
-          {weeklyMessage && (
-            <div className="rounded-row border border-ok/40 bg-ok/10 p-3 td-text-body text-ok">{weeklyMessage}</div>
-          )}
-          {weeklyError && (
-            <div className="rounded-row border border-danger/40 bg-danger/10 p-3 td-text-body text-danger">
-              {weeklyError}
-            </div>
-          )}
+          {weeklyMessage && <StatusBanner tone="ok">{weeklyMessage}</StatusBanner>}
+          {weeklyError && <StatusBanner tone="danger">{weeklyError}</StatusBanner>}
         </div>
       )}
     </SettingsDetailPage>

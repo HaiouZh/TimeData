@@ -1,5 +1,6 @@
 import QRCode from "qrcode";
 import { useEffect, useState } from "react";
+import { StatusBanner } from "../../components/ui/StatusBanner.js";
 import { confirmTotp, disableTotp, fetchTotpStatus, setupTotp, type TotpSetupResponse } from "../../lib/adminApi.ts";
 import { messages } from "../../lib/messages.ts";
 
@@ -100,9 +101,7 @@ export default function SettingsTotpSection() {
       <h3 className="td-text-body font-medium text-ink-2">{totpMessages.sectionTitle}</h3>
       <p className="td-text-caption text-ink-3">{totpMessages.sectionIntro}</p>
 
-      {statusError && (
-        <div className="rounded-ctl border border-danger/40 bg-danger/10 p-3 td-text-body text-danger">{statusError}</div>
-      )}
+      {statusError && <StatusBanner tone="danger">{statusError}</StatusBanner>}
 
       {enrolled === false && !pending && (
         <div className="space-y-2">

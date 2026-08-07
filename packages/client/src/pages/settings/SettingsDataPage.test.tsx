@@ -160,6 +160,7 @@ describe("SettingsDataPage", () => {
     const details = host.querySelector("details");
     expect(details?.open).toBe(true);
     expect(host.textContent).toContain("普通同步已连续失败 3 次");
+    expect(host.querySelector("[data-tone='warn']")).toBeInstanceOf(HTMLElement);
 
     await unmount(root);
   });

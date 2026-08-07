@@ -35,6 +35,7 @@ import {
 } from "../../lib/adminNewIps.ts";
 import { SelectSheet, type SelectOption } from "../../components/ui/SelectSheet.js";
 import { LoadingState } from "../../components/ui/LoadingState.js";
+import { StatusBanner } from "../../components/ui/StatusBanner.js";
 import { Switch } from "../../components/ui/Switch.js";
 import { TimeField } from "../../components/ui/TimeField.js";
 import { useConfirm } from "../../hooks/useConfirm.tsx";
@@ -365,7 +366,7 @@ function RequestAuditSection({
       </p>
 
       {loading && <LoadingState label="正在加载请求审计…" className="py-4" />}
-      {error && <div className="rounded-ctl border border-danger/40 bg-danger/10 p-3 td-text-label text-danger">{error}</div>}
+      {error && <StatusBanner tone="danger">{error}</StatusBanner>}
 
       <div className="space-y-2">
         {logs?.logs.map((log) => (
@@ -605,9 +606,7 @@ export default function SettingsAdminInsightsPage() {
       <NewIpAlertCard newIps={newIps} busy={newIpAckBusy} onAcknowledge={(item) => void handleAcknowledgeNewIp(item)} />
 
       {loading && <LoadingState label="正在加载服务端数据…" className="py-4" />}
-      {error && (
-        <div className="rounded-card border border-danger/40 bg-danger/10 p-4 td-text-label text-danger">{error}</div>
-      )}
+      {error && <StatusBanner tone="danger">{error}</StatusBanner>}
 
       {data && (
         <>

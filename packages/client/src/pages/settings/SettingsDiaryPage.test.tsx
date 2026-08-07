@@ -91,6 +91,7 @@ describe("SettingsDiaryPage", () => {
       ([url, opts]) => String(url).endsWith("/api/diary/config") && opts?.method === "PUT",
     );
     expect(JSON.parse(String(putCall?.[1]?.body))).toEqual({ template: "日记_{yyyy}/新模板/{yyyy}-{MM}-{dd}.md" });
+    expect(host.querySelector("[data-tone='ok']")).toBeInstanceOf(HTMLElement);
 
     await unmount(root);
   });
@@ -118,6 +119,7 @@ describe("SettingsDiaryPage", () => {
     await flushEffects();
 
     expect(host.textContent).toContain("模板格式不合法");
+    expect(host.querySelector("[data-tone='danger']")).toBeInstanceOf(HTMLElement);
 
     await unmount(root);
   });
@@ -191,6 +193,7 @@ describe("SettingsDiaryPage", () => {
     await flushEffects();
 
     expect(host.textContent).toContain("周记模板格式不合法");
+    expect(host.querySelector("[data-tone='danger']")).toBeInstanceOf(HTMLElement);
 
     await unmount(root);
   });
@@ -226,6 +229,7 @@ describe("SettingsDiaryPage", () => {
     // 空串必须真的发出去（服务端据此清除配置），且不报错
     expect(JSON.parse(String(putCall?.[1]?.body))).toEqual({ weeklyTemplate: "" });
     expect(host.textContent).toContain("模板已保存");
+    expect(host.querySelector("[data-tone='ok']")).toBeInstanceOf(HTMLElement);
 
     await unmount(root);
   });

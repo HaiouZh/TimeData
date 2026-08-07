@@ -4,6 +4,7 @@ import { ShortcutInput } from "../../components/desktop/ShortcutInput.js";
 import { Icon } from "../../components/Icon.js";
 import { SegmentedControl } from "../../components/ui/SegmentedControl.js";
 import { SelectSheet } from "../../components/ui/SelectSheet.js";
+import { StatusBanner } from "../../components/ui/StatusBanner.js";
 import { Switch } from "../../components/ui/Switch.js";
 import type {
   AutostartState,
@@ -313,9 +314,7 @@ export default function SettingsDesktopPage() {
 
   return (
     <SettingsDetailPage title="桌面设置">
-      {error && (
-        <p className="rounded-ctl border border-danger/50 bg-danger/10 p-2 td-text-caption text-danger">{error}</p>
-      )}
+      {error && <StatusBanner tone="danger">{error}</StatusBanner>}
       {hint && (
         <p className="rounded-ctl border border-border bg-surface-hover p-2 td-text-caption text-ink-2">{hint}</p>
       )}

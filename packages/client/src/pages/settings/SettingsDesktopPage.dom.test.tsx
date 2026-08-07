@@ -266,6 +266,7 @@ describe("SettingsDesktopPage 接线", () => {
     expect(host.textContent).toContain("被其他程序占用");
     expect(host.textContent).toContain("改动要保存才生效");
     expect(buttonNamed(host, "保存快捷键").disabled).toBe(false);
+    expect(host.querySelector("[data-tone='danger']")).toBeInstanceOf(HTMLElement);
   });
 
   // 读屏取可访问名时 aria-label 会盖掉按钮文字。写死「快捷键」的话读出来永远是

@@ -293,6 +293,7 @@ describe("SettingsAdminInsightsPage", () => {
     expect(host.textContent).toContain("timedata-backup.sqlite");
     expect(host.textContent).toContain("/api/agent/tasks/task-1/status");
     expect(host.textContent).toContain("auth_failed");
+    expect(host.querySelector("[data-tone='danger']")).toBeInstanceOf(HTMLElement);
 
     await unmount(root);
   });

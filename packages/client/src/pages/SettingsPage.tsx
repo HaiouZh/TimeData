@@ -28,6 +28,7 @@ import {
 } from "@phosphor-icons/react";
 import { Icon } from "../components/Icon.js";
 import SyncTimingsPanel from "../components/SyncTimingsPanel.js";
+import { StatusBanner } from "../components/ui/StatusBanner.js";
 import { SettingsRow, SettingsSection } from "./settings/components/SettingsRows.js";
 
 type ServerConnectionColor = "green" | "gray" | "red" | "yellow";
@@ -82,14 +83,14 @@ function SyncIssueList({ issues }: { issues: NonNullable<RegularSyncResult["push
   if (issues.length === 0) return null;
 
   return (
-    <div className="space-y-1 rounded-ctl border border-warn/50 bg-warn/10 p-2 text-warn">
+    <StatusBanner tone="warn" className="space-y-1">
       <p>需要处理的同步项：</p>
       {issues.map((issue) => (
         <p key={`${issue.tableName}:${issue.recordId}:${issue.action}`}>
           {issue.tableName}/{issue.recordId}: {issue.reasonCode} — {issue.message}
         </p>
       ))}
-    </div>
+    </StatusBanner>
   );
 }
 
