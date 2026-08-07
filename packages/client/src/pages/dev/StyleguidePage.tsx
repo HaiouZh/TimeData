@@ -309,6 +309,8 @@ export default function StyleguidePage() {
                 <StatusBanner tone="info">同步进行中</StatusBanner>
                 <StatusBanner tone="warn">部分记录未同步</StatusBanner>
                 <StatusBanner tone="danger">同步失败，请重试</StatusBanner>
+                <StatusBanner tone="ok">已生成本周回顾</StatusBanner>
+                <StatusBanner tone="danger" variant="bar">日记已被其他窗口修改</StatusBanner>
               </div>
             </div>
             <div>

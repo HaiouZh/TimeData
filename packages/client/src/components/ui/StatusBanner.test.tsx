@@ -40,4 +40,60 @@ describe("StatusBanner", () => {
     expect(host.textContent).toContain("同步失败");
     await unmount(root);
   });
+
+  it("ok 档：成功态的边框/底色/文字色", async () => {
+    const { host, root } = await renderDom(createElement(StatusBanner, { tone: "ok" }, "已生成"));
+    const el = host.querySelector("[data-tone='ok']");
+    expect(el?.className).toContain("border-ok/40");
+    expect(el?.className).toContain("bg-ok/10");
+    expect(el?.className).toContain("text-ok");
+    await unmount(root);
+  });
+
+  it("bar 形态：贴边横条，无圆角卡片类", async () => {
+    const { host, root } = await renderDom(
+      createElement(StatusBanner, { tone: "danger", variant: "bar" }, "日记已被其他窗口修改"),
+    );
+    const el = host.querySelector("[data-tone='danger']");
+    expect(el?.className).toContain("border-b");
+    // 贴边横条不能有圆角卡片形态，否则日记页顶部会冒出一个悬空的圆角块。
+    expect(el?.className).not.toContain("rounded-card");
+    await unmount(root);
+  });
+
+  it("有 actions 时文字与动作并排", async () => {
+    const { host, root } = await renderDom(
+      createElement(
+        StatusBanner,
+        { tone: "danger", actions: createElement("button", { type: "button" }, "刷新重载") },
+        "冲突了",
+      ),
+    );
+    const banner = host.querySelector("[data-tone='danger']");
+    expect(banner?.querySelector("button")?.textContent).toBe("刷新重载");
+    expect(banner?.textContent).toContain("冲突了");
+    await unmount(root);
+  });
+
+  it("没有 actions 时不套 flex 布局", async () => {
+    // 18 处纯文字条不带 actions，多套一层 flex 会改变它们的 DOM 与换行行为。
+    const { host, root } = await renderDom(createElement(StatusBanner, { tone: "info" }, "同步中"));
+    expect(host.querySelector("[data-tone='info'] div")).toBeNull();
+    await unmount(root);
+  });
+
+  it("className 与 role 透传；不传 role 时不渲染 role 属性", async () => {
+    const withRole = await renderDom(
+      createElement(StatusBanner, { tone: "danger", className: "fixed left-4", role: "alert" }, "出错了"),
+    );
+    const el = withRole.host.querySelector("[data-tone='danger']");
+    expect(el?.className).toContain("fixed left-4");
+    expect(el?.getAttribute("role")).toBe("alert");
+    await unmount(withRole.root);
+
+    // 现有 18 处都没有 role，无条件加会改变屏幕阅读器的播报行为。
+    const plain = await renderDom(createElement(StatusBanner, { tone: "info" }, "提示"));
+    expect(plain.host.querySelector("[data-tone='info']")?.hasAttribute("role")).toBe(false);
+    await unmount(plain.root);
+  });
 });
