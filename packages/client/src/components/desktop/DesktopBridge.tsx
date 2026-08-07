@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useLocation, useNavigate } from "react-router";
 import { useEntryMutations } from "../../hooks/useEntries.js";
 import type { DesktopConfigDto, DesktopHotkeyEvent } from "../../lib/desktop/api.js";
 import { invokeDesktop, listenDesktopHotkey, messageOf } from "../../lib/desktop/api.js";
+import { resolveNavigateTarget } from "../../lib/desktop/navigateAction.js";
 import { desktopPunch, rangeHours, type DesktopPunchOutcome } from "../../lib/desktop/desktopPunch.js";
 import { formatTime } from "../../lib/time.js";
 import {
@@ -206,10 +208,12 @@ export function dismissNotice(prev: BridgeState, expected: DesktopNoticeState | 
 export async function startDesktopBridge(
   io: Pick<DesktopBridgeIo, "invoke" | "listen">,
   onPunch: (pressedAtMs: number) => void,
+  onNavigate: (event: DesktopHotkeyEvent) => void,
 ): Promise<() => void> {
   const unlisten = await io.listen((event) => {
-    // toggleMain 由 Rust 直办，前端只认 punch。
+    // toggleMain 由 Rust 直办，前端不认。
     if (event.action === "punch") onPunch(event.pressedAtMs);
+    if (event.action === "navigate") onNavigate(event);
   });
   try {
     await io.invoke("desktop_ready");
@@ -242,6 +246,21 @@ export function DesktopBridge() {
     }),
     [],
   );
+
+  // 两个都用 ref 读、不进 effect 依赖：否则每次路由变化都会重挂一次热键监听。
+  const navigate = useNavigate();
+  const navigateRef = useRef(navigate);
+  navigateRef.current = navigate;
+  const location = useLocation();
+  const pathnameRef = useRef(location.pathname);
+  pathnameRef.current = location.pathname;
+
+  const handleNavigate = useCallback((event: DesktopHotkeyEvent) => {
+    const to = resolveNavigateTarget(event, pathnameRef.current);
+    // 走 router 的 navigate（不是 location.href）：useUnsavedChangesGuard 的 useBlocker
+    // 只拦得住站内换页，日记页脏着时误按热键会照常弹「放弃未保存的修改？」。
+    if (to) navigateRef.current(to);
+  }, []);
 
   /**
    * 全部状态转移排成一条串行队列。热键连按两下会并发跑两次打点，各自 ~8 个 await 必然交错：
@@ -281,7 +300,11 @@ export function DesktopBridge() {
     let unlisten: (() => void) | null = null;
     void (async () => {
       try {
-        const un = await startDesktopBridge(io, (pressedAtMs) => run((prev) => punchFromHotkey(pressedAtMs, io, prev)));
+        const un = await startDesktopBridge(
+          io,
+          (pressedAtMs) => run((prev) => punchFromHotkey(pressedAtMs, io, prev)),
+          handleNavigate,
+        );
         if (cancelled) {
           un();
           return;

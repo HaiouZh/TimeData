@@ -6,7 +6,8 @@
 import { act, createElement } from "react";
 import { MemoryRouter } from "react-router";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { type Root, renderDom, unmount } from "../../test/domHarness.js";
+import { MAIN_NAV_ITEMS } from "../../lib/navigation/navRegistry.js";
+import { type Root, click, renderDom, unmount } from "../../test/domHarness.js";
 
 // 路径写 ".ts" 而不是 ".js"：本仓 vi.mock 按 vitest 的解析路径匹配（DesktopBridge.dom.test.tsx 已验证）。
 const ipc = vi.hoisted(() => ({ invoke: vi.fn() }));
@@ -375,5 +376,25 @@ describe("SettingsDesktopPage 接线", () => {
     await focusInput(button);
 
     expect(calls.filter((cmd) => cmd === "suspend_hotkeys").length).toBe(2);
+  });
+});
+
+describe("navigate 行", () => {
+  it("选了跳转就露出目标页选择器，且带着默认值", async () => {
+    const { host, root } = await renderDom(createElement(MemoryRouter, null, createElement(SettingsDesktopPage)));
+    mountedRoot = root;
+    await waitFor(() => host.querySelector('[aria-label="动作"]') !== null, "首屏加载");
+
+    const navigateOption = [...host.querySelectorAll('[aria-label="动作"] button')].find(
+      (b) => b.textContent === "跳转",
+    );
+    expect(navigateOption).toBeTruthy();
+    await click(navigateOption);
+    await settle();
+
+    const targetTrigger = host.querySelector('[aria-label="目标页"]');
+    expect(targetTrigger).toBeTruthy();
+    // 默认值必须落上——留空保存会被 Rust 静默丢掉整条绑定。
+    expect(targetTrigger?.textContent).toContain(MAIN_NAV_ITEMS[0].label);
   });
 });

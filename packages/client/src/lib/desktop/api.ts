@@ -5,7 +5,9 @@ import { isDesktopShell } from "./shell.js";
 
 export interface DesktopHotkeyBinding {
   shortcut: string;
-  action: "punch" | "toggleMain" | "capture";
+  action: "punch" | "toggleMain" | "capture" | "navigate";
+  /** 只有 action 为 "navigate" 时有意义，值是 MAIN_NAV_ITEMS 里的路径。 */
+  target?: string;
 }
 
 export interface DesktopConfigDto {
@@ -29,6 +31,7 @@ export interface AutostartState {
 export interface DesktopHotkeyEvent {
   action: string;
   pressedAtMs: number;
+  target?: string;
 }
 
 /**

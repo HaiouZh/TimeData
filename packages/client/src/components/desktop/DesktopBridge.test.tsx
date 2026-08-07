@@ -1,6 +1,7 @@
 import type { Category } from "@timedata/shared";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
+import { MemoryRouter } from "react-router";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { DesktopHotkeyEvent } from "../../lib/desktop/api.js";
 import { setPunchCategoryId } from "../../lib/settings/punchCategorySetting.js";
@@ -85,7 +86,7 @@ describe("startDesktopBridge 接线顺序", () => {
     const gate = deferred<() => void>();
     listen.mockImplementation(() => gate.promise);
 
-    const started = startDesktopBridge(io, vi.fn());
+    const started = startDesktopBridge(io, vi.fn(), vi.fn());
     await flush();
     expect(listen).toHaveBeenCalledOnce();
     expect(invoke).not.toHaveBeenCalled();
@@ -104,7 +105,7 @@ describe("startDesktopBridge 接线顺序", () => {
     });
     const onPunch = vi.fn();
 
-    await startDesktopBridge(io, onPunch);
+    await startDesktopBridge(io, onPunch, vi.fn());
     expect(handlers).toHaveLength(1);
 
     handlers[0]({ action: "toggleMain", pressedAtMs: 1 });
@@ -119,7 +120,7 @@ describe("startDesktopBridge 接线顺序", () => {
     const { io, listen } = makeIo();
     listen.mockImplementation(async () => unlisten);
 
-    const returned = await startDesktopBridge(io, vi.fn());
+    const returned = await startDesktopBridge(io, vi.fn(), vi.fn());
     returned();
     expect(unlisten).toHaveBeenCalledOnce();
   });
@@ -132,7 +133,7 @@ describe("startDesktopBridge 接线顺序", () => {
     listen.mockImplementation(async () => unlisten);
     invoke.mockRejectedValueOnce(new Error("壳没起来"));
 
-    await expect(startDesktopBridge(io, vi.fn())).rejects.toThrow("壳没起来");
+    await expect(startDesktopBridge(io, vi.fn(), vi.fn())).rejects.toThrow("壳没起来");
     expect(unlisten).toHaveBeenCalledOnce();
   });
 });
@@ -416,6 +417,6 @@ describe("停留中的确认卡在 noRange / missingCategory 出口被清掉", (
 
 describe("DesktopBridge 组件", () => {
   it("空闲时不吐任何 DOM（挂进 App 不影响版式）", () => {
-    expect(renderToStaticMarkup(createElement(DesktopBridge))).toBe("");
+    expect(renderToStaticMarkup(createElement(MemoryRouter, null, createElement(DesktopBridge)))).toBe("");
   });
 });

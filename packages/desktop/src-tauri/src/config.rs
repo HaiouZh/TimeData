@@ -7,17 +7,17 @@ pub const DEFAULT_PUNCH_CONFIRM_HOURS: f64 = 4.0;
 
 /// 热键动作。内部标签 `action`。
 ///
-/// **加带参变体（`Navigate { target: String }`）不是「只是加成员」**：参数位只在
-/// 配置文件这一层预留得住（内部标签 + `#[serde(flatten)]` 装得下
-/// `{ "action": "navigate", "target": "/diary" }`）。往前端去的两层都是扁的——
-/// `hotkeys::HotkeyEventPayload.action` 是 `String`，前端 `DesktopHotkeyBinding.action`
-/// 是字符串联合类型，参数根本传不过去。真要加带参动作，这三层的形状要一起改。
+/// `Navigate { target }` 是唯一带参的变体：内部标签 + `HotkeyBinding` 的 `#[serde(flatten)]`
+/// 让 `{ "action": "navigate", "target": "/todo" }` 直接落位。**target 是不透明字符串**——
+/// Rust 只保证它非空（见 `parse_config`），「是不是一个真实页面」由前端查
+/// `isMainNavRoute` 判定。页面清单故意只存在于前端一处，不在这里复制第二份。
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "action", rename_all = "camelCase")]
 pub enum HotkeyAction {
     Punch,
     ToggleMain,
     Capture,
+    Navigate { target: String },
 }
 
 pub fn action_id(action: &HotkeyAction) -> &'static str {
@@ -25,6 +25,21 @@ pub fn action_id(action: &HotkeyAction) -> &'static str {
         HotkeyAction::Punch => "punch",
         HotkeyAction::ToggleMain => "toggleMain",
         HotkeyAction::Capture => "capture",
+        HotkeyAction::Navigate { .. } => "navigate",
+    }
+}
+
+/// 一条绑定的**结构**是否完整。Rust 只管这一层——「有哪些页面」是前端的事。
+///
+/// 读写两路都要过：`parse_config` 挡住手改配置文件写进来的坏条目，`replace_hotkeys`
+/// 挡住不经设置页 UI 的写入（导入、CLI、将来的第二个写入口）。只在读路径过滤时，
+/// 空 target 绑定会「注册成功 → 按下去零反应 → 下次读配置整条凭空消失」。
+///
+/// `trim` 不是多余：`" "` 是合法非空 String，`is_empty()` 放行它，而它同样不是有效目标。
+pub fn binding_is_structurally_valid(binding: &HotkeyBinding) -> bool {
+    match &binding.action {
+        HotkeyAction::Navigate { target } => !target.trim().is_empty(),
+        HotkeyAction::Punch | HotkeyAction::ToggleMain | HotkeyAction::Capture => true,
     }
 }
 
@@ -78,7 +93,16 @@ pub fn parse_config(text: &str) -> DesktopConfig {
         .map(|items| {
             items
                 .iter()
-                .filter_map(|item| serde_json::from_value::<HotkeyBinding>(item.clone()).ok())
+                .filter_map(|item| {
+                    let binding = serde_json::from_value::<HotkeyBinding>(item.clone()).ok()?;
+                    // serde 只挡得住 target **缺失**（反序列化失败）。空串 / 空白串是合法 String，
+                    // 会一路通过——注册成功、按下去前端丢弃、屏幕上零反应。显式滤掉。
+                    if binding_is_structurally_valid(&binding) {
+                        Some(binding)
+                    } else {
+                        None
+                    }
+                })
                 .collect()
         })
         .unwrap_or_default();
@@ -191,6 +215,31 @@ where
     update_config_at(&path, mutate)
 }
 
+/// 「读一份配置、换掉热键表、写回」的编排。
+///
+/// 两次 IO 注入进来只为一件事：让「读失败就不写文件」这条**测得到**。命令本体
+/// （`commands::set_hotkeys`）要 `AppHandle`，那一层测不了，闸只能立在这里。
+///
+/// 返回写进去的那份热键表，调用方拿它去注册——**不要改成返回整个 config**，
+/// 调用方只需要这一项。
+pub fn replace_hotkeys<L, S>(
+    bindings: Vec<HotkeyBinding>,
+    load: L,
+    mut save: S,
+) -> Result<Vec<HotkeyBinding>, String>
+where
+    L: FnOnce() -> Result<DesktopConfig, String>,
+    S: FnMut(&DesktopConfig) -> Result<(), String>,
+{
+    let mut cfg = load()?;
+    cfg.hotkeys = bindings
+        .into_iter()
+        .filter(binding_is_structurally_valid)
+        .collect();
+    save(&cfg)?;
+    Ok(cfg.hotkeys)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -252,11 +301,11 @@ mod tests {
 
     #[test]
     fn unknown_action_entries_are_skipped_not_fatal() {
-        // 未来版本写入的 navigate 条目，旧版本壳读到要跳过，不能整文件作废。
+        // 未来版本写入的未知动作条目（此处以 teleport 冒充），旧版本壳读到要跳过，不能整文件作废。
         let text = r#"{
             "hotkeys": [
                 { "shortcut": "Ctrl+Alt+P", "action": "punch" },
-                { "shortcut": "Ctrl+Alt+D", "action": "navigate", "target": "/diary" },
+                { "shortcut": "Ctrl+Alt+D", "action": "teleport", "target": "/diary" },
                 { "shortcut": 42, "action": "punch" }
             ]
         }"#;
@@ -299,6 +348,57 @@ mod tests {
     fn action_id_maps_variants() {
         assert_eq!(action_id(&HotkeyAction::Punch), "punch");
         assert_eq!(action_id(&HotkeyAction::ToggleMain), "toggleMain");
+        assert_eq!(action_id(&HotkeyAction::Navigate { target: "/todo".into() }), "navigate");
+    }
+
+    #[test]
+    fn navigate_carries_target() {
+        let config = parse_config(
+            r#"{"hotkeys":[{"shortcut":"Ctrl+Alt+T","action":"navigate","target":"/todo"}]}"#,
+        );
+        assert_eq!(config.hotkeys.len(), 1);
+        assert_eq!(
+            config.hotkeys[0].action,
+            HotkeyAction::Navigate { target: "/todo".to_owned() }
+        );
+    }
+
+    #[test]
+    fn navigate_without_target_is_skipped() {
+        // serde 反序列化 Navigate { target: String } 时缺字段直接失败，filter_map 跳过该条。
+        let config = parse_config(r#"{"hotkeys":[{"shortcut":"Ctrl+Alt+T","action":"navigate"}]}"#);
+        assert!(config.hotkeys.is_empty());
+    }
+
+    #[test]
+    fn navigate_with_empty_target_is_skipped() {
+        // **空串 serde 是收的**（String 可以为空），必须显式过滤——否则这条绑定注册成功、
+        // 按下去前端拿到空 target 丢弃，表现为「按了没反应」。
+        let config = parse_config(r#"{"hotkeys":[{"shortcut":"Ctrl+Alt+T","action":"navigate","target":""}]}"#);
+        assert!(config.hotkeys.is_empty());
+    }
+
+    #[test]
+    fn navigate_with_blank_target_is_skipped() {
+        // 空串的升级版：`" "` 是合法非空 String，`is_empty()` 放行它、`trim()` 才能挡住——
+        // 它同样会注册成功、按下去前端丢弃、屏幕上零反应。
+        let config = parse_config(r#"{"hotkeys":[{"shortcut":"Ctrl+Alt+T","action":"navigate","target":"  "}]}"#);
+        assert!(config.hotkeys.is_empty());
+    }
+
+    #[test]
+    fn navigate_survives_round_trip() {
+        // flatten 写回丢字段是静默的：存一次就把 target 抹掉，下次启动这条绑定整个消失。
+        let original = DesktopConfig {
+            autostart_disabled: false,
+            punch_confirm_hours: 4.0,
+            hotkeys: vec![HotkeyBinding {
+                shortcut: "Ctrl+Alt+T".into(),
+                action: HotkeyAction::Navigate { target: "/todo".into() },
+            }],
+        };
+        let reparsed = parse_config(&serialize_config(&original));
+        assert_eq!(reparsed.hotkeys, original.hotkeys);
     }
 
     // ---- 读写落盘：三态 + 往返不变量（`load_config` / `save_config` 此前零覆盖）----
@@ -364,15 +464,16 @@ mod tests {
 
     #[test]
     fn 认不出的条目在一次保存后就永久没了() {
-        // parse_config 的 filter_map 前向兼容只在**读**路径上成立：新版本写下的 navigate 条目
-        // 被旧版本读到会跳过，而旧版本的任何一次保存都是全量覆盖——跳过的条目就此消失。
+        // parse_config 的 filter_map 前向兼容只在**读**路径上成立：新版本写下的未知动作条目
+        // （此处以 teleport 冒充 navigate 当年的角色）被旧版本读到会跳过，而旧版本的任何一次
+        // 保存都是全量覆盖——跳过的条目就此消失。
         // 这是当前接受的行为（Rust 是配置文件唯一写者，跨版本回退属罕见操作），
         // 但它必须写在纸面上：哪天要改成「保留未知条目」，这条用例就是改动的入口。
         let dir = temp_dir_for("forward-compat");
         let path = dir.join("desktop-config.json");
         std::fs::write(
             &path,
-            r#"{"hotkeys":[{"shortcut":"Ctrl+Alt+P","action":"punch"},{"shortcut":"Ctrl+Alt+D","action":"navigate","target":"/diary"}]}"#,
+            r#"{"hotkeys":[{"shortcut":"Ctrl+Alt+P","action":"punch"},{"shortcut":"Ctrl+Alt+D","action":"teleport","target":"/diary"}]}"#,
         )
         .expect("造一份带未来条目的文件");
 
@@ -381,7 +482,7 @@ mod tests {
 
         write_config_at(&path, &loaded).expect("原样存回");
         assert_eq!(read_config_at(&path).expect("再读").hotkeys.len(), 1);
-        assert!(!std::fs::read_to_string(&path).expect("读原文").contains("navigate"));
+        assert!(!std::fs::read_to_string(&path).expect("读原文").contains("teleport"));
     }
 
     #[test]
@@ -412,5 +513,94 @@ mod tests {
         );
         assert!(err.contains("读取配置文件"), "错误信息要指明是读取失败，实际：{err}");
         assert!(!write_trace.exists(), "读失败时不许产生任何写入痕迹");
+    }
+
+    #[test]
+    fn 读失败时不换热键也不写文件() {
+        // 这条守的是 set_hotkeys 的那个 `?`。把它改成 unwrap_or_default() 时必须红——
+        // 否则杀软/OneDrive 短暂独占文件的那一瞬会被当成「用户没配过任何东西」，
+        // 一次保存就把全部快捷键永久抹掉，且全程返回 Ok、零提示。
+        let mut saved = false;
+        let result = replace_hotkeys(
+            vec![HotkeyBinding { shortcut: "Ctrl+Alt+P".into(), action: HotkeyAction::Punch }],
+            || Err("读取配置文件 X 失败".to_owned()),
+            |_| {
+                saved = true;
+                Ok(())
+            },
+        );
+        assert!(!saved, "读失败时一个字都不许写");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn 换热键只动热键那一项其余原样带过() {
+        // 全量覆盖写回时漏带字段就是静默清设置，所以要逐项确认其余字段原封不动。
+        let mut written: Option<DesktopConfig> = None;
+        let result = replace_hotkeys(
+            vec![HotkeyBinding {
+                shortcut: "Ctrl+Alt+T".into(),
+                action: HotkeyAction::Navigate { target: "/todo".into() },
+            }],
+            || {
+                Ok(DesktopConfig {
+                    autostart_disabled: true,
+                    punch_confirm_hours: 2.5,
+                    hotkeys: vec![HotkeyBinding { shortcut: "Ctrl+Alt+P".into(), action: HotkeyAction::Punch }],
+                })
+            },
+            |cfg| {
+                written = Some(cfg.clone());
+                Ok(())
+            },
+        );
+        let returned = result.expect("正常路径应成功");
+        let written = written.expect("正常路径必须落盘");
+        assert_eq!(written.hotkeys, returned);
+        assert_eq!(written.hotkeys.len(), 1);
+        assert_eq!(written.hotkeys[0].shortcut, "Ctrl+Alt+T");
+        assert!(written.autostart_disabled, "自启意图不许被顺手改掉");
+        assert_eq!(written.punch_confirm_hours, 2.5, "打点阈值不许被顺手改掉");
+    }
+
+    #[test]
+    fn 写失败时把错误原样往上送() {
+        // 落盘失败必须让用户看见——吞掉它就是「看着保存成功、壳里其实没换」。
+        let result = replace_hotkeys(
+            vec![],
+            || Ok(DesktopConfig::default()),
+            |_| Err("替换配置文件 X 失败".to_owned()),
+        );
+        assert_eq!(result.unwrap_err(), "替换配置文件 X 失败");
+    }
+
+    #[test]
+    fn replace_hotkeys_drops_invalid_bindings() {
+        // 写路径也要过同一道结构闸：只在读路径过滤时，空 target 绑定会「注册成功 →
+        // 按下去零反应 → 下次读配置整条凭空消失」。这里走 replace_hotkeys 直接喂坏条目，
+        // 返回值与落盘内容都必须只剩合法那条。
+        let mut written: Option<DesktopConfig> = None;
+        let result = replace_hotkeys(
+            vec![
+                HotkeyBinding {
+                    shortcut: "Ctrl+Alt+T".into(),
+                    action: HotkeyAction::Navigate { target: "/todo".into() },
+                },
+                HotkeyBinding {
+                    shortcut: "Ctrl+Alt+X".into(),
+                    action: HotkeyAction::Navigate { target: "  ".into() },
+                },
+            ],
+            || Ok(DesktopConfig::default()),
+            |cfg| {
+                written = Some(cfg.clone());
+                Ok(())
+            },
+        );
+        let returned = result.expect("正常路径应成功");
+        let written = written.expect("正常路径必须落盘");
+        assert_eq!(returned.len(), 1, "坏条目不许进返回值");
+        assert_eq!(returned[0].shortcut, "Ctrl+Alt+T");
+        assert_eq!(written.hotkeys, returned, "落盘内容与返回值一致，都不含坏条目");
     }
 }

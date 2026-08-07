@@ -65,6 +65,20 @@ if (captureWindow.url !== "index.html?window=capture") {
   );
 }
 
+// capabilities 的 windows 授权列表与 tauri.conf.json 的窗口集合必须一致。
+// 漏加一个 label：窗口建得出来、却拿不到任何 IPC 权限，前端 catch 是空的、完全静默——
+// 表现为「热键唤起后什么都没发生」。加窗口与开权限是同一个原子改动。
+const capabilities = JSON.parse(readFileSync(new URL("../src-tauri/capabilities/default.json", import.meta.url), "utf8"));
+const capWindows = [...(capabilities.windows ?? [])].sort();
+const confLabels = windows.map((w) => w.label).sort();
+if (JSON.stringify(capWindows) !== JSON.stringify(confLabels)) {
+  throw new Error(
+    `[desktop-config] capabilities/default.json 的 windows 是 ${JSON.stringify(capWindows)}，` +
+      `而 tauri.conf.json 声明的窗口是 ${JSON.stringify(confLabels)}。两者必须逐个相等——` +
+      "少一个的那个窗口所有 IPC 会被权限层静默拒掉。",
+  );
+}
+
 // ---- 跨语言契约：热键事件名两端必须逐字相同 ----
 // Rust `app.emit(name, …)` 与前端 `listen(name, …)` 之间没有共享类型，typecheck 管不到
 // 字符串字面量。打错一个字母：注册成功、按键有反应、Rust 侧照常 emit，前端永远收不到，

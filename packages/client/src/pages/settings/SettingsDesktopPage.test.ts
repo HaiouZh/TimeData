@@ -1,8 +1,12 @@
 import { describe, expect, it, vi } from "vitest";
 import type { AutostartState, DesktopConfigDto, RegistrationOutcome } from "../../lib/desktop/api.js";
+import { isMainNavRoute, MAIN_NAV_ITEMS } from "../../lib/navigation/navRegistry.js";
 import {
+  applyActionChange,
   type DesktopSettingsIo,
   loadDesktopSettings,
+  NAV_TARGET_OPTIONS,
+  navTargetErrorOf,
   outcomesForRows,
   registrationErrorOf,
   saveConfirmHours,
@@ -243,5 +247,74 @@ describe("skippedRowsNotice", () => {
 
   it("全都录了就不啰嗦", () => {
     expect(skippedRowsNotice([{ shortcut: "Ctrl+Alt+P", action: "punch" }])).toBeNull();
+  });
+});
+
+describe("目标页选项", () => {
+  it("恰好是主导航表的 8 项，顺序一致", () => {
+    // 防有人图省事把它抄成硬编码：抄了之后行为一样对，但「以后加一个主导航页、
+    // 桌面热键下拉自动多一项」这条好处会无声消失。
+    expect(NAV_TARGET_OPTIONS).toEqual(MAIN_NAV_ITEMS.map((item) => ({ value: item.to, label: item.label })));
+  });
+
+  it("下拉里的每一项都必须过 isMainNavRoute，否则用户选得到、热键却拒绝", () => {
+    // 两张表（MAIN_NAV_ITEMS / MAIN_NAV_ROUTES）漂移时，设置页选得到的页面会被
+    // resolveNavigateTarget 丢弃：保存成功、注册成功、按下去零反应，且没有任何回显。
+    for (const option of NAV_TARGET_OPTIONS) {
+      expect(isMainNavRoute(option.value)).toBe(true);
+    }
+  });
+});
+
+describe("applyActionChange", () => {
+  it("切到 navigate 时自动填上第一个目标页", () => {
+    // 留空存下去，Rust 解析时缺 target 会把整条绑定跳过——用户看着保存成功、
+    // 热键却凭空没了，一条测试都不会红。
+    expect(applyActionChange({ shortcut: "Ctrl+Alt+T", action: "punch", rowId: "r1" }, "navigate")).toStrictEqual({
+      action: "navigate",
+      target: MAIN_NAV_ITEMS[0].to,
+    });
+  });
+
+  it("已有 target 时切回 navigate 不覆盖用户已选的页", () => {
+    expect(
+      applyActionChange({ shortcut: "Ctrl+Alt+T", action: "navigate", target: "/todo", rowId: "r1" }, "navigate"),
+    ).toStrictEqual({ action: "navigate", target: "/todo" });
+  });
+
+  it("切走 navigate 时清掉 target", () => {
+    // **必须 toStrictEqual**：toEqual 忽略值为 undefined 的属性，分不清「返回了
+    // target: undefined」与「压根没有 target 属性」。而经 updateRow 的 {...row, ...patch}
+    // 展开后两者行为不同——后者让旧 target 原样残留，一个 punch 绑定会带着 target 落盘。
+    // 实测：toEqual 下删掉那行守卫，这条照绿。
+    // 不清的话，非 navigate 动作会带着一个无意义的残留字段落盘。
+    expect(
+      applyActionChange({ shortcut: "Ctrl+Alt+T", action: "navigate", target: "/todo", rowId: "r1" }, "punch"),
+    ).toStrictEqual({ action: "punch", target: undefined });
+  });
+});
+
+describe("navTargetErrorOf", () => {
+  it("目标页不在白名单里时给出可见的话", () => {
+    expect(navTargetErrorOf({ shortcut: "Ctrl+Alt+T", action: "navigate", target: "/nope", rowId: "r1" })).toBe(
+      "目标页「/nope」不存在，重新选一个",
+    );
+  });
+
+  it("目标页为空时也报错", () => {
+    // 这条与上一条不同：空 target 的绑定会被 Rust 整条丢弃，比「跳不过去」更严重。
+    expect(navTargetErrorOf({ shortcut: "Ctrl+Alt+T", action: "navigate", rowId: "r1" })).toBe(
+      "目标页「」不存在，重新选一个",
+    );
+  });
+
+  it("白名单内不报错", () => {
+    expect(navTargetErrorOf({ shortcut: "Ctrl+Alt+T", action: "navigate", target: "/todo", rowId: "r1" })).toBeNull();
+  });
+
+  it("非 navigate 动作不报错", () => {
+    // 必须带一个非法 target 才测得到 action 判断——不带的话会被「target 不合法」那一支
+    // 兜住，走不到 action 判断，这条就成了一个杀不死变异的假闸。
+    expect(navTargetErrorOf({ shortcut: "Ctrl+Alt+P", action: "punch", target: "/nope", rowId: "r1" })).toBeNull();
   });
 });
