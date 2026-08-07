@@ -950,3 +950,70 @@ test("collectViolations reports unknown semantic colors with file and line", () 
   assert.equal(hits[0].file, "packages/client/src/pages/x.tsx");
   assert.equal(hits[0].line, 2);
 });
+
+test("flags handwritten centered modal and allows Sheet's bottom drawer", () => {
+  assert.equal(
+    classifyLine(
+      "x.tsx",
+      '<div className="fixed inset-0 z-[var(--z-modal)] flex items-center justify-center bg-backdrop/50">',
+    ).some((v) => v.rule === "handwritten-centered-modal"),
+    true,
+  );
+  // Sheet 自身贴底（items-end），不该被拦
+  assert.equal(
+    classifyLine(
+      "x.tsx",
+      '<div className="sheet-overlay fixed inset-0 flex items-end justify-center bg-backdrop/60">',
+    ).some((v) => v.rule === "handwritten-centered-modal"),
+    false,
+  );
+});
+
+test("flags handwritten status banner triplet and allows the five legit forms", () => {
+  // 命中：完整三件套的状态条
+  assert.equal(
+    classifyLine(
+      "x.tsx",
+      '<div className="rounded-row border border-ok/40 bg-ok/10 p-3 td-text-body text-ok">{message}</div>',
+    ).some((v) => v.rule === "handwritten-status-banner"),
+    true,
+  );
+  // 放行 1：危险按钮（带交互态 utility）
+  assert.equal(
+    classifyLine(
+      "x.tsx",
+      'className="rounded-ctl border border-danger/40 bg-danger/10 px-3 py-1.5 text-danger disabled:text-ink-3"',
+    ).some((v) => v.rule === "handwritten-status-banner"),
+    false,
+  );
+  // 放行 2：徽章 pill
+  assert.equal(
+    classifyLine(
+      "x.tsx",
+      '<span className="rounded-pill border border-warn/30 bg-warn/10 px-2.5 py-1 td-text-caption text-warn">',
+    ).some((v) => v.rule === "handwritten-status-banner"),
+    false,
+  );
+  // 放行 3：内容容器（危险操作区，装着标题+说明+按钮）
+  assert.equal(
+    classifyLine("x.tsx", '<section className="space-y-3 rounded-card border border-danger/40 bg-danger/10 p-4">').some(
+      (v) => v.rule === "handwritten-status-banner",
+    ),
+    false,
+  );
+  // 放行 4：tone 映射常量表
+  assert.equal(
+    classifyLine("x.tsx", '    good: "border-ok/30 bg-ok/10 text-ok",').some(
+      (v) => v.rule === "handwritten-status-banner",
+    ),
+    false,
+  );
+  // 放行 5：组件自身
+  assert.equal(
+    classifyLine(
+      "packages/client/src/components/ui/StatusBanner.tsx",
+      '  danger: "border-danger/40 bg-danger/10 text-danger",',
+    ).some((v) => v.rule === "handwritten-status-banner"),
+    false,
+  );
+});

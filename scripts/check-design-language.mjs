@@ -299,6 +299,31 @@ const RULES = [
     msg: "页面 h1 必须使用 td-text-title 或 td-text-display（td-text-body font-medium 当标题是历史遗留层级分裂，新代码不得复制）",
     skip: (file, line) => isTestFile(file) || /td-text-title/.test(line) || /td-text-display/.test(line),
   },
+  {
+    id: "handwritten-centered-modal",
+    // 居中遮罩三件套：全屏定位 + 居中 + 背板色。Sheet 自身是 items-end，天然不命中。
+    re: /fixed inset-0[^"]*items-center[^"]*justify-center[^"]*bg-backdrop/,
+    msg: "弹层统一走 Sheet（底部抽屉，自带 Esc/焦点管理/aria-modal）；手写居中遮罩是历史遗留形态，新代码不得复制",
+    skip: (file) => isTestFile(file),
+  },
+  {
+    id: "handwritten-status-banner",
+    // 三件套：同一个 tone 的 border-X/N + bg-X/10 + text-X。反向引用 \1 锁住「同一个 tone」。
+    re: /border-(warn|danger|ok)\/\d+[^"]*bg-\1\/10[^"]*text-\1\b/,
+    msg: "需要用户注意/处理的状态必须使用 StatusBanner（info/ok/warn/danger 四档，card/bar 两形态）；手写三件套是历史遗留形态，新代码不得复制",
+    skip: (file, line) =>
+      isTestFile(file) ||
+      /StatusBanner/.test(line) ||
+      normalizePath(file).endsWith("/components/ui/StatusBanner.tsx") ||
+      // 危险按钮：交互态 utility 是它的识别特征，状态条没有交互态
+      /hover:|disabled:/.test(line) ||
+      // 徽章
+      /rounded-pill/.test(line) ||
+      // 内容容器（装着标题+说明+按钮的危险操作区）；状态条是单行文字，不需要垂直间距
+      /space-y-/.test(line) ||
+      // tone 映射常量表（`good: "…"` 这种键值对），不是 JSX className
+      /^\s*[A-Za-z_$][\w$]*:\s*"/.test(line),
+  },
 ];
 
 for (const rule of RULES) {
