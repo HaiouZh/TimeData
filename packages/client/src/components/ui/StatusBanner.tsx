@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import type { CSSProperties, ReactNode } from "react";
 
 export type StatusTone = "info" | "ok" | "warn" | "danger";
 
@@ -11,6 +11,11 @@ export interface StatusBannerProps {
   actions?: ReactNode;
   /** 调用方定位/收缩用（速记 fixed、画布 absolute、日记 shrink-0）。 */
   className?: string;
+  /**
+   * 内联样式透传。速记页两条浮条要靠它算 bottom：`--bottom-offset` 自定义属性 +
+   * `bottom: calc(…px + var(--safe-bottom))`，这两个值随键盘/底栏实时变，写不进 className。
+   */
+  style?: CSSProperties;
   /** 无障碍语义透传。缺省不设——现有 18 处都没有 role，无条件加会改变播报行为。 */
   role?: "alert" | "status";
 }
@@ -27,11 +32,20 @@ const VARIANT_CLASSES: Record<"card" | "bar", string> = {
   bar: "border-b px-4 py-2",
 };
 
-export function StatusBanner({ tone, children, variant = "card", actions, className, role }: StatusBannerProps) {
+export function StatusBanner({
+  tone,
+  children,
+  variant = "card",
+  actions,
+  className,
+  role,
+  style,
+}: StatusBannerProps) {
   return (
     <div
       data-tone={tone}
       role={role}
+      style={style}
       className={`${VARIANT_CLASSES[variant]} td-text-body ${TONE_CLASSES[tone]}${className ? ` ${className}` : ""}`}
     >
       {actions ? (

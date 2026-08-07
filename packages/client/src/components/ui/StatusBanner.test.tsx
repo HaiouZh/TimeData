@@ -96,4 +96,20 @@ describe("StatusBanner", () => {
     expect(plain.host.querySelector("[data-tone='info']")?.hasAttribute("role")).toBe(false);
     await unmount(plain.root);
   });
+
+  it("style 透传——速记两条浮条的 bottom 靠它算", async () => {
+    // 这两条的定位是 `--bottom-offset` 自定义属性 + calc(…+var(--safe-bottom))，
+    // 值随键盘/底栏实时变，只能走内联 style；组件不透传就等于把它们的定位丢了。
+    const { host, root } = await renderDom(
+      createElement(
+        StatusBanner,
+        { tone: "danger", style: { bottom: "calc(56px + var(--safe-bottom))" } },
+        "出错了",
+      ),
+    );
+    expect(host.querySelector<HTMLElement>("[data-tone='danger']")?.style.bottom).toBe(
+      "calc(56px + var(--safe-bottom))",
+    );
+    await unmount(root);
+  });
 });
