@@ -137,6 +137,8 @@ last-reviewed: 2026-08-06
 
 13. **触感只经语义层**：页面调的是 `lib/haptics.ts` 的四个语义函数——`hapticToggle`（勾选 / 取消勾选）、`hapticDestructive`（删除 / 清空）、`hapticGrab`（拖拽拿起）、`hapticDrop`（拖拽吸附落位，取消或原地放下不调）。**「什么动作配什么强度」的映射只写在这一个文件**（`@capacitor/haptics` 的 `ImpactStyle`：destructive 一档重，其余三个最轻档），调用点不出现强度常量，整体调轻重或加全局开关只改这一处。调用接在页面的事件处理处，不下沉进 `lib/` 数据函数——否则跑数据层单测也会震。批量动作**整批只震一次**，不逐条震。iOS 与 Android 原生壳都接；Web / PWA / 桌面经 `Capacitor.isNativePlatform()` 判否后**整层空转**，且不回退 `navigator.vibrate`（浏览器那种整机震与原生轻触感不是同一种反馈）。插件缺失 / 系统关闭 / 硬件不支持一律吞掉，业务动作照常完成：除了接 promise 的 reject，还得防住 `impact` 同步抛与返回非 thenable（插件未注册 / 旧桥 shim）——那两种是**同步** TypeError，`hapticGrab` 在 dnd-kit 的同步 `onDragStart` 里抛出去整个拖拽都起不来。投递坠的「抓到手头」同样是吸附落位，写入成功后要震（投递失败与 invalid 拒绝不震）。
 
+14. **页面样式不写死 `visibility: visible`**：iOS 分层壳 `KeptRouteStack` 靠给整层挂 `visibility: hidden` 隐藏保留层（两层恒 `absolute inset-0` 相互重叠，换 `display:none` 会清掉滚动容器 scrollTop，机制见 [architecture](architecture.md)）。`visibility` 是可继承属性，后代给绝对值 `visible` 即反向击穿祖先的 hidden，该元素连同自身 z-index 一起浮到当前页之上——上一页的浮起元素会挂在下一页画面里，且只在 iOS 壳出现（其余平台上一页直接卸载）。需要「默认可见、可被某个类隐身」的元素写 `visibility: inherit`：常规层级下父级本就是 visible，两者等价；进了保留层才跟着一起藏。棘轮：`indexCssTokens.test.ts` 禁 `index.css` 出现写死的 `visibility: visible`。
+
 ## 5. 模块速查
 
 | 关注点 | 入口 |

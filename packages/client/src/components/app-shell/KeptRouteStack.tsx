@@ -93,6 +93,9 @@ interface KeptRouteStackProps {
  *    replace 时 location.key 会变而身份不变，跟着变就等于每次切日期都重挂整页。
  * 5. 暗化遮罩渲染在**保留层内部**，别提到栈容器下（详见渲染处注释）：提出去就会盖在当前层之上，
  *    起手瞬间整屏一起变暗。
+ * 6. 页面样式里**不得写死 `visibility: visible`**。visibility 是可继承属性，后代给绝对值就把这里的
+ *    hidden 反向击穿，该元素连同自己的 z-index 一起浮到当前页之上（速记页日期条曾这样残留在时间轴页）。
+ *    要「默认可见、可被某个类隐身」就写 `visibility: inherit`；闸在 indexCssTokens.test.ts。
  */
 export function KeptRouteStack({ isWideScreen, onMainScroll }: KeptRouteStackProps) {
   const location = useLocation();

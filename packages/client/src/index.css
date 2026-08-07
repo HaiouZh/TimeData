@@ -411,7 +411,10 @@ details[open] > summary .ts-collapse-caret {
      .stuck 由页面层在停止滚动后打上；多选态靠页面层跳过扫描来保持常显，CSS 不参与判断。
      行内时间戳占位、右键菜单最小宽见下。 */
   .quick-note-date-divider {
-    visibility: visible;
+    /* inherit 而不是 visible：iOS 的 KeptRouteStack 靠整层 visibility:hidden 藏保留层，写死的
+       visible 会击穿祖先的 hidden，让日期条连同 z-10 一起浮在下一页之上（切到时间轴页胶囊还挂着）。
+       常规页面下父级本就是 visible，inherit 与 visible 一字不差；进了保留层才跟着一起藏。 */
+    visibility: inherit;
     /* visibility 无延迟：摘掉 .stuck 时立刻回来，不等 300ms 才可点。 */
     transition:
       opacity 300ms ease,
@@ -432,7 +435,8 @@ details[open] > summary .ts-collapse-caret {
      真隐身之前这条就已经把 visibility 拉回来，焦点不会被浏览器 blur 掉。 */
   .quick-note-date-divider.stuck:focus-within {
     opacity: 1;
-    visibility: visible;
+    /* 同样用 inherit 不用 visible，理由见上：保留层是 inert，本就聚不上焦，逃生阀只在活跃层生效。 */
+    visibility: inherit;
   }
   /* 减弱动效：隐身照常发生（重影仍要消除），只是不做渐变——同时把 visibility 的 300ms
      延迟一并归零，否则会留下「已经看不见但还挡着」的空窗。 */

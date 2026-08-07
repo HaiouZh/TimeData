@@ -161,7 +161,7 @@ describe("速记日期条隐身态（.quick-note-date-divider.stuck）", () => {
 
   it("键盘焦点落在里面时不隐身（逃生阀）", () => {
     expect(block).toMatch(
-      /\.quick-note-date-divider\.stuck:focus-within\s*\{[^}]*opacity:\s*1;[^}]*visibility:\s*visible;/s,
+      /\.quick-note-date-divider\.stuck:focus-within\s*\{[^}]*opacity:\s*1;[^}]*visibility:\s*inherit;/s,
     );
   });
 
@@ -169,5 +169,19 @@ describe("速记日期条隐身态（.quick-note-date-divider.stuck）", () => {
     expect(block).toMatch(
       /@media \(prefers-reduced-motion: reduce\)\s*\{[^@]*\.quick-note-date-divider[^@]*transition-duration:\s*0s;[^@]*transition-delay:\s*0s;/s,
     );
+  });
+});
+
+// iOS 的 KeptRouteStack 把整个保留层用 visibility:hidden 藏起来（不能用 display:none——无 layout box
+// 会清掉滚动容器的 scrollTop，见 KeptRouteStack.tsx 纪律 2），且两层恒 absolute inset-0 相互重叠。
+// visibility 是可继承属性：后代写死 `visibility: visible` 就把祖先的 hidden 反向击穿，该元素连同自己的
+// z-index 一起浮到当前页之上。速记页日期条正是这样残留在时间轴页上（切页后胶囊还挂着）。
+// 想让某个元素"默认可见、可被 .stuck 之类的类隐身"，写 `visibility: inherit` 而不是 visible：
+// 常规页面下父级本就是 visible，行为一字不差；进了保留层则跟着一起藏。
+describe("visibility 隐身层不得被后代击穿（iOS 保留层的地基）", () => {
+  it("index.css 里没有任何写死的 visibility: visible", () => {
+    // 先剥注释——上面这段解释里就写着这个词，不剥的话闸恒红。
+    const cssWithoutComments = css.replace(/\/\*[\s\S]*?\*\//g, "");
+    expect(cssWithoutComments).not.toMatch(/visibility:\s*visible/);
   });
 });
