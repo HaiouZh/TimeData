@@ -95,7 +95,11 @@ describe("QuickNotesPage 底部避让接线（键盘高并入合成）", () => {
     keyboardHeightMock.mockReturnValue(300);
     const { host, root } = await renderPage();
 
-    const status = Array.from(host.querySelectorAll("p")).find((p) => p.textContent === "已恢复未发出的草稿");
+    // 按 data-tone 取，不按标签取：状态浮层是 StatusBanner（渲染 div），标签会随组件走，
+    // data-tone 是它对外的稳定锚点。顺带把「这条浮层确实是 info 档状态条」也断言进来。
+    const status = Array.from(host.querySelectorAll<HTMLElement>('[data-tone="info"]')).find(
+      (el) => el.textContent === "已恢复未发出的草稿",
+    );
     expect(status).toBeInstanceOf(HTMLElement);
     // floatBottomInsetPx = barHeightPx（128）+ navOffsetPx（结算后归零）+ 键盘高（300）。
     expect((status as HTMLElement).style.bottom).toBe(`calc(${DEFAULT_COMPOSER_INSET_PX + 300}px + var(--safe-bottom))`);
