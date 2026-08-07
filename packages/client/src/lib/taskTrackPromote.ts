@@ -80,7 +80,7 @@ export async function undoToggleWithTrackConclude(
   trackId: string,
   options: { now?: Date } = {},
 ): Promise<void> {
-  // 先读当前态再决定翻不翻：`toggleTaskDone` 是**翻转**、不接受目标状态。提示存活 6 秒，
+  // 先读当前态再决定翻不翻：`toggleTaskDone` 是**翻转**、不接受目标状态。提示存活数秒（todo 侧 6 秒 / 目标图侧 5 秒），
   // 期间用户完全可能自己已经取消过勾选——那时再无条件 toggle 会把任务反向勾成已完成，
   // 与「撤销 = 回退」正好相反。只有仍停在已完成态时才需要翻回去。
   const current = await db.tasks.get(taskId);
@@ -95,7 +95,8 @@ export interface TrackConcludeUndo {
 
 /**
  * 把「勾选附带归档」的结果翻译成撤销提示所需的文案与回退动作；没真归档时返回 null。
- * 三个调用点（待办列表 / 目标图编辑器 / 目标星图）共用它，文案与回退口径只有这一份。
+ * 四个调用点（待办列表 / 任务详情抽屉 / 目标图编辑器 / 目标星图）共用它，文案与回退口径只有这一份；
+ * 落地组件仍是两套（todo 侧 `ActionToastBar` / goals 侧 `GoalGraphUndoToast`），只差自动消失时长。
  */
 export function buildTrackConcludeUndo(result: ToggleWithTrackConcludeResult): TrackConcludeUndo | null {
   const { task, concludedTrack } = result;

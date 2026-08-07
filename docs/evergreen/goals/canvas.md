@@ -17,7 +17,7 @@ covers:
   - packages/client/src/lib/galaxyEngineMode.ts
   - packages/client/src/lib/goalUnassigned.ts
   - packages/client/src/pages/goals/**
-last-reviewed: 2026-08-04
+last-reviewed: 2026-08-07
 ---
 
 # 目标层 · 星图画布
@@ -75,7 +75,7 @@ B 阶段后，`goalGraphLayout` 输出确定性星环 seed：Goal 居中，成�
 
 宽屏下，添加成员与目标设置使用星图局部右侧面板；窄屏/粗指针继续使用底部 sheet。添加成员面板复用 ToDo 的搜索和标签筛选口径；任务候选只含普通未完成任务与 active pending occurrence，目标详情 picker 按今天/收件箱/已排期分组，全局未归类托盘在其前额外显示当前活跃场的“手头”组；重复模板及 done/skipped 历史发不进入候选；轨道按 active / parked / concluded 分组并显示看板信号和最新步骤提示。
 
-轻撤销只覆盖破坏性结构操作：删除前置边、移出成员、移出失效引用。移出成员的撤销会恢复成员列表和被级联删除的前置边；Task 完成、加成员、快建任务、新建前置等非破坏操作不进入这条 undo 口径。
+轻撤销只覆盖破坏性结构操作：删除前置边、移出成员、移出失效引用。移出成员的撤销会恢复成员列表和被级联删除的前置边；加成员、快建任务、新建前置等非破坏操作不进入这条 undo 口径。Task 完成本身同样不进，但勾掉挂 active 轨道的任务会**附带归档该轨道**，这一步复用同一个 `GoalGraphUndoToast` 给撤销——回退是取消勾选 + 轨道重开 active，文案与动作同源于 `buildTrackConcludeUndo`（口径见 [tracks](../tracks.md#tracks-s5)）。
 
 <a id="goals-canvas-s3"></a>
 
