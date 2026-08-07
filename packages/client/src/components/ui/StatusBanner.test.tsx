@@ -97,6 +97,23 @@ describe("StatusBanner", () => {
     await unmount(plain.root);
   });
 
+  it("data-* 透传，且不得覆盖 data-tone", async () => {
+    // 既有页面拿 data-* 当测试钩子（GoalGraphEditor.test 靠 data-connect-sheet-error 取节点），
+    // 不透传就只能改那条测试来迁就实现——那是放水。
+    const { host, root } = await renderDom(
+      createElement(
+        StatusBanner,
+        { tone: "danger", "data-connect-sheet-error": "", "data-tone": "info" },
+        "连线失败",
+      ),
+    );
+    const el = host.querySelector("[data-connect-sheet-error]");
+    expect(el).toBeInstanceOf(HTMLElement);
+    // data-tone 是 19 处迁移断言的落点，调用方传什么都不能把它顶掉。
+    expect(el?.getAttribute("data-tone")).toBe("danger");
+    await unmount(root);
+  });
+
   it("style 透传——速记两条浮条的 bottom 靠它算", async () => {
     // 这两条的定位是 `--bottom-offset` 自定义属性 + calc(…+var(--safe-bottom))，
     // 值随键盘/底栏实时变，只能走内联 style；组件不透传就等于把它们的定位丢了。

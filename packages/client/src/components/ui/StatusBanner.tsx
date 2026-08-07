@@ -20,6 +20,13 @@ export interface StatusBannerProps {
   role?: "alert" | "status";
 }
 
+/**
+ * 允许透传 `data-*`：既有页面用它当测试钩子定位（如 `data-connect-sheet-error`，
+ * `GoalGraphEditor.test.tsx` 靠它取节点）。不开这个口，迁移就只能去改那条测试——那是放水。
+ * 模板字面量索引签名，不用 any，类型仍然收得住。
+ */
+type DataAttributes = { [key: `data-${string}`]: string | undefined };
+
 const TONE_CLASSES: Record<StatusTone, string> = {
   info: "border-border bg-surface/95 text-ink-2",
   ok: "border-ok/40 bg-ok/10 text-ok",
@@ -40,9 +47,12 @@ export function StatusBanner({
   className,
   role,
   style,
-}: StatusBannerProps) {
+  ...dataAttrs
+}: StatusBannerProps & DataAttributes) {
   return (
     <div
+      // 展开放在 data-tone 之前：调用方不得覆盖 data-tone，19 处迁移的断言都挂在它上面。
+      {...dataAttrs}
       data-tone={tone}
       role={role}
       style={style}
