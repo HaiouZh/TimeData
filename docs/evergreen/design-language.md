@@ -26,7 +26,7 @@ contracts:
   - scripts/check-design-language.mjs
   - scripts/design-language-allowlist.json
   - packages/client/src/lib/navigation/navRegistry.ts
-last-reviewed: 2026-08-06
+last-reviewed: 2026-08-07
 ---
 
 # 设计语言
@@ -113,6 +113,8 @@ last-reviewed: 2026-08-06
 - 禁止手写单选筛选分段（同一元素 `aria-pressed={` + `rounded-pill`）：规则 `handwritten-segmented-control`，须用 `SegmentedControl`（`role=radiogroup`）；`role=tablist/tab` 的视图切换语义页与 `SegmentedControl` 自身豁免（测试文件豁免）。
 - 禁止裸文本空态（`py-10` + `text-center` 组合）：规则 `bare-text-empty-state`，须用 `EmptyState`（card/inline 档）；`EmptyState` 组件自身豁免（测试文件豁免）。
 - 禁止 `<h1>` 不带 `td-text-title`/`td-text-display` 排版类：规则 `h1-without-title-size`，页面标题层级分裂（`td-text-body font-medium` 当 h1）是历史遗留形态（测试文件豁免）。
+- 禁止手写状态三件套（同一 `className` 串里、同一个 tone 的 `border-warn|danger|ok/N` + `bg-*/10` + `text-*`）：规则 `handwritten-status-banner`，须用 `StatusBanner`（`info`/`ok`/`warn`/`danger` 四档、`card`/`bar` 两形态）。判定用反向引用锁死「三个类同一个 tone」、且 `bg` 恰好 `/10`——手写 `info` 档、跨行、透明度非 `/10` 或混用 tone 都不在拦截面（规则按此窄形态实现，只认三件套同行且 tone 一致的典型散装状态条）。豁免：测试文件、同行已含 `StatusBanner`、`StatusBanner.tsx` 自身、交互态 `hover:`/`disabled:`（危险按钮以交互态 utility 为识别特征，状态条没有交互态）、`rounded-pill`（徽章）与 tone 映射常量表（`good: "…"` 键值对，不是 JSX className）。
+- 禁止手写居中遮罩（同一 `className` 串的 `fixed inset-0` + `items-center` + `justify-center` + `bg-backdrop` 三件套）：规则 `handwritten-centered-modal`，弹层统一走 `Sheet` / `ConfirmSheet` 底部抽屉（Esc / 焦点管理 / `aria-modal` 由抽屉自带）；`Sheet` 自身是 `items-end`，天然不命中（测试文件豁免）。
 
 `scripts/design-language-allowlist.json` 是显式例外登记簿，每项写明 `file`、`rule`、`lineText`、`reason`、`ownerBatch`、`removeBy`。脚本按 `file + rule + lineText` 精确匹配并报告 stale 条目；新增代码不得通过 allowlist 绕过棘轮。当前长期例外是 `categoryColors.ts` 的用户内容分类预设色，属于业务数据而非 UI chrome，其余设计语言规则均直接拦截违规。
 
@@ -138,6 +140,11 @@ last-reviewed: 2026-08-06
 13. **触感只经语义层**：页面调的是 `lib/haptics.ts` 的四个语义函数——`hapticToggle`（勾选 / 取消勾选）、`hapticDestructive`（删除 / 清空）、`hapticGrab`（拖拽拿起）、`hapticDrop`（拖拽吸附落位，取消或原地放下不调）。**「什么动作配什么强度」的映射只写在这一个文件**（`@capacitor/haptics` 的 `ImpactStyle`：destructive 一档重，其余三个最轻档），调用点不出现强度常量，整体调轻重或加全局开关只改这一处。调用接在页面的事件处理处，不下沉进 `lib/` 数据函数——否则跑数据层单测也会震。批量动作**整批只震一次**，不逐条震。iOS 与 Android 原生壳都接；Web / PWA / 桌面经 `Capacitor.isNativePlatform()` 判否后**整层空转**，且不回退 `navigator.vibrate`（浏览器那种整机震与原生轻触感不是同一种反馈）。插件缺失 / 系统关闭 / 硬件不支持一律吞掉，业务动作照常完成：除了接 promise 的 reject，还得防住 `impact` 同步抛与返回非 thenable（插件未注册 / 旧桥 shim）——那两种是**同步** TypeError，`hapticGrab` 在 dnd-kit 的同步 `onDragStart` 里抛出去整个拖拽都起不来。投递坠的「抓到手头」同样是吸附落位，写入成功后要震（投递失败与 invalid 拒绝不震）。
 
 14. **页面样式不写死 `visibility: visible`**：iOS 分层壳 `KeptRouteStack` 靠给整层挂 `visibility: hidden` 隐藏保留层（两层恒 `absolute inset-0` 相互重叠，换 `display:none` 会清掉滚动容器 scrollTop，机制见 [architecture](architecture.md)）。`visibility` 是可继承属性，后代给绝对值 `visible` 即反向击穿祖先的 hidden，该元素连同自身 z-index 一起浮到当前页之上——上一页的浮起元素会挂在下一页画面里，且只在 iOS 壳出现（其余平台上一页直接卸载）。需要「默认可见、可被某个类隐身」的元素写 `visibility: inherit`：常规层级下父级本就是 visible，两者等价；进了保留层才跟着一起藏。棘轮：`indexCssTokens.test.ts` 禁 `index.css` 出现写死的 `visibility: visible`。
+
+15. **状态表达三分工**：需要用户注意或处理的状态（出错、冲突、警告、成功）→ `StatusBanner`；普通信息行（不需要用户做什么，只是告知）→ 普通文字，不套框；一次性操作反馈（「已删除」+「撤销」这类，会自己消失的）→ `ActionToastBar`。分界线是**用户需不需要对它做点什么**，不是「这条信息重不重要」——重要性是主观量、人人排序不同，用户是否要行动是可判定的事实。手写散装三件套由 §3 的 `handwritten-status-banner` 拦着。
+16. **删除确认两档**：判据是**频次 × 后果**，不是「重要程度」。删掉一个**完整对象**（轨道 / 分类 / 目标 / 一批速记）→ `ConfirmSheet` 弹层确认——低频、误触后果重、连带删掉下属内容；删掉对象**内部的一条**（轨道里的一个步骤）→ `ConfirmDeleteButton` 就地二次确认——高频、后果轻、弹层会打断编辑节奏。重要程度是连续量、人人排序不同，频次和后果是能看出来的事实。
+
+    **待办的删除任务是这条判据的已知例外，如实记差异不假装一致**：`TaskDetailSheet` 与 `InlineChildren` 直接调 `deleteTaskCascade`，既无确认也无撤销（待办唯一的撤销是「勾选附带归档轨道」），而它单事务删 root + 全部直接子任务，重复模板还连清名下活跃 pending occurrence 与镜像子任务（级联范围见 [todo](todo.md)）。按判据它属第一档；未收口是因为待办的删除入口含滑动删除，而滑动删除另有「不配确认、配撤销」的成熟形态，走哪条属产品取向而非工程判断，需拍板后才动。
 
 ## 5. 模块速查
 

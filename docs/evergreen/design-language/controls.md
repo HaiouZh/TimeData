@@ -12,7 +12,7 @@ covers:
   - scripts/check-design-language.mjs
 contracts:
   - packages/client/src/components/ui/**
-last-reviewed: 2026-08-05
+last-reviewed: 2026-08-07
 ---
 
 # 设计语言 · 控件库
@@ -53,7 +53,11 @@ last-reviewed: 2026-08-05
 
 **`bare` 不能用「在 `className` 里覆盖」代替**：Tailwind 工具类之间没有先后之分——同层同特异性时谁生效取决于**生成的 CSS 里谁在后面**，不是 class 字符串里谁写在后面。所以给基础类追加 `min-h-0 rounded-pill` 是赌运气，且实测赌输过（速记日期条被撑成 44px 高的方角块）。速记日期气泡是当前唯一承重点，三个开关一起用。
 
-除表单替代件外，`components/ui/` 还有一组**页面壳与状态原子件**，不替代任何原生控件、也不进棘轮禁用映射：`PageHeader`（sticky 顶栏，**背景色只走 `background` prop 不走 `className`**——两个 `bg-*` 并存时胜负同样由编译产物顺序决定）、`PageBackButton`（统一返回钮，44px 热区 `hotarea-lg`；传 `to` 渲染路由 `Link`、否则渲染 `button`）、`StatusBanner`（`info`/`warn`/`danger` 三态提示条）、`EmptyState`（空态，`card`/`inline` 两形态）、`LoadingState`（加载态一行字）。
+除表单替代件外，`components/ui/` 还有一组**页面壳与状态原子件**，不替代任何原生控件、也不进棘轮禁用映射：`PageHeader`（sticky 顶栏，**背景色只走 `background` prop 不走 `className`**——两个 `bg-*` 并存时胜负同样由编译产物顺序决定）、`PageBackButton`（统一返回钮，44px 热区 `hotarea-lg`；传 `to` 渲染路由 `Link`、否则渲染 `button`）、`StatusBanner`（`info`/`ok`/`warn`/`danger` 四档 tone × `card`/`bar` 两形态）、`EmptyState`（空态，`card`/`inline` 两形态）、`LoadingState`（加载态一行字）。
+
+`StatusBanner` 四档 tone 分工：`info`（中性提示）、`ok`（成功）、`warn`（警告）、`danger`（错误/冲突/危险）。`card` 是缺省形态（`rounded-card border px-3 py-2`），`bar` 是贴边横条（`border-b px-4 py-2`，如日记页顶部两条）。`actions` 传入时文字与动作按钮排成一行（`flex-wrap`、文字 `flex-1`），如日记冲突条的「刷新重载 / 仍然覆盖」、回顾页错误条的「重试」；不传则纯文字。组件恒定输出 `data-tone={tone}`，且 `data-*` 透传展开在 `data-tone` **之前**——调用方盖不掉它，迁移过来各页测试的断言全挂在 `data-tone` 上（如 `data-connect-sheet-error` 这种测试钩子）。`role`（缺省不设，显式传 `alert`/`status` 才进播报）与 `style` 同样透传；`style` 的承重点是速记页两条浮动横条，靠 `--bottom-offset` + `calc(… + var(--safe-bottom))` 实时定位，不传会静默丢位置。
+
+`ConfirmDeleteButton` 是「就地二次确认删除」：第一次点变成「确认删除」文字，第二次点才执行 `onConfirm`。`resetKey` 值变化即复位确认态（`useEffect(() => setConfirming(false), [resetKey])`）——用户切走干别的时，那个半按下的确认态不该留着（轨道两处传 `editing`，进编辑态要撤销待确认）。`aria-label` 随确认态在「删除{target}」/「确认删除{target}」间切换。它与 `ConfirmSheet` 的分工按「频次 × 后果」判据（[design-language](../design-language.md#design-language-s4) §4 第 16 条）：删掉完整对象走 `ConfirmSheet` 弹层，删对象内部的一条走本件就地确认。
 
 面板的入场动画与 88vh 限高一并由 `index.css` 的 `.sheet-panel` 承载（顶层规则，优先级高于 utilities）：调用方传进来的 `className` 改不动限高，要调只能改那条 CSS。
 
@@ -131,7 +135,7 @@ last-reviewed: 2026-08-05
 
 | 入口 | 职责 |
 |---|---|
-| `components/ui/{Checkbox,Switch,SegmentedControl,SelectSheet,ConfirmSheet,Sheet}.tsx` | 自绘控件词汇表 |
+| `components/ui/{Checkbox,Switch,SegmentedControl,SelectSheet,ConfirmSheet,ConfirmDeleteButton,Sheet}.tsx` | 自绘控件词汇表 |
 | `components/ui/{MonthCalendar,DateField,TimeField}.tsx` | 日期/时间自绘控件 |
 | `components/ui/{PageHeader,PageBackButton,StatusBanner,EmptyState,LoadingState}.tsx` | 页面壳与状态原子件（非原生控件替代件，不进棘轮映射） |
 | `components/Icon.tsx` | Phosphor 图标包装 + `resolveIconWeight` |
@@ -140,4 +144,4 @@ last-reviewed: 2026-08-05
 | `hooks/useLongPress.ts` | 长按/右键手势 handlers，纯函数 `createLongPressHandlers` 可直测 |
 | `scripts/check-no-native-controls.mjs` | 无原生控件棘轮（`check:ui`，CI 强制） |
 
-**测试**：`components/ui/{Checkbox,Switch,SegmentedControl,SelectSheet,ConfirmSheet,Sheet,MonthCalendar,DateField,TimeField,ActionToastBar,PageHeader,PageBackButton,StatusBanner,EmptyState,LoadingState}.test.tsx`、`components/Icon.test.tsx`、`hooks/{useConfirm.test.tsx,useLongPress.test.ts}`（`useActionToast` 无独立测试，靠消费方页面测试覆盖）。
+**测试**：`components/ui/{Checkbox,Switch,SegmentedControl,SelectSheet,ConfirmSheet,ConfirmDeleteButton,Sheet,MonthCalendar,DateField,TimeField,ActionToastBar,PageHeader,PageBackButton,StatusBanner,EmptyState,LoadingState}.test.tsx`、`components/Icon.test.tsx`、`hooks/{useConfirm.test.tsx,useLongPress.test.ts}`（`useActionToast` 无独立测试，靠消费方页面测试覆盖）。

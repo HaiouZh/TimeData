@@ -17,7 +17,7 @@ contracts:
   - packages/client/src/pages/diary/review/DiaryMarkdown.tsx
   - packages/client/src/pages/diary/review/DiaryReviewPage.tsx
   - packages/server/src/routes/diary.ts
-last-reviewed: 2026-08-04
+last-reviewed: 2026-08-07
 ---
 
 # 日记 · 回顾页
@@ -43,7 +43,7 @@ last-reviewed: 2026-08-04
 
 `DiaryReviewPage` 复用 `resolveDiaryDate` 读取当前日期，但回顾页只读，所以无参视图可以跟随实时今天。切日期使用 `replace`，周览左右步进 7 天；冷入口的返回兜底在挂载时冻结，避免 `replace` 改掉 `location.key` 后退化。
 
-页面根据模式一次性请求 `fetchDiaryBatch({ dates, weeks })`。缺文件是“无内容”，不是错误；`weeklyConfigured=false` 表示周记模板未配置，`WeekColumn` 会链接到 `/settings/diary`，不能当成周记空白。batch 请求失败只显示错误条，不替换已有内容区；渲染异常通过 ErrorBoundary key 随 mode/date/retry 重挂。
+页面根据模式一次性请求 `fetchDiaryBatch({ dates, weeks })`。缺文件是“无内容”，不是错误；`weeklyConfigured=false` 表示周记模板未配置，`WeekColumn` 会链接到 `/settings/diary`，不能当成周记空白。batch 请求失败只显示错误条，不替换已有内容区——错误条是 `StatusBanner` 的 `bar` 形态（贴边横条，`actions` 挂「重试」），叠在内容之上，已有卡片继续可读；渲染异常通过 ErrorBoundary key 随 mode/date/retry 重挂。
 
 卡片只读：已有日记进编辑页，缺失日记提供创建入口；未来日期降饱和且不提供创建入口。长内容在卡片内滚动，不撑破回顾布局。
 
