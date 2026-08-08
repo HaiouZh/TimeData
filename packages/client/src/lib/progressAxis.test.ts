@@ -1,10 +1,12 @@
-import type { Task, Track, TrackStep } from "@timedata/shared";
+import type { Goal, Task, Track, TrackStep } from "@timedata/shared";
 import { describe, expect, it } from "vitest";
 import { DEFAULT_TODO_GRAVITY_SETTINGS } from "./tasks/gravity.js";
 import {
   bucketForProject,
   bucketForTask,
   bucketForTrack,
+  buildProgressItems,
+  type ProgressAxisInput,
   type TaskBucketContext,
 } from "./progressAxis.js";
 
@@ -208,5 +210,145 @@ describe("bucketForProject 结构式 roll-up", () => {
 
   it("结构式判定与时间无关：成员全在等即判 waiting", () => {
     expect(bucketForProject(["waiting"])).toBe("waiting");
+  });
+});
+
+function input(patch: Partial<ProgressAxisInput> = {}): ProgressAxisInput {
+  return {
+    tasks: [],
+    childrenByParent: new Map(),
+    tracks: [],
+    stepsByTrack: new Map(),
+    projects: [],
+    handSessionId: null,
+    gravitySettings: DEFAULT_TODO_GRAVITY_SETTINGS,
+    now: NOW,
+    ...patch,
+  };
+}
+
+describe("buildProgressItems 去重", () => {
+  it("任务挂 active 轨道 → 只出一行，两个 id 都在，桶取任务的", () => {
+    const task = makeTask({ id: "t1", done: true });
+    const track = makeTrack({ id: "k1", refs: [{ kind: "task", id: "t1" }] });
+    const items = buildProgressItems(input({ tasks: [task], tracks: [track] }));
+    expect(items).toHaveLength(1);
+    expect(items[0]).toMatchObject({ kind: "task", taskId: "t1", trackId: "k1", bucket: "settled" });
+  });
+
+  it("轨道 refs 指向已删除任务 → 轨道独立成行，不被吞掉", () => {
+    const track = makeTrack({ id: "k1", refs: [{ kind: "task", id: "gone" }] });
+    const items = buildProgressItems(input({ tracks: [track] }));
+    expect(items).toHaveLength(1);
+    expect(items[0]).toMatchObject({ kind: "track", trackId: "k1", taskId: null });
+  });
+
+  it("一任务挂两条 active 轨道 → 取 updatedAt 新者", () => {
+    const task = makeTask({ id: "t1" });
+    const older = makeTrack({ id: "old", refs: [{ kind: "task", id: "t1" }], updatedAt: iso(5 * DAY) });
+    const newer = makeTrack({ id: "new", refs: [{ kind: "task", id: "t1" }], updatedAt: iso(1 * DAY) });
+    const items = buildProgressItems(input({ tasks: [task], tracks: [older, newer] }));
+    expect(items.filter((i) => i.kind === "task")[0].trackId).toBe("new");
+  });
+
+  it("一轨道 refs 指多任务 → 合并到下标最小的那个，其余独立成行", () => {
+    const a = makeTask({ id: "a" });
+    const b = makeTask({ id: "b" });
+    const track = makeTrack({ id: "k1", refs: [{ kind: "task", id: "a" }, { kind: "task", id: "b" }] });
+    const items = buildProgressItems(input({ tasks: [a, b], tracks: [track] }));
+    expect(items).toHaveLength(2);
+    expect(items.find((i) => i.taskId === "a")?.trackId).toBe("k1");
+    expect(items.find((i) => i.taskId === "b")?.trackId).toBeNull();
+  });
+});
+
+describe("buildProgressItems 进度", () => {
+  it("子任务口径：剔 skipped", () => {
+    const parent = makeTask({ id: "p" });
+    const children = new Map([[
+      "p",
+      [
+        makeTask({ id: "c1", parentId: "p", done: true }),
+        makeTask({ id: "c2", parentId: "p" }),
+        makeTask({ id: "c3", parentId: "p", skipped: true, ruleId: "r" }),
+      ],
+    ]]);
+    const items = buildProgressItems(input({ tasks: [parent], childrenByParent: children }));
+    expect(items[0].progress).toEqual({ kind: "subtasks", done: 1, total: 2 });
+  });
+
+  it("步数口径：不减已闭合", () => {
+    const task = makeTask({ id: "t1" });
+    const track = makeTrack({ id: "k1", refs: [{ kind: "task", id: "t1" }] });
+    const steps = [makeStep("k1", 1 * DAY, 2 * DAY), makeStep("k1", null, 1 * DAY)];
+    const items = buildProgressItems(
+      input({ tasks: [task], tracks: [track], stepsByTrack: new Map([["k1", steps]]) }),
+    );
+    expect(items[0].progress).toEqual({ kind: "steps", count: 2 });
+  });
+
+  it("无子任务无轨道 → progress 为 null", () => {
+    const items = buildProgressItems(input({ tasks: [makeTask()] }));
+    expect(items[0].progress).toBeNull();
+  });
+});
+
+describe("buildProgressItems 项目组与 latestNote", () => {
+  function makeGoal(members: Goal["members"]): Goal {
+    return {
+      id: "g1",
+      title: "项目",
+      kind: "project",
+      status: "active",
+      members,
+      prerequisites: [],
+      createdAt: iso(30 * DAY),
+      updatedAt: iso(0),
+    };
+  }
+
+  it("成员全是轨道的项目仍然成行——不因只认 task 成员而整个消失", () => {
+    const track = makeTrack({ id: "k1", createdAt: iso(1 * DAY) });
+    const goal = makeGoal([{ kind: "track", id: "k1" }]);
+    const row = buildProgressItems(input({ tracks: [track], projects: [goal] })).find(
+      (i) => i.kind === "project",
+    );
+    expect(row).toMatchObject({ goalId: "g1", bucket: "queued" });
+    expect(row?.progress).toEqual({ kind: "members", done: 0, total: 1 });
+  });
+
+  it("被合并进任务行的轨道，roll-up 取任务的桶不取轨道自己的", () => {
+    // 任务已完成 → 合并行 settled；轨道有开口步、单独算会是 doing。项目组必须跟合并行走。
+    const task = makeTask({ id: "t1", done: true });
+    const track = makeTrack({ id: "k1", refs: [{ kind: "task", id: "t1" }] });
+    const items = buildProgressItems(
+      input({
+        tasks: [task],
+        tracks: [track],
+        stepsByTrack: new Map([["k1", [makeStep("k1", null, 1 * DAY)]]]),
+        projects: [makeGoal([{ kind: "track", id: "k1" }])],
+      }),
+    );
+    expect(items.find((i) => i.kind === "project")?.bucket).toBe("settled");
+  });
+
+  it("latestNote 取轨道最新一步正文；无轨道的任务为 null", () => {
+    const task = makeTask({ id: "t1" });
+    const track = makeTrack({ id: "k1", refs: [{ kind: "task", id: "t1" }] });
+    const steps = [makeStep("k1", 2 * DAY, 3 * DAY), makeStep("k1", null, 1 * DAY)];
+    const merged = buildProgressItems(
+      input({ tasks: [task], tracks: [track], stepsByTrack: new Map([["k1", steps]]) }),
+    );
+    expect(merged[0].latestNote).toBe(steps[1].content);
+    expect(buildProgressItems(input({ tasks: [makeTask({ id: "t2" })] }))[0].latestNote).toBeNull();
+  });
+});
+
+describe("buildProgressItems 排序", () => {
+  it("组内按 lastActivityAt 倒序、空值沉底", () => {
+    const older = makeTask({ id: "old", updatedAt: iso(5 * DAY) });
+    const newer = makeTask({ id: "new", updatedAt: iso(1 * DAY) });
+    const items = buildProgressItems(input({ tasks: [older, newer] }));
+    expect(items.map((i) => i.taskId)).toEqual(["new", "old"]);
   });
 });

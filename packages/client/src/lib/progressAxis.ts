@@ -1,8 +1,9 @@
-import type { Task, Track, TrackStep } from "@timedata/shared";
+import type { Goal, Task, Track, TrackStep } from "@timedata/shared";
 import { placementForTask } from "./tasks/placement.js";
 import { isTaskSunken, type TodoGravitySettings } from "./tasks/gravity.js";
 import { STALL_THRESHOLD_MS } from "./tracksDispatch.js";
-import { lastActivityAt } from "./tracksView.js";
+import { lastActivityAt, latestStep } from "./tracksView.js";
+import { findActiveTrackForTask } from "./taskTrackIndex.js";
 
 /** 推进桶。顺序即显示序。 */
 export type ProgressBucket = "doing" | "waiting" | "queued" | "todo" | "settled";
@@ -86,4 +87,156 @@ export function bucketForProject(memberBuckets: readonly ProgressBucket[]): Prog
   if (unsettled.length === 0) return "settled";
   if (unsettled.every((bucket) => bucket === "waiting")) return "waiting";
   return "queued";
+}
+
+export type ProgressMeter =
+  | { kind: "subtasks"; done: number; total: number }
+  | { kind: "steps"; count: number }
+  | { kind: "members"; done: number; total: number };
+
+export interface ProgressItem {
+  key: string;
+  kind: "task" | "track" | "project";
+  bucket: ProgressBucket;
+  title: string;
+  taskId: string | null;
+  trackId: string | null;
+  goalId: string | null;
+  progress: ProgressMeter | null;
+  lastActivityAt: string | null;
+  latestNote: string | null;
+}
+
+export interface ProgressAxisInput {
+  tasks: readonly Task[];
+  /** parentId → 子任务；用于算子任务进度。 */
+  childrenByParent: ReadonlyMap<string, Task[]>;
+  tracks: readonly Track[];
+  stepsByTrack: ReadonlyMap<string, TrackStep[]>;
+  /** 只传 status==="active" && kind==="project" 的裸行。 */
+  projects: readonly Goal[];
+  handSessionId: string | null;
+  gravitySettings: TodoGravitySettings;
+  now: Date;
+}
+
+function subtaskMeter(children: readonly Task[] | undefined): ProgressMeter | null {
+  if (!children || children.length === 0) return null;
+  const counted = children.filter((child) => !child.skipped);
+  if (counted.length === 0) return null;
+  return { kind: "subtasks", done: counted.filter((child) => child.done).length, total: counted.length };
+}
+
+export function buildProgressItems(input: ProgressAxisInput): ProgressItem[] {
+  const { tasks, childrenByParent, tracks, stepsByTrack, projects, handSessionId, gravitySettings, now } = input;
+
+  const taskById = new Map(tasks.map((task) => [task.id, task]));
+  const trackById = new Map(tracks.map((track) => [track.id, track]));
+  const projectMemberIds = new Set<string>();
+  for (const goal of projects) {
+    for (const member of goal.members) {
+      if (member.kind === "task") projectMemberIds.add(member.id);
+    }
+  }
+
+  const ctx: TaskBucketContext = { handSessionId, projectMemberIds, gravitySettings, now };
+  const items: ProgressItem[] = [];
+  const consumedTrackIds = new Set<string>();
+  const bucketByTaskId = new Map<string, ProgressBucket>();
+  /** 轨道的**最终**桶：被合并进任务行的取任务的桶（§4 桶冲突），独立成行的取自己的。 */
+  const bucketByTrackId = new Map<string, ProgressBucket>();
+
+  for (const task of tasks) {
+    const bucket = bucketForTask(task, ctx);
+    if (bucket === null) continue;
+    bucketByTaskId.set(task.id, bucket);
+
+    const track = findActiveTrackForTask(tracks, task.id);
+    // 只有「本轨道 refs 里下标最小的、且查得到的 task」才吃掉轨道；其余任务独立成行。
+    const owned =
+      track !== null &&
+      track.refs.filter((ref) => ref.kind === "task" && taskById.has(ref.id))[0]?.id === task.id
+        ? track
+        : null;
+    if (owned !== null) {
+      consumedTrackIds.add(owned.id);
+      bucketByTrackId.set(owned.id, bucket);
+    }
+
+    const steps = owned === null ? [] : (stepsByTrack.get(owned.id) ?? []);
+    items.push({
+      key: `task:${task.id}`,
+      kind: "task",
+      bucket,
+      title: task.title,
+      taskId: task.id,
+      trackId: owned?.id ?? null,
+      goalId: null,
+      progress:
+        steps.length > 0
+          ? { kind: "steps", count: steps.length }
+          : subtaskMeter(childrenByParent.get(task.id)),
+      lastActivityAt: task.updatedAt,
+      latestNote: latestStep([...steps])?.content ?? null,
+    });
+  }
+
+  for (const track of tracks) {
+    if (consumedTrackIds.has(track.id)) continue;
+    const steps = stepsByTrack.get(track.id) ?? [];
+    const bucket = bucketForTrack(track, steps, now);
+    bucketByTrackId.set(track.id, bucket);
+    items.push({
+      key: `track:${track.id}`,
+      kind: "track",
+      bucket,
+      title: track.title,
+      taskId: null,
+      trackId: track.id,
+      goalId: null,
+      progress: steps.length > 0 ? { kind: "steps", count: steps.length } : null,
+      lastActivityAt: lastActivityAt([...steps]) ?? track.createdAt,
+      latestNote: latestStep([...steps])?.content ?? null,
+    });
+  }
+
+  // projects 放在最后：它读 bucketByTrackId，而那张表要等上面两个循环都填完才完整。
+  for (const goal of projects) {
+    const memberBuckets: ProgressBucket[] = [];
+    let latest: string | null = null;
+    for (const member of goal.members) {
+      // 两种成员都算——只收 task 会让「成员全是轨道」的项目整个从面板消失。
+      const bucket =
+        member.kind === "task" ? bucketByTaskId.get(member.id) : bucketByTrackId.get(member.id);
+      if (bucket === undefined) continue;
+      memberBuckets.push(bucket);
+      const at =
+        member.kind === "task" ? taskById.get(member.id)?.updatedAt : trackById.get(member.id)?.updatedAt;
+      if (at !== undefined && (latest === null || at > latest)) latest = at;
+    }
+    const bucket = bucketForProject(memberBuckets);
+    if (bucket === null) continue;
+    items.push({
+      key: `project:${goal.id}`,
+      kind: "project",
+      bucket,
+      title: goal.title,
+      taskId: null,
+      trackId: null,
+      goalId: goal.id,
+      progress: {
+        kind: "members",
+        done: memberBuckets.filter((b) => b === "settled").length,
+        total: memberBuckets.length,
+      },
+      lastActivityAt: latest,
+      latestNote: null,
+    });
+  }
+
+  return items.sort((a, b) => {
+    const aMs = a.lastActivityAt === null ? 0 : new Date(a.lastActivityAt).getTime();
+    const bMs = b.lastActivityAt === null ? 0 : new Date(b.lastActivityAt).getTime();
+    return bMs - aMs;
+  });
 }
