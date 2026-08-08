@@ -119,6 +119,9 @@
   "docs/evergreen/todo/modules.md": {
     "covers": 7
   },
+  "docs/evergreen/todo/progress-axis.md": {
+    "covers": 1
+  },
   "docs/evergreen/todo/recurrence.md": {
     "covers": 7
   },

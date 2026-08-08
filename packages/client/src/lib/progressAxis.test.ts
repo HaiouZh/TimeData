@@ -1,6 +1,7 @@
 import type { Goal, Task, Track, TrackStep } from "@timedata/shared";
 import { describe, expect, it } from "vitest";
-import { DEFAULT_TODO_GRAVITY_SETTINGS } from "./tasks/gravity.js";
+import { DEFAULT_TODO_GRAVITY_SETTINGS, splitInboxByGravity } from "./tasks/gravity.js";
+import { placementForTask } from "./tasks/placement.js";
 import {
   bucketForProject,
   bucketForTask,
@@ -350,5 +351,62 @@ describe("buildProgressItems 排序", () => {
     const newer = makeTask({ id: "new", updatedAt: iso(1 * DAY) });
     const items = buildProgressItems(input({ tasks: [older, newer] }));
     expect(items.map((i) => i.taskId)).toEqual(["new", "old"]);
+  });
+});
+
+/**
+ * 正交性回归。**这一组是回归哨兵，不是行为验证**——`buildProgressItems` 现在纯读、
+ * 天然不碰入参，所以这几条现在恒绿，删掉本层实现它们也不会红。它们守的是**将来**：
+ * 谁要是往这一层加了写操作（顺手把 placement 缓存回写 task、把桶写进实体、
+ * 就地 sort 传进来的数组），这里会立刻红。
+ *
+ * 推进轴是**新增读法**，不是改写既有投影——这是阶段 1 的立身之本，值得一组哨兵守着。
+ */
+describe("正交性：本层不改变既有投影的输出", () => {
+  const makeFixture = (): Task[] => [
+    makeTask({ id: "a", scheduledAt: iso(0) }),
+    makeTask({ id: "b", scheduledAt: iso(30 * DAY) }),
+    makeTask({ id: "c", updatedAt: iso(40 * DAY) }),
+    makeTask({ id: "d", done: true }),
+  ];
+
+  it("placementForTask 的结果不因本层被调用而改变", () => {
+    const fixture = makeFixture();
+    const before = fixture.map((task) => placementForTask(task, NOW));
+    buildProgressItems(input({ tasks: fixture }));
+    expect(fixture.map((task) => placementForTask(task, NOW))).toEqual(before);
+  });
+
+  it("splitInboxByGravity 的结果不因本层被调用而改变", () => {
+    const fixture = makeFixture();
+    const before = splitInboxByGravity(fixture, DEFAULT_TODO_GRAVITY_SETTINGS, NOW);
+    buildProgressItems(input({ tasks: fixture }));
+    expect(splitInboxByGravity(fixture, DEFAULT_TODO_GRAVITY_SETTINGS, NOW)).toEqual(before);
+  });
+
+  it("不修改传入的任何实体，也不就地重排传入的数组", () => {
+    const tasks = makeFixture();
+    const tracks = [makeTrack({ id: "k1", refs: [{ kind: "task", id: "a" }] })];
+    const steps = [makeStep("k1", null, 2 * DAY)];
+    const goals = [
+      {
+        id: "g1",
+        title: "项目",
+        kind: "project" as const,
+        status: "active" as const,
+        members: [{ kind: "task" as const, id: "a" }],
+        prerequisites: [],
+        createdAt: iso(30 * DAY),
+        updatedAt: iso(0),
+      },
+    ];
+    const snapshot = JSON.parse(JSON.stringify({ tasks, tracks, steps, goals })) as unknown;
+
+    buildProgressItems(
+      input({ tasks, tracks, stepsByTrack: new Map([["k1", steps]]), projects: goals }),
+    );
+
+    // 深比较连数组顺序一起验：就地 sort 也会被这条抓到。
+    expect(JSON.parse(JSON.stringify({ tasks, tracks, steps, goals }))).toEqual(snapshot);
   });
 });
