@@ -219,7 +219,7 @@ export default function TimeStatsPage() {
           </button>
         </div>
 
-        <div className="mt-4 rounded-card border border-border bg-surface-elevated px-4 py-3">
+        <div className="mt-4">
           <div className="td-text-caption font-medium text-ink-2">已记录</div>
           <div className="mt-1 flex items-end gap-2">
             <span className="td-num td-text-display text-ink">{totalHours.toFixed(1)}</span>
