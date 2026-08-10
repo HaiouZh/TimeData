@@ -128,7 +128,7 @@ export default function SettingsTodoGravityPage() {
         <button
           type="button"
           onClick={restoreDefaults}
-          className="w-full rounded-ctl border border-border bg-surface px-4 py-2.5 td-text-label text-ink-2 transition-colors hover:bg-surface-hover"
+          className="min-h-11 w-full rounded-ctl border border-border bg-surface px-4 py-2.5 td-text-label text-ink-2 transition-colors hover:bg-surface-hover"
         >
           恢复默认
         </button>

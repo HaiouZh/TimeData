@@ -96,7 +96,7 @@ export function CustomRecurrencePage({ initial, onComplete, onBack }: CustomRecu
           type="button"
           aria-label="返回"
           onClick={onBack}
-          className="rounded-ctl px-2 py-1 td-text-label text-ink-2 hover:bg-surface-hover"
+          className="min-h-11 rounded-ctl px-2 py-1 td-text-label text-ink-2 hover:bg-surface-hover"
         >
           返回
         </button>
@@ -105,7 +105,7 @@ export function CustomRecurrencePage({ initial, onComplete, onBack }: CustomRecu
           type="button"
           aria-label="完成"
           onClick={() => onComplete(customToRecurrence(draft), draft.start)}
-          className="rounded-ctl px-2 py-1 td-text-label font-medium text-accent-ink hover:bg-accent/10"
+          className="min-h-11 rounded-ctl px-2 py-1 td-text-label font-medium text-accent-ink hover:bg-accent/10"
         >
           完成
         </button>

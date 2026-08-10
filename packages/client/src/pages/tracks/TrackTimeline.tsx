@@ -57,7 +57,7 @@ export function TrackTimeline({
           <button
             type="button"
             onClick={() => setShowAll(true)}
-            className="w-full rounded-card border border-border bg-surface px-3 py-2 td-text-caption text-ink-2 hover:border-accent hover:text-accent"
+            className="min-h-11 w-full rounded-card border border-border bg-surface px-3 py-2 td-text-caption text-ink-2 hover:border-accent hover:text-accent"
           >
             显示其余 {hiddenCount} 步
           </button>

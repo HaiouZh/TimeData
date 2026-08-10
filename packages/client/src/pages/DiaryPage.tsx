@@ -473,7 +473,7 @@ export default function DiaryPage() {
               aria-label="保存"
               disabled={!dirty || saving || reloading || loading || loadFailed}
               onClick={() => void handleSave()}
-              className="rounded-ctl bg-accent px-3 py-1.5 td-text-body font-medium text-page transition hover:bg-accent-strong disabled:cursor-not-allowed disabled:bg-surface-hover disabled:text-ink-3"
+              className="min-h-11 rounded-ctl bg-accent px-3 py-1.5 td-text-body font-medium text-page transition hover:bg-accent-strong disabled:cursor-not-allowed disabled:bg-surface-hover disabled:text-ink-3"
             >
               保存
             </button>

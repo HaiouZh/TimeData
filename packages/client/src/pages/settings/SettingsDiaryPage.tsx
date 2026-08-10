@@ -111,7 +111,7 @@ export default function SettingsDiaryPage() {
             type="button"
             disabled={saving}
             onClick={() => void handleSave()}
-            className="rounded-ctl bg-accent px-4 py-2 td-text-body font-medium text-page transition-colors hover:bg-accent-strong disabled:opacity-50"
+            className="min-h-11 rounded-ctl bg-accent px-4 py-2 td-text-body font-medium text-page transition-colors hover:bg-accent-strong disabled:opacity-50"
           >
             {saving ? "保存中…" : "保存"}
           </button>
@@ -140,7 +140,7 @@ export default function SettingsDiaryPage() {
             type="button"
             disabled={weeklySaving}
             onClick={() => void handleSaveWeekly()}
-            className="rounded-ctl bg-accent px-4 py-2 td-text-body font-medium text-page transition-colors hover:bg-accent-strong disabled:opacity-50"
+            className="min-h-11 rounded-ctl bg-accent px-4 py-2 td-text-body font-medium text-page transition-colors hover:bg-accent-strong disabled:opacity-50"
           >
             {weeklySaving ? "保存中…" : "保存"}
           </button>

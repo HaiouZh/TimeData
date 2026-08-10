@@ -1433,7 +1433,7 @@ export default function QuickNotesPage() {
                       type="button"
                       aria-label="加载更多搜索结果"
                       onClick={() => setSearchLimit((limit) => limit + SEARCH_RESULT_PAGE_SIZE)}
-                      className="rounded-pill border border-border bg-surface px-3 py-1.5 td-text-caption font-medium text-ink-3 transition hover:border-accent hover:text-ink-2"
+                      className="min-h-11 rounded-pill border border-border bg-surface px-3 py-1.5 td-text-caption font-medium text-ink-3 transition hover:border-accent hover:text-ink-2"
                     >
                       加载更多（还有 {searchHiddenCount} 条）
                     </button>
@@ -1448,7 +1448,7 @@ export default function QuickNotesPage() {
                   <button
                     type="button"
                     onClick={() => void timeline.loadOlder()}
-                    className="rounded-pill border border-border bg-surface px-3 py-1.5 td-text-caption font-medium text-ink-3 transition hover:border-accent hover:text-ink-2"
+                    className="min-h-11 rounded-pill border border-border bg-surface px-3 py-1.5 td-text-caption font-medium text-ink-3 transition hover:border-accent hover:text-ink-2"
                   >
                     加载更早
                   </button>
@@ -1567,7 +1567,7 @@ export default function QuickNotesPage() {
         <button
           type="button"
           onClick={jumpToLatest}
-          className="fixed right-4 rounded-pill border border-border-strong bg-surface px-3 py-2 td-text-caption font-medium text-ink-2 shadow-elev1 transition hover:border-accent hover:text-ink [bottom:var(--bottom-offset)]"
+          className="fixed right-4 min-h-11 rounded-pill border border-border-strong bg-surface px-3 py-2 td-text-caption font-medium text-ink-2 shadow-elev1 transition hover:border-accent hover:text-ink [bottom:var(--bottom-offset)]"
           // 兜底类 [bottom:var(--bottom-offset)]：env() 未定义环境（Firefox 桌面 / 旧 WebView）里 calc
           // 整条失效、内联 bottom 被丢弃，由它还原批次前的纯数值位置（floatBottomInsetPx，原口径
           // navOffsetPx + bottomInsetPx，现走合成并计入键盘高）。

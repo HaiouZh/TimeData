@@ -77,7 +77,7 @@ export default function SettingsServerPage() {
         <button
           type="button"
           onClick={saveConfig}
-          className="rounded-ctl bg-accent px-4 py-2 td-text-label font-medium text-page hover:bg-accent-strong"
+          className="min-h-11 rounded-ctl bg-accent px-4 py-2 td-text-label font-medium text-page hover:bg-accent-strong"
         >
           {saved ? "已保存" : "保存配置"}
         </button>

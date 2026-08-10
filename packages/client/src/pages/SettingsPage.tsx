@@ -144,7 +144,7 @@ function ServerStatusCard() {
               type="button"
               onClick={() => sync()}
               disabled={syncing}
-              className="shrink-0 rounded-ctl bg-accent px-3 py-1.5 td-text-caption font-medium text-page transition-colors hover:bg-accent-strong disabled:opacity-50"
+              className="shrink-0 min-h-11 rounded-ctl bg-accent px-3 py-1.5 td-text-caption font-medium text-page transition-colors hover:bg-accent-strong disabled:opacity-50"
             >
               {syncing ? "同步中…" : "同步"}
             </button>

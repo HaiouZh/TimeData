@@ -125,7 +125,7 @@ export default function EntryPage() {
     return (
       <div className="p-6 space-y-4 text-center">
         <p className="text-ink-3">没有找到这条记录。</p>
-        <button onClick={() => goBack("/")} className="px-4 py-2 rounded-ctl bg-surface-hover td-text-caption">
+        <button onClick={() => goBack("/")} className="min-h-11 px-4 py-2 rounded-ctl bg-surface-hover td-text-caption">
           返回
         </button>
       </div>

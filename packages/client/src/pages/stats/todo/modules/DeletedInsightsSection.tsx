@@ -53,7 +53,7 @@ export default function DeletedInsightsSection() {
           <button
             type="button"
             onClick={load}
-            className="rounded-ctl border border-border bg-surface px-3 py-1.5 td-text-caption font-medium text-ink-2 transition-colors hover:bg-surface-hover"
+            className="min-h-11 rounded-ctl border border-border bg-surface px-3 py-1.5 td-text-caption font-medium text-ink-2 transition-colors hover:bg-surface-hover"
           >
             重试
           </button>

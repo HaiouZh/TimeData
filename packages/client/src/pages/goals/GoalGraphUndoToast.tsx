@@ -52,7 +52,7 @@ export function GoalGraphUndoToast({
           type="button"
           data-goal-undo-action
           onClick={onAction}
-          className="shrink-0 rounded-ctl bg-page px-3 py-1.5 td-text-label font-medium text-ink hover:bg-surface-elevated"
+          className="shrink-0 min-h-11 rounded-ctl bg-page px-3 py-1.5 td-text-label font-medium text-ink hover:bg-surface-elevated"
         >
           {actionLabel}
         </button>
