@@ -37,7 +37,9 @@ describe("StyleguidePage", () => {
     expect(html).toContain("打开 Sheet");
     expect(html).toContain("打开 ConfirmSheet（普通）");
     expect(html).toContain("打开 ConfirmSheet（danger）");
-    expect(html).toContain("SelectSheet");
+    // 锁 SelectSheet 组件实例本身：「演示强度」是传给组件的 label，由组件渲染进 trigger；
+    // 断言说明 span 的「SelectSheet」字样会被删实例保留文案的变异逃逸（终审变异 D 实测）。
+    expect(html).toContain("演示强度");
   });
 
   it("renders the feedback actions section", () => {
