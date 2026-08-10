@@ -30,4 +30,27 @@ describe("StyleguidePage", () => {
     expect(html).toContain("td-time");
     expect(html).toContain("td-duration");
   });
+
+  it("renders the overlay system section with trigger buttons", () => {
+    const html = renderToStaticMarkup(<MemoryRouter><StyleguidePage /></MemoryRouter>);
+    expect(html).toContain("弹层体系");
+    expect(html).toContain("打开 Sheet");
+    expect(html).toContain("打开 ConfirmSheet（普通）");
+    expect(html).toContain("打开 ConfirmSheet（danger）");
+    expect(html).toContain("SelectSheet");
+  });
+
+  it("renders the feedback actions section", () => {
+    const html = renderToStaticMarkup(<MemoryRouter><StyleguidePage /></MemoryRouter>);
+    expect(html).toContain("反馈动作");
+    expect(html).toContain("触发 ActionToast");
+    expect(html).toContain("删除演示条目");
+  });
+
+  it("renders the page shell section with a sticky PageHeader demo", () => {
+    const html = renderToStaticMarkup(<MemoryRouter><StyleguidePage /></MemoryRouter>);
+    expect(html).toContain("页面壳");
+    expect(html).toContain("演示页标题");
+    expect(html).toContain("滚动这块区域看 sticky");
+  });
 });

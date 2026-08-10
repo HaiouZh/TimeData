@@ -4,9 +4,16 @@ import { Icon } from "../../components/Icon.js";
 import { EmptyState } from "../../components/ui/EmptyState.js";
 import { LoadingState } from "../../components/ui/LoadingState.js";
 import { PageBackButton } from "../../components/ui/PageBackButton.js";
+import { PageHeader } from "../../components/ui/PageHeader.js";
 import { SegmentedControl } from "../../components/ui/SegmentedControl.js";
+import { ActionToastBar } from "../../components/ui/ActionToastBar.js";
+import { ConfirmDeleteButton } from "../../components/ui/ConfirmDeleteButton.js";
+import { ConfirmSheet } from "../../components/ui/ConfirmSheet.js";
+import { SelectSheet } from "../../components/ui/SelectSheet.js";
+import { Sheet } from "../../components/ui/Sheet.js";
 import { StatusBanner } from "../../components/ui/StatusBanner.js";
 import { Switch } from "../../components/ui/Switch.js";
+import { useActionToast } from "../../hooks/useActionToast.js";
 
 /** 用户内容身份色（见 ADR 0026）。色块预览与「真实形态验收台」两处共用这一份，不各列一遍。 */
 const TINT_TOKENS = Array.from({ length: 9 }, (_, i) => `--color-tint-${i + 1}`);
@@ -34,6 +41,8 @@ const GALAXY_GLOWS = [
   "--shadow-galaxy-star-core-strong",
   "--shadow-galaxy-star-core-wide",
 ];
+
+const ELEV_SHADOWS = ["--shadow-elev1", "--shadow-elev2"];
 
 const FONT_STACKS: [string, string][] = [
   ["--font-body", "Times New Roman / Tinos / LXGW WenKai Screen / KaiTi / serif"],
@@ -76,6 +85,11 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 export default function StyleguidePage() {
   const [seg, setSeg] = useState<"day" | "week" | "month">("week");
   const [switched, setSwitched] = useState(true);
+  const [demoSheetOpen, setDemoSheetOpen] = useState(false);
+  const [demoConfirmOpen, setDemoConfirmOpen] = useState<"plain" | "danger" | null>(null);
+  const [demoSelect, setDemoSelect] = useState<"low" | "mid" | "high" | null>("mid");
+  const { toast: demoToast, showToast: showDemoToast, clearToast: clearDemoToast } = useActionToast();
+  const [demoDeleted, setDemoDeleted] = useState(0);
 
   return (
     <div className="min-h-full bg-page text-ink">
@@ -173,14 +187,16 @@ export default function StyleguidePage() {
 
         <Section title="高度阴影（含顶部 hairline 高光）">
           <div className="flex flex-wrap gap-4">
-            <div className="flex flex-col items-center gap-2">
-              <span aria-hidden="true" className="h-16 w-28 rounded-card bg-surface-elevated shadow-elev1" />
-              <span className="td-text-caption text-ink-2">shadow-elev1</span>
-            </div>
-            <div className="flex flex-col items-center gap-2">
-              <span aria-hidden="true" className="h-16 w-28 rounded-card bg-surface-elevated shadow-elev2" />
-              <span className="td-text-caption text-ink-2">shadow-elev2</span>
-            </div>
+            {ELEV_SHADOWS.map((token) => (
+              <div key={token} className="flex flex-col items-center gap-2">
+                <span
+                  aria-hidden="true"
+                  className="h-16 w-28 rounded-card bg-surface-elevated"
+                  style={{ boxShadow: `var(${token})` }}
+                />
+                <span className="td-text-caption text-ink-2">{token}</span>
+              </div>
+            ))}
           </div>
         </Section>
 
@@ -319,6 +335,117 @@ export default function StyleguidePage() {
                 <span aria-hidden="true" className="content-dot rounded-pill" style={{ backgroundColor: "var(--tint-1)" }} />
                 <span aria-hidden="true" className="content-dot rounded-pill" style={{ backgroundColor: "var(--tint-5)" }} />
                 <span aria-hidden="true" className="content-dot rounded-pill" style={{ backgroundColor: "var(--tint-9)" }} />
+              </div>
+            </div>
+          </div>
+        </Section>
+
+        <Section title="弹层体系">
+          <div className="space-y-4 rounded-card border border-border bg-surface p-4">
+            <p className="td-text-label text-ink-2">
+              全站弹层规范：一律底部抽屉（批 3 已收口 7 个居中弹窗）。删除一个完整对象走 ConfirmSheet；删对象内部一条走就地二次确认（见下一节）。
+            </p>
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setDemoSheetOpen(true)}
+                className="min-h-11 rounded-ctl border border-border px-4 td-text-label text-ink hover:bg-surface-hover"
+              >
+                打开 Sheet
+              </button>
+              <button
+                type="button"
+                onClick={() => setDemoConfirmOpen("plain")}
+                className="min-h-11 rounded-ctl border border-border px-4 td-text-label text-ink hover:bg-surface-hover"
+              >
+                打开 ConfirmSheet（普通）
+              </button>
+              <button
+                type="button"
+                onClick={() => setDemoConfirmOpen("danger")}
+                className="min-h-11 rounded-ctl border border-border px-4 td-text-label text-danger hover:bg-surface-hover"
+              >
+                打开 ConfirmSheet（danger）
+              </button>
+            </div>
+            <div className="max-w-xs">
+              <span className="block mb-1.5 td-text-label text-ink-2">SelectSheet（trigger + 底部抽屉选择）</span>
+              <SelectSheet
+                label="演示强度"
+                value={demoSelect}
+                onChange={setDemoSelect}
+                options={[
+                  { value: "low", label: "低" },
+                  { value: "mid", label: "中" },
+                  { value: "high", label: "高" },
+                ]}
+              />
+            </div>
+            <Sheet open={demoSheetOpen} onClose={() => setDemoSheetOpen(false)} title="Sheet 演示">
+              <p className="td-text-body text-ink-2">底部抽屉壳：Escape / 点遮罩关闭，焦点圈定在面板内。</p>
+            </Sheet>
+            <ConfirmSheet
+              open={demoConfirmOpen === "plain"}
+              title="普通确认"
+              body="非破坏性动作的确认档。"
+              onConfirm={() => setDemoConfirmOpen(null)}
+              onCancel={() => setDemoConfirmOpen(null)}
+            />
+            <ConfirmSheet
+              open={demoConfirmOpen === "danger"}
+              title="删除这条演示数据？"
+              body="danger 档：确认钮 bg-danger，用于删除一个完整对象。"
+              danger
+              confirmLabel="删除"
+              onConfirm={() => setDemoConfirmOpen(null)}
+              onCancel={() => setDemoConfirmOpen(null)}
+            />
+          </div>
+        </Section>
+
+        <Section title="反馈动作">
+          <div className="space-y-4 rounded-card border border-border bg-surface p-4">
+            <div>
+              <span className="block mb-1.5 td-text-label text-ink-2">ActionToastBar（出现 → 自动消退，可挂动作钮）</span>
+              <div className="space-y-2">
+                <button
+                  type="button"
+                  onClick={() => showDemoToast({ message: "已完成 1 条演示任务", actions: [{ label: "撤销", onClick: () => {} }] })}
+                  className="min-h-11 rounded-ctl border border-border px-4 td-text-label text-ink hover:bg-surface-hover"
+                >
+                  触发 ActionToast
+                </button>
+                <ActionToastBar toast={demoToast} onDismiss={clearDemoToast} ariaLabel="演示操作提示" />
+              </div>
+            </div>
+            <div>
+              <span className="block mb-1.5 td-text-label text-ink-2">
+                ConfirmDeleteButton（就地二次确认：首点变「确认删除」，点别处复位）· 已删 {demoDeleted} 次
+              </span>
+              <ConfirmDeleteButton target="演示条目" onConfirm={() => setDemoDeleted((n) => n + 1)} />
+            </div>
+          </div>
+        </Section>
+
+        <Section title="页面壳">
+          <div className="space-y-2">
+            <span className="td-text-label text-ink-2">PageHeader（sticky + backdrop-blur；背景 page / surface 两档走 prop，不用 className 覆盖）</span>
+            <div className="max-h-56 overflow-y-auto rounded-card border border-border">
+              <PageHeader
+                title="演示页标题"
+                back={<PageBackButton onClick={() => {}} />}
+                actions={
+                  <button type="button" className="min-h-11 rounded-ctl px-3 td-text-label text-accent hover:bg-surface-hover">
+                    动作
+                  </button>
+                }
+              />
+              <div className="space-y-3 bg-page p-4">
+                {Array.from({ length: 8 }, (_, i) => (
+                  <p key={i} className="td-text-body text-ink-2">
+                    滚动这块区域看 sticky——第 {i + 1} 行占位内容。
+                  </p>
+                ))}
               </div>
             </div>
           </div>
