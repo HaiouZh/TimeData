@@ -73,6 +73,8 @@ const NUMBER_ROLES: [string, string][] = [
 
 const Z_LAYERS = ["--z-dropdown · 30", "--z-backdrop · 40", "--z-modal · 50", "--z-top · 70"];
 
+const SHELL_DEMO_LINES = Array.from({ length: 8 }, (_, i) => `滚动这块区域看 sticky——第 ${i + 1} 行占位内容。`);
+
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <section className="space-y-3">
@@ -441,9 +443,9 @@ export default function StyleguidePage() {
                 }
               />
               <div className="space-y-3 bg-page p-4">
-                {Array.from({ length: 8 }, (_, i) => (
-                  <p key={i} className="td-text-body text-ink-2">
-                    滚动这块区域看 sticky——第 {i + 1} 行占位内容。
+                {SHELL_DEMO_LINES.map((line) => (
+                  <p key={line} className="td-text-body text-ink-2">
+                    {line}
                   </p>
                 ))}
               </div>
