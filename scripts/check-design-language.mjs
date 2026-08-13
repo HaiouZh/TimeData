@@ -22,9 +22,7 @@ const UNKNOWN_SEMANTIC_COLOR_RE = new RegExp(
 // Tailwind 内置调色板（slate-400、blue-600 等）是「裸色」，已由既有 bare-* 规则管辖，
 // 本规则不重复报；判据是「调色板名 + 数字档」形态。black/white 无数字档、裸写
 // `text-white`/`bg-black` 由 bare-black-white 管辖，同样放行不重复报。
-const BUILTIN_PALETTE_NAME_RE = new RegExp(
-  "^(?:slate|gray|zinc|neutral|stone|red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose)-\\d+$|^(?:black|white)(?:-\\d+)?$",
-);
+const BUILTIN_PALETTE_NAME_RE = /^(?:slate|gray|zinc|neutral|stone|red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose)-\d+$|^(?:black|white)(?:-\d+)?$/;
 // Tailwind 内置「非颜色」工具类里恰好落在 `<前缀>-<名字>` 形态的合法用法。
 // 这份清单是 Tailwind v4 框架 API 的一部分，不是项目内手抄清单；新增合法用法在此补登记。
 const BUILTIN_UTIL_NAMES = {

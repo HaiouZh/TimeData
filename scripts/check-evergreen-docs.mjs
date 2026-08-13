@@ -158,7 +158,7 @@ export function parseFrontmatter(content) {
       i++;
       const arr = [];
       while (i < lines.length && /^\s*-/.test(lines[i])) {
-        const item = lines[i].match(/^  -\s+(\S.*)$/);
+        const item = lines[i].match(/^ {2}-\s+(\S.*)$/);
         if (item) {
           arr.push(unquote(item[1]));
         } else {

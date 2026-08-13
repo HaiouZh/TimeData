@@ -202,7 +202,7 @@ function ChildRowBody({
           />
         </span>
       ) : (
-        // biome-ignore lint/a11y/useSemanticElements: 按钮元素会截断浏览器选区，跨子任务划选复制要求标题是真文字节点
+        // 按钮元素会截断浏览器选区，跨子任务划选复制要求标题是真文字节点，故用 span + role
         <span
           role="button"
           tabIndex={0}

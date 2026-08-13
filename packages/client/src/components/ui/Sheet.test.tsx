@@ -10,10 +10,6 @@ function dialog(): HTMLElement | null {
   return document.body.querySelector<HTMLElement>('[role="dialog"]');
 }
 
-function overlay(): HTMLElement | null {
-  return document.body.querySelector<HTMLElement>(".sheet-overlay");
-}
-
 describe("Sheet", () => {
   it("open=false 不渲染", async () => {
     const { host, root } = await renderDom(

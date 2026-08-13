@@ -275,7 +275,7 @@ test("validateFrontmatter reports covers parsed as a scalar as bad-type", () => 
   assert.equal(issues[0].key, "covers");
   assert.match(issues[0].detail, /`covers:` 冒号后不能有任何字符/);
   assert.match(issues[0].detail, /行尾 `#` 注释/);
-  assert.match(issues[0].detail, /下一行直接写 `  - item`/);
+  assert.match(issues[0].detail, /下一行直接写 ` {2}- item`/);
 });
 
 test("validateFrontmatter reports missing required fields", () => {
