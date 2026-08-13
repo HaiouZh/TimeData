@@ -5,7 +5,7 @@ covers:
 contracts:
   - packages/client/src/lib/tasks/projectZone.ts
   - packages/client/src/pages/todo/todoDnd.ts
-last-reviewed: 2026-08-10
+last-reviewed: 2026-08-13
 ---
 
 # 项目区与归属轴 · 呈现与手势

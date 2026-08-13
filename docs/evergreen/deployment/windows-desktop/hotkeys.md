@@ -8,7 +8,7 @@ contracts:
   - packages/desktop/src-tauri/src/commands.rs
   - packages/client/src/lib/desktop/desktopPunch.ts
   - packages/client/src/lib/desktop/navigateAction.ts
-last-reviewed: 2026-08-10
+last-reviewed: 2026-08-13
 ---
 
 # 部署 · Windows 桌面壳 · 全局热键与打点
