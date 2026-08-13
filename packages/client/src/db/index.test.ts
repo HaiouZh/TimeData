@@ -1,5 +1,6 @@
 import "fake-indexeddb/auto";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { STORAGE_KEYS } from "../lib/storageKeys.js";
 import {
   LAST_SYNCED_SEQ_KEY,
   db,
@@ -38,6 +39,19 @@ beforeEach(async () => {
 
 afterEach(async () => {
   await db.delete();
+});
+
+describe("resetLocalDataToDefaults", () => {
+  it("clears the quick-note and capture composer draft keys", async () => {
+    await db.open();
+    localStorage.setItem(STORAGE_KEYS.quickNoteComposerDraft, "打了一半的速记");
+    localStorage.setItem(STORAGE_KEYS.captureComposerDraft, "浮窗里没发出去的正文");
+
+    await resetLocalDataToDefaults();
+
+    expect(localStorage.getItem(STORAGE_KEYS.quickNoteComposerDraft)).toBeNull();
+    expect(localStorage.getItem(STORAGE_KEYS.captureComposerDraft)).toBeNull();
+  });
 });
 
 describe("resetSyncCursors", () => {

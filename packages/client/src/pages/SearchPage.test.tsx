@@ -8,6 +8,32 @@ import { cleanupRoots, click, renderDom, type Root, unmount } from "../test/domH
 import { db } from "../db/index.ts";
 import SearchPage from "./SearchPage.js";
 
+// 本文件全是整页渲染的用例，行内时间格式化走 Intl.DateTimeFormat（每行新建实例）是全文件最贵的开销，
+// 「超过一页」那条在满载并发下曾超时。这里换成与 Asia/Shanghai（APP_TIME_ZONE，无 DST）等价的纯算术实现，
+// 断言里不关心格式化后的时间/星期文本，只关心记录行与汇总数，故替换不改变任何断言语义。
+vi.mock("../lib/time.js", async () => {
+  const original = await import("../lib/time.js");
+  return {
+    ...original,
+    getDateString: (date: Date) => {
+      const localMs = date.getTime() + 8 * 3600_000;
+      const d = new Date(localMs);
+      const mm = String(d.getUTCMonth() + 1).padStart(2, "0");
+      const dd = String(d.getUTCDate()).padStart(2, "0");
+      return `${d.getUTCFullYear()}-${mm}-${dd}`;
+    },
+    formatTime: (isoString: string) => {
+      const localMs = new Date(isoString).getTime() + 8 * 3600_000;
+      const d = new Date(localMs);
+      return `${String(d.getUTCHours()).padStart(2, "0")}:${String(d.getUTCMinutes()).padStart(2, "0")}`;
+    },
+    formatWeekday: (dateStr: string) => {
+      const dayOffset = Math.floor((Date.parse(`${dateStr}T00:00:00Z`) + 8 * 3600_000) / 86_400_000);
+      return ["周四", "周五", "周六", "周日", "周一", "周二", "周三"][((dayOffset % 7) + 7) % 7] ?? "";
+    },
+  };
+});
+
 function entry(
   id: string,
   categoryId: string,

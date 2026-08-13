@@ -488,11 +488,18 @@ export function resolveTodoDragOperation({
  * 第三参既是容器解析失败时的兜底，也是「拖拽来源」判据。收纳只在区内 / 组内成立——
  * 外区任务要归到某件活底下，正确路径是先进那个区 / 那个组再收敛。这道守卫必须落在本函数，
  * 因为收纳高亮（handleDragOver）与落库判定共用它；只拦落库会留下「亮了高亮却无事发生」。
+ *
+ * 第四参表达「over 所在 `parent:` 容器的父任务是否与拖拽来源同属一个项目组」。判定层分不出
+ * over 落在谁家（`parent:<id>` 与收件箱子任务完全同形），这份「同组」关系只有页面能从
+ * buckets.projects 算得出——来路照抄 `activeParentProjectGoalId`。项目区来源落到 `parent:`
+ * 容器时，只有该参为 true 才放行（悬停同组成员的子任务行是组内便利落点）；false / 缺省一律
+ * 拒绝，跨组安全性质不放松。
  */
 export function hoveredRootIdFromOver(
   overContainerId: string,
   overTaskId: string,
   activeContainerId?: string,
+  overParentInActiveProject = false,
 ): string | null {
   // 投递坞不是缩进落点:dock id 解析不进 TodoContainer,会 fall 到 activeContainerId(通常是池)
   // 把 dock id 字符串当「根行 id」返回,下游拿它拼 parent:<dock:…> 落成垃圾 move-to-parent。
@@ -514,7 +521,12 @@ export function hoveredRootIdFromOver(
   // 走到这里 container 只可能是 pool / parent 两种容器，两种都是组外落点——
   // 项目区来源一律不认：组内两个手势只在组内成立，「拖出组」不由拖拽提供（退出走行内 × 按钮）。
   // 与上面 project / hand 两支的守卫同类——那两支挡的是「外区来源进不来」，这一支挡的是「组内来源出不去」。
-  if (parseTodoContainerId(activeContainerId)?.kind === "project") return null;
+  // 唯一例外：悬停在**同组**另一个成员的子任务行上（`parent:` 容器的父是本组成员）算组内便利落点，
+  // 由页面按 overParentInActiveProject 算好放行；跨组 / 未知仍是 null，不放松上面的安全性质。
+  if (parseTodoContainerId(activeContainerId)?.kind === "project") {
+    if (container.kind === "pool") return null;
+    return overParentInActiveProject ? container.parentId : null;
+  }
   if (container.kind === "pool") return overTaskId;
   return container.parentId;
 }

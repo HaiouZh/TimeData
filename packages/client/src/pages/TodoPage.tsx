@@ -349,6 +349,29 @@ export function TodoPage() {
     if (t.ruleId !== null && t.recurrence === null) {
       await markOccurrenceSkipped(t.id);
     } else {
+      // 级联删除会连带清掉子任务与活跃发次（deleteTaskCascade），误删代价大：先数连带条数，
+      // 大于 0 弹 ConfirmSheet 并如实报数，纯叶子才直接删。查询复用数据层同款口径
+      //（children 按 parentId 查，活跃发次按 ruleId 查且只算 done/skipped 都为 false 的）。
+      const [children, occurrences] = await Promise.all([
+        db.tasks.where("parentId").equals(t.id).toArray(),
+        t.recurrence !== null ? db.tasks.where("ruleId").equals(t.id).toArray() : Promise.resolve([] as Task[]),
+      ]);
+      const collateral = {
+        children: children.length,
+        occurrences: occurrences.filter((o) => !o.done && !o.skipped).length,
+      };
+      if (collateral.children + collateral.occurrences > 0) {
+        const parts: string[] = [];
+        if (collateral.children > 0) parts.push(`${collateral.children} 个子任务`);
+        if (collateral.occurrences > 0) parts.push(`${collateral.occurrences} 条待处理发次`);
+        const ok = await confirm({
+          title: "删除任务？",
+          body: `将同时删除 ${parts.join("和")}，且无法撤销。`,
+          confirmLabel: "删除",
+          danger: true,
+        });
+        if (!ok) return;
+      }
       // 级联删除：模板连清子任务+活跃 occurrence；普通父任务连清子任务（旧 deleteTask 会孤儿化两者）
       await deleteTaskCascade(t.id);
     }
@@ -730,6 +753,22 @@ export function TodoPage() {
   /** 父在一个整区不出坞的区里（手头 / 项目组）。坞的第三参只收这一个布尔。 */
   const dragCandidateParentInDocklessZone: boolean =
     dragCandidateParentInHand || dragCandidateParentProjectGoalId !== null;
+  /**
+   * over 所在 `parent:` 容器的父任务，是否与拖拽来源同属一个项目组。
+   *
+   * 判定层分不出 over 落在谁家（`parent:<id>` 与收件箱子任务完全同形），这份「同组」关系只有页面
+   * 能从 buckets.projects 算出来——来路照抄 `dragCandidateParentProjectGoalId`（active 那侧的先例）。
+   * 供 `hoveredRootIdFromOver` 的第四参用：项目区来源悬停同组成员的子任务行是组内便利落点，
+   * 跨组 / 来源非项目区一律 false。
+   */
+  const overParentInActiveProject = (overContainerId: string, activeContainerId: string): boolean => {
+    const over = parseTodoContainerId(overContainerId);
+    if (over?.kind !== "parent") return false;
+    const active = parseTodoContainerId(activeContainerId);
+    if (active?.kind !== "project") return false;
+    const overGoalId = buckets.projects.find((g) => g.tasks.some((t) => t.id === over.parentId))?.goalId ?? null;
+    return overGoalId === active.goalId;
+  };
   const sensors = useSensors(
     useSensor(MouseSensor, { activationConstraint: { delay: 180, tolerance: 6 } }),
     useSensor(TouchSensor, { activationConstraint: { delay: 300, tolerance: 8 } }),
@@ -839,7 +878,12 @@ export function TodoPage() {
     // 容器级 droppable（项目卡、坞）没有 taskId，故 overTaskId 用空串兜底。
     const activeId = activeData?.taskId ?? String(active.id);
     const overTaskId = overData?.taskId ?? "";
-    const rootAboveId = hoveredRootIdFromOver(overContainerId, overTaskId, activeContainerId);
+    const rootAboveId = hoveredRootIdFromOver(
+      overContainerId,
+      overTaskId,
+      activeContainerId,
+      overParentInActiveProject(overContainerId, activeContainerId),
+    );
     const activeHasChildren = rootIdsWithChildren.has(activeId);
     setIndentTargetId(rootAboveId && rootAboveId !== activeId && !activeHasChildren ? rootAboveId : null);
   }
@@ -907,7 +951,12 @@ export function TodoPage() {
           );
     if (dockOutcome === "handled") return;
 
-    const rootAboveId = hoveredRootIdFromOver(overContainerId, overTaskId, activeContainerId);
+    const rootAboveId = hoveredRootIdFromOver(
+      overContainerId,
+      overTaskId,
+      activeContainerId,
+      overParentInActiveProject(overContainerId, activeContainerId),
+    );
     const targetContainer = targetContainerFromOver(overContainerId, rootAboveId);
     const activeHasChildren = rootIdsWithChildren.has(activeId);
 

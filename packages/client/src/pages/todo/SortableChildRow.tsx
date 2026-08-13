@@ -10,10 +10,9 @@ import {
   useRef,
   useState,
 } from "react";
-import { Trash } from "@phosphor-icons/react";
-import { Icon } from "../../components/Icon.js";
 import { copyText } from "../../quick-notes/clipboard.js";
 import { Checkbox } from "../../components/ui/Checkbox.js";
+import { ConfirmDeleteButton } from "../../components/ui/ConfirmDeleteButton.js";
 
 export interface ChildRowCallbacks {
   onToggleDone: (child: Task) => void;
@@ -232,14 +231,14 @@ function ChildRowBody({
         </span>
       )}
       {!readonly && (
-        <button
-          type="button"
-          aria-label={`删除子任务 ${child.title}`}
-          onClick={() => onDelete(child)}
-          className="flex min-h-8 shrink-0 items-center rounded-ctl px-1 text-ink-3 opacity-0 transition-opacity hover:text-danger group-hover:opacity-100 group-focus-within:opacity-100"
-        >
-          <Icon icon={Trash} size={14} />
-        </button>
+        // 删子任务走就地二次确认：它调的 deleteTaskCascade 是单事务级联删（连子树、连重复模板的
+        // 活跃发次一起走），误点没有撤销路可退。删「对象内部的一条」用 ConfirmDeleteButton，
+        // 删一个完整对象才走 ConfirmSheet（见 design-language §4 第 16 条）。
+        <ConfirmDeleteButton
+          onConfirm={() => onDelete(child)}
+          target={`子任务 ${child.title}`}
+          className="shrink-0 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100"
+        />
       )}
     </div>
   );

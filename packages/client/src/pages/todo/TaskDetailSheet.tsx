@@ -6,6 +6,7 @@ import { Link } from "react-router";
 import { Icon } from "../../components/Icon.js";
 import { ActionToastBar } from "../../components/ui/ActionToastBar.js";
 import { Checkbox } from "../../components/ui/Checkbox.js";
+import { ConfirmSheet } from "../../components/ui/ConfirmSheet.js";
 import { db } from "../../db/index.js";
 import { useActionToast } from "../../hooks/useActionToast.js";
 import { contentTint } from "../../lib/contentTint.js";
@@ -72,7 +73,7 @@ export function TaskDetailSheet({ id, onClose, onTagsChange, onTimeChanged }: Ta
   const [title, setTitle] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [expanded, setExpanded] = useState(false);
-  const [overlay, setOverlay] = useState<"none" | "preset" | "custom">("none");
+  const [overlay, setOverlay] = useState<"none" | "preset" | "custom" | "delete">("none");
   const [tagDraft, setTagDraft] = useState("");
   const [tags, setTags] = useState<string[]>([]);
   const touchStartY = useRef<number | null>(null);
@@ -211,25 +212,6 @@ export function TaskDetailSheet({ id, onClose, onTagsChange, onTimeChanged }: Ta
     else await grabTaskToHand(task.id);
   };
 
-  function handleDelete(): void {
-    if (!id || !task) return;
-    void (async () => {
-      try {
-        // occurrence 一律留痕（done / 已 skipped 也是）：硬删会让游标回退，
-        // 引擎下一轮用确定性 id occ:{ruleId}:{dueDate} 把这发重新物化成未勾选。
-        // recurrence===null 是 markOccurrenceSkipped 的前置条件，混合体行仍走 cascade 兜底不至于删不掉。
-        if (task.ruleId !== null && task.recurrence === null) {
-          await markOccurrenceSkipped(id);
-        } else {
-          await deleteTaskCascade(id);
-        }
-        onClose();
-      } catch (err) {
-        setError((err as Error).message);
-      }
-    })();
-  }
-
   function handleClose(): void {
     if (id && task) {
       const normalized = normalizeTitle(title);
@@ -297,6 +279,49 @@ export function TaskDetailSheet({ id, onClose, onTagsChange, onTimeChanged }: Ta
         : recurrenceToCustomInput(DEFAULT_RECURRENCE, null, todayDate),
     [anchorDate, recurrenceTarget, todayDate],
   );
+
+  // 级联删除会连带清掉子任务与活跃发次（deleteTaskCascade），误删代价大：删除入口先数连带条数，
+  // 大于 0 弹 ConfirmSheet 并如实报数，纯叶子才直接删。计数口径与数据层一致：children 按
+  // parentId 查（useTaskChildren 同款），活跃发次按 ruleId 查、只算 pending（done/skipped 都为 false）。
+  const deleteCollateral = (() => {
+    const children = childRows.length;
+    const occurrences = task?.recurrence ? ruleOccurrences.filter((o) => !o.done && !o.skipped).length : 0;
+    return { children, occurrences, total: children + occurrences };
+  })();
+  const deleteCollateralBody = (() => {
+    const parts: string[] = [];
+    if (deleteCollateral.children > 0) parts.push(`${deleteCollateral.children} 个子任务`);
+    if (deleteCollateral.occurrences > 0) parts.push(`${deleteCollateral.occurrences} 条待处理发次`);
+    return `将同时删除 ${parts.join("和")}，且无法撤销。`;
+  })();
+
+  async function performDelete(): Promise<void> {
+    if (!id || !task) return;
+    try {
+      // occurrence 一律留痕（done / 已 skipped 也是）：硬删会让游标回退，
+      // 引擎下一轮用确定性 id occ:{ruleId}:{dueDate} 把这发重新物化成未勾选。
+      // recurrence===null 是 markOccurrenceSkipped 的前置条件，混合体行仍走 cascade 兜底不至于删不掉。
+      if (task.ruleId !== null && task.recurrence === null) {
+        await markOccurrenceSkipped(id);
+      } else {
+        await deleteTaskCascade(id);
+      }
+      onClose();
+    } catch (err) {
+      setError((err as Error).message);
+    }
+  }
+
+  function handleDelete(): void {
+    if (!id || !task) return;
+    // occurrence 与纯叶子任务直接删；有连带删除（子任务 / 活跃发次）先弹 ConfirmSheet。
+    const isOccurrenceRow = task.ruleId !== null && task.recurrence === null;
+    if (isOccurrenceRow || deleteCollateral.total === 0) {
+      void performDelete();
+      return;
+    }
+    setOverlay("delete");
+  }
 
   const closeRef = useRef(handleClose);
   closeRef.current = handleClose;
@@ -561,6 +586,20 @@ export function TaskDetailSheet({ id, onClose, onTagsChange, onTimeChanged }: Ta
             setOverlay("none");
             void run(() => updateTask(recurrenceTarget.id, { recurrence, startAt: normalizeScheduledDate(startDate) }));
           }}
+        />
+      )}
+      {overlay === "delete" && task && (
+        <ConfirmSheet
+          open
+          title="删除任务？"
+          body={deleteCollateralBody}
+          confirmLabel="删除"
+          danger
+          onConfirm={() => {
+            setOverlay("none");
+            void performDelete();
+          }}
+          onCancel={() => setOverlay("none")}
         />
       )}
     </div>

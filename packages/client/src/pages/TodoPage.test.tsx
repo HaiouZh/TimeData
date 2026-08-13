@@ -3253,3 +3253,51 @@ describe("拖拽投递坞", () => {
     }
   });
 });
+
+/** 在删除确认弹层内按文字点按钮。限定在弹层里找，避免误伤列表里的同名按钮。 */
+async function clickDeleteConfirmButton(host: HTMLElement, text: string): Promise<void> {
+  const dialog = host.querySelector('[role="dialog"][aria-label="删除任务？"]');
+  const btn = [...(dialog?.querySelectorAll("button") ?? [])].find((b) => b.textContent === text);
+  expect(btn).toBeTruthy();
+  await act(async () => {
+    btn?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+  });
+  await settle();
+}
+
+// 列表上的删除入口同样走两档确认：deleteTaskCascade 无撤销路，误点一下不该就没了。
+describe("TodoPage 悬停删除二次确认", () => {
+  it("有子任务 → 弹确认且文案带条数；取消后任务还在", async () => {
+    const parent = await addTask({ title: "父", toInbox: true });
+    await createChildTask(parent.id, "子1");
+    const { host, root } = await renderPage();
+    await waitForCondition(() => host.textContent?.includes("父") ?? false, "父 to render");
+    await act(async () => {
+      (host.querySelector('button[aria-label="删除 父"]') as HTMLButtonElement)?.click();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    await settle();
+    expect(host.textContent).toContain("删除任务？");
+    expect(host.textContent).toContain("将同时删除 1 个子任务");
+    await clickDeleteConfirmButton(host, "取消");
+    expect(await db.tasks.get(parent.id)).not.toBeUndefined();
+    await unmount(root);
+  });
+
+  it("叶子任务 → 不弹确认直接删", async () => {
+    const t = await addTask({ title: "叶子", toInbox: true });
+    const { host, root } = await renderPage();
+    await waitForCondition(() => host.textContent?.includes("叶子") ?? false, "叶子 to render");
+    await act(async () => {
+      (host.querySelector('button[aria-label="删除 叶子"]') as HTMLButtonElement)?.click();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    await settle();
+    expect(host.textContent).not.toContain("删除任务？");
+    await waitForCondition(() => !(host.textContent?.includes("叶子") ?? false), "叶子 to leave the list");
+    expect(await db.tasks.get(t.id)).toBeUndefined();
+    await unmount(root);
+  });
+});

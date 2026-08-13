@@ -400,7 +400,29 @@ describe("InlineChildren mode 行为矩阵", () => {
     await unmount(root);
   });
 
-  it("draggable 点删除子任务 → 从库删除", async () => {
+  it("draggable 点两次删除子任务 → 从库删除", async () => {
+    const parent = await seedParentWithChildren();
+    const { host, root } = await renderChildren(parent.id, "draggable");
+
+    // 走 ConfirmDeleteButton 的两击语义：第一下进待确认态，第二下才真删。
+    const deleteBtn = host.querySelector('button[aria-label^="删除子任务"]') as HTMLButtonElement;
+    await act(async () => {
+      deleteBtn.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    const confirmBtn = host.querySelector('button[aria-label^="确认删除子任务"]') as HTMLButtonElement;
+    await act(async () => {
+      confirmBtn.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    await settle();
+
+    const children = await db.tasks.where("parentId").equals(parent.id).toArray();
+    expect(children.length).toBe(1);
+
+    await unmount(root);
+  });
+
+  it("draggable 只点一次删除子任务 → 不删，停在待确认态", async () => {
+    // 二次确认的价值全在这条：deleteTaskCascade 是单事务级联删且无撤销，误点一下不能就没了。
     const parent = await seedParentWithChildren();
     const { host, root } = await renderChildren(parent.id, "draggable");
 
@@ -411,7 +433,8 @@ describe("InlineChildren mode 行为矩阵", () => {
     await settle();
 
     const children = await db.tasks.where("parentId").equals(parent.id).toArray();
-    expect(children.length).toBe(1);
+    expect(children.length).toBe(2);
+    expect(host.querySelector('button[aria-label^="确认删除子任务"]')).not.toBeNull();
 
     await unmount(root);
   });

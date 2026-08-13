@@ -240,6 +240,37 @@ where
     Ok(cfg.hotkeys)
 }
 
+/// 「开/关系统自启 + 落盘意图」的编排。与 `replace_hotkeys` 同款形状，三个口子注入：
+/// `load`（读配置）、`apply_system`（系统自启开/关）、`save`（写配置）。
+///
+/// 注入进来只为一件事：让「读失败时系统状态一个字都不改」这条**测得到**。命令本体
+/// （`commands::set_autostart_enabled`）要 `AppHandle`，那一层测不了，闸只能立在这里。
+/// 顺序是先读、再动系统、最后落盘——读失败当场早退，系统调用一次都不许发生。
+pub fn apply_autostart<L, A, S>(
+    enabled: bool,
+    load: L,
+    mut apply_system: A,
+    mut save: S,
+) -> Result<(), String>
+where
+    L: FnOnce() -> Result<DesktopConfig, String>,
+    A: FnMut(bool) -> Result<(), String>,
+    S: FnMut(&DesktopConfig) -> Result<(), String>,
+{
+    // 先读、读不到就走人：这一句必须在 apply_system 之前，读失败时系统状态一个字没改。
+    let mut cfg = load()?;
+    if enabled {
+        apply_system(true)?;
+        cfg.autostart_disabled = false;
+        save(&cfg).map_err(|e| format!("自启已开启，但关闭意图记录失败：{e}"))?;
+    } else {
+        apply_system(false)?;
+        cfg.autostart_disabled = true;
+        save(&cfg).map_err(|e| format!("自启已关闭，但意图记录失败：{e}"))?;
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -602,5 +633,116 @@ mod tests {
         assert_eq!(returned.len(), 1, "坏条目不许进返回值");
         assert_eq!(returned[0].shortcut, "Ctrl+Alt+T");
         assert_eq!(written.hotkeys, returned, "落盘内容与返回值一致，都不含坏条目");
+    }
+
+    #[test]
+    fn 读失败时系统自启一次都不动也不写文件() {
+        // 这条守的是 set_autostart_enabled 的那个 `?`。把它换成 unwrap_or_default() 时必须红——
+        // 否则杀软/OneDrive 短暂独占文件的那一瞬会被当成「用户没配过任何东西」，
+        // 一次保存就把「关掉的自启」重新打开、且全程返回 Ok、零提示。
+        // 系统调用用计数器闭包证明它没被调用——这正是本函数被抽出来要堵的形状。
+        let mut system_calls = 0;
+        let mut saved = false;
+        let result = apply_autostart(
+            true,
+            || Err("读取配置文件 X 失败".to_owned()),
+            |_| {
+                system_calls += 1;
+                Ok(())
+            },
+            |_| {
+                saved = true;
+                Ok(())
+            },
+        );
+        assert_eq!(system_calls, 0, "读失败时系统自启一次都不许动");
+        assert!(!saved, "读失败时一个字都不许写");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn 系统调用失败时不写文件错误往上抛() {
+        // 系统自启没开成，意图就不许落盘——文件里记的与系统实际的必须一致，
+        // 否则下次启动会照着错的意图去修系统状态。错误要原样往上抛，不能吞。
+        let mut saved = false;
+        let result = apply_autostart(
+            true,
+            || Ok(DesktopConfig::default()),
+            |_| Err("enable 被系统拒绝".to_owned()),
+            |_| {
+                saved = true;
+                Ok(())
+            },
+        );
+        assert!(!saved, "系统调用失败时不许落盘");
+        assert_eq!(result.unwrap_err(), "enable 被系统拒绝");
+    }
+
+    #[test]
+    fn 落盘失败时错误信息说明矛盾态() {
+        // 系统自启成功、意图落盘失败 = 「系统已变、记录没跟上」的矛盾态，
+        // 错误信息必须把两半都讲清楚，设置页原样展示即可让用户知道现状。
+        let err = apply_autostart(
+            true,
+            || Ok(DesktopConfig::default()),
+            |_| Ok(()),
+            |_| Err("替换配置文件 X 失败".to_owned()),
+        )
+        .unwrap_err();
+        assert!(err.contains("自启已开启"), "错误要说明系统侧实际已开：{err}");
+        assert!(err.contains("关闭意图记录失败"), "错误要说明是意图落盘失败：{err}");
+        assert!(err.contains("替换配置文件 X 失败"), "落盘的原始错误不能丢：{err}");
+
+        let err = apply_autostart(
+            false,
+            || Ok(DesktopConfig::default()),
+            |_| Ok(()),
+            |_| Err("替换配置文件 Y 失败".to_owned()),
+        )
+        .unwrap_err();
+        assert!(err.contains("自启已关闭"), "关闭侧也要说明系统侧实际已关：{err}");
+        assert!(err.contains("意图记录失败"), "关闭侧的矛盾态措辞：{err}");
+        assert!(err.contains("替换配置文件 Y 失败"), "关闭侧的原始错误不能丢：{err}");
+    }
+
+    #[test]
+    fn 成功路径按意图开关系统并把意图落盘() {
+        // 正常路径的两半都要对：传给系统调用的方向与 enabled 一致，落盘的
+        // autostart_disabled 是 enabled 的反（自启开启 = 没有禁用意图）。
+        let mut system_on: Option<bool> = None;
+        let mut written: Option<DesktopConfig> = None;
+        apply_autostart(
+            true,
+            || Ok(DesktopConfig::default()),
+            |on| {
+                system_on = Some(on);
+                Ok(())
+            },
+            |cfg| {
+                written = Some(cfg.clone());
+                Ok(())
+            },
+        )
+        .expect("开自启应成功");
+        assert_eq!(system_on, Some(true));
+        assert!(!written.expect("必须落盘").autostart_disabled);
+
+        let mut system_on: Option<bool> = None;
+        let mut written: Option<DesktopConfig> = None;
+        apply_autostart(
+            false,
+            || Ok(DesktopConfig::default()),
+            |on| {
+                system_on = Some(on);
+                Ok(())
+            },
+            |cfg| {
+                written = Some(cfg.clone());
+                Ok(())
+            },
+        )
+        .expect("关自启应成功");
+        assert_eq!(system_on, Some(false));
+        assert!(written.expect("必须落盘").autostart_disabled);
     }
 }

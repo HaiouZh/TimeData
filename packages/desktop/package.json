@@ -10,7 +10,7 @@
     "tauri": "tauri",
     "dev": "tauri dev",
     "build": "tauri build",
-    "test": "node scripts/check-desktop-config.mjs && node scripts/check-hotkey-actions.mjs"
+    "test": "node scripts/check-desktop-config.mjs && node scripts/check-hotkey-actions.mjs && node scripts/check-hotkey-actions.test.mjs"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2.9.1"

@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import {
   DESKTOP_NAV_DEFAULT_ITEMS,
@@ -72,5 +74,27 @@ describe("navRegistry", () => {
   it("recognizes only configured main routes", () => {
     expect(isMainNavRoute("/todo")).toBe(true);
     expect(isMainNavRoute("/bogus")).toBe(false);
+  });
+});
+
+// 主导航路由分散在 MAIN_NAV_ROUTES（isMainNavRoute 白名单）、MAIN_NAV_ITEMS（侧边栏/热键）与
+// AppRoutes.tsx 的 <Route> 表三处。TypeScript 拦不住「白名单加了项却忘了注册路由」——MainNavRoute
+// 只约束白名单外的路径，注册表是自由字符串。这里把 AppRoutes.tsx 当文本读、抽 path 值，断言
+// MAIN_NAV_ROUTES 是已注册路由的子集；根路由当前写作 path="/"，故按 path 抽取即可覆盖。
+const appRoutesPath = fileURLToPath(new URL("../../components/app-shell/AppRoutes.tsx", import.meta.url));
+const appRoutesSource = readFileSync(appRoutesPath, "utf8");
+
+const registeredPaths = new Set(
+  [...appRoutesSource.matchAll(/\bpath="([^"]+)"/g)].map((match) => match[1]),
+);
+
+describe("主导航路由注册表", () => {
+  it("MAIN_NAV_ROUTES 每一条都在 AppRoutes.tsx 注册了 <Route>", () => {
+    const missing = MAIN_NAV_ROUTES.filter((route) => !registeredPaths.has(route));
+    expect(missing).toEqual([]);
+  });
+
+  it("注册表里确实读到了主导航路由（防读取逻辑自身抽空）", () => {
+    expect(registeredPaths.size).toBeGreaterThan(0);
   });
 });

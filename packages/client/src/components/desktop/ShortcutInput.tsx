@@ -87,10 +87,15 @@ export function ShortcutInput({
   value,
   onChange,
   onRecordingChange,
+  ariaDescribedby,
+  ariaInvalid,
 }: {
   value: string;
   onChange: (shortcut: string) => void;
   onRecordingChange: (recording: boolean) => void;
+  /** 出错时指向那条红字的 id：红字挨着控件是**视觉**关联，读屏要靠它才知道这话在说谁。 */
+  ariaDescribedby?: string;
+  ariaInvalid?: boolean;
 }) {
   const [recording, setRecording] = useState(false);
   const [invalid, setInvalid] = useState(false);
@@ -115,6 +120,8 @@ export function ShortcutInput({
     <button
       type="button"
       aria-label={label}
+      aria-describedby={ariaDescribedby}
+      aria-invalid={ariaInvalid}
       onFocus={() => setRecordingState(true)}
       onBlur={() => setRecordingState(false)}
       onKeyDown={(e) => {

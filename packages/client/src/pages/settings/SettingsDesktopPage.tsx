@@ -346,6 +346,8 @@ export default function SettingsDesktopPage() {
             {rows.map((row, index) => {
               const failure = registrationErrorOf(rowOutcomes[index]);
               const navTargetError = navTargetErrorOf(row);
+              const failureId = `hotkey-failure-${row.rowId}`;
+              const navTargetErrorId = `hotkey-navtarget-error-${row.rowId}`;
               return (
                 <li key={row.rowId} className="space-y-1">
                   <div className="flex flex-wrap items-center gap-2">
@@ -353,6 +355,8 @@ export default function SettingsDesktopPage() {
                       value={row.shortcut}
                       onChange={(shortcut) => updateRow(row.rowId, { shortcut })}
                       onRecordingChange={handleRecordingChange}
+                      ariaDescribedby={failure ? failureId : undefined}
+                      ariaInvalid={failure ? true : undefined}
                     />
                     <SegmentedControl
                       options={ACTION_OPTIONS}
@@ -362,16 +366,6 @@ export default function SettingsDesktopPage() {
                       size="sm"
                       className="min-w-0 flex-1"
                     />
-                    {row.action === "navigate" && (
-                      <SelectSheet
-                        options={NAV_TARGET_OPTIONS}
-                        value={row.target ?? null}
-                        onChange={(target) => updateRow(row.rowId, { target })}
-                        label="目标页"
-                        placeholder="选一个页面"
-                        className="min-w-0 flex-1"
-                      />
-                    )}
                     <button
                       type="button"
                       aria-label="删除"
@@ -384,8 +378,31 @@ export default function SettingsDesktopPage() {
                       <Icon icon={Trash} size={18} />
                     </button>
                   </div>
-                  {failure && <p className="td-text-caption text-danger">{failure}</p>}
-                  {navTargetError && <p className="td-text-caption text-danger">{navTargetError}</p>}
+                  {/* 目标页选择器只在动作是 navigate 时渲染，出现/消失与自动填入的默认值对读屏是
+                      静默的；aria-live 必须挂在**始终存在**的这个容器上，挂在条件元素自己身上等于没有。 */}
+                  <div aria-live="polite">
+                    {row.action === "navigate" && (
+                      <SelectSheet
+                        options={NAV_TARGET_OPTIONS}
+                        value={row.target ?? null}
+                        onChange={(target) => updateRow(row.rowId, { target })}
+                        label="目标页"
+                        placeholder="选一个页面"
+                        ariaDescribedby={navTargetError ? navTargetErrorId : undefined}
+                        ariaInvalid={navTargetError ? true : undefined}
+                      />
+                    )}
+                  </div>
+                  {failure && (
+                    <p id={failureId} className="td-text-caption text-danger">
+                      {failure}
+                    </p>
+                  )}
+                  {navTargetError && (
+                    <p id={navTargetErrorId} className="td-text-caption text-danger">
+                      {navTargetError}
+                    </p>
+                  )}
                 </li>
               );
             })}

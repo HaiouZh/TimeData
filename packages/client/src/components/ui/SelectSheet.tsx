@@ -15,6 +15,10 @@ export interface SelectSheetProps<T extends string> {
   label: string;
   placeholder?: string;
   className?: string;
+  /** 出错红字的目标控件 id（供 aria-describedby 引用），仅在出错时由调用方传入。 */
+  ariaDescribedby?: string;
+  /** 出错时标 true，读屏据此宣告当前选择无效。 */
+  ariaInvalid?: boolean;
 }
 
 export function SelectSheet<T extends string>({
@@ -24,9 +28,15 @@ export function SelectSheet<T extends string>({
   label,
   placeholder = "请选择",
   className,
+  ariaDescribedby,
+  ariaInvalid,
 }: SelectSheetProps<T>) {
   const [open, setOpen] = useState(false);
   const current = options.find((o) => o.value === value);
+
+  // aria-label 会盖掉按钮的 text content，写死 label 的话读出来永远是「目标页，有弹出对话框」——
+  // 当前选了哪项、是不是占位态一概听不出来（与 ShortcutInput 同一个坑）。把当前值拼进去。
+  const accessibleLabel = current ? `${label}：${current.label}` : `${label}：${placeholder}`;
 
   return (
     <>
@@ -34,7 +44,9 @@ export function SelectSheet<T extends string>({
         type="button"
         aria-haspopup="dialog"
         aria-expanded={open}
-        aria-label={label}
+        aria-label={accessibleLabel}
+        aria-describedby={ariaDescribedby}
+        aria-invalid={ariaInvalid}
         onClick={() => setOpen(true)}
         className={`flex min-h-11 w-full items-center justify-between rounded-row border border-border bg-surface-elevated px-3 td-text-label ${className ?? ""}`}
       >

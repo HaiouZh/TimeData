@@ -55,4 +55,18 @@ describe("StyleguidePage", () => {
     expect(html).toContain("演示页标题");
     expect(html).toContain("滚动这块区域看 sticky");
   });
+
+  it("renders the input controls section with the four legacy components", () => {
+    const html = renderToStaticMarkup(<MemoryRouter><StyleguidePage /></MemoryRouter>);
+    expect(html).toContain("输入控件");
+    // DateField / TimeField 是带弹层的控件，字段按钮本身即触发钮：
+    // ariaLabel 由组件渲染进触发钮的 aria-label，删实例即丢失，锁的是组件本体而非标题文案。
+    expect(html).toContain('aria-label="开始日期"');
+    expect(html).toContain('aria-label="开始时间"');
+    // MonthCalendar：锁月历本体渲染出的选中日按钮 aria-label（组件内部按 date 生成的文案）。
+    expect(html).toContain('aria-label="2026-08-10"');
+    // Checkbox：label 由组件自身渲染成可见文本，两态各一枚。
+    expect(html).toContain("勾选态");
+    expect(html).toContain("未勾选态");
+  });
 });

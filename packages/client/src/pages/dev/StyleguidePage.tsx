@@ -7,12 +7,16 @@ import { PageBackButton } from "../../components/ui/PageBackButton.js";
 import { PageHeader } from "../../components/ui/PageHeader.js";
 import { SegmentedControl } from "../../components/ui/SegmentedControl.js";
 import { ActionToastBar } from "../../components/ui/ActionToastBar.js";
+import { Checkbox } from "../../components/ui/Checkbox.js";
 import { ConfirmDeleteButton } from "../../components/ui/ConfirmDeleteButton.js";
 import { ConfirmSheet } from "../../components/ui/ConfirmSheet.js";
+import { DateField } from "../../components/ui/DateField.js";
+import { MonthCalendar } from "../../components/ui/MonthCalendar.js";
 import { SelectSheet } from "../../components/ui/SelectSheet.js";
 import { Sheet } from "../../components/ui/Sheet.js";
 import { StatusBanner } from "../../components/ui/StatusBanner.js";
 import { Switch } from "../../components/ui/Switch.js";
+import { TimeField } from "../../components/ui/TimeField.js";
 import { useActionToast } from "../../hooks/useActionToast.js";
 
 /** 用户内容身份色（见 ADR 0026）。色块预览与「真实形态验收台」两处共用这一份，不各列一遍。 */
@@ -92,6 +96,10 @@ export default function StyleguidePage() {
   const [demoSelect, setDemoSelect] = useState<"low" | "mid" | "high" | null>("mid");
   const { toast: demoToast, showToast: showDemoToast, clearToast: clearDemoToast } = useActionToast();
   const [demoDeleted, setDemoDeleted] = useState(0);
+  const [demoDate, setDemoDate] = useState<string | null>(null);
+  const [demoTime, setDemoTime] = useState<string | null>(null);
+  const [demoCal, setDemoCal] = useState<string | null>("2026-08-10");
+  const [demoChecked, setDemoChecked] = useState(true);
 
   return (
     <div className="min-h-full bg-page text-ink">
@@ -337,6 +345,36 @@ export default function StyleguidePage() {
                 <span aria-hidden="true" className="content-dot rounded-pill" style={{ backgroundColor: "var(--tint-1)" }} />
                 <span aria-hidden="true" className="content-dot rounded-pill" style={{ backgroundColor: "var(--tint-5)" }} />
                 <span aria-hidden="true" className="content-dot rounded-pill" style={{ backgroundColor: "var(--tint-9)" }} />
+              </div>
+            </div>
+          </div>
+        </Section>
+
+        <Section title="输入控件">
+          <div className="space-y-4 rounded-card border border-border bg-surface p-4">
+            <div>
+              <span className="block mb-1.5 td-text-label text-ink-2">
+                DateField（字段本身即触发钮：点击开底部抽屉月历；clearable 可清除回空）
+              </span>
+              <DateField value={demoDate} onChange={setDemoDate} ariaLabel="开始日期" clearable />
+            </div>
+            <div>
+              <span className="block mb-1.5 td-text-label text-ink-2">
+                TimeField（字段本身即触发钮：点击开底部抽屉滚轮选时分）
+              </span>
+              <TimeField value={demoTime} onChange={setDemoTime} ariaLabel="开始时间" clearable />
+            </div>
+            <div>
+              <span className="block mb-1.5 td-text-label text-ink-2">MonthCalendar（DateField 弹层内嵌的月历本体，可独立使用）</span>
+              <div className="max-w-xs">
+                <MonthCalendar value={demoCal} onChange={setDemoCal} ariaLabel="演示月历" />
+              </div>
+            </div>
+            <div>
+              <span className="block mb-1.5 td-text-label text-ink-2">Checkbox（勾选 / 未勾选两态）</span>
+              <div className="flex flex-wrap items-center gap-4">
+                <Checkbox checked={demoChecked} onChange={setDemoChecked} label="勾选态" />
+                <Checkbox checked={false} onChange={() => {}} label="未勾选态" />
               </div>
             </div>
           </div>

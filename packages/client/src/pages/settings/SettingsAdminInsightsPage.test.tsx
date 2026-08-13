@@ -219,7 +219,9 @@ const requestLogsResponse: AdminRequestLogsResponse = {
 };
 
 async function chooseFilterOption(host: ParentNode, ariaLabel: string, optionText: string) {
-  const trigger = host.querySelector(`button[aria-label='${ariaLabel}']`);
+  // 前缀匹配：SelectSheet 的 aria-label 是「<标签>：<当前值>」，把当前值念给读屏听是刻意的，
+  // 精确匹配会随选中项变化而失配。
+  const trigger = host.querySelector(`button[aria-label^='${ariaLabel}']`);
   expect(trigger).not.toBeNull();
   await act(async () => {
     trigger?.dispatchEvent(new MouseEvent("click", { bubbles: true }));

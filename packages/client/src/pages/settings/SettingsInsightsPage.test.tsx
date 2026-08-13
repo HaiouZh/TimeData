@@ -96,7 +96,8 @@ describe("SettingsInsightsPage", () => {
   it("persists sleep category selection through synced setting", async () => {
     const { host, root } = await renderDom(createElement(MemoryRouter, null, createElement(SettingsInsightsPage)));
 
-    const trigger = host.querySelector('[aria-label="睡眠分类"]') as HTMLButtonElement | null;
+    // 前缀匹配：SelectSheet 的 aria-label 带当前值（「睡眠分类：<值>」），精确匹配会失配。
+    const trigger = host.querySelector('[aria-label^="睡眠分类"]') as HTMLButtonElement | null;
     await act(async () => {
       trigger?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
@@ -145,7 +146,8 @@ describe("SettingsInsightsPage", () => {
     const { host, root } = await renderDom(createElement(MemoryRouter, null, createElement(SettingsInsightsPage)));
 
     expect(host.textContent).toContain("打点分类");
-    const trigger = host.querySelector('[aria-label="打点分类"]') as HTMLButtonElement | null;
+    // 前缀匹配：同上，SelectSheet 的 aria-label 带当前值。
+    const trigger = host.querySelector('[aria-label^="打点分类"]') as HTMLButtonElement | null;
     await act(async () => {
       trigger?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });

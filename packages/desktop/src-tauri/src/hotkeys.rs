@@ -44,6 +44,12 @@ pub fn hotkey_payload(action: &HotkeyAction, pressed_at_ms: u64) -> HotkeyEventP
     }
 }
 
+/// 单 label 待投递队列的水位上限。窗口崩了 / 没开时队列会一直长大，等它某天就绪
+/// 再一次性突发冲刷出全部积压。64 是「数分钟高频连按」也能覆盖的量级（每秒 2 次连按
+/// 半分钟才满），同时把内存与突发冲刷都压在可忽略的范围；再往大没有收益——积压超过
+/// 这个量说明那次就绪已经迟到太久，早到的事件反而更不该被送达。
+const QUEUE_CAPACITY: usize = 64;
+
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RegistrationOutcome {
@@ -69,11 +75,18 @@ impl HotkeyDispatcher {
     }
 
     /// 该 label 就绪前入队返回 None；就绪后返回 Some，由调用方立即 emit_to 该 label。
+    ///
+    /// 入队有水位上限：满了**丢最老的、保留最新的**。热键是「用户刚按下的意图」，
+    /// 积压到溢出说明最老那些早已失去时效，而最新按下的那次最可能还是用户想要的。
     pub fn accept(&mut self, label: &str, payload: HotkeyEventPayload) -> Option<HotkeyEventPayload> {
         if self.ready.contains(label) {
             Some(payload)
         } else {
-            self.queues.entry(label.to_owned()).or_default().push_back(payload);
+            let queue = self.queues.entry(label.to_owned()).or_default();
+            if queue.len() >= QUEUE_CAPACITY {
+                queue.pop_front();
+            }
+            queue.push_back(payload);
             None
         }
     }
@@ -182,5 +195,39 @@ mod tests {
         d.accept("capture", capture_at(2));
         assert_eq!(d.mark_ready("main"), vec![punch_at(1)]);
         assert_eq!(d.mark_ready("capture"), vec![capture_at(2)]);
+    }
+
+    #[test]
+    fn queue_stops_growing_at_capacity() {
+        // 某个 label 永不就绪时，每次按键都会入队。没有水位上限的话，积压随按键次数
+        // 无限增长，等就绪那天一次性突发冲刷出全部旧事件。这条锁的是：溢出不增长，
+        // 队列长度钉死在 QUEUE_CAPACITY。
+        let mut d = HotkeyDispatcher::new();
+        let total = QUEUE_CAPACITY * 2 + 10;
+        for i in 0..total {
+            d.accept("main", punch_at(i as u64));
+        }
+        assert_eq!(
+            d.queues["main"].len(),
+            QUEUE_CAPACITY,
+            "入队超过上限后队列长度不许再增长"
+        );
+        assert_eq!(d.mark_ready("main").len(), QUEUE_CAPACITY, "冲刷出来也只能是上限那么多");
+    }
+
+    #[test]
+    fn overflow_keeps_newest_drops_oldest() {
+        // 溢出的丢弃方向必须是「丢最老的、留最新的」：热键是用户刚按下的意图，
+        // 最老那批早已失去时效。用 pressed_at_ms 区分先后，断言首批积压被丢、最新压线保留。
+        let mut d = HotkeyDispatcher::new();
+        let extra = 10;
+        let total = QUEUE_CAPACITY + extra;
+        for i in 0..total {
+            d.accept("main", punch_at(i as u64));
+        }
+        let drained = d.mark_ready("main");
+        assert_eq!(drained.len(), QUEUE_CAPACITY);
+        assert_eq!(drained.first().map(|p| p.pressed_at_ms), Some(extra as u64), "最老那批已被丢弃");
+        assert_eq!(drained.last().map(|p| p.pressed_at_ms), Some((total - 1) as u64), "最新那次必须保留");
     }
 }

@@ -226,24 +226,29 @@ pub fn get_autostart_state(app: AppHandle) -> Result<AutostartState, String> {
 
 /// 系统动作（enable/disable）成功而意图落盘失败时，是「系统已变、记录没跟上」的
 /// 矛盾态——错误信息把两半都讲清楚，设置页原样展示即可让用户知道现状。
+/// 读失败时系统状态一个字不改这条正确性保证在 `config::apply_autostart` 里，
+/// 那里的注入式编排测得到；本命令只剩系统调用与写路径标记文件这两处装配。
 #[tauri::command]
 pub fn set_autostart_enabled(app: AppHandle, enabled: bool) -> Result<(), String> {
     let _guard = config::config_write_guard();
-    // 先读、读不到就走人：这一步在 enable()/disable() **之前**，读失败时系统状态一个字没改。
-    let mut cfg = config::load_config(&app)?;
+    config::apply_autostart(
+        enabled,
+        || config::load_config(&app),
+        |on| {
+            if on {
+                app.autolaunch().enable().map_err(|e| e.to_string())
+            } else {
+                app.autolaunch().disable().map_err(|e| e.to_string())
+            }
+        },
+        |cfg| config::save_config(&app, cfg),
+    )?;
+    // 与批 1 的路径标记文件保持同步，换 exe 自愈逻辑照旧。
     if enabled {
-        app.autolaunch().enable().map_err(|e| e.to_string())?;
-        cfg.autostart_disabled = false;
-        config::save_config(&app, &cfg).map_err(|e| format!("自启已开启，但关闭意图记录失败：{e}"))?;
-        // 与批 1 的路径标记文件保持同步，换 exe 自愈逻辑照旧。
         if let (Ok(dir), Ok(exe)) = (app.path().app_config_dir(), std::env::current_exe()) {
             let _ = std::fs::create_dir_all(&dir);
             let _ = std::fs::write(dir.join(shell::AUTOSTART_MARKER), exe.to_string_lossy().as_bytes());
         }
-    } else {
-        app.autolaunch().disable().map_err(|e| e.to_string())?;
-        cfg.autostart_disabled = true;
-        config::save_config(&app, &cfg).map_err(|e| format!("自启已关闭，但意图记录失败：{e}"))?;
     }
     Ok(())
 }

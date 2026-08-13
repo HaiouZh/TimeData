@@ -26,6 +26,28 @@ describe("SelectSheet", () => {
     await unmount(b.root);
   });
 
+  it("已选中时 aria-label 带上当前项——读屏听得出选的是哪一项", async () => {
+    const { host, root } = await renderDom(
+      createElement(SelectSheet, { options: opts, value: "y", onChange: () => {}, label: "目标页" }),
+    );
+    expect(host.querySelector("button")?.getAttribute("aria-label")).toBe("目标页：选项Y");
+    await unmount(root);
+  });
+
+  it("未选中时 aria-label 宣告占位态——读屏听得出是没选", async () => {
+    const { host, root } = await renderDom(
+      createElement(SelectSheet, {
+        options: opts,
+        value: null,
+        onChange: () => {},
+        label: "目标页",
+        placeholder: "选一个页面",
+      }),
+    );
+    expect(host.querySelector("button")?.getAttribute("aria-label")).toBe("目标页：选一个页面");
+    await unmount(root);
+  });
+
   it("点触发器开 sheet，点选项回调并关闭", async () => {
     const onChange = vi.fn();
     const { host, root } = await renderDom(

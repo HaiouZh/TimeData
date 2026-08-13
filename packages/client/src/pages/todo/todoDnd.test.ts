@@ -523,6 +523,31 @@ describe("hoveredRootIdFromOver", () => {
     expect(hoveredRootIdFromOver("pool:inbox", "task-1", "hand")).toBe("task-1");
     expect(hoveredRootIdFromOver("pool:today", "task-2", "hand")).toBe("task-2");
   });
+
+  it("项目区来源 → 同组成员的子任务行：允许（组内便利落点）", () => {
+    // 第四参 overParentInActiveProject=true = over 的父任务与来源同属一个项目组。
+    // 拖动项目区成员悬停在同组成员的子任务行上，算组内收纳、返回该父 id。
+    expect(hoveredRootIdFromOver("parent:member-a", "child-9", "project:g1", true)).toBe("member-a");
+  });
+
+  it("项目区来源 → 跨组成员的子任务行：仍拒绝（安全性质不放松）", () => {
+    // 同一输入只改第四参：false = over 的父不属于本组 → 维持原有的「一律不认」。
+    expect(hoveredRootIdFromOver("parent:member-a", "child-9", "project:g1", false)).toBeNull();
+    // 缺省 = false：老调用点不传新参，行为与改动前逐值一致。
+    expect(hoveredRootIdFromOver("parent:member-a", "child-9", "project:g1")).toBeNull();
+  });
+
+  it("项目区来源 → 池容器：第四参为 true 也不放行（pool 守卫保持原样）", () => {
+    expect(hoveredRootIdFromOver("pool:inbox", "task-1", "project:g1", true)).toBeNull();
+    expect(hoveredRootIdFromOver("pool:today", "task-2", "project:g1", true)).toBeNull();
+  });
+
+  it("非项目区来源不受第四参影响（回归）", () => {
+    // hand / 池来源落到 parent 容器照常返回父 id，第四参在非项目区来源下被忽略。
+    expect(hoveredRootIdFromOver("parent:root-1", "child-9", "hand", true)).toBe("root-1");
+    expect(hoveredRootIdFromOver("parent:root-1", "child-9", "pool:inbox", true)).toBe("root-1");
+    expect(hoveredRootIdFromOver("pool:today", "task-2", "pool:inbox", true)).toBe("task-2");
+  });
 });
 
 const dropLookup = {

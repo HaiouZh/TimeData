@@ -393,9 +393,109 @@ describe("navigate 行", () => {
     await click(navigateOption);
     await settle();
 
-    const targetTrigger = host.querySelector('[aria-label="目标页"]');
+    // 前缀匹配：SelectSheet 的 aria-label 是「目标页：<当前值>」，把当前值念给读屏听是刻意的，
+    // 精确匹配会随选中项变化而失配。
+    const targetTrigger = host.querySelector('[aria-label^="目标页"]');
     expect(targetTrigger).toBeTruthy();
     // 默认值必须落上——留空保存会被 Rust 静默丢掉整条绑定。
     expect(targetTrigger?.textContent).toContain(MAIN_NAV_ITEMS[0].label);
+  });
+});
+
+/** 用指定配置替换 IPC 替身再挂载。与上面的 `mount()` 的区别只在于配置可指定。 */
+async function mountWith(
+  configHotkeys: { shortcut: string; action: string; target?: string }[],
+  outcomes: { shortcut: string; action: string; ok: boolean; error?: string }[] = [],
+) {
+  ipc.invoke.mockImplementation(async (cmd: string) => {
+    calls.push(cmd);
+    if (cmd === "get_desktop_config") {
+      return { autostartDisabled: false, punchConfirmHours: 4, hotkeys: configHotkeys };
+    }
+    if (cmd === "get_autostart_state") return { enabled: true, userDisabled: false };
+    if (cmd === "resume_hotkeys") return outcomes;
+    return undefined;
+  });
+  const rendered = await renderDom(createElement(MemoryRouter, null, createElement(SettingsDesktopPage)));
+  mountedRoot = rendered.root;
+  await waitFor(() => calls.includes("resume_hotkeys"), "首屏配置拉完");
+  return rendered;
+}
+
+// 读屏接线要真渲染才验得到：红字与控件的关联、以及 live region 是否常驻，都是 DOM 层的事实。
+describe("SettingsDesktopPage 读屏接线", () => {
+  it("目标页红字有稳定 id，目标页选择器用 aria-describedby 挂回它并标 aria-invalid", async () => {
+    const { host } = await mountWith([{ shortcut: "Ctrl+Alt+T", action: "navigate", target: "/nope" }]);
+
+    const errorP = host.querySelector("p[id^='hotkey-navtarget-error-']");
+    const trigger = host.querySelector('[aria-label^="目标页"]');
+    expect(errorP?.textContent).toContain("不存在");
+    expect(errorP?.id).toContain("row-"); // id 带着行标识，多行热键不撞
+    expect(trigger?.getAttribute("aria-describedby")).toBe(errorP?.id);
+    expect(trigger?.getAttribute("aria-invalid")).toBe("true");
+  });
+
+  it("无错的目标页选择器不带 aria-describedby / aria-invalid（空串关联会让读屏读出不存在的提示）", async () => {
+    const { host } = await mountWith([{ shortcut: "Ctrl+Alt+T", action: "navigate", target: "/todo" }]);
+
+    const trigger = host.querySelector('[aria-label^="目标页"]');
+    expect(trigger).toBeTruthy();
+    expect(trigger?.getAttribute("aria-describedby")).toBeNull();
+    expect(trigger?.getAttribute("aria-invalid")).toBeNull();
+  });
+
+  it("注册失败红字挂回快捷键录入控件（aria-describedby + aria-invalid）", async () => {
+    const { host } = await mountWith(
+      [{ shortcut: "Ctrl+Alt+P", action: "punch" }],
+      [{ shortcut: "Ctrl+Alt+P", action: "punch", ok: false, error: "被其他程序占用" }],
+    );
+
+    const failureP = host.querySelector("p[id^='hotkey-failure-']");
+    const shortcutBtn = host.querySelector('[aria-label^="快捷键"]');
+    expect(failureP?.textContent).toContain("被其他程序占用");
+    expect(failureP?.id).toContain("row-");
+    // 红字挨着控件只是**视觉**关联；读屏要靠这条挂钩才知道这话在说哪个控件。
+    expect(shortcutBtn?.getAttribute("aria-describedby")).toBe(failureP?.id);
+    expect(shortcutBtn?.getAttribute("aria-invalid")).toBe("true");
+  });
+
+  it("注册成功时快捷键控件不带 aria-describedby / aria-invalid", async () => {
+    const { host } = await mountWith(
+      [{ shortcut: "Ctrl+Alt+P", action: "punch" }],
+      [{ shortcut: "Ctrl+Alt+P", action: "punch", ok: true }],
+    );
+
+    const shortcutBtn = host.querySelector('[aria-label^="快捷键"]');
+    expect(shortcutBtn).toBeTruthy();
+    expect(shortcutBtn?.getAttribute("aria-describedby")).toBeNull();
+    expect(shortcutBtn?.getAttribute("aria-invalid")).toBeNull();
+  });
+
+  it("目标页选择器套在常驻的 aria-live 容器里，切到跳转时带着默认值出现，切走时消失", async () => {
+    const { host } = await mountWith([{ shortcut: "Ctrl+Alt+P", action: "punch" }]);
+
+    // 容器常驻——哪怕当前没内容，live region 也在 DOM 里（挂在条件元素自己身上等于没有）。
+    const live = host.querySelector('[aria-live="polite"]');
+    expect(live).toBeTruthy();
+    expect(live?.querySelector('[aria-label^="目标页"]')).toBeNull();
+
+    const navigateOption = [...host.querySelectorAll('[aria-label="动作"] button')].find(
+      (b) => b.textContent === "跳转",
+    );
+    expect(navigateOption).toBeTruthy();
+    await click(navigateOption);
+    await settle();
+
+    // 选择器出现在 live 容器内，且自动填入的默认值也一并宣告得到。
+    const trigger = live?.querySelector('[aria-label^="目标页"]');
+    expect(trigger).toBeTruthy();
+    expect(live?.textContent).toContain(MAIN_NAV_ITEMS[0].label);
+
+    const punchOption = [...host.querySelectorAll('[aria-label="动作"] button')].find(
+      (b) => b.textContent === "打点",
+    );
+    await click(punchOption);
+    await settle();
+    expect(live?.querySelector('[aria-label^="目标页"]')).toBeNull();
   });
 });

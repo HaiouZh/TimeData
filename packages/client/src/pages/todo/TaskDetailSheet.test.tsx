@@ -7,7 +7,7 @@ import { SyncProvider } from "../../contexts/SyncContext.tsx";
 import { normalizeScheduledDate, placementForTask } from "../../lib/tasks/placement.js";
 import { recurrenceSummary } from "../../lib/tasks/recurrence.js";
 import { grabTaskToHand } from "../../lib/sessions.js";
-import { addTask, createChildTask, setTaskTags, toggleTaskDone, updateTask } from "../../lib/tasks.js";
+import { addTask, createChildTask, runMaterialization, setTaskTags, toggleTaskDone, updateTask } from "../../lib/tasks.js";
 import { promoteTaskToTrack } from "../../lib/taskTrackPromote.js";
 import { addDays, getDateString } from "../../lib/time.js";
 import { db, resetDb } from "../../test/dbReset.js";
@@ -964,6 +964,96 @@ describe("TaskDetailSheet tag 编辑", () => {
     expect(onTimeChanged).toHaveBeenCalledTimes(1);
     expect(onTimeChanged).toHaveBeenCalledWith(expect.objectContaining({ id: task.id }));
     expect(onTimeChanged.mock.calls[0]?.[0]?.recurrence).not.toBeNull();
+    await unmount(root);
+  });
+});
+
+/** 点抽屉的「删除任务」按钮。 */
+async function clickDetailDelete(host: HTMLElement): Promise<void> {
+  await act(async () => {
+    (host.querySelector('button[aria-label="删除任务"]') as HTMLButtonElement).dispatchEvent(
+      new MouseEvent("click", { bubbles: true }),
+    );
+  });
+  await act(async () => {
+    await new Promise((r) => setTimeout(r, 0));
+  });
+}
+
+/** 在确认弹层内按文字点按钮。限定在弹层里找，避免误伤页面其它同名按钮。 */
+async function clickConfirmButton(host: HTMLElement, text: string): Promise<void> {
+  const dialog = host.querySelector('[role="dialog"][aria-label="删除任务？"]');
+  const btn = [...(dialog?.querySelectorAll("button") ?? [])].find((b) => b.textContent === text);
+  expect(btn).toBeTruthy();
+  await act(async () => {
+    btn?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+  });
+  await act(async () => {
+    await new Promise((r) => setTimeout(r, 0));
+  });
+}
+
+// 删除走二次确认：deleteTaskCascade 是单事务级联删（连子树、连重复模板的活跃发次），且没有撤销路。
+// 两档——有子任务/活跃发次的弹 ConfirmSheet 且文案带条数，叶子任务直接删不弹。
+describe("TaskDetailSheet 删除二次确认（ConfirmSheet）", () => {
+  it("有子任务 → 弹确认且文案带连带删除条数", async () => {
+    const parent = await addTask({ title: "父任务" });
+    await createChildTask(parent.id, "子1");
+    await createChildTask(parent.id, "子2");
+    const { host, root } = await renderSheet(parent.id);
+    await clickDetailDelete(host);
+    expect(host.textContent).toContain("删除任务？");
+    expect(host.textContent).toContain("将同时删除 2 个子任务，且无法撤销。");
+    // 确认框还开着，任务未被删
+    expect(await db.tasks.get(parent.id)).not.toBeUndefined();
+    await unmount(root);
+  });
+
+  it("有活跃发次的重复模板 → 确认文案带发次条数", async () => {
+    const rule = await addTask({
+      title: "晨间例行",
+      recurrence: { freq: "daily", interval: 1, basis: "due" },
+      startAt: "2026-07-01T00:00:00.000Z",
+      now: new Date("2026-07-01T08:00:00.000Z"),
+    });
+    await runMaterialization(new Date("2026-07-01T08:20:00.000Z"));
+    const { host, root } = await renderSheet(rule.id);
+    await clickDetailDelete(host);
+    expect(host.textContent).toContain("删除任务？");
+    expect(host.textContent).toContain("将同时删除 1 条待处理发次，且无法撤销。");
+    expect(await db.tasks.get(rule.id)).not.toBeUndefined();
+    await unmount(root);
+  });
+
+  it("叶子任务 → 不弹确认直接删", async () => {
+    const t = await addTask({ title: "叶子" });
+    const { host, root } = await renderSheet(t.id);
+    await clickDetailDelete(host);
+    expect(host.textContent).not.toContain("删除任务？");
+    expect(await db.tasks.get(t.id)).toBeUndefined();
+    await unmount(root);
+  });
+
+  it("确认里点取消 → 任务还在、抽屉不关", async () => {
+    const parent = await addTask({ title: "父任务" });
+    await createChildTask(parent.id, "子1");
+    const { host, root, onClose } = await renderSheet(parent.id);
+    await clickDetailDelete(host);
+    await clickConfirmButton(host, "取消");
+    expect(await db.tasks.get(parent.id)).not.toBeUndefined();
+    expect(onClose).not.toHaveBeenCalled();
+    await unmount(root);
+  });
+
+  it("确认里点删除 → 级联删除并关闭抽屉", async () => {
+    const parent = await addTask({ title: "父任务" });
+    await createChildTask(parent.id, "子1");
+    const { host, root, onClose } = await renderSheet(parent.id);
+    await clickDetailDelete(host);
+    await clickConfirmButton(host, "删除");
+    expect(await db.tasks.get(parent.id)).toBeUndefined();
+    expect(await db.tasks.where("parentId").equals(parent.id).count()).toBe(0);
+    expect(onClose).toHaveBeenCalled();
     await unmount(root);
   });
 });

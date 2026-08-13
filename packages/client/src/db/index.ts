@@ -355,5 +355,9 @@ export async function resetLocalDataToDefaults(): Promise<void> {
     await db.categories.bulkAdd(createDefaultCategories());
   });
 
+  // 两个速记草稿 key 与 Dexie 事务无关，放事务外跟游标一起清——不清的话「清空本地数据」后
+  // 未发出的速记正文仍留在本机，共享设备上会在下次唤起输入框时直接显示出来。
+  safeRemoveItem(STORAGE_KEYS.quickNoteComposerDraft);
+  safeRemoveItem(STORAGE_KEYS.captureComposerDraft);
   resetSyncCursors();
 }
