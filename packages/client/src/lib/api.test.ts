@@ -229,6 +229,7 @@ describe("fetch 失败文案按壳分平台", () => {
     if (present) {
       (globalThis as Record<string, unknown>).window = { __TAURI_INTERNALS__: {} };
     } else {
+      // biome-ignore lint/performance/noDelete: 测的就是「没有 window 这个全局」的环境；赋 undefined 后 `"window" in globalThis` 仍为 true，桌面壳探测会走另一条分支
       delete (globalThis as Record<string, unknown>).window;
     }
   }

@@ -17,7 +17,7 @@ contracts:
   - packages/client/src/pages/diary/review/DiaryMarkdown.tsx
   - packages/client/src/pages/diary/review/DiaryReviewPage.tsx
   - packages/server/src/routes/diary.ts
-last-reviewed: 2026-08-07
+last-reviewed: 2026-08-13
 ---
 
 # 日记 · 回顾页

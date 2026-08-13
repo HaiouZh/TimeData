@@ -81,6 +81,7 @@ describe("cycleMetrics 周转（medianTurnaroundDays / turnaroundBuckets）", ()
     ];
     const result = cycleMetrics(tasks, TODAY);
     const byLabel = Object.fromEntries(result.turnaroundBuckets.map((b) => [b.label, b.count]));
+    // biome-ignore lint/complexity/useLiteralKeys: 同一组桶标签统一用括号访问——旁边的 `byLabel["1-3天"]` 数字开头用不了点号，改一半反而不齐
     expect(byLabel["当天"]).toBe(1);
     expect(byLabel["1-3天"]).toBe(1);
     expect(byLabel["4-7天"]).toBe(1);
@@ -97,6 +98,7 @@ describe("cycleMetrics 周转（medianTurnaroundDays / turnaroundBuckets）", ()
     ];
     const result = cycleMetrics(tasks, TODAY);
     const byLabel = Object.fromEntries(result.turnaroundBuckets.map((b) => [b.label, b.count]));
+    // biome-ignore lint/complexity/useLiteralKeys: 同上：与相邻数字开头的标签保持同一种写法
     expect(byLabel["当天"]).toBe(0); // 恰 1 天不进"当天"(< 1 才是"当天")
     expect(byLabel["1-3天"]).toBe(2); // 恰 1 天、恰 3 天都进 1-3天(<=3)
     expect(byLabel["4-7天"]).toBe(1); // 恰 7 天进 4-7天(<=7)

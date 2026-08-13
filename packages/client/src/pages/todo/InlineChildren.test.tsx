@@ -653,6 +653,7 @@ describe("InlineChildren mode 行为矩阵", () => {
     expect(writeText).toHaveBeenCalledWith("子任务0");
     expect(onCopyTitle).toHaveBeenCalledTimes(1);
     expect(host.querySelector('textarea[aria-label="子任务标题"]')).toBeNull();
+    // biome-ignore lint/performance/noDelete: jsdom 的 navigator 跨测试文件共享，赋 undefined 会留下键、让被测代码的 clipboard 存在性判断走错分支（改成赋值曾让 TaskRow 用例翻红）
     delete (navigator as { clipboard?: unknown }).clipboard;
     await unmount(root);
   });
@@ -676,6 +677,7 @@ describe("InlineChildren mode 行为矩阵", () => {
     expect(onCopyTitle).not.toHaveBeenCalled();
     // 复制被断掉后 Shift+单击与普通单击同行为：多选态子行标题照常可编辑
     expect(host.querySelector('textarea[aria-label="子任务标题"]')).not.toBeNull();
+    // biome-ignore lint/performance/noDelete: jsdom 的 navigator 跨测试文件共享，赋 undefined 会留下键、让被测代码的 clipboard 存在性判断走错分支（改成赋值曾让 TaskRow 用例翻红）
     delete (navigator as { clipboard?: unknown }).clipboard;
     await unmount(root);
   });
@@ -700,6 +702,7 @@ describe("InlineChildren mode 行为矩阵", () => {
     expect(onCopyTitle).not.toHaveBeenCalled();
     expect(host.querySelector('textarea[aria-label="子任务标题"]')).toBeNull();
     selection.mockRestore();
+    // biome-ignore lint/performance/noDelete: jsdom 的 navigator 跨测试文件共享，赋 undefined 会留下键、让被测代码的 clipboard 存在性判断走错分支（改成赋值曾让 TaskRow 用例翻红）
     delete (navigator as { clipboard?: unknown }).clipboard;
     await unmount(root);
   });

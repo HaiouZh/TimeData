@@ -3416,7 +3416,9 @@ describe("旧客户端缺新字段的整行 push（sync.md §5.8 回归钉）", 
     const stalePayload: Record<string, unknown> = {
       ...taskData({ id: "task-old-payload", title: "旧客户端只想改标题", updatedAt: "2026-07-05T00:00:00.000Z" }),
     };
+    // biome-ignore lint/performance/noDelete: 本用例模拟旧构建：整行快照里根本没有这个键。赋 undefined 会变成「键在、值为空」，那正是本用例要与之区分的另一种情况
     delete stalePayload.sessionId;
+    // biome-ignore lint/performance/noDelete: 本用例模拟旧构建：整行快照里根本没有这个键。赋 undefined 会变成「键在、值为空」，那正是本用例要与之区分的另一种情况
     delete stalePayload.weight;
     const updateRes = await app.request("/api/sync/push", {
       method: "POST",
@@ -3454,6 +3456,7 @@ describe("旧客户端缺新字段的整行 push（sync.md §5.8 回归钉）", 
     const stalePayload: Record<string, unknown> = {
       ...taskData({ id: "task-guarded", title: "旧客户端改标题", updatedAt: "2026-07-05T00:00:00.000Z" }),
     };
+    // biome-ignore lint/performance/noDelete: 本用例模拟旧构建：整行快照里根本没有这个键。赋 undefined 会变成「键在、值为空」，那正是本用例要与之区分的另一种情况
     delete stalePayload.completedAt;
     const updateRes = await app.request("/api/sync/push", {
       method: "POST",

@@ -55,6 +55,7 @@ describe("phosphor 图标 stub", () => {
 
   it("没有已无人使用的死图标", () => {
     const used = collectUsedIcons();
+    // biome-ignore lint/performance/noDynamicNamespaceImportAccess: 本用例的目的就是枚举 stub 的全部导出来找无人使用的死图标，动态访问是它的手段本身
     const exported = Object.keys(stub).filter((key) => typeof stub[key as keyof typeof stub] === "function");
     const dead = exported.filter((name) => !used.has(name)).sort();
 

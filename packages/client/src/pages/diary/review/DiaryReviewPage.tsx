@@ -79,6 +79,7 @@ export default function DiaryReviewPage() {
 
   const modeA = mode === "A" ? modeADates(anchor, yearRange) : null;
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: retryNonce 是触发器而非读取项——出错后点「重试」靠它自增来重跑本 effect。删掉它，重试按钮就点了没反应。
   useEffect(() => {
     let cancelled = false;
     setLoading(true);

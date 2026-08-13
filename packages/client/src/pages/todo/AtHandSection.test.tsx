@@ -154,6 +154,7 @@ describe("AtHandSection", () => {
     });
     expect(writeText).toHaveBeenCalledWith("买菜");
     expect(onCopyTitle).toHaveBeenCalledTimes(1);
+    // biome-ignore lint/performance/noDelete: jsdom 的 navigator 跨测试文件共享，赋 undefined 会留下键、让被测代码的 clipboard 存在性判断走错分支（改成赋值曾让 TaskRow 用例翻红）
     delete (navigator as { clipboard?: unknown }).clipboard;
     await unmount(root);
   });

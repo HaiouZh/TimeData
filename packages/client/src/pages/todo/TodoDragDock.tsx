@@ -128,6 +128,7 @@ export function TodoDragDock({
   const state: TodoDockState = !dragging || targets.length === 0 ? "hidden" : dockEngaged ? "engaged" : "hint";
   const { measureDroppableContainers } = useDndContext();
   const dockIdKey = targets.map(todoDockId).join("|");
+  // biome-ignore lint/correctness/useExhaustiveDependencies: anchorLeftPx 是触发器而非读取项——坞横向落位定下来之后才重测一次。删掉它，命中区就停在下面注释描述的那个旧位置上。
   useEffect(() => {
     if (!dragging || dockIdKey === "") return;
     // 坞按 anchorLeftPx 横向落位,而该值要到 dragStart 那一批 setState 才定;dnd-kit 只在拖起瞬间与

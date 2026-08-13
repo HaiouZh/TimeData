@@ -16,6 +16,7 @@ export function ConfirmDeleteButton({ onConfirm, resetKey, target, className }: 
   const [confirming, setConfirming] = useState(false);
   const [busy, setBusy] = useState(false);
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: resetKey 是触发器而非读取项——effect 体里不读它，它变了就把二次确认态收回去。删掉这个依赖，重置就只在挂载时发生一次。
   useEffect(() => {
     setConfirming(false);
   }, [resetKey]);

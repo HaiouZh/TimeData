@@ -21,6 +21,7 @@ function LookbackEntry({ date, label, epoch }: { date: string; label: string; ep
   // 这个 effect 同时是把 state 从 loading 拉出来的**唯一**出口：下面守卫的拒绝分支是裸 return、
   // 不写任何 state，而 toggle() 只在 state.kind === "idle" 时才重发请求。一旦这个 effect 不来
   //（比如以后有人给它加条件、或把 epoch 依赖改窄），这块会永久停在「读取中…」，用户反复点也不重发。
+  // biome-ignore lint/correctness/useExhaustiveDependencies: epoch 是触发器而非读取项——日期一换就收起面板、丢掉上一份内容。删掉它，切日期后会留着上一天的回看结果。
   useEffect(() => {
     setOpen(false);
     setState({ kind: "idle" });

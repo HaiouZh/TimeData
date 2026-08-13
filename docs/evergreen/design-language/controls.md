@@ -12,7 +12,7 @@ covers:
   - scripts/check-design-language.mjs
 contracts:
   - packages/client/src/components/ui/**
-last-reviewed: 2026-08-10
+last-reviewed: 2026-08-13
 ---
 
 # 设计语言 · 控件库

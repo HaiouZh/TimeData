@@ -295,6 +295,7 @@ export function DesktopBridge() {
     deleteEntryRef.current = deleteEntry;
   });
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: handleNavigate 是 useCallback([]) 的恒稳引用，内部靠 navigateRef / pathnameRef 读最新值（见上），列进依赖只是噪音——桥注册一次即可，多注册一轮反而要先注销。
   useEffect(() => {
     let cancelled = false;
     let unlisten: (() => void) | null = null;

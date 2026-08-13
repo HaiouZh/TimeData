@@ -8,6 +8,7 @@ afterEach(() => {
   // 环境跨文件共享，不显式摘除会把 execCommand（返回 true）与 clipboard 泄漏给同 worker 的后续文件——
   // 曾让 TaskRow 的「clipboard 拒绝且 DOM 兜底失败」用例拿到能成功的兜底而翻红。
   Reflect.deleteProperty(document, "execCommand");
+  // biome-ignore lint/performance/noDelete: jsdom 的 navigator 跨测试文件共享，赋 undefined 会留下键、让被测代码的 clipboard 存在性判断走错分支（改成赋值曾让 TaskRow 用例翻红）
   delete (navigator as { clipboard?: unknown }).clipboard;
 });
 
