@@ -41,6 +41,16 @@ export function splitEndDateTime(value: string): DateTimeValue {
   return parts;
 }
 
+// 合并会让相邻记录在保存时被并入删除，它的备注必须先进表单，否则连同记录一起消失。
+function mergeNotes(current: string, incoming: string | null | undefined, position: "before" | "after"): string {
+  const extra = (incoming ?? "").trim();
+  if (!extra) return current;
+  if (!current.trim()) return extra;
+  // 相邻记录是 live query，连点两下时上一条可能还没换人，别把同一段备注并第二遍。
+  if (current.includes(extra)) return current;
+  return position === "before" ? `${extra}\n${current}` : `${current}\n${extra}`;
+}
+
 export default function EntryForm({
   startTime,
   endTime,
@@ -101,6 +111,7 @@ export default function EntryForm({
     if (!prevEntry) return;
     setStart(splitDateTime(utcToLocalDateTime(prevEntry.startTime)));
     setCategoryId(prevEntry.categoryId);
+    setNote((current) => mergeNotes(current, prevEntry.note, "before"));
     if (error) setError("");
   }
 
@@ -108,6 +119,7 @@ export default function EntryForm({
     if (!nextEntry) return;
     setEnd(splitEndDateTime(utcToLocalDateTime(nextEntry.endTime)));
     setCategoryId(nextEntry.categoryId);
+    setNote((current) => mergeNotes(current, nextEntry.note, "after"));
     if (error) setError("");
   }
 

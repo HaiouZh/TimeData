@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import type { TimeEntry } from "@timedata/shared";
 import { localDateTimeToUtc } from "@timedata/shared";
 import { act, createElement } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -21,12 +22,26 @@ vi.mock("./TimeRangeWheelPicker.js", () => ({
   default: ({ error }: { error: string }) => createElement("div", { "data-testid": "time-error" }, error),
 }));
 
+type AdjacentEntry = { id: string; categoryId: string; startTime: string; endTime: string; note?: string | null };
+
 const adjacentMock = vi.hoisted(() => ({
   value: {
-    prevEntry: null as null | { id: string; categoryId: string; startTime: string; endTime: string },
-    nextEntry: null as null | { id: string; categoryId: string; startTime: string; endTime: string },
+    prevEntry: null as null | AdjacentEntry,
+    nextEntry: null as null | AdjacentEntry,
   },
 }));
+
+function entryWithNote(note: string | null): TimeEntry {
+  return {
+    id: "current",
+    categoryId: "cat-work",
+    startTime: localDateTimeToUtc("2026-05-20T10:00:00"),
+    endTime: localDateTimeToUtc("2026-05-20T11:00:00"),
+    note,
+    createdAt: "2026-05-20T02:00:00.000Z",
+    updatedAt: "2026-05-20T02:00:00.000Z",
+  };
+}
 
 vi.mock("../hooks/useEntries.js", () => ({
   useAdjacentEntriesForRange: () => adjacentMock.value,
@@ -269,6 +284,176 @@ describe("EntryForm", () => {
     await click(saveButton);
 
     expect(onSave).toHaveBeenCalledWith("cat-commute", "2026-05-20T10:00:00", "2026-05-20T12:00:00", "");
+    await unmount(root);
+  });
+
+  it("merge up keeps both notes, previous entry note first", async () => {
+    adjacentMock.value = {
+      prevEntry: {
+        id: "prev",
+        categoryId: "cat-work",
+        startTime: localDateTimeToUtc("2026-05-20T09:00:00"),
+        endTime: localDateTimeToUtc("2026-05-20T10:00:00"),
+        note: "开会讨论排期",
+      },
+      nextEntry: null,
+    };
+    const onSave = vi.fn().mockResolvedValue({ ok: true });
+
+    const { host, root } = await renderDom(
+      createElement(EntryForm, {
+        startTime: "2026-05-20T10:00:00",
+        endTime: "2026-05-20T11:00:00",
+        existingEntry: entryWithNote("继续写方案"),
+        onSave,
+        onCancel: vi.fn(),
+      }),
+    );
+
+    const mergeUp = Array.from(host.querySelectorAll("button")).find((button) =>
+      button.textContent?.includes("向上合并"),
+    );
+    await click(mergeUp);
+
+    // 合并是表单层的编辑：并进来的备注要肉眼可见、可再改。
+    expect(host.querySelector("textarea")?.value).toBe("开会讨论排期\n继续写方案");
+
+    const saveButton = Array.from(host.querySelectorAll("button")).find((button) => button.textContent === "保存");
+    await click(saveButton);
+
+    expect(onSave).toHaveBeenCalledWith(
+      "cat-work",
+      "2026-05-20T09:00:00",
+      "2026-05-20T11:00:00",
+      "开会讨论排期\n继续写方案",
+    );
+    await unmount(root);
+  });
+
+  it("merge up adopts the previous entry note when the current note is empty", async () => {
+    adjacentMock.value = {
+      prevEntry: {
+        id: "prev",
+        categoryId: "cat-work",
+        startTime: localDateTimeToUtc("2026-05-20T09:00:00"),
+        endTime: localDateTimeToUtc("2026-05-20T10:00:00"),
+        note: "开会讨论排期",
+      },
+      nextEntry: null,
+    };
+    const onSave = vi.fn().mockResolvedValue({ ok: true });
+
+    const { host, root } = await renderDom(
+      createElement(EntryForm, {
+        startTime: "2026-05-20T10:00:00",
+        endTime: "2026-05-20T11:00:00",
+        existingEntry: entryWithNote(null),
+        onSave,
+        onCancel: vi.fn(),
+      }),
+    );
+
+    await click(Array.from(host.querySelectorAll("button")).find((button) => button.textContent?.includes("向上合并")));
+    await click(Array.from(host.querySelectorAll("button")).find((button) => button.textContent === "保存"));
+
+    expect(onSave).toHaveBeenCalledWith("cat-work", "2026-05-20T09:00:00", "2026-05-20T11:00:00", "开会讨论排期");
+    await unmount(root);
+  });
+
+  it("merge up leaves the current note untouched when the previous entry has none", async () => {
+    adjacentMock.value = {
+      prevEntry: {
+        id: "prev",
+        categoryId: "cat-work",
+        startTime: localDateTimeToUtc("2026-05-20T09:00:00"),
+        endTime: localDateTimeToUtc("2026-05-20T10:00:00"),
+        note: null,
+      },
+      nextEntry: null,
+    };
+    const onSave = vi.fn().mockResolvedValue({ ok: true });
+
+    const { host, root } = await renderDom(
+      createElement(EntryForm, {
+        startTime: "2026-05-20T10:00:00",
+        endTime: "2026-05-20T11:00:00",
+        existingEntry: entryWithNote("继续写方案"),
+        onSave,
+        onCancel: vi.fn(),
+      }),
+    );
+
+    await click(Array.from(host.querySelectorAll("button")).find((button) => button.textContent?.includes("向上合并")));
+    await click(Array.from(host.querySelectorAll("button")).find((button) => button.textContent === "保存"));
+
+    expect(onSave).toHaveBeenCalledWith("cat-work", "2026-05-20T09:00:00", "2026-05-20T11:00:00", "继续写方案");
+    await unmount(root);
+  });
+
+  it("merge up twice on the same previous entry does not duplicate its note", async () => {
+    adjacentMock.value = {
+      prevEntry: {
+        id: "prev",
+        categoryId: "cat-work",
+        startTime: localDateTimeToUtc("2026-05-20T09:00:00"),
+        endTime: localDateTimeToUtc("2026-05-20T10:00:00"),
+        note: "开会讨论排期",
+      },
+      nextEntry: null,
+    };
+    const onSave = vi.fn().mockResolvedValue({ ok: true });
+
+    const { host, root } = await renderDom(
+      createElement(EntryForm, {
+        startTime: "2026-05-20T10:00:00",
+        endTime: "2026-05-20T11:00:00",
+        existingEntry: entryWithNote("继续写方案"),
+        onSave,
+        onCancel: vi.fn(),
+      }),
+    );
+
+    // 相邻查询是 live query，连点两下时上一条可能还没换人。
+    const mergeUp = Array.from(host.querySelectorAll("button")).find((button) =>
+      button.textContent?.includes("向上合并"),
+    );
+    await click(mergeUp);
+    await click(mergeUp);
+
+    expect(host.querySelector("textarea")?.value).toBe("开会讨论排期\n继续写方案");
+    await unmount(root);
+  });
+
+  it("merge down keeps both notes, current note first", async () => {
+    adjacentMock.value = {
+      prevEntry: null,
+      nextEntry: {
+        id: "next",
+        categoryId: "cat-commute",
+        startTime: localDateTimeToUtc("2026-05-20T11:00:00"),
+        endTime: localDateTimeToUtc("2026-05-20T12:00:00"),
+        note: "回家路上",
+      },
+    };
+    const onSave = vi.fn().mockResolvedValue({ ok: true });
+
+    const { host, root } = await renderDom(
+      createElement(EntryForm, {
+        startTime: "2026-05-20T10:00:00",
+        endTime: "2026-05-20T11:00:00",
+        existingEntry: entryWithNote("继续写方案"),
+        onSave,
+        onCancel: vi.fn(),
+      }),
+    );
+
+    await click(Array.from(host.querySelectorAll("button")).find((button) => button.textContent?.includes("向下合并")));
+
+    expect(host.querySelector("textarea")?.value).toBe("继续写方案\n回家路上");
+
+    await click(Array.from(host.querySelectorAll("button")).find((button) => button.textContent === "保存"));
+
+    expect(onSave).toHaveBeenCalledWith("cat-commute", "2026-05-20T10:00:00", "2026-05-20T12:00:00", "继续写方案\n回家路上");
     await unmount(root);
   });
 
