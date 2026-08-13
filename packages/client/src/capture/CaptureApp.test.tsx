@@ -19,6 +19,11 @@ describe("CaptureApp 骨架", () => {
     const { host } = await renderDom(createElement(CaptureApp));
     expect(host.querySelector('[data-testid="desktop-punch-layer"]')).toBeNull();
   });
+
+  it("浮窗设一个能区分的窗口标题——两窗共用 index.html，读屏分不出焦点在哪个窗口", async () => {
+    await renderDom(createElement(CaptureApp));
+    expect(document.title).toContain("速记");
+  });
 });
 
 beforeEach(async () => {
@@ -111,6 +116,26 @@ describe("CaptureApp 存入状态机", () => {
       release();
     });
     expect(save).toHaveBeenCalledTimes(1);
+  });
+
+  it("saving 中给读屏一条正在保存的 live 反馈——text 冻结本身对读屏是静默的", async () => {
+    let release!: () => void;
+    const gate = new Promise<void>((r) => {
+      release = r;
+    });
+    const save = vi.fn(async () => {
+      await gate;
+    });
+    const { host } = await renderDom(createElement(CaptureApp, { save }));
+    const input = host.querySelector("textarea")!;
+    await type(input, "写着呢");
+    await pressEnter(input);
+
+    expect(host.querySelector('[role="status"]')?.textContent).toContain("正在保存");
+
+    await act(async () => {
+      release();
+    });
   });
 
   it("saving 中按 Esc 不收窗口——结果没出来就走会留下「以为没存其实存了」", async () => {
@@ -321,5 +346,57 @@ describe("CaptureApp 热键接线", () => {
       root.unmount();
     });
     expect(unlisten).toHaveBeenCalledOnce();
+  });
+});
+
+// 前台锁抢不到焦点是 Windows 系统裁决的结果、且不报错（`set_focus` 返回 Ok），
+// Rust 侧查返回值查不出来。这几条锁的是「浮窗自己观测焦点归属并自报」这条落点。
+describe("CaptureApp 焦点归属自报", () => {
+  it("唤起时没抢到键盘焦点 → 给出提示（半开状态不能零反馈）", async () => {
+    vi.spyOn(document, "hasFocus").mockReturnValue(false);
+    const { host } = await renderDom(createElement(CaptureApp));
+    expect(host.textContent).toContain("没抢到键盘焦点");
+  });
+
+  it("拿到焦点时不提示", async () => {
+    vi.spyOn(document, "hasFocus").mockReturnValue(true);
+    const { host } = await renderDom(createElement(CaptureApp));
+    expect(host.textContent).not.toContain("没抢到键盘焦点");
+  });
+
+  it("焦点被别的应用拿走 → 提示出现；拿回来 → 提示消失", async () => {
+    const hasFocus = vi.spyOn(document, "hasFocus").mockReturnValue(true);
+    const { host } = await renderDom(createElement(CaptureApp));
+    expect(host.textContent).not.toContain("没抢到键盘焦点");
+
+    hasFocus.mockReturnValue(false);
+    await act(async () => {
+      window.dispatchEvent(new Event("blur"));
+    });
+    expect(host.textContent).toContain("没抢到键盘焦点");
+
+    hasFocus.mockReturnValue(true);
+    await act(async () => {
+      window.dispatchEvent(new Event("focus"));
+    });
+    expect(host.textContent).not.toContain("没抢到键盘焦点");
+  });
+
+  it("saving 态优先——两条反馈同时挂着看不清哪条是哪条", async () => {
+    vi.spyOn(document, "hasFocus").mockReturnValue(false);
+    let release: (() => void) | undefined;
+    const save = vi.fn(() => new Promise<void>((resolve) => { release = resolve; }));
+    const { host } = await renderDom(createElement(CaptureApp, { save }));
+    const input = host.querySelector("textarea") as HTMLTextAreaElement;
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")?.set?.call(input, "半条");
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    await act(async () => {
+      input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+    });
+    expect(host.textContent).toContain("正在保存");
+    expect(host.textContent).not.toContain("没抢到键盘焦点");
+    release?.();
   });
 });

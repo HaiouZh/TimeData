@@ -12,7 +12,7 @@ contracts:
   - packages/desktop/src-tauri/tauri.conf.json
   - .github/workflows/mobile-release.yml
   - packages/desktop/src-tauri/src/config.rs
-last-reviewed: 2026-08-07
+last-reviewed: 2026-08-10
 ---
 
 # 部署 · Windows 桌面壳
@@ -104,7 +104,11 @@ Rust 侧不广播热键事件，按 `shell::target_window` 的映射表**点名�
 
 「按下热键 → 浮窗拿到键盘焦点」这条在 Windows 上**不是必然的**：前台锁会把 `set_focus` 降级成任务栏闪烁（[windows-desktop/hotkeys](windows-desktop/hotkeys.md) §3 的确认卡撞过同一件事）。实现是直白的 `show` + `set_focus`，能不能真拿到焦点由系统裁决，三种场景各不相同：别的应用正在接收键盘输入、别的应用全屏、短时间内连续唤起。
 
-**这条路径上没有兜底**：`show_capture_window` 是无条件的 `show` + `unminimize` + `set_focus`，三句的失败都被 `let _ =` 吞掉，既不检查焦点最终落在谁身上，也不发通知。抢不到焦点时浮窗照显，成为「看着能打字、键入却进了别的应用」的半开状态，屏幕上零提示。
+**Rust 侧查不出抢没抢到**：`show_capture_window` 是无条件的 `show` + `unminimize` + `set_focus`，三句的失败都被 `let _ =` 吞掉；但前台锁**根本不算失败**——它把 `set_focus` 降级后照样返回 Ok，所以查那三句的返回值查不出焦点归属。焦点落在谁身上，只有拿到焦点的那一端知道。
+
+**故由浮窗自己观测并自报**：`CaptureApp` 读 `document.hasFocus()`（并监听 window 的 focus / blur），没拿到焦点时在输入框下方显示一行提示。这条落点**不经通知通道**——浮窗本就在屏幕正中，而系统通知会被专注助手或权限设置吞掉（[windows-desktop/hotkeys](windows-desktop/hotkeys.md) §3「每条出口都要有一个不经通知通道的落点」同一条判据）。提示只在 idle 态出现，`saving` / `saved` / `error` 各有各的话要说，同时挂两条反而看不清。
+
+**主窗口侧仍无兜底**：`show_main_window` 同形状的三句 `let _ =`，`toggleMain` 与 navigate 都复用它。主窗口抢不到焦点的后果轻得多——窗口显示出来就看得见，不构成「看着能打字却打进别处」的半开状态，故按已知界限留着。
 
 补兜底时的判据是**宁可不显示窗口 + 发通知，也不留半开状态**——半开比不出现更糟。
 

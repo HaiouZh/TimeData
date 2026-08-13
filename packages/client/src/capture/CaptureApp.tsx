@@ -44,7 +44,24 @@ export function CaptureApp({ onHide, save, io, savedFlashMs = DEFAULT_SAVED_FLAS
   const [text, setText] = useState(readCaptureDraft);
   const [status, setStatus] = useState<CaptureStatus>("idle");
   const [error, setError] = useState<string | null>(null);
+  const [unfocused, setUnfocused] = useState(false);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+
+  // **前台锁**：别的应用正在接收键盘输入时，Windows 不让浮窗抢焦点，只让任务栏闪一下。
+  // 关键是它**不当错误报**——`set_focus` 照样返回 Ok，所以 Rust 侧查那三句的返回值查不出来。
+  // 抢不到时浮窗照显，成为「看着能打字、键入却进了别的应用」的半开状态。
+  // 焦点归属只有拿到焦点的那一端才知道，故由浮窗自己观测 `document.hasFocus()` 上报；
+  // 而浮窗本身就是这条出口不经通知通道的落点（它就在屏幕正中，通知反而可能被专注助手吞掉）。
+  useEffect(() => {
+    const sync = () => setUnfocused(!document.hasFocus());
+    sync();
+    window.addEventListener("focus", sync);
+    window.addEventListener("blur", sync);
+    return () => {
+      window.removeEventListener("focus", sync);
+      window.removeEventListener("blur", sync);
+    };
+  }, []);
 
   // 收窗口。**默认实现不能省**：浮窗 `decorations: false` 没有关闭按钮、`skipTaskbar: true`
   // 不在任务栏里，没有这条 IPC 它就永远关不掉。测试注入 mock `onHide` 会全绿，而生产分支
@@ -71,6 +88,12 @@ export function CaptureApp({ onHide, save, io, savedFlashMs = DEFAULT_SAVED_FLAS
   useEffect(() => {
     focusInput();
   }, [focusInput]);
+
+  // 浮窗与主窗口共用同一个 index.html（浮窗 url 是 index.html?window=capture），两个窗口的
+  // document.title 都是 TimeData——读屏播报窗口名时分不出焦点落在哪个窗口。浮窗自报家门。
+  useEffect(() => {
+    document.title = "速记 - TimeData";
+  }, []);
 
   // 唤起接线。**先挂监听、后报 desktop_ready**：Rust 收到 ready 会立刻把就绪前排队的
   // 按键投出来，顺序颠倒这批补投就全打在没有听众的窗口上（与 DesktopBridge 同规矩）。
@@ -188,6 +211,11 @@ export function CaptureApp({ onHide, save, io, savedFlashMs = DEFAULT_SAVED_FLAS
           onKeyDown={onKeyDown}
           className="w-full resize-none bg-transparent px-2 py-1 text-ink outline-none"
         />
+        {status === "saving" && (
+          <p role="status" className="px-2 pb-1 td-text-caption text-ink-3">
+            正在保存…
+          </p>
+        )}
         {status === "saved" && (
           <p role="status" className="px-2 pb-1 td-text-caption text-accent-ink">
             已记下
@@ -196,6 +224,12 @@ export function CaptureApp({ onHide, save, io, savedFlashMs = DEFAULT_SAVED_FLAS
         {status === "error" && error !== null && (
           <p role="alert" className="px-2 pb-1 td-text-caption text-danger">
             {error}
+          </p>
+        )}
+        {/* 只在 idle 态提示：saving / saved / error 三态各有各的话要说，同时挂两条反而看不清。 */}
+        {status === "idle" && unfocused && (
+          <p role="status" className="px-2 pb-1 td-text-caption text-warn">
+            没抢到键盘焦点，点一下上面再打字
           </p>
         )}
       </div>

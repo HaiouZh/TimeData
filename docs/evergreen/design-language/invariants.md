@@ -15,7 +15,7 @@ last-reviewed: 2026-08-10
 # 设计语言 · 关键不变量与红线
 
 > [design-language](../design-language.md) 的**红线子文档**：写新 UI 之前该知道的全站不变量、坑与红线。
-> 讲什么：token 使用红线、图表取色分工、主导航与设置壳形态、z-index 与安全区让位分工、底部避让量单一来源、触感语义层、状态表达与删除确认的收口判据。
+> 讲什么：token 使用红线、图表取色分工、主导航与设置壳形态、z-index 与安全区让位分工、底部避让量单一来源、触感语义层、状态表达与删除确认的收口判据，以及一条已知界限（存量触控热区）。
 > 不讲什么：token 与排版角色的定义（见 [design-language](../design-language.md) §1–§2）、执行这些红线的机器闸（见 [ratchets](ratchets.md)）、自绘控件词汇表（见 [controls](controls.md)）。
 
 ## 承上启下
@@ -58,4 +58,17 @@ last-reviewed: 2026-08-10
     **「会不会自己消失」不是判据，别拿它分桶。** 自动消失是呈现选择，两个组件都可以做：速记页的 `status` 通道（`QuickNotesPage` 的 `showStatus`）是一条**自动消失的浮动 `StatusBanner`**，装的既有「已复制」这种无动作的一次性反馈，也有「请先在设置 · 记录偏好选择打点分类」这种要用户去处理的提示——同一条通道混装两类，而它们都不带动作按钮，所以都不该进 `ActionToastBar`。真正把两者分开的是**这条提示有没有随手挂一个动作**。手写散装三件套由 [棘轮](ratchets.md) 的 `handwritten-status-banner` 拦着。
 16. **删除确认两档**：判据是**频次 × 后果**，不是「重要程度」。删掉一个**完整对象**（轨道 / 分类 / 目标 / 一批速记）→ `ConfirmSheet` 弹层确认——低频、误触后果重、连带删掉下属内容；删掉对象**内部的一条**（轨道里的一个步骤）→ `ConfirmDeleteButton` 就地二次确认——高频、后果轻、弹层会打断编辑节奏。重要程度是连续量、人人排序不同，频次和后果是能看出来的事实。
 
-    **待办的删除任务是这条判据的已知例外，如实记差异不假装一致**：`TaskDetailSheet` 与 `InlineChildren` 直接调 `deleteTaskCascade`，既无确认也无撤销（待办唯一的撤销是「勾选附带归档轨道」），而它单事务删 root + 全部直接子任务，重复模板还连清名下活跃 pending occurrence 与镜像子任务（级联范围见 [todo](../todo.md)）。按判据它属第一档；未收口是因为待办的删除入口含滑动删除，而滑动删除另有「不配确认、配撤销」的成熟形态，走哪条属产品取向而非工程判断，需拍板后才动。
+    **待办的删除任务按同一判据收口，但第一档带一个量的门槛**：`deleteTaskCascade` 单事务删 root + 全部直接子任务，重复模板还连清名下活跃 pending occurrence 与镜像子任务（级联范围见 [todo](../todo.md)），故**有子任务或有活跃发次**的走 `ConfirmSheet`，且确认文案带上会被连带删除的条数；**叶子任务直接删不弹**——它没有连带范围，弹层只剩打断。删子任务（`SortableChildRow` 行内的删除钮）属「对象内部的一条」，走 `ConfirmDeleteButton`。这里没有撤销：撤销要按原 id 重建全部记录并处理已推送的 tombstone，是同步层的活，与 `GoalGraphUndoToast` 撤一条连线不是一回事。
+
+<a id="design-language-invariants-s2"></a>
+
+## 2. 已知界限：存量触控热区低于 44px
+
+新写的可点区域一律给到 44px（`min-h-11`；页头返回钮走 `hotarea-lg`）。**存量约 170 处低于这个值**——`packages/client/src/pages/**` 下 237 个 `<button>` 逐处判过，独立按钮已补齐，剩下的改不动，原因分两类：
+
+- **共享 className 变量**（约 60 处）：设置页三处的 `primary` / `secondary` / `danger` / `warnButtonClassName`（数据页、两步验证、后台洞察，≈34px）、速记页的 `MENU_ITEM_CLASS`（42px）、目标页与待办的 `CONTROL_PILL_CLASS` / `CONTROL_CLASS` / `tabButtonClass` / `TOGGLE_BTN` / `segmentedClass`（36px 分段控件）。一个变量供多处调用，改它就同时改掉全部调用方。
+- **紧凑行与绝对定位**（约 110 处）：速记页多选工具条（7 个元素排一行）、日记页的状态条、目标图节点角外的 pin、子任务行的删除钮与拖柄。补到 44px 会顶开所在行，或盖住它标注的那个对象。
+
+这批里**唯一不牵动布局的是设置页那 23 处**——低频页、独立按钮、周围有空间；其余各处要达标都得连着改所在行的排布，属版式重做而非加一个类。
+
+**静态扫描每跑一次都会重新报出这批**（`packages/client/src/pages/**` 全量扫 `<button>` 即可复现），判据记在这里是为了不必每次重新评估一遍。

@@ -108,7 +108,7 @@ last-reviewed: 2026-08-10
 | 子文档 | 拥有什么 |
 |---|---|
 | [design-language/ratchets](design-language/ratchets.md) | `check:design` 全部规则与判定形态、豁免登记簿 `design-language-allowlist.json` |
-| [design-language/invariants](design-language/invariants.md) | 写新 UI 前该知道的 16 条全站红线：token 红线、图表取色分工、导航与设置壳形态、安全区与底部避让分工、触感语义层、状态表达与删除确认判据 |
+| [design-language/invariants](design-language/invariants.md) | 写新 UI 前该知道的 16 条全站红线：token 红线、图表取色分工、导航与设置壳形态、安全区与底部避让分工、触感语义层、状态表达与删除确认判据；外加一条已知界限（存量触控热区低于 44px 的成因与分布） |
 | [design-language/controls](design-language/controls.md) | 自绘控件库 `components/ui/**`、Phosphor 图标包装 `Icon.tsx`、确认弹层 `useConfirm`、CI 棘轮 `check-no-native-controls.mjs`（`check:ui`） |
 
 ## 深水细节
