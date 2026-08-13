@@ -107,7 +107,7 @@
 - **测试分层归位**：纯逻辑测 `lib/` / `hooks/`；组件行为测 component；整页测只留烟测 + 真正跨组件协作的流程，别把单组件/单函数行为又在整页重测一遍。
 - **去冗余分级举证**：删任何测试前须先确认"同一行为已在更低层覆盖"（看的是同一行为，不是同一函数名）。数据完整性域（sync / backup / 数据契约 / 迁移）blast radius 大，须**正面贴出低层覆盖证据**且优先 merge 不 delete；其余域低层确证覆盖即可删。
 - **无效测试定义（可删）**：只测实现细节非行为（如断言具体 className 串）、永远绿（断言已删除代码"不存在"）、grep 文档字符串、无人看的快照。
-- **禁真实定时等待**：不写 `setTimeout(fn, n>0)` 等待，真实计时器用 fake timers（用法见 [`development`](docs/evergreen/development.md)）。CI `check:test` 棘轮守。
+- **禁真实定时等待**：不写 `setTimeout(fn, n>0)` 等待，真实计时器用 fake timers（用法见 [`development/commands-and-testing`](docs/evergreen/development/commands-and-testing.md)）。CI `check:test` 棘轮守。
 - **DOM 测试走 `src/test/domHarness`**，不裸 `createRoot`。
 
 ------

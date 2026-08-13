@@ -1,0 +1,54 @@
+---
+type: evergreen
+title: 设计语言 · 关键不变量与红线
+covers:
+contracts:
+  - packages/client/src/index.css
+  - packages/client/src/lib/bottomInset.ts
+  - packages/client/src/hooks/useKeyboardHeight.ts
+  - packages/client/src/lib/haptics.ts
+  - packages/client/src/pages/stats/chartColors.ts
+  - packages/client/src/lib/navigation/navRegistry.ts
+last-reviewed: 2026-08-10
+---
+
+# 设计语言 · 关键不变量与红线
+
+> [design-language](../design-language.md) 的**红线子文档**：写新 UI 之前该知道的全站不变量、坑与红线。
+> 讲什么：token 使用红线、图表取色分工、主导航与设置壳形态、z-index 与安全区让位分工、底部避让量单一来源、触感语义层、状态表达与删除确认的收口判据。
+> 不讲什么：token 与排版角色的定义（见 [design-language](../design-language.md) §1–§2）、执行这些红线的机器闸（见 [ratchets](ratchets.md)）、自绘控件词汇表（见 [controls](controls.md)）。
+
+## 承上启下
+
+- **上游**：[design-language](../design-language.md) 的 token 与语义类；本文只讲怎么用、不重复定义。
+- **下游**：所有功能主题的页面与组件；写新 UI 时这一份是"到了那儿也看不出来的事"。
+- **契约**：多数红线有对应机器闸（见 [ratchets](ratchets.md)），带闸的以闸为准；无闸的（如第 6、11、13 条的真机行为）只能靠本文与真机验收。
+- **邻居**：[design-language](../design-language.md)（主题）、[ratchets](ratchets.md)（执行闸）、[controls](controls.md)（控件库）。
+
+<a id="design-language-invariants-s1"></a>
+
+## 1. 不变量清单
+
+1. **新 UI 一律用 token，不写裸 hex/rgba**；统计、设置、Todo、Entry、Track、Goal 等页面的 UI chrome 都消费语义颜色、圆角、排版和几何类；用户内容分类预设色是业务数据例外。裸任意尺寸/间距、裸字号、裸圆角均由 [棘轮](ratchets.md) 直接拦截。
+2. **图表不维护独立 data palette**：图表序列走用户分类色；用户内容色只代表分类、项目、标签、用户自定义标记。Track agent tone 只表达该调度信号。
+3. **无原生表单控件**：`<select>`/`type=checkbox`/`type=radio`/`window.confirm`/`window.alert` 一律用自绘控件——**CI 棘轮 `check:ui` 强制**（见 [controls](controls.md)）。
+4. **图标统一 Phosphor**，经 `components/Icon.tsx` 包装（见 [controls](controls.md)）；不用 emoji 或文字字符伪装图标。
+5. **recharts 不解析 CSS `var()`**：图表 chrome（axis/grid/tooltip 背景边框文字/legend/cursor）须把中性 token 镜像成 JS 常量，统一出自 `pages/stats/chartColors.ts`（只导出 `CHART_CHROME`），唯一消费方是 TimeStats 的 `InsightCharts`（健康图表随健康子系统退役，见 [ADR 0024](../../adr/0024-retire-health-subsystem.md)）；该文件在 `check:design` 整文件豁免 `bare-raw-color`（见 [棘轮](ratchets.md)），对应的中性颜色事实源是 `index.css` token。数据序列不由本文件取色，走用户分类色（`item.color`，无色回退 `UNCATEGORIZED_COLOR`，见 [stats-insights](../stats-insights.md#stats-insights-s1-2)）；状态色只留给真状态，不上数据序列。
+6. **横向溢出从组件源头收口**：全站 `<main>` 负责纵向滚动，交互组件若会产生临时横向位移（如 Todo 拖拽 / swipe 行），应在组件行容器或本主题全局规则里裁掉横向溢出，避免把页面撑出横向滚动面；纵向拖拽让位可单独放开。**推论：swipe 行内的装饰必须画在内侧**——`ring-*` 与任何向外画的 `box-shadow` 会被祖先 `.swipeable-list-item { overflow:hidden }` 整圈裁掉，真机不可见，而 jsdom / happy-dom 不算裁剪，只断言 className 的单测照样全绿（"已归目标任务绿外圈"就这么 ship 成过隐形功能）。用绝对定位子元素（`pointer-events-none`，避开圆角与拖拽命中区）或 `ring-inset`，并靠真机 / 截图验收——单测在这件事上给不出结论。
+7. **主导航：移动纯图标 / 桌面图标+文字**：移动底栏主导航用 Phosphor 纯图标（仅 `aria-label`），只渲染 `nav.visibleTabs.v1` 选中的入口并固定保留设置，不提供三点菜单；未选入口由设置的"更多功能"子页承接。桌面侧栏主导航图标下方配 `td-text-caption` 文字标签（aside `w-20`，"更多"按钮同款），这是设计审查 C1 的可读性收口——**仅桌面，移动底栏维持纯图标不变**。图标来自 `navRegistry`，用户配置只保存 route/placement，不保存 icon 名或颜色；主导航按钮必须有 `aria-label`。active 用 `accent-soft` 背景、`accent` 图标色和 `accent` ring，hover/focus 只消费现有 `page/surface/border/ink/accent` token，不为主导航单独引入裸色。轨道回手计数以 `NavBadge`（`bg-accent`/`text-page` 圆点，`td-text-caption`，>9 显「9+」）叠在 `/tracks` 图标右上角，计数为 0 时不渲染；两端复用同一 `NavBadge`，不引裸色。
+8. **设置壳与设置行复用 token 组件**：设置详情页外壳 `SettingsDetailPage` 使用 `page/surface/border/ink` token；设置首页的 `SettingsSection` / `SettingsRow` / `SettingsToggleRow` / `SettingsNumberRow` 使用 `surface/border/ink/accent` 语义 tone，避免各设置入口重新引入旧 `slate-*` / 模块色 / 大圆角样式。`SettingsNumberRow` 的步进按钮是 Phosphor `Minus` / `Plus` 图标钮（经 `Icon`，不是文字加减号），与 `input[type=number]` 一起消费 `surface-hover`/`border`/`ink`/`accent` token，不引入裸色。
+9. **z-index 走层级 token**：跨局部内容的下拉 / 日期气泡、遮罩、弹层与全屏接管用 `z-[var(--z-*)]`，内联 `style.zIndex` 用 `lib/zLayers.ts` 的 `Z`；普通粘顶头、画布 HUD/notice 等局部 stacking 使用 `z-10`/`z-20`，不升全局 token。新全局浮层选层级按语义对号入座，不另造数值。
+10. **单一暗色主题 + 单一动作色**：不搭换肤机制、不引 `[data-theme]`、不出亮色主题；动作色只有品牌蓝一支。motion 走标准 utility/局部 keyframe 值，z-index 与任意值按各自语义治理并由棘轮守。视觉一致性靠单测 + `/dev/styleguide` 预览页人工验收，**不做像素快照**。
+11. **安全区让位分工**：顶部与左右在 AppShell 根容器一处解决（根 div 挂 `td-safe-top td-safe-x`，类语义见 [design-language](../design-language.md#design-language-s1)）；底部由**实际占位者自己让**，统一走 `calc(<px> + var(--safe-bottom))` 组成式——px 项是常规偏移，安全区值经 `:root` 的 `--safe-*` 变量流入（机制见 [design-language](../design-language.md#design-language-s1)）。**`--safe-bottom` 固定为 `0px`**：底栏与内容刻意延伸到 home 横条 / 手势条之下、横条浮在其上，这是产品取向不是疏漏；组成式接口照旧保留，要整体恢复让位只改 `:root` 一处、消费点一律不动。按 `<html data-platform="android">` 清零的是顶部与左右（WebView 里原生 padding 与 `env()` 会叠成双倍留白）。消费点：底栏可见态总高与内边距（隐藏态两者一起归零，只归零高度会留下 inset 高空带）、贴底浮层（TodoComposer / TodoSelectionBar / 速记页 / 更新提示 / GoalGraphUndoToast）的 `bottom`、滚动内容与 sticky 收起位的 `paddingBottom` / `scrollPaddingBottom` / `bottom`。**组件里新写底部让位一律走 calc 组成式，不散写裸 `env()`**；底部弹层是让位的唯一例外——`components/ui/Sheet.tsx` 与 `pages/todo/TaskDetailSheet.tsx` 的操作按钮就在面板最下沿，压到横条下会点不到，故走独立的 `--safe-bottom-sheet`（`env(safe-area-inset-bottom)`，两平台同源），本就贴屏幕底边、没有 px 偏移项，直接消费变量。
+12. **底部避让量单一来源**：速记页（QuickNotesPage）与待办页（TodoPage）喂进上一条 `calc()` 组成式的 px 项，由 `lib/bottomInset.ts` 的 `composeBottomInset({ barHeightPx, navOffsetPx, keyboardHeightPx })` = `Math.ceil(三者之和)` 单一合成，是两页共用的唯一入口。各页私有的"此刻底部站着谁"（QuickNotes 的 selectionMode/searchOpen 分支、Todo 的多选/滚动收起分支）仍留在各页自己算，只把结果当 `barHeightPx` 喂给合成函数——合成函数本身不判断"底部站着谁"。键盘高度经 `hooks/useKeyboardHeight.ts` 的 `useKeyboardHeight()` 并入 `keyboardHeightPx`：Capacitor native 壳走 `@capacitor/keyboard` 的 `keyboardWillShow`/`keyboardWillHide` 事件（前者取事件里的真实高度，后者归 0），web/PWA 没有该插件桥接，降级用 `visualViewport` 与 `innerHeight` 的差值估算，差值 > 80px 才判定键盘弹起（避免地址栏收合等抖动误报）。这条 JS 路径是键盘避让的唯一实现——capacitor 侧 `Keyboard.resize` 设为 `none`，webview 不因键盘弹起自动 reflow，见 [deployment/ios-ipa](../deployment/ios-ipa.md#deployment-ios-ipa-s3-3)。回归护栏：`keyboardHeightPx = 0`（桌面浏览器 / 键盘收起）时合成结果与合成前逐值相等，见 `bottomInset.test.ts`。安全区值不参与本次合成，仍按上一条经 CSS 变量单独叠加。
+
+    两页的 `navOffsetPx` 归零时机不同，如实记差异，不假装一致：Todo 页的 `navOffsetPx` 在计算式里带 `keyboardHeightPx === 0` 同步守卫（`!wide && !navHidden && keyboardHeightPx === 0 ? BOTTOM_NAV_HEIGHT_PX : 0`），键盘一弹起就在同一次渲染里归零，不依赖任何 effect。QuickNotes 页的 `navOffsetPx` 只看 `navHidden`（`!isWideScreen && !navHidden ? BOTTOM_NAV_HEIGHT_PX : 0`），而 `navHidden` 由 `inputInteractionActive`（`composerFocused || searchOpen || keyboardHeight > 0`）驱动的 `useEffect` 异步 `setNavHidden` 得来——键盘收起（`keyboardHeight` 归 0）与 `navHidden` 变回 `false` 隔了一次 effect，即隔一帧。这意味着键盘收起的瞬间可能有一帧 `keyboardHeightPx=0` 且 `navOffsetPx` 还未回填（nav 让位比键盘高晚一帧），composer 输入条会先冲到更低位置再弹回原位（"收起抖"/下冲）。这一帧级别的抖动 jsdom 测不出，是**真机验收项**。
+
+13. **触感只经语义层**：页面调的是 `lib/haptics.ts` 的四个语义函数——`hapticToggle`（勾选 / 取消勾选）、`hapticDestructive`（删除 / 清空）、`hapticGrab`（拖拽拿起）、`hapticDrop`（拖拽吸附落位，取消或原地放下不调）。**「什么动作配什么强度」的映射只写在这一个文件**（`@capacitor/haptics` 的 `ImpactStyle`：destructive 一档重，其余三个最轻档），调用点不出现强度常量，整体调轻重或加全局开关只改这一处。调用接在页面的事件处理处，不下沉进 `lib/` 数据函数——否则跑数据层单测也会震。批量动作**整批只震一次**，不逐条震。iOS 与 Android 原生壳都接；Web / PWA / 桌面经 `Capacitor.isNativePlatform()` 判否后**整层空转**，且不回退 `navigator.vibrate`（浏览器那种整机震与原生轻触感不是同一种反馈）。插件缺失 / 系统关闭 / 硬件不支持一律吞掉，业务动作照常完成：除了接 promise 的 reject，还得防住 `impact` 同步抛与返回非 thenable（插件未注册 / 旧桥 shim）——那两种是**同步** TypeError，`hapticGrab` 在 dnd-kit 的同步 `onDragStart` 里抛出去整个拖拽都起不来。投递坠的「抓到手头」同样是吸附落位，写入成功后要震（投递失败与 invalid 拒绝不震）。
+14. **页面样式不写死 `visibility: visible`**：iOS 分层壳 `KeptRouteStack` 靠给整层挂 `visibility: hidden` 隐藏保留层（两层恒 `absolute inset-0` 相互重叠，换 `display:none` 会清掉滚动容器 scrollTop，机制见 [architecture](../architecture.md)）。`visibility` 是可继承属性，后代给绝对值 `visible` 即反向击穿祖先的 hidden，该元素连同自身 z-index 一起浮到当前页之上——上一页的浮起元素会挂在下一页画面里，且只在 iOS 壳出现（其余平台上一页直接卸载）。需要「默认可见、可被某个类隐身」的元素写 `visibility: inherit`：常规层级下父级本就是 visible，两者等价；进了保留层才跟着一起藏。棘轮：`indexCssTokens.test.ts` 禁 `index.css` 出现写死的 `visibility: visible`。
+15. **状态表达三分工**：需要用户注意或处理的状态（出错、冲突、警告、成功）→ `StatusBanner`；普通信息行（不需要用户做什么，只是告知）→ 普通文字，不套框；一次性操作反馈**且随手给一个动作**（「已删除」+「撤销」、「已打点」+「改时间」这类）→ `ActionToastBar`。分界线是**用户需不需要对它做点什么**，不是「这条信息重不重要」——重要性是主观量、人人排序不同，用户是否要行动是可判定的事实。
+
+    **「会不会自己消失」不是判据，别拿它分桶。** 自动消失是呈现选择，两个组件都可以做：速记页的 `status` 通道（`QuickNotesPage` 的 `showStatus`）是一条**自动消失的浮动 `StatusBanner`**，装的既有「已复制」这种无动作的一次性反馈，也有「请先在设置 · 记录偏好选择打点分类」这种要用户去处理的提示——同一条通道混装两类，而它们都不带动作按钮，所以都不该进 `ActionToastBar`。真正把两者分开的是**这条提示有没有随手挂一个动作**。手写散装三件套由 [棘轮](ratchets.md) 的 `handwritten-status-banner` 拦着。
+16. **删除确认两档**：判据是**频次 × 后果**，不是「重要程度」。删掉一个**完整对象**（轨道 / 分类 / 目标 / 一批速记）→ `ConfirmSheet` 弹层确认——低频、误触后果重、连带删掉下属内容；删掉对象**内部的一条**（轨道里的一个步骤）→ `ConfirmDeleteButton` 就地二次确认——高频、后果轻、弹层会打断编辑节奏。重要程度是连续量、人人排序不同，频次和后果是能看出来的事实。
+
+    **待办的删除任务是这条判据的已知例外，如实记差异不假装一致**：`TaskDetailSheet` 与 `InlineChildren` 直接调 `deleteTaskCascade`，既无确认也无撤销（待办唯一的撤销是「勾选附带归档轨道」），而它单事务删 root + 全部直接子任务，重复模板还连清名下活跃 pending occurrence 与镜像子任务（级联范围见 [todo](../todo.md)）。按判据它属第一档；未收口是因为待办的删除入口含滑动删除，而滑动删除另有「不配确认、配撤销」的成熟形态，走哪条属产品取向而非工程判断，需拍板后才动。

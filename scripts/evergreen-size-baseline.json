@@ -35,20 +35,35 @@
   "docs/evergreen/deployment/android-apk.md": {
     "covers": 16
   },
+  "docs/evergreen/deployment/configuration.md": {
+    "covers": 0
+  },
   "docs/evergreen/deployment/ios-ipa.md": {
     "covers": 4
   },
   "docs/evergreen/deployment/windows-desktop.md": {
     "covers": 6
   },
+  "docs/evergreen/deployment/windows-desktop/hotkeys.md": {
+    "covers": 0
+  },
   "docs/evergreen/design-language.md": {
-    "covers": 19
+    "covers": 17
   },
   "docs/evergreen/design-language/controls.md": {
     "covers": 8
   },
+  "docs/evergreen/design-language/invariants.md": {
+    "covers": 0
+  },
+  "docs/evergreen/design-language/ratchets.md": {
+    "covers": 2
+  },
   "docs/evergreen/development.md": {
     "covers": 10
+  },
+  "docs/evergreen/development/commands-and-testing.md": {
+    "covers": 0
   },
   "docs/evergreen/diary.md": {
     "covers": 7
@@ -74,6 +89,9 @@
   "docs/evergreen/project-zone/multi-select.md": {
     "covers": 0
   },
+  "docs/evergreen/project-zone/presentation.md": {
+    "covers": 0
+  },
   "docs/evergreen/quick-notes.md": {
     "covers": 16
   },
@@ -92,6 +110,9 @@
   "docs/evergreen/sync/domain-registry.md": {
     "covers": 14
   },
+  "docs/evergreen/sync/push-pull.md": {
+    "covers": 0
+  },
   "docs/evergreen/sync/realtime-and-scheduler.md": {
     "covers": 9
   },
@@ -99,7 +120,7 @@
     "covers": 1
   },
   "docs/evergreen/timeline.md": {
-    "covers": 26
+    "covers": 19
   },
   "docs/evergreen/todo.md": {
     "covers": 27

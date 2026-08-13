@@ -65,7 +65,7 @@
 
 初版另有一支 `#fb7185` 距 `--color-danger` 仅色差 5.83（色相差 9°）——项目圆点与「危险/错误」感知同色，正是决策一列为禁止的情形，已换成浅一档的 `#fda4af`（色差 13.4，色相仍在 353°，整体观感不变）。
 
-**残留最近项**：`tint-3`（绿 142°）距 `--color-ok`（158°）色差 7.28，是九支里离状态色最近的一支。它与 `ok` 不会同屏指向同一条任务（项目 chip 与绿竖条排他，见 [project-zone](../evergreen/project-zone.md#project-zone-presentation)），但仍留待真机长期使用后复核。
+**残留最近项**：`tint-3`（绿 142°）距 `--color-ok`（158°）色差 7.28，是九支里离状态色最近的一支。它与 `ok` 不会同屏指向同一条任务（项目 chip 与绿竖条排他，见 [project-zone/presentation](../evergreen/project-zone/presentation.md#project-zone-presentation)），但仍留待真机长期使用后复核。
 
 ## 适用域
 

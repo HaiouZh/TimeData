@@ -45,4 +45,4 @@
 - 服务端不再有 Python 子进程与外部账号凭据面，镜像不含 Python 运行时；启动序列里没有 Garmin 配置加载与抓取定时器。
 - 6 个健康同步域与 6 张表继续存在且必须继续维护：改它们仍走完整 schema 变更红线（client / server / shared / sync / Dexie / 夹具一起对齐），不因"没人用"而放宽。现状描述见 [data-model](../evergreen/data-model.md) §1.1 与 [sync/domain-registry](../evergreen/sync/domain-registry.md) §2。
 - 老设备 `settings` 表里残留的 `health.range.presets` 无消费方，不清理也无副作用。
-- 图表色镜像 `chartColors.ts` 从健康域迁到 `pages/stats/`，只导出 `CHART_CHROME`；`--color-data-*` token 失去 JS 镜像消费方（见 [design-language](../evergreen/design-language.md) §4）。
+- 图表色镜像 `chartColors.ts` 从健康域迁到 `pages/stats/`，只导出 `CHART_CHROME`；`--color-data-*` token 失去 JS 镜像消费方（见 [design-language/invariants](../evergreen/design-language/invariants.md) 第 5 条）。

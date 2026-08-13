@@ -59,7 +59,7 @@ last-reviewed: 2026-08-07
 
 **`className` 与 `actions` 之间有一处会互相作用**：不传 `actions` 时 `children` 直接落在根 div 下；一传 `actions`，组件会在中间插一层 `flex` 包装、把 `children` 收进一个 `<span className="flex-1">`。于是**作用于直接子元素的 `className`（`space-y-*`、`divide-*` 这类）在加了 `actions` 之后会静默失效**——它管的对象从原本那几个子元素变成了那层包装的唯一子元素。同步问题条（`SettingsPage` 的 `SyncIssueList`）正是靠 `className="space-y-1"` 给多行 `<p>` 拉间距，给它加动作按钮时这条会一起塌掉。传 `className` 的一律走定位 / 外边距 / flex 收缩这类**只作用于自身**的类，别用作用于子元素的类。
 
-`ConfirmDeleteButton` 是「就地二次确认删除」：第一次点变成「确认删除」文字，第二次点才执行 `onConfirm`。`resetKey` 值变化即复位确认态（`useEffect(() => setConfirming(false), [resetKey])`）——用户切走干别的时，那个半按下的确认态不该留着（轨道两处传 `editing`，进编辑态要撤销待确认）。`aria-label` 随确认态在「删除{target}」/「确认删除{target}」间切换。它与 `ConfirmSheet` 的分工按「频次 × 后果」判据（[design-language](../design-language.md#design-language-s4) §4 第 16 条）：删掉完整对象走 `ConfirmSheet` 弹层，删对象内部的一条走本件就地确认。
+`ConfirmDeleteButton` 是「就地二次确认删除」：第一次点变成「确认删除」文字，第二次点才执行 `onConfirm`。`resetKey` 值变化即复位确认态（`useEffect(() => setConfirming(false), [resetKey])`）——用户切走干别的时，那个半按下的确认态不该留着（轨道两处传 `editing`，进编辑态要撤销待确认）。`aria-label` 随确认态在「删除{target}」/「确认删除{target}」间切换。它与 `ConfirmSheet` 的分工按「频次 × 后果」判据（[invariants](invariants.md) 第 16 条）：删掉完整对象走 `ConfirmSheet` 弹层，删对象内部的一条走本件就地确认。
 
 面板的入场动画与 88vh 限高一并由 `index.css` 的 `.sheet-panel` 承载（顶层规则，优先级高于 utilities）：调用方传进来的 `className` 改不动限高，要调只能改那条 CSS。
 
@@ -69,7 +69,7 @@ last-reviewed: 2026-08-07
 
 ### 控件排版档
 
-控件内文字一律用 `.td-text-*` 语义类，不写裸字号（由 `bare-text-size` 棘轮守，见 [design-language](../design-language.md#design-language-s3)）。档位分工：
+控件内文字一律用 `.td-text-*` 语义类，不写裸字号（由 `bare-text-size` 棘轮守，见 [ratchets](ratchets.md)）。档位分工：
 
 | 用途 | 档 |
 |---|---|
@@ -123,7 +123,7 @@ last-reviewed: 2026-08-07
 - **豁免**：`components/ui/**`（原子件本身）与 `*.test.*` 测试文件。
 - **CI**：`.github/workflows/ci.yml` 有 `pnpm check:ui` 步骤（与 `check:design`、`check:test` 并列）。这道闸锁住表单控件不回退到原生。
 
-> 注意：`check:ui` 只管**原生控件**。裸色、退役模块色、散装交互图标和业务 `font-mono` 由 [design-language](../design-language.md#design-language-s3) 的 `check:design` 棘轮检查；遗留旧债必须登记在 allowlist，并随 P1/P3/P4 迁移逐步删除。
+> 注意：`check:ui` 只管**原生控件**。裸色、退役模块色、散装交互图标和业务 `font-mono` 由 [ratchets](ratchets.md) 的 `check:design` 棘轮检查；遗留旧债必须登记在 allowlist，并随 P1/P3/P4 迁移逐步删除。
 
 ## 5. 关键不变量 / 坑 / 红线
 

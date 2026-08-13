@@ -118,7 +118,7 @@ SQL `categories`（`db/schema.ts`）：`parent_id` FK → categories(id)，`is_a
 8. **`useCategories` 缓存**：`categoryById`/`childrenByParentId` Map；`getCategoryPath`（“父名 · 子名”，未找到“未知”）/`getCategoryColor`（未找到回退 shared 的 `UNCATEGORIZED_COLOR` = `#8b94a8`，**不是** SQL 列默认的 `#808080`——后者是服务端 `categories.color` 建表默认值，两者各管一处别混）/`getChildren` O(1)。
 9. **`punch.ts` 不归本域**：打点动作 `punchNow` 写 `time_entries`（归 [timeline](timeline.md)）；本域/子文档只拥有其分类设置 `punchCategorySetting.ts`。
 10. **目标层不改变 Category 语义**：Goal 新增 shared schema / sync 登记簿分支会命中本域 covers，但分类两级树、排序、归档、级联删除都不变；底部导航新增 `/goals` 的 settings key 取值见 [settings-catalog](categories-settings/settings-catalog.md)。
-11. **分类页弹层一律走底部抽屉**：新增分类、一键配色、重命名、改色、新增子分类、删除确认等弹层统一走 `Sheet` / `ConfirmSheet`，不手写居中遮罩——Esc、焦点管理、`aria-modal` 由抽屉自带，手写的没有；手写形态由 [design-language](design-language.md#design-language-s3) 的 `handwritten-centered-modal` 棘轮拦截。
+11. **分类页弹层一律走底部抽屉**：新增分类、一键配色、重命名、改色、新增子分类、删除确认等弹层统一走 `Sheet` / `ConfirmSheet`，不手写居中遮罩——Esc、焦点管理、`aria-modal` 由抽屉自带，手写的没有；手写形态由 [design-language/ratchets](design-language/ratchets.md) 的 `handwritten-centered-modal` 棘轮拦截。
 
 ## 4. 模块速查（代码入口 + 路由 + 测试）
 

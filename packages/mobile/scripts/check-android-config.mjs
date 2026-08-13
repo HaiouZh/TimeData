@@ -21,11 +21,11 @@ if (!/allowMixedContent:\s*false/.test(capacitorConfig)) {
 
 // resize:none 是整套 JS 键盘避让（useKeyboardHeight + composeBottomInset）的前提：webview 若自己
 // reflow 会与 JS 加的键盘高双倍避让。配置漂移（版本升级/复制模板/精简）删了它，全绿也只真机双倍
-// 避让，测不出来——故在这里棘轮住。改动见 docs/evergreen/design-language.md §4-12。
+// 避让，测不出来——故在这里棘轮住。改动见 docs/evergreen/design-language/invariants.md 第 12 条。
 if (!/Keyboard:\s*\{\s*resize:\s*(?:KeyboardResize\.None|["']none["'])/.test(capacitorConfig)) {
   throw new Error(
     "[android-config] capacitor.config.ts 的 plugins.Keyboard.resize 必须为 none（KeyboardResize.None）——" +
-      "JS 键盘避让依赖它，改动见 docs/evergreen/design-language.md §4-12",
+      "JS 键盘避让依赖它，改动见 docs/evergreen/design-language/invariants.md 第 12 条",
   );
 }
 

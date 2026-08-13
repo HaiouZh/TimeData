@@ -89,7 +89,7 @@ last-reviewed: 2026-08-06
 
 裁决点只有一个：`preferProjectCollisions` 的 `dockAllowed`，由页面传 `laneRef.current === "dock"`。
 
-同一个函数另有一档与坞正交的裁决 `activeProjectGoalId`（项目区来源时同组行优先于组卡片，见 [project-zone](../project-zone.md#project-zone-nesting)）。**两档互不影响**：坞档在最前，无资格时先把 `dock:` 前缀整个剔掉，之后才轮到项目区那档。该入参同样走 ref（`activeProjectGoalIdRef`）而非 state，理由与 `dockAllowed` 逐字相同——碰撞策略每帧读它，state 慢两跳。它随其余拖拽 ref 一起在 `resetTodoDragRefs` 单点复位，**新增拖拽期 ref 一律加进那个函数**，别在页面里手写：复位要覆盖 dragStart / dragEnd / dragCancel 三条路径，手写漏的必然是 cancel 那条，留下的残留值会让下一次非项目区拖拽被按「来自那个组」裁决。
+同一个函数另有一档与坞正交的裁决 `activeProjectGoalId`（项目区来源时同组行优先于组卡片，见 [project-zone/presentation](../project-zone/presentation.md#project-zone-nesting)）。**两档互不影响**：坞档在最前，无资格时先把 `dock:` 前缀整个剔掉，之后才轮到项目区那档。该入参同样走 ref（`activeProjectGoalIdRef`）而非 state，理由与 `dockAllowed` 逐字相同——碰撞策略每帧读它，state 慢两跳。它随其余拖拽 ref 一起在 `resetTodoDragRefs` 单点复位，**新增拖拽期 ref 一律加进那个函数**，别在页面里手写：复位要覆盖 dragStart / dragEnd / dragCancel 三条路径，手写漏的必然是 cancel 那条，留下的残留值会让下一次非项目区拖拽被按「来自那个组」裁决。
 
 - **两条路都要滤**：`pointerHits` 与 `fallback()`（closestCenter 会把坞药丸的矩形一并算进去）在无资格时都得剔掉 `dock:` 前缀，只滤前者会让兜底路把坞重新放进来。
 - **有资格时坞优先**：指针同时落在药丸与其下方行/项目组的矩形内时只认坞。

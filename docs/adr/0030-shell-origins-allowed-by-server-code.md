@@ -39,4 +39,4 @@ Tauri 的三种形态（Windows 的 `http`、开 https scheme 的 `https`、macO
 - 代价：服务端多背一份「客户端壳有哪些」的知识，新增壳时要同步 `SHELL_ORIGINS_BY_SHELL`。这正是上面第二条机检要挡的，也比让每个部署者各自摸索便宜。
 - 旧版本服务端仍需手填，所以客户端文案与设置页提示保留「服务端版本较早时把 origin 填进 `ALLOWED_ORIGINS`」这一句。
 
-机制现状见 [deployment](../evergreen/deployment.md) 的 `ALLOWED_ORIGINS` 段落。
+机制现状见 [deployment/configuration](../evergreen/deployment/configuration.md) §1。

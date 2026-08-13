@@ -649,7 +649,7 @@ function main() {
     console.error(
       `✗ 设计语言棘轮闸（新增违规 ${violations.length}）：\n${violations
         .map((violation) => `${violation.file}:${violation.line} ${violation.rule} ${violation.message}`)
-        .join("\n")}\n\n修法指引：正确 token / 语义类与规则清单见 docs/evergreen/design-language.md §3，效果可在 /dev/styleguide 预览。旧债请写入 scripts/design-language-allowlist.json，并在对应批次完成后删除；新代码违规不得写入 allowlist。`,
+        .join("\n")}\n\n修法指引：正确 token / 语义类与规则清单见 docs/evergreen/design-language/ratchets.md，效果可在 /dev/styleguide 预览。旧债请写入 scripts/design-language-allowlist.json，并在对应批次完成后删除；新代码违规不得写入 allowlist。`,
     );
     process.exit(1);
   }

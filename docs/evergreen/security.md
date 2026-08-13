@@ -63,7 +63,7 @@ last-reviewed: 2026-08-07
 
 `schemaNormalizationVersion`（`timedata_schema_normalization_version`）是纯本地、不同步、非敏感的版本闸，只记录客户端 schema 归一 pass 已跑到的版本号。
 
-Android 原生环境保持 HTTPS-only：`packages/mobile/capacitor.config.ts` 的 `server.cleartext: false` / `android.allowMixedContent: false` 与 Manifest 的 `android:usesCleartextTraffic="false"` 共同禁止明文 API 请求。服务器设置页在原生环境会拒绝保存 `http://` API 地址，并提示用户改用 HTTPS 反向代理地址；Web/PWA 环境不做这层 Android 专属拦截。壳（Android `https://localhost`、iOS `capacitor://localhost`、桌面版 Tauri）的 origin 由服务端代码内置放行而非部署者手填，理由与安全论证见 [ADR 0030](../adr/0030-shell-origins-allowed-by-server-code.md)：这些 origin 只有本机安装的壳能占据，而真正的恶意本地应用根本不受 CORS 约束，守 API 的是 Bearer token。设置页仍提示自托管用户，服务端版本早于该改动时要把 origin 填进 `ALLOWED_ORIGINS`；配置位置与验证方法见 [部署与自更新](deployment.md) 的 `ALLOWED_ORIGINS` 段落。
+Android 原生环境保持 HTTPS-only：`packages/mobile/capacitor.config.ts` 的 `server.cleartext: false` / `android.allowMixedContent: false` 与 Manifest 的 `android:usesCleartextTraffic="false"` 共同禁止明文 API 请求。服务器设置页在原生环境会拒绝保存 `http://` API 地址，并提示用户改用 HTTPS 反向代理地址；Web/PWA 环境不做这层 Android 专属拦截。壳（Android `https://localhost`、iOS `capacitor://localhost`、桌面版 Tauri）的 origin 由服务端代码内置放行而非部署者手填，理由与安全论证见 [ADR 0030](../adr/0030-shell-origins-allowed-by-server-code.md)：这些 origin 只有本机安装的壳能占据，而真正的恶意本地应用根本不受 CORS 约束，守 API 的是 Bearer token。设置页仍提示自托管用户，服务端版本早于该改动时要把 origin 填进 `ALLOWED_ORIGINS`；配置位置与验证方法见 [deployment/configuration](deployment/configuration.md) §1。
 
 ## 服务端认证与审计
 
@@ -84,7 +84,7 @@ Android 原生环境保持 HTTPS-only：`packages/mobile/capacitor.config.ts` �
 - **速率限制**（`middleware/rateLimit.ts`）：按 token 标识对 `/api/sync/*`、`/api/admin/*` 与 `POST /api/update` 分别限流，60 秒滑窗，超限返回 HTTP 429；`/api/admin/sync-logs` 与 `/api/admin/request-logs` 复用 admin 限流。update 一档只挂精确路径不带 `/*`，故状态轮询 `/api/update/status` 不受限（理由见 §TOTP 危险操作锁末段）。
 - **请求体上限**（`middleware/bodyLimit.ts`）：`/api/*` 请求体超限返回 HTTP 413；`Content-Length` 超限快速拒绝，无/未知长度的 body 先读取计数再判定。
 
-窗口次数与上限字节由 `SYNC_RATE_MAX` / `ADMIN_RATE_MAX` / `UPDATE_RATE_MAX` / `MAX_BODY_BYTES` 调整，**默认值与完整说明见 [deployment](deployment.md) 环境变量表（数值单一来源）**。多实例部署时限流计数当前是单进程内存结构。
+窗口次数与上限字节由 `SYNC_RATE_MAX` / `ADMIN_RATE_MAX` / `UPDATE_RATE_MAX` / `MAX_BODY_BYTES` 调整，**默认值与完整说明见 [deployment/configuration](deployment/configuration.md) 环境变量表（数值单一来源）**。多实例部署时限流计数当前是单进程内存结构。
 
 ## force-push 临时 Token
 

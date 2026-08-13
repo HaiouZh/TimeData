@@ -69,7 +69,7 @@ desktop  Tauri Windows 壳，前端产物同样取 client/dist
 
 依赖方向单向：`client` / `server` / `cli` 都依赖 `shared`，彼此不 import。它们靠 HTTP API、同步账本和共享类型契约协作。`mobile` 与 `desktop` 都不写业务逻辑，只包装前端构建产物与原生配置。
 
-根 `package.json` 只做 workspace 脚本编排：构建先产出 `shared`，再并行跑 client/server/cli；测试允许 package 间有限并行并在最后串起根目录脚本测试；文档、UI、设计语言和测试卫生棘轮以 `check:*` 脚本集中暴露。包管理器由 `packageManager` 固定到 pnpm 11，`pnpm-workspace.yaml` 管 workspace、catalog 和原生依赖构建审批。本地命令细节见 [development](development.md)，CI 顺序见 [deployment](deployment.md)。
+根 `package.json` 只做 workspace 脚本编排：构建先产出 `shared`，再并行跑 client/server/cli；测试允许 package 间有限并行并在最后串起根目录脚本测试；文档、UI、设计语言和测试卫生棘轮以 `check:*` 脚本集中暴露。包管理器由 `packageManager` 固定到 pnpm 11，`pnpm-workspace.yaml` 管 workspace、catalog 和原生依赖构建审批。本地命令细节见 [development/commands-and-testing](development/commands-and-testing.md)，CI 顺序见 [deployment](deployment.md)。
 
 ## 3. 总体数据流
 
