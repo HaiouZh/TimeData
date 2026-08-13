@@ -43,6 +43,7 @@ import { hapticDestructive } from "../lib/haptics.ts";
 import { punchNow } from "../lib/punch.js";
 import { formatLocalClock, groupQuickNotesForDisplay, quickNoteAriaLabel } from "../lib/quickNoteDisplay.ts";
 import { useIsWideScreen } from "../lib/useIsWideScreen.js";
+import { Z } from "../lib/zLayers.ts";
 import {
   addQuickNote,
   deleteQuickNote,
@@ -214,9 +215,10 @@ export default function QuickNotesPage() {
   const navOffsetPx = !isWideScreen && !navHidden ? BOTTOM_NAV_HEIGHT_PX : 0;
   const bottomInsetPx = selectionMode || searchOpen ? COMPOSER_BOTTOM_GAP_PX : composerInsetPx;
   // 底部避让量单一合成来源（composeBottomInset，见 lib/bottomInset.ts）：bottomInsetPx/navOffsetPx
-  // 仍是本页私有的「此刻底部站着谁」判断，这里只把它们的结果连同键盘高一起喂进合成，
+  // 仍是本页私有的「此刻底部站着谁」判断，这里只把它们的结果连同键盘遮挡量一起喂进合成
+  //（keyboardHeight 是「键盘还挡着多少」，壳自己让过位时为 0，见 useKeyboardHeight）。
   // keyboardHeightPx=0（桌面浏览器 / 键盘收起）时逐值等于合成前的批 1 值，见该文件回归护栏测试。
-  // 内容留白：原口径只有 bottomInsetPx（不含 navOffsetPx），故 navOffsetPx 传 0，只加键盘高。
+  // 内容留白：原口径只有 bottomInsetPx（不含 navOffsetPx），故 navOffsetPx 传 0，只加键盘遮挡量。
   const contentBottomInsetPx = composeBottomInset({ barHeightPx: bottomInsetPx, navOffsetPx: 0, keyboardHeightPx: keyboardHeight });
   // 贴 composer 上沿的浮层（跳到最新按钮 / 错误 / 状态提示）：原口径 navOffsetPx + bottomInsetPx。
   const floatBottomInsetPx = composeBottomInset({ barHeightPx: bottomInsetPx, navOffsetPx, keyboardHeightPx: keyboardHeight });
@@ -1571,10 +1573,12 @@ export default function QuickNotesPage() {
           // 兜底类 [bottom:var(--bottom-offset)]：env() 未定义环境（Firefox 桌面 / 旧 WebView）里 calc
           // 整条失效、内联 bottom 被丢弃，由它还原批次前的纯数值位置（floatBottomInsetPx，原口径
           // navOffsetPx + bottomInsetPx，现走合成并计入键盘高）。
+          // zIndex 必须显式给：列表里的日期气泡是 z-10，z-index:auto 的固定层会被它压住（见下方 form 注释）。
           style={
             {
               "--bottom-offset": `${floatBottomInsetPx}px`,
               bottom: `calc(${floatBottomInsetPx}px + var(--safe-bottom))`,
+              zIndex: Z.backdrop,
             } as CSSProperties
           }
         >
@@ -1589,11 +1593,12 @@ export default function QuickNotesPage() {
         <StatusBanner
           tone="danger"
           className="fixed left-4 right-4 mx-auto max-w-3xl shadow-elev1 [bottom:var(--bottom-offset)]"
-          // 兜底类 [bottom:var(--bottom-offset)]：见「最新」按钮同款注释。
+          // 兜底类 [bottom:var(--bottom-offset)] 与 zIndex：见「最新」按钮同款注释。
           style={
             {
               "--bottom-offset": `${floatBottomInsetPx}px`,
               bottom: `calc(${floatBottomInsetPx}px + var(--safe-bottom))`,
+              zIndex: Z.backdrop,
             } as CSSProperties
           }
         >
@@ -1608,6 +1613,7 @@ export default function QuickNotesPage() {
             {
               "--bottom-offset": `${floatBottomInsetPx}px`,
               bottom: `calc(${floatBottomInsetPx}px + var(--safe-bottom))`,
+              zIndex: Z.backdrop,
             } as CSSProperties
           }
         >
@@ -1622,10 +1628,14 @@ export default function QuickNotesPage() {
           // 兜底类 [bottom:var(--bottom-offset)]：env() 未定义环境（Firefox 桌面 / 旧 WebView）里 calc
           // 整条失效、内联 bottom 被丢弃，由它还原批次前的纯数值位置（composerBarBottomPx，原口径
           // navOffsetPx，现加键盘高——这是用户敲字的输入条本身，键盘弹起须浮到其上方，见文件头注释）。
+          // zIndex 显式给 backdrop(40)、与待办页两条固定条同层：列表里的日期气泡是 z-10、顶栏是 z-20，
+          // 同一层叠上下文里带 z-index 的永远压过 z-index:auto 的，与 DOM 顺序无关——不写就会被气泡
+          // 盖住（闸在 QuickNotesPage.layering.test.tsx）。低于详情抽屉 / 长按菜单 / 置顶面板（modal=50）。
           style={
             {
               "--bottom-offset": `${composerBarBottomPx}px`,
               bottom: `calc(${composerBarBottomPx}px + var(--safe-bottom))`,
+              zIndex: Z.backdrop,
             } as CSSProperties
           }
           onSubmit={(event) => {

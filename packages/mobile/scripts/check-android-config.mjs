@@ -19,9 +19,11 @@ if (!/allowMixedContent:\s*false/.test(capacitorConfig)) {
   throw new Error("Capacitor config must keep android.allowMixedContent false.");
 }
 
-// resize:none 是整套 JS 键盘避让（useKeyboardHeight + composeBottomInset）的前提：webview 若自己
-// reflow 会与 JS 加的键盘高双倍避让。配置漂移（版本升级/复制模板/精简）删了它，全绿也只真机双倍
-// 避让，测不出来——故在这里棘轮住。改动见 docs/evergreen/design-language/invariants.md 第 12 条。
+// resize:none 让 **iOS** 的 webview 不因键盘弹起自己 reflow。**这条只有 iOS 端插件读**——Android 端
+// KeyboardPlugin.java 只读 resizeOnFullScreen、setResizeMode 是 unimplemented()，本断言对安卓行为
+// 没有任何约束力（曾被误当成两平台的双倍避让护栏，真机上安卓照样双倍）。避让正确性现在由网页层
+// 实测承担（useKeyboardHeight 读 visualViewport 的遮挡量，插件高度只兜底）；这条棘轮留着是防配置
+// 漂移改掉 iOS 行为。见 docs/evergreen/design-language/invariants.md 第 12 条。
 if (!/Keyboard:\s*\{\s*resize:\s*(?:KeyboardResize\.None|["']none["'])/.test(capacitorConfig)) {
   throw new Error(
     "[android-config] capacitor.config.ts 的 plugins.Keyboard.resize 必须为 none（KeyboardResize.None）——" +

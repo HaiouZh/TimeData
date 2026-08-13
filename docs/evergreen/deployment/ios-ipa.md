@@ -61,7 +61,9 @@ last-reviewed: 2026-08-04
 
 ### 3.3 Keyboard resize 模式
 
-`packages/mobile/capacitor.config.ts` 的 `plugins.Keyboard.resize` 设为 `KeyboardResize.None`（`@capacitor/keyboard` 插件，两平台共用配置，`capacitor.config.ts` 整体归属见 [deployment/android-apk](android-apk.md#deployment-android-apk-s2)；这条不经过**本文** §3 开头的 `patch-ios.rb` 补丁管线，是构建时随 Capacitor 配置生效的插件设置）：webview 不因键盘弹起自动 reflow。选 `none` 而不是让 webview 自己 resize，是为了与网页层 JS 计算避让保持一致——§3.1 已经移除了系统键盘工具条，贴底输入条与内容留白改由网页层读键盘高度手动抬起（键盘高度单一来源与底部避让量单一合成见 [design-language/invariants](../design-language/invariants.md) 第 12 条）；若 webview 自己 reflow，会与这条 JS 避让重复叠加。
+`packages/mobile/capacitor.config.ts` 的 `plugins.Keyboard.resize` 设为 `KeyboardResize.None`（`@capacitor/keyboard` 插件，两平台共用配置，`capacitor.config.ts` 整体归属见 [deployment/android-apk](android-apk.md#deployment-android-apk-s2)；这条不经过**本文** §3 开头的 `patch-ios.rb` 补丁管线，是构建时随 Capacitor 配置生效的插件设置）：iOS 的 webview 不因键盘弹起自动 reflow。选 `none` 而不是让 webview 自己 resize，是为了与网页层 JS 计算避让保持一致——§3.1 已经移除了系统键盘工具条，贴底输入条与内容留白改由网页层手动抬起（见 [design-language/invariants](../design-language/invariants.md) 第 12 条）。
+
+**这条配置的作用范围比字面小，别当成两平台的护栏**：`resize` 只有 iOS 端读，Android 端插件根本不解析它（`KeyboardPlugin.java` 只读 `resizeOnFullScreen`，`setResizeMode` 是 `unimplemented()`）；iOS 端的 `none` 也只拦住插件自己 resize，拦不住 WebKit 因聚焦输入框而挪视口。故网页层的避让口径不建立在"壳一定不动"之上，而是实测布局视口底部被遮多少（同上第 12 条）。`check-android-config.mjs` 仍棘轮住这条配置，守的是 iOS 侧行为不被配置漂移改掉。
 
 <a id="deployment-ios-ipa-s4"></a>
 

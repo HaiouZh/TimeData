@@ -256,8 +256,9 @@ export function TodoPage() {
       ? 0
       : composerHeightPx;
   // 底部避让量单一合成来源（composeBottomInset，见 lib/bottomInset.ts，与 QuickNotesPage 共用）：
-  // bottomBarHeightPx/navOffsetPx 仍是本页私有的「此刻底部站着谁」判断，这里只把结果连同键盘高
-  // 一起喂进合成。keyboardHeightPx=0（桌面浏览器 / 键盘收起）时 = Math.ceil(bottomBarHeightPx +
+  // bottomBarHeightPx/navOffsetPx 仍是本页私有的「此刻底部站着谁」判断，这里只把结果连同键盘遮挡量
+  // 一起喂进合成（keyboardHeightPx 是「键盘还挡着多少」，壳自己让过位时为 0，见 useKeyboardHeight）。
+  // keyboardHeightPx=0（桌面浏览器 / 键盘收起）时 = Math.ceil(bottomBarHeightPx +
   // navOffsetPx)，与合成前的批 1 值逐值相等，见 bottomInset.test.ts 回归护栏。
   const composerAvoidancePx = composeBottomInset({ barHeightPx: bottomBarHeightPx, navOffsetPx, keyboardHeightPx });
   const contentBottomPaddingPx = Math.max(192, composerAvoidancePx + TODO_COMPOSER_CONTENT_GAP_PX);
