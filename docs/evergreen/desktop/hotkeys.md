@@ -1,6 +1,6 @@
 ---
 type: evergreen
-title: 部署 · Windows 桌面壳 · 全局热键与打点
+title: Windows 桌面壳 · 全局热键与打点
 covers:
 contracts:
   - packages/desktop/src-tauri/src/config.rs
@@ -11,18 +11,18 @@ contracts:
 last-reviewed: 2026-08-13
 ---
 
-# 部署 · Windows 桌面壳 · 全局热键与打点
+# Windows 桌面壳 · 全局热键与打点
 
-> [deployment/windows-desktop](../windows-desktop.md) 的**热键子文档**：桌面壳配置文件、热键注册与分发、打点全程与确认卡、桥的串行队列、navigate 动作，以及两条已知界限。
+> [desktop](../desktop.md) 的**热键子文档**：桌面壳配置文件、热键注册与分发、打点全程与确认卡、桥的串行队列、navigate 动作，以及两条已知界限。
 > 讲什么：`desktop-config.json` 的字段与三态读、两把锁的分工与锁序、punch 的四条出口、串行队列的身份比对、navigate 的校验分工。
-> 不讲什么：壳的构成与窗口/托盘语义、开机自启、速记浮窗与双窗口、构建发布与配置闸（都在 [母文档](../windows-desktop.md)）。
+> 不讲什么：壳的构成与窗口/托盘语义、开机自启、速记浮窗与双窗口、配置闸（都在 [母文档](../desktop.md)），以及构建发布（见 [deployment/windows-desktop](../deployment/windows-desktop.md)）。
 
 ## 承上启下
 
-- **上游**：[母文档](../windows-desktop.md) §1 的 Tauri 壳与 `shell.rs` 纯函数层；Windows 全局热键 API。
-- **下游**：[timeline](../../timeline.md) 的 `punchNow`（热键打点复用它写库）、[categories-settings/settings-catalog](../../categories-settings/settings-catalog.md) 的打点分类设置 key。
+- **上游**：[母文档](../desktop.md) §1 的 Tauri 壳与 `shell.rs` 纯函数层；Windows 全局热键 API。
+- **下游**：[timeline](../timeline.md) 的 `punchNow`（热键打点复用它写库）、[categories-settings/settings-catalog](../categories-settings/settings-catalog.md) 的打点分类设置 key。
 - **契约**：Rust 是 `desktop-config.json` 的唯一写者；事件名 `desktop-hotkey` 只准出自 `hotkeys.rs` 的常量；`desktopPunch` 是桌面打点的唯一写入口并自守上限。
-- **邻居**：[母文档](../windows-desktop.md)、[deployment/ios-ipa](../ios-ipa.md) / [deployment/android-apk](../android-apk.md)（同一条发布链路的另两个平台）。
+- **邻居**：[母文档](../desktop.md)、[deployment/windows-desktop](../deployment/windows-desktop.md)（NSIS 安装包与发布链路）。
 
 ## 1. 配置文件
 
@@ -32,7 +32,7 @@ last-reviewed: 2026-08-13
 |---|---|
 | `hotkeys` | `[{ shortcut, action }]`，出厂空数组（不带默认键位，装好后在设置页自己配） |
 | `punchConfirmHours` | 打点确认阈值（小时），默认 4；非有限值或 `<= 0` 被拒 |
-| `autostartDisabled` | 用户在设置页关过自启的意图记录，见 [母文档](../windows-desktop.md) §3 |
+| `autostartDisabled` | 用户在设置页关过自启的意图记录，见 [母文档](../desktop.md) §3 |
 
 `shortcut` 是 Tauri accelerator 字符串，修饰键顺序由前端 `normalizeShortcutFromKeyboardEvent` 钉死为 `Ctrl→Alt→Shift→Super`，与用户按下的先后无关——存进配置的串必须与回显注册结果时用来匹配的串逐字一致。字母 / 数字必须带修饰键（裸键会让正常打字触发全局动作），F1–F24 例外可裸录。`action` 是带参枚举，成员为 `punch` / `toggleMain` / `capture` / `navigate`。前三个无参；`navigate` 带一个 `target`（内部标签 + `#[serde(flatten)]` 让它直接落位，见 §7）。
 
@@ -42,7 +42,7 @@ last-reviewed: 2026-08-13
 
 落盘走原子写（临时文件 + rename），中途断电不会留下半截 JSON。所有 `load → 改 → save` 形态的 IPC 命令先拿同一把进程内写锁，否则两条并发写命令会交错成「各自基于旧文件改、后写者静默抹掉先写者」。**锁与它保护的资源同在 `config.rs`**：纯读改写走 `update_config`（调用方不必记得拿锁），需要在锁内多做一件事的（`set_hotkeys` 写盘后要注册热键、`set_autostart_enabled` 写盘前要开关系统自启）显式取 `config_write_guard`。字段定义与解析在 `packages/desktop/src-tauri/src/config.rs`。
 
-`autostart-initialized` 标记文件与本文件职责不同（它记「上次注册自启时的 exe 路径」，见 [母文档](../windows-desktop.md) §3），两者互不覆盖。
+`autostart-initialized` 标记文件与本文件职责不同（它记「上次注册自启时的 exe 路径」，见 [母文档](../desktop.md) §3），两者互不覆盖。
 
 ## 2. 注册、分发与排队
 
@@ -53,7 +53,7 @@ last-reviewed: 2026-08-13
 - **热键注册表另有一把锁**，与配置文件写锁分开：注册表有三个写者（`set_hotkeys` / `suspend_hotkeys` / `resume_hotkeys`），而只护配置文件不够——点一次「保存快捷键」这个动作本身就会先 blur 录入框发出 `resume_hotkeys`、再发出 `set_hotkeys`，两条 promise 互不等待。交错时 `resume` 的 `unregister_all` 会落在 `set_hotkeys` 注册完之后，抹掉新表装回旧表：文件里是新表、页面显示全绿、系统里跑的是旧表。碰注册表的函数收 `RegistryGuard` 引用，**漏拿锁编译不过**。前端把录入态的 `suspend` / `resume` 串成一条链是必要配套，但不充分。
 - **拿到锁只是一半：`resume_hotkeys` 的读也必须在注册表锁内。**互斥只保证两条命令不交错，**不保证顺序**——`resume_hotkeys` 若在锁外先 `load_config`，读到的可能是 `set_hotkeys` 落盘前的旧表；等它排到锁，`set_hotkeys` 早已写完文件、装好新表并全部释放，`resume` 这才按旧表 `unregister_all` 加重注册，把上面那个终态原样复现一遍。所以它**先 `lock_registry()` 再 `load_config`**，这两句的顺序不能倒。
     另两个写者各是各的形状，不存在「三个写者同一条锁序」这回事：`suspend_hotkeys` 只拿注册表锁注销，根本不读配置；`set_hotkeys` 在**配置写锁**内走 load→改→全量写回，之后才拿注册表锁按刚落盘的新表重注册——它装的就是自己刚写的那份，不存在读到旧表的窗口。`RegistryGuard` 拦得住「漏拿锁」，拦不住「在锁外先读」——后者没有编译期或测试期的闸，只有这一条与 `resume_hotkeys` 上的注释记着。锁内读不会死锁：`load_config` 只读文件、不碰配置写锁，两把锁之间无环。`main.rs` 的 `setup` 同样是配置在上、锁在下，但它跑在事件循环启动之前，三个写注册表的命令此刻一条都派发不出来，别把这个顺序照搬进命令里。
-- 事件名 `desktop-hotkey` 是 Rust `emit` 与前端 `listen` 之间唯一的约定。**Rust 侧的字面量只准出现在 `hotkeys.rs` 的 `HOTKEY_EVENT` 常量里**（`commands.rs` 有两处 emit，各写一遍字面量时改名极易漏掉补投那处），由配置闸全匹配比对（见 [母文档](../windows-desktop.md) §8）。
+- 事件名 `desktop-hotkey` 是 Rust `emit` 与前端 `listen` 之间唯一的约定。**Rust 侧的字面量只准出现在 `hotkeys.rs` 的 `HOTKEY_EVENT` 常量里**（`commands.rs` 有两处 emit，各写一遍字面量时改名极易漏掉补投那处），由配置闸全匹配比对（见 [母文档](../desktop.md) §7）。
 - WebView 未就绪时 punch 事件在 Rust 侧 **FIFO 排队**；前端桥挂好监听后 `invoke("desktop_ready")`，Rust 收到即按序补投。`pressedAtMs` 随事件走，因此**执行晚了不影响封口时刻**——开机第一秒按打点，记录的就是那一秒。`toggleMain` 不排队。
 - **队列按 label 分组，每组有水位上限，溢出丢最老的**。两个窗口各有各的就绪时刻，共用一个 ready 标志会让先起来的那个替另一个宣布就绪。上限管的是「某个 label 的 WebView 永不就绪」——那种情况下队列会随每次按键无限长，就绪后再一次性突发冲刷；丢最老是因为积压到溢出时，最早那些按键早已失去时效，而最新按下的那次最可能仍是用户想要的。
 - 设置页的快捷键录入框进入录入态时先 `suspend_hotkeys`（注销全部），失焦 / 录完再 `resume_hotkeys`。不挂起的话，录一个本应用已注册的组合时按键会被全局热键吃掉、永远录不上；挂起后不恢复则按一次 Esc 全局热键就永久失效。
@@ -69,7 +69,7 @@ last-reviewed: 2026-08-13
 | 区间时长 > `punchConfirmHours` | 不写，`show_main` 提起主窗口 + 一条通知，显示确认卡「要把 HH:mm–HH:mm 记为打点吗？」[记录 / 算了] |
 | 阈值内 | 调 `punchNow(pressedAt)` 写入，系统通知「已打点 HH:mm–HH:mm」+ 主窗口挂撤销条 |
 
-**每条出口都要有一个不经通知通道的落点**：系统通知两端各吞一次（Rust 的 `let _ = …show()`、桥的 `quietly`），专注助手开着或通知权限关了就是屏幕上零变化。只有通知的话，全新装机必然撞上的那条（[母文档](../windows-desktop.md) §7 首次启动是空数据 → 没配打点分类 → 按热键走第二条）就是不写库、不提窗、无红字，用户会去查热键注册（设置页全绿），真正的原因被静默丢掉。`needsConfirm` 也发通知：Windows 的前台锁会把 `set_focus` 降级成任务栏闪烁，只靠 `show_main` 时这次按键可以是零可观察结果。队列里抛出的失败同样两条路都给（提示条 + 通知），原因文本用 `messageOf` 读——**Tauri 的 invoke 失败 reject 的是字符串**（Rust 的 `Err(String)`），只认 `Error` 的写法会把 Rust 写的原因换成一句无信息的兜底词。
+**每条出口都要有一个不经通知通道的落点**：系统通知两端各吞一次（Rust 的 `let _ = …show()`、桥的 `quietly`），专注助手开着或通知权限关了就是屏幕上零变化。只有通知的话，全新装机必然撞上的那条（[母文档](../desktop.md) §6 首次启动是空数据 → 没配打点分类 → 按热键走第二条）就是不写库、不提窗、无红字，用户会去查热键注册（设置页全绿），真正的原因被静默丢掉。`needsConfirm` 也发通知：Windows 的前台锁会把 `set_focus` 降级成任务栏闪烁，只靠 `show_main` 时这次按键可以是零可观察结果。队列里抛出的失败同样两条路都给（提示条 + 通知），原因文本用 `messageOf` 读——**Tauri 的 invoke 失败 reject 的是字符串**（Rust 的 `Err(String)`），只认 `Error` 的写法会把 Rust 写的原因换成一句无信息的兜底词。
 
 「不写」的两条出口清掉停留中的确认卡：卡上的区间是按下那一刻算的，走到这两条说明当下数据已经不支持它了，留着就是「通知说没时间可记、屏幕上却挂着一张要你记 00:00–12:00 的卡」。
 
@@ -115,7 +115,7 @@ last-reviewed: 2026-08-13
 | 设置二级页（`/settings/desktop`，仅桌面壳渲染入口行） | `packages/client/src/pages/settings/SettingsDesktopPage.tsx` |
 | 速记浮窗与草稿 | `packages/client/src/capture/CaptureApp.tsx`、`captureDraft.ts` |
 
-Rust 单测不在 `pnpm gate` 里（门禁机器没有 Rust 工具链），走 `pnpm check:desktop`——碰了 `packages/desktop/**` 必跑，见 [母文档](../windows-desktop.md) §5.6。
+Rust 单测不在 `pnpm gate` 里（门禁机器没有 Rust 工具链），走 `pnpm check:desktop`——碰了 `packages/desktop/**` 必跑，见 [母文档](../desktop.md) §5.6。
 
 ## 7. navigate：显示主窗口并跳到指定页
 

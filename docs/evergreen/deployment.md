@@ -307,4 +307,4 @@ $env:AUTH_TOKEN='devtoken'; $env:DIARY_VAULT_DIR='D:\OneDrive\Obsidian\Time'; pn
 | [deployment/android-apk](deployment/android-apk.md) | Android 签名 release APK workflow、release keystore、Capacitor / Gradle 版本、安全配置、APK 更新入口与移动端排错 |
 | [deployment/ios-ipa](deployment/ios-ipa.md) | iOS 未签名 IPA workflow、CI 现场生成原生工程、键盘工具条与状态栏补丁、不标 latest 的 Release 契约、SideStore 装机与数据边界 |
 | [deployment/configuration](deployment/configuration.md) | 环境变量表与默认值、CORS 白名单与壳 origin 内置放行、请求头白名单与预检缓存、GeoLite2 与中国段表 |
-| [deployment/windows-desktop](deployment/windows-desktop.md) | Tauri 壳构成、托盘与关窗语义、开机自启判定、全局热键与打点（再下沉一层子文档）、NSIS 安装包发布链路与版本码 semver 转换、桌面壳数据边界 |
+| [deployment/windows-desktop](deployment/windows-desktop.md) | `windows` job、版本码 semver 转换、NSIS 安装包与装机侧排错；壳机制在 [desktop](desktop.md) 主题 |

@@ -140,7 +140,7 @@ CLI 不直接读写 SQLite。命令面见 [cli](cli.md)。
 
 **主内容区**的渲染路径上 iOS 与其余平台只有一处分叉：`AppShell` 按 `Capacitor.getPlatform() === "ios"` 二选一，iOS 渲染保留式页面栈 `components/app-shell/KeptRouteStack.tsx`——钻进子页时上一页不卸载，留在 DOM 里供边缘返回手势（`components/EdgeSwipeBack.tsx`）露出；其余平台仍是单份 `<main>` + `<Routes>`，分叉之外零差异。栈的五条不变式、推进纯函数、保留层灭声与手势状态机见 [architecture/ios-page-stack](architecture/ios-page-stack.md)；构建链路与原生补丁见 [deployment/ios-ipa](deployment/ios-ipa.md)（工程为何不入库见 §4.4）。
 
-`AppShell` 里另有一处与主内容区无关的平台条件：`lib/desktop/shell.ts` 的 `isDesktopShell()` 决定挂不挂 `components/desktop/DesktopBridge.tsx`（桌面壳的全局热键桥与打点反馈层，Tauri API 只在其内部动态 import，三端 bundle 不加载）。该 gate 与设置页「桌面设置」入口是桌面专属代码在 client 里的全部落点，见 [deployment/windows-desktop](deployment/windows-desktop.md)。
+`AppShell` 里另有一处与主内容区无关的平台条件：`lib/desktop/shell.ts` 的 `isDesktopShell()` 决定挂不挂 `components/desktop/DesktopBridge.tsx`（桌面壳的全局热键桥与打点反馈层，Tauri API 只在其内部动态 import，三端 bundle 不加载）。该 gate 与设置页「桌面设置」入口是桌面专属代码在 client 里的全部落点，见 [desktop](desktop.md)。
 
 ### 4.6 iOS 壳：调度器死锁
 
@@ -187,6 +187,7 @@ WKWebView 在 App 挂起时会丢掉 React 调度器赖以排队的 `MessageChan
 | [stats-insights](stats-insights.md) | 域 | 时间统计、洞察模块、统计布局和趋势设置 |
 | [admin](admin.md) | 运维 | `/settings/admin-insights` 只读管理洞察 API、健康检查、异常筛选和基础分析 |
 | [categories-settings](categories-settings.md) | 域 | 分类 schema、分类管理、排序/颜色/删除、sleep/punch 分类设置 |
+| [desktop](desktop.md) | 模块 | Windows 桌面壳机制：窗口托盘、开机自启、速记浮窗与双窗口、全局热键与打点（子文档）、数据边界、配置闸 |
 | [design-language](design-language.md) | 设计 | 语义颜色 token、字体与排版角色、圆角/边框/阴影、自绘控件库、Phosphor 图标、设计语言棘轮 |
 
 ## 7. 子文档索引

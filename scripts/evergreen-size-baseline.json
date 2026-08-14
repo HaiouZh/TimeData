@@ -48,10 +48,7 @@
     "covers": 4
   },
   "docs/evergreen/deployment/windows-desktop.md": {
-    "covers": 6
-  },
-  "docs/evergreen/deployment/windows-desktop/hotkeys.md": {
-    "covers": 0
+    "covers": 2
   },
   "docs/evergreen/design-language.md": {
     "covers": 17
@@ -64,6 +61,12 @@
   },
   "docs/evergreen/design-language/ratchets.md": {
     "covers": 2
+  },
+  "docs/evergreen/desktop.md": {
+    "covers": 5
+  },
+  "docs/evergreen/desktop/hotkeys.md": {
+    "covers": 0
   },
   "docs/evergreen/development.md": {
     "covers": 10
