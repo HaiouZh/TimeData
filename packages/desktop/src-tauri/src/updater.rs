@@ -1,5 +1,4 @@
 //! 更新检查的可判定逻辑。系统调用（真去查、真去下）在 commands.rs，本文件全是纯函数。
-#![allow(dead_code)] // 调用方在后续任务接入，本模块先落地纯函数与单测
 
 /// 每 4 小时查一轮。常驻壳可能数周不重启，只靠启动检查等于不查。
 pub const CHECK_INTERVAL_MS: u64 = 4 * 60 * 60 * 1000;
@@ -49,6 +48,40 @@ pub fn resolve_download_decision(ready_version: Option<&str>, available_version:
         Some(ready) if ready == available_version => DownloadDecision::Skip,
         _ => DownloadDecision::Download,
     }
+}
+
+use serde::Serialize;
+use std::sync::Mutex;
+use tauri_plugin_updater::Update;
+
+/// 更新状态。**下载缓冲随进程走**：`Vec<u8>` 与 `Update` 句柄都只活在内存里，
+/// 应用重启即失效、需重下（约 6 秒）。不做磁盘缓存——省下的那几秒不值一套过期清理逻辑。
+#[derive(Default)]
+pub struct UpdaterInner {
+    pub phase_is_busy: bool,
+    pub ready_version: Option<String>,
+    pub pending: Option<(Update, Vec<u8>)>,
+    pub last_checked_ms: Option<u64>,
+    pub last_error: Option<String>,
+}
+
+pub struct UpdaterState(pub Mutex<UpdaterInner>);
+
+impl Default for UpdaterState {
+    fn default() -> Self {
+        UpdaterState(Mutex::new(UpdaterInner::default()))
+    }
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UpdaterStatusDto {
+    /// "disabled" | "idle" | "busy" | "ready"
+    pub phase: String,
+    pub current_version: String,
+    pub available_version: Option<String>,
+    pub last_checked_ms: Option<u64>,
+    pub last_error: Option<String>,
 }
 
 #[cfg(test)]

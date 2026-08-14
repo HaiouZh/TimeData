@@ -9,12 +9,14 @@ use tauri::{AppHandle, Emitter, Manager, State};
 use tauri_plugin_autostart::ManagerExt;
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
 use tauri_plugin_notification::NotificationExt;
+use tauri_plugin_updater::UpdaterExt;
 
 use crate::config::{self, action_id, DesktopConfig, HotkeyAction, HotkeyBinding};
 use crate::hotkeys::{hotkey_payload, HotkeyDispatcher, HotkeyEventPayload, RegistrationOutcome, HOTKEY_EVENT};
 use crate::shell::{
     self, resolve_toggle_from_window, AncestorRoot, ForegroundRaw, Minimized, SelfHwnd, ToggleAction, Visible,
 };
+use crate::updater::{self, UpdaterState, UpdaterStatusDto};
 
 /// 热键**注册表**写锁。注册表与配置文件是两份独立资源，各要各的锁：
 /// `set_hotkeys` / `suspend_hotkeys` / `resume_hotkeys` 三个命令改的是同一份注册表
@@ -304,4 +306,109 @@ pub fn hide_capture_window(app: AppHandle) {
     if let Some(window) = app.get_webview_window(shell::CAPTURE_WINDOW) {
         let _ = window.hide();
     }
+}
+
+/// dev 构建不查更新：`tauri.conf.json` 里 version 是占位 0.1.0，真版本只在 CI 用
+/// `--config` 注入，dev 下 check() 会恒判「有新版」并开始下载。
+fn updater_enabled() -> bool {
+    !cfg!(debug_assertions)
+}
+
+#[tauri::command]
+pub fn updater_status(app: AppHandle, state: State<'_, UpdaterState>) -> UpdaterStatusDto {
+    let current_version = app.package_info().version.to_string();
+    let enabled = updater_enabled();
+    let inner = state.0.lock().expect("updater state poisoned");
+    let phase = updater::resolve_phase(enabled, inner.phase_is_busy, inner.ready_version.is_some());
+    UpdaterStatusDto {
+        phase: phase.to_string(),
+        current_version,
+        // 禁用时其余三项一律吐空：dev 下它们要么是拿 0.1.0 当基线算出来的假值，要么无意义。
+        available_version: if enabled { inner.ready_version.clone() } else { None },
+        last_checked_ms: if enabled { inner.last_checked_ms } else { None },
+        last_error: if enabled { inner.last_error.clone() } else { None },
+    }
+}
+
+/// 手动检查：绕过节流立即查。前端点「检查更新」走这条。
+#[tauri::command]
+pub async fn updater_check_now(app: AppHandle) -> Result<(), String> {
+    if !updater_enabled() {
+        return Err("开发构建不检查更新".into());
+    }
+    run_update_check(app, true).await;
+    Ok(())
+}
+
+#[tauri::command]
+pub fn updater_install(state: State<'_, UpdaterState>) -> Result<(), String> {
+    let pending = {
+        let mut inner = state.0.lock().expect("updater state poisoned");
+        inner.pending.take()
+    };
+    let (update, bytes) = pending.ok_or_else(|| "没有已下载好的更新".to_string())?;
+    // install() 之后进程立即退出（Windows 安装器限制），安装器带 /ARGS 把应用重新拉起。
+    // 这一行之后的代码正常情况下不会执行。
+    update.install(bytes).map_err(|e| format!("安装更新失败：{e}"))
+}
+
+/// 查一轮：check → 按决策决定下不下 → 落状态。全程静默，失败只记 lastError。
+pub async fn run_update_check(app: AppHandle, manual: bool) {
+    {
+        let state = app.state::<UpdaterState>();
+        let inner = state.0.lock().expect("updater state poisoned");
+        if inner.phase_is_busy {
+            return;
+        }
+        if !updater::should_check(inner.last_checked_ms, now_ms(), updater::CHECK_INTERVAL_MS, manual) {
+            return;
+        }
+    }
+    {
+        let state = app.state::<UpdaterState>();
+        let mut inner = state.0.lock().expect("updater state poisoned");
+        inner.phase_is_busy = true;
+        inner.last_error = None;
+    }
+
+    let outcome = check_and_download(&app).await;
+
+    let state = app.state::<UpdaterState>();
+    let mut inner = state.0.lock().expect("updater state poisoned");
+    inner.phase_is_busy = false;
+    inner.last_checked_ms = Some(now_ms());
+    match outcome {
+        Ok(Some((update, bytes, version))) => {
+            inner.ready_version = Some(version);
+            inner.pending = Some((update, bytes));
+        }
+        Ok(None) => {}
+        // 区分网络失败 / 验签失败 / 解析失败：验签失败几乎必然是 CI 侧配错
+        // （典型为 latest.json 的 signature 字段读空），与网络抖动的处置完全不同。
+        Err(message) => inner.last_error = Some(message),
+    }
+}
+
+async fn check_and_download(
+    app: &AppHandle,
+) -> Result<Option<(tauri_plugin_updater::Update, Vec<u8>, String)>, String> {
+    let updater_handle = app.updater().map_err(|e| format!("更新器初始化失败：{e}"))?;
+    let Some(update) = updater_handle.check().await.map_err(|e| format!("检查更新失败：{e}"))? else {
+        return Ok(None);
+    };
+    let version = update.version.clone();
+    {
+        let state = app.state::<UpdaterState>();
+        let inner = state.0.lock().expect("updater state poisoned");
+        if updater::resolve_download_decision(inner.ready_version.as_deref(), &version)
+            == updater::DownloadDecision::Skip
+        {
+            return Ok(None);
+        }
+    }
+    let bytes = update
+        .download(|_, _| {}, || {})
+        .await
+        .map_err(|e| format!("下载更新失败：{e}"))?;
+    Ok(Some((update, bytes, version)))
 }

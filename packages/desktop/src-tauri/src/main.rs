@@ -16,6 +16,7 @@ use tauri_plugin_autostart::{ManagerExt, MacosLauncher};
 use tauri_plugin_notification::NotificationExt;
 
 use commands::HotkeyState;
+use updater::UpdaterState;
 use shell::{
     resolve_autostart_action, resolve_close_behavior, resolve_tray_action, should_show_on_startup, AutostartAction,
     CloseBehavior, Enabled, TrayAction, UserDisabled,
@@ -32,7 +33,9 @@ fn main() {
         ))
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .plugin(tauri_plugin_notification::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .manage(HotkeyState(Mutex::new(hotkeys::HotkeyDispatcher::new())))
+        .manage(UpdaterState::default())
         .invoke_handler(tauri::generate_handler![
             commands::get_desktop_config,
             commands::set_hotkeys,
@@ -45,6 +48,9 @@ fn main() {
             commands::notify_user,
             commands::show_main,
             commands::hide_capture_window,
+            commands::updater_status,
+            commands::updater_check_now,
+            commands::updater_install,
         ])
         .setup(|app| {
             let show_item = MenuItem::with_id(app, "show", "打开 TimeData", true, None::<&str>)?;
@@ -141,6 +147,19 @@ fn main() {
             }
             if let Some(window) = app.get_webview_window(shell::CAPTURE_WINDOW) {
                 let _ = window.hide();
+            }
+
+            // 启动后延迟首查，之后每 4 小时一轮。跑在 Tauri 自己的 async runtime 上。
+            // 检查与下载全程静默，失败只落 lastError。dev 构建整条不启动。
+            if !cfg!(debug_assertions) {
+                let handle = app.handle().clone();
+                tauri::async_runtime::spawn(async move {
+                    tokio::time::sleep(std::time::Duration::from_millis(updater::STARTUP_DELAY_MS)).await;
+                    loop {
+                        commands::run_update_check(handle.clone(), false).await;
+                        tokio::time::sleep(std::time::Duration::from_millis(updater::CHECK_INTERVAL_MS)).await;
+                    }
+                });
             }
 
             Ok(())
