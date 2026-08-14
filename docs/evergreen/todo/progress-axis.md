@@ -5,7 +5,7 @@ covers:
   - packages/client/src/lib/progressAxis.ts
 contracts:
   - packages/client/src/lib/progressAxis.ts
-last-reviewed: 2026-08-07
+last-reviewed: 2026-08-14
 ---
 
 # 待办 · 推进轴
@@ -18,6 +18,10 @@ last-reviewed: 2026-08-07
 `progressAxis.ts` 把三种实体投影进同一组「推进桶」，产出一个去重后的**推进单元**列表。一行 = 一件在推进的事，不是一条 Task 也不是一条 Track。
 
 **推进轴是第四根轴**，与既有的归属 / 焦点 / 时间三轴（[project-zone](../project-zone.md) §1）**正交**：它不排他、不替代四分区、不改变任何既有投影的输出。一条任务同时出现在待办的今天区和推进面板的「在做」桶里，是正常的。
+
+**`bucketForTrack` 有两个消费者**：本文件内部的 `buildProgressItems`，以及待办页的 `tasks/todoTrackRows.ts`（轨道落进「今天」/「在等」两区）。**停滞阈值与开口步口径共用这一份，落区方不自行判定。** 但两者的**去重口径刻意不同**：`todoTrackRows` 只认 `useTaskTrackIndex` 的 `claimedTrackIds`，不复用 `buildProgressItems` 的 `consumedTrackIds`——后者多一道「被认领的任务本身要进面板」的条件，轨道挂在子任务上时两处判定相反，同一条轨道会既有徽章又独立成行。
+
+**`buildProgressItems` 没有 UI 消费方**：待办页的轨道行走 `todoTrackRows`，不经本函数。
 
 ## 2. 五个桶
 

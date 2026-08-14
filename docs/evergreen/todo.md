@@ -16,6 +16,7 @@ covers:
   - packages/client/src/lib/tasks/placement.ts
   - packages/client/src/lib/tasks/taskSort.ts
   - packages/client/src/lib/tasks/taskRowZone.ts
+  - packages/client/src/lib/tasks/todoTrackRows.ts
   - packages/client/src/lib/tasks/workbenchPrefs.ts
   - packages/client/src/lib/tasks/inboxGrouping.ts
   - packages/client/src/lib/tasks/turnTags.ts
@@ -37,7 +38,7 @@ contracts:
   - packages/shared/src/taskDates.ts
   - packages/shared/src/syncDomains.ts
   - packages/server/src/db/schema.ts
-last-reviewed: 2026-08-05
+last-reviewed: 2026-08-14
 ---
 
 # 待办任务
@@ -190,6 +191,8 @@ agent / CLI (task-done/task-tag)
 ## 深水细节
 
 - **非重复排期任务过期后回到收件箱**不堆进今天；重复任务过期在“今天”区以红色日期呈现（当年 `m月d日`，跨年补年份 `yyyy年m月d日`），无“逾期”前缀。
+- **轨道行进区的两条硬约束**（`todoTrackRows.ts`）：① 轨道行必须渲染在 `TaskList` 的 `SortableContext` **之外**——`verticalListSortingStrategy` 按 DOM 顺序算位置，夹进任务行之间会扰乱落位；`TaskColumn` 的 `extra` 插槽就是为此留的（渲染在 `TaskList` 之后、与之同层）。② 去重只认 `useTaskTrackIndex` 的 `claimedTrackIds`：一条 active 轨道**要么**挂在某任务行的徽章上、**要么**自己独立成行，不会两处都有也不会两处都没有。**刻意不复用** `buildProgressItems` 的 `consumedTrackIds`——那份多一道“被认领的任务本身要进面板”的条件，轨道挂在子任务上时两处判定相反。
+- **`TaskColumn.extra` 在无内容时必须传 `null`**：JSX 元素对象恒为 truthy，哪怕组件内部 `return null`，`empty = tasks.length === 0 && !extra` 也会被顶掉、空态文案不再显示，渲染结果是只剩标题与计数的空白卡片。React 判不了“一个 ReactNode 会不会渲染成空”，只能在**调用点**判。回归闸见 `TodoPage.test.tsx` 的“今天区没有任务也没有轨道时…”。
 
 ## 子文档索引
 
