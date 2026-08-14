@@ -124,8 +124,20 @@ async function waitForTask(id: string, predicate: (task: Task | undefined) => bo
   throw new Error(`Timed out waiting for task ${id}`);
 }
 
+/**
+ * 项目区的文本，**排除组标题行的「下一步」徽章**。
+ *
+ * 那枚徽章会把组内首条未完成成员的标题渲染进标题行、折叠态也显示，于是
+ * 「某条任务渲染出来了没」这件事不能直接读整块 textContent——不排除的话，
+ * 反查（`not.toContain`）会被徽章顶红，正查（等任务行出现）则一开始就成立、等不到真正的展开。
+ * 组标题、计数与目标名都不在徽章里，排除它不影响那些用法。
+ */
 function zoneText(host: HTMLElement): string {
-  return (host.querySelector('[data-section="todo-projects"]') as HTMLElement | null)?.textContent ?? "";
+  const zone = host.querySelector('[data-section="todo-projects"]') as HTMLElement | null;
+  if (zone === null) return "";
+  const clone = zone.cloneNode(true) as HTMLElement;
+  for (const badge of clone.querySelectorAll('[data-testid="project-next-badge"]')) badge.remove();
+  return clone.textContent ?? "";
 }
 
 function hasRemainingOne(text: string): boolean {
@@ -1465,8 +1477,7 @@ describe("TodoPage", () => {
       "project chip in today section",
     );
 
-    const zone = host.querySelector('[data-section="todo-projects"]') as HTMLElement;
-    expect(zone.textContent ?? "").not.toContain("刷墙");
+    expect(zoneText(host)).not.toContain("刷墙");
     // 注：今天区的 <TaskColumn> 本就没接 goalLinkedIds（见下方「红线 3」用例的说明），
     // 这条用例只覆盖 chip 本身的展示与回跳，不覆盖竖条裁剪。
 
@@ -1500,9 +1511,7 @@ describe("TodoPage", () => {
       () => host.querySelector('[data-section="today"] [aria-label="回收件箱 刷墙"]') !== null,
       "今天区行尾「回收件箱」动作",
     );
-    expect((host.querySelector('[data-section="todo-projects"]') as HTMLElement).textContent ?? "").not.toContain(
-      "刷墙",
-    );
+    expect(zoneText(host)).not.toContain("刷墙");
 
     await act(async () => {
       host.querySelector<HTMLButtonElement>('[data-section="today"] [aria-label="回收件箱 刷墙"]')?.click();
@@ -1510,10 +1519,12 @@ describe("TodoPage", () => {
       await Promise.resolve();
     });
 
-    await waitForCondition(() => {
-      const zone = host.querySelector('[data-section="todo-projects"]') as HTMLElement | null;
-      return (zone?.textContent ?? "").includes("刷墙");
-    }, "项目区展开归属组并列出该成员");
+    // 摘掉「下一步」徽章再等：徽章在折叠态就会显示首条未完成成员的标题，
+    // 不摘的话这个条件一开始就成立，等不到「归属组真的展开并列出成员」。
+    await waitForCondition(
+      () => zoneText(host).includes("刷墙"),
+      "项目区展开归属组并列出该成员",
+    );
 
     expect((host.querySelector('[data-section="today"]') as HTMLElement).textContent ?? "").not.toContain("刷墙");
     expect((host.querySelector('[data-section="inbox"]') as HTMLElement).textContent ?? "").not.toContain("刷墙");
