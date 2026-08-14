@@ -1,5 +1,4 @@
 import { z } from "zod";
-import { HealthChartConfigSchema } from "./chartSchemas.js";
 import {
   CategorySchema,
   GoalLayoutPinSchema,
@@ -12,10 +11,6 @@ import {
   TrackSchema,
   TrackStepSchema,
 } from "./entitySchemas.js";
-import {
-  HealthHeartRateSchema, HealthHrvSchema, HealthSleepSchema,
-  HealthStressSchema, HealthRunSchema,
-} from "./healthSchemas.js";
 
 /** 冲突策略：lww=后写赢自动解决，不进冲突 UI；manual=本地有 pending 修改时弹窗问用户。 */
 export type SyncConflictPolicy = "lww" | "manual";
@@ -72,54 +67,6 @@ export const SYNC_DOMAINS: readonly SyncDomainConfig[] = [
     dataSchema: TaskSchema,
     upsertPriority: 45,
     deletePriority: 45,
-    conflictPolicy: "lww",
-    countsInStatus: false,
-  },
-  {
-    table: "health_heart_rate",
-    dataSchema: HealthHeartRateSchema,
-    upsertPriority: 50,
-    deletePriority: 50,
-    conflictPolicy: "lww",
-    countsInStatus: false,
-  },
-  {
-    table: "health_hrv",
-    dataSchema: HealthHrvSchema,
-    upsertPriority: 51,
-    deletePriority: 51,
-    conflictPolicy: "lww",
-    countsInStatus: false,
-  },
-  {
-    table: "health_sleep",
-    dataSchema: HealthSleepSchema,
-    upsertPriority: 52,
-    deletePriority: 52,
-    conflictPolicy: "lww",
-    countsInStatus: false,
-  },
-  {
-    table: "health_stress",
-    dataSchema: HealthStressSchema,
-    upsertPriority: 53,
-    deletePriority: 53,
-    conflictPolicy: "lww",
-    countsInStatus: false,
-  },
-  {
-    table: "runs",
-    dataSchema: HealthRunSchema,
-    upsertPriority: 54,
-    deletePriority: 54,
-    conflictPolicy: "lww",
-    countsInStatus: false,
-  },
-  {
-    table: "health_charts",
-    dataSchema: HealthChartConfigSchema,
-    upsertPriority: 60,
-    deletePriority: 60,
     conflictPolicy: "lww",
     countsInStatus: false,
   },

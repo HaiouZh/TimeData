@@ -52,12 +52,6 @@ const RESET_DOMAIN_SPECS: readonly ResetDomainSpec[] = [
   simpleDomain("sessions"),
   simpleDomain("quick_notes"),
   simpleDomain("settings", "key"),
-  simpleDomain("health_charts"),
-  simpleDomain("health_heart_rate"),
-  simpleDomain("health_hrv"),
-  simpleDomain("health_sleep"),
-  simpleDomain("health_stress"),
-  simpleDomain("runs"),
   {
     tableName: "categories",
     selectRecordIds: (db) => {

@@ -136,12 +136,6 @@ beforeEach(() => {
       value TEXT NOT NULL,
       updated_at TEXT NOT NULL
     );
-    CREATE TABLE IF NOT EXISTS health_heart_rate (id TEXT PRIMARY KEY, date TEXT NOT NULL, resting_heart_rate INTEGER, min_heart_rate INTEGER, max_heart_rate INTEGER, avg_heart_rate INTEGER, last_7_days_avg_resting_heart_rate INTEGER, sync_seq INTEGER, sync_tombstone INTEGER DEFAULT 0, created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
-    CREATE TABLE IF NOT EXISTS health_hrv (id TEXT PRIMARY KEY, date TEXT NOT NULL, hrv_ms INTEGER NOT NULL, sync_seq INTEGER, sync_tombstone INTEGER DEFAULT 0, created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
-    CREATE TABLE IF NOT EXISTS health_sleep (id TEXT PRIMARY KEY, date TEXT NOT NULL, sleep_start TEXT NOT NULL, wake_time TEXT NOT NULL, adjustment_hours INTEGER NOT NULL DEFAULT 0, sync_seq INTEGER, sync_tombstone INTEGER DEFAULT 0, created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
-    CREATE TABLE IF NOT EXISTS health_stress (id TEXT PRIMARY KEY, date TEXT NOT NULL, stress INTEGER NOT NULL, sync_seq INTEGER, sync_tombstone INTEGER DEFAULT 0, created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
-    CREATE TABLE IF NOT EXISTS runs (id TEXT PRIMARY KEY, date TEXT NOT NULL, start_time TEXT NOT NULL, distance_km REAL, duration_seconds INTEGER, average_heart_rate INTEGER, average_cadence REAL, average_stride_m REAL, average_vertical_ratio_percent REAL, average_vertical_oscillation_cm REAL, average_ground_contact_ms INTEGER, type TEXT NOT NULL, city TEXT NOT NULL, sync_seq INTEGER, sync_tombstone INTEGER DEFAULT 0, created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
-    CREATE TABLE IF NOT EXISTS health_charts (id TEXT PRIMARY KEY, type TEXT NOT NULL, sort_order INTEGER NOT NULL DEFAULT 0, config TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
 
   `);
 });
@@ -199,31 +193,6 @@ describe("resetDatabaseConnectionToDefaults", () => {
       VALUES ('session-1', ?, ?, ?)
     `).run(now, now, now);
     db.prepare(`
-      INSERT INTO health_charts (id, type, sort_order, config, created_at, updated_at)
-      VALUES ('chart-1', 'line', 0, '{}', ?, ?)
-    `).run(now, now);
-    db.prepare(`
-      INSERT INTO health_heart_rate
-        (id, date, resting_heart_rate, created_at, updated_at)
-      VALUES ('heart-1', '2026-05-06', 60, ?, ?)
-    `).run(now, now);
-    db.prepare(`
-      INSERT INTO health_hrv (id, date, hrv_ms, created_at, updated_at)
-      VALUES ('hrv-1', '2026-05-06', 50, ?, ?)
-    `).run(now, now);
-    db.prepare(`
-      INSERT INTO health_sleep (id, date, sleep_start, wake_time, adjustment_hours, created_at, updated_at)
-      VALUES ('sleep-1', '2026-05-06', ?, ?, 0, ?, ?)
-    `).run(now, "2026-05-06T08:00:00.000Z", now, now);
-    db.prepare(`
-      INSERT INTO health_stress (id, date, stress, created_at, updated_at)
-      VALUES ('stress-1', '2026-05-06', 20, ?, ?)
-    `).run(now, now);
-    db.prepare(`
-      INSERT INTO runs (id, date, start_time, type, city, created_at, updated_at)
-      VALUES ('run-1', '2026-05-06', ?, 'run', 'Taipei', ?, ?)
-    `).run(now, now, now);
-    db.prepare(`
       INSERT INTO sync_seq (table_name, record_id, action, created_at)
       VALUES ('categories', 'historic-record', 'delete', ?)
     `).run(now);
@@ -268,12 +237,6 @@ describe("resetDatabaseConnectionToDefaults", () => {
       "quick_notes",
       "tasks",
       "sessions",
-      "health_heart_rate",
-      "health_hrv",
-      "health_sleep",
-      "health_stress",
-      "runs",
-      "health_charts",
       "track_steps",
       "tracks",
       "goals",
@@ -298,12 +261,6 @@ describe("resetDatabaseConnectionToDefaults", () => {
         "quick_notes:note-1",
         "tasks:task-1",
         "sessions:session-1",
-        "health_heart_rate:heart-1",
-        "health_hrv:hrv-1",
-        "health_sleep:sleep-1",
-        "health_stress:stress-1",
-        "runs:run-1",
-        "health_charts:chart-1",
         "track_steps:step-1",
         "tracks:track-1",
         "goals:goal-1",

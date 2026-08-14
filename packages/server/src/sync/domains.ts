@@ -23,15 +23,6 @@ import {
   rowToSetting,
   rowToTask,
 } from "../lib/db-rows.js";
-import {
-  type HealthHeartRateRow, type HealthHrvRow, type HealthSleepRow,
-  type HealthStressRow, type HealthRunRow,
-  rowToHealthHeartRate, rowToHealthHrv, rowToHealthSleep,
-  rowToHealthStress, rowToHealthRun,
-  healthHeartRateToRow, healthHrvToRow, healthSleepToRow,
-  healthStressToRow, healthRunToRow,
-} from "../lib/healthRows.js";
-import { type HealthChartRow, rowToHealthChart, healthChartToRow } from "../lib/chartRows.js";
 import { type GoalRow, goalToRow, rowToGoal } from "../lib/goal-rows.js";
 import {
   type GoalLayoutPinRow,
@@ -622,12 +613,6 @@ export const SERVER_SYNC_DOMAINS: Record<string, ServerDomainHooks> = {
     },
     readRecord: readTaskRecord,
   },
-  health_heart_rate: simpleLwwDomain<HealthHeartRateRow>("health_heart_rate", healthHeartRateToRow, rowToHealthHeartRate),
-  health_hrv: simpleLwwDomain<HealthHrvRow>("health_hrv", healthHrvToRow, rowToHealthHrv),
-  health_sleep: simpleLwwDomain<HealthSleepRow>("health_sleep", healthSleepToRow, rowToHealthSleep),
-  health_stress: simpleLwwDomain<HealthStressRow>("health_stress", healthStressToRow, rowToHealthStress),
-  runs: simpleLwwDomain<HealthRunRow>("runs", healthRunToRow, rowToHealthRun),
-  health_charts: simpleLwwDomain<HealthChartRow>("health_charts", healthChartToRow, rowToHealthChart),
   tracks: {
     lww: { idColumn: "id", toRow: (data) => trackToRow(data as never), guardedColumns: ["status"] },
     readRecord: readTrackRecord,

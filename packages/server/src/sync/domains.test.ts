@@ -27,13 +27,7 @@ describe("server sync domains", () => {
       "categories",
       "goal_layout_pins",
       "goals",
-      "health_charts",
-      "health_heart_rate",
-      "health_hrv",
-      "health_sleep",
-      "health_stress",
       "quick_notes",
-      "runs",
       "sessions",
       "settings",
       "tasks",
@@ -48,11 +42,6 @@ describe("server sync domains", () => {
     expect(getServerDomain("quick_notes").apply).toBeUndefined();
     expect(getServerDomain("settings").lww).toBeDefined();
     expect(getServerDomain("quick_notes").lww).toBeDefined();
-  });
-
-  it("registers health_charts on the generic lww path", () => {
-    expect(getServerDomain("health_charts").apply).toBeUndefined();
-    expect(getServerDomain("health_charts").lww).toBeDefined();
   });
 
   it("registers tracks and track_steps on the generic lww path", () => {

@@ -10,12 +10,6 @@ describe("sync domain registry", () => {
       "settings",
       "quick_notes",
       "tasks",
-      "health_heart_rate",
-      "health_hrv",
-      "health_sleep",
-      "health_stress",
-      "runs",
-      "health_charts",
       "tracks",
       "track_steps",
       "goals",
@@ -47,10 +41,10 @@ describe("sync domain registry", () => {
     }
   });
 
-  it("registers health_charts as lww domain", () => {
-    const domain = SYNC_DOMAINS.find((d) => d.table === "health_charts");
-    expect(domain).toBeDefined();
-    expect(domain?.conflictPolicy).toBe("lww");
+  it("no longer registers any health domain", () => {
+    // 健康数据层已退役（ADR 0031）。登记簿是封闭契约：域一旦删除就不该悄悄回来，
+    // 加回任何一个都必须是显式决策，会在这里先红一次。
+    expect(SYNC_TABLE_NAMES.filter((table) => table.startsWith("health_") || table === "runs")).toEqual([]);
   });
 });
 

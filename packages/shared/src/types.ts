@@ -25,8 +25,6 @@ import type {
   TrackStepSchema,
   RefSchema,
 } from "./schemas.js";
-import type { HealthChartConfig } from "./chartSchemas.js";
-import type { HealthHeartRate, HealthHrv, HealthSleep, HealthStress, HealthRun } from "./healthSchemas.js";
 import type { TASK_DELETE_REASONS } from "./syncDomains.js";
 
 export type TaskDeleteReason = (typeof TASK_DELETE_REASONS)[number];
@@ -111,18 +109,6 @@ export type SyncChange =
   | SyncDeleteChange<"quick_notes">
   | (SyncUpsertChange<"tasks", Task> & { op?: TaskCompletionOp })
   | (SyncDeleteChange<"tasks"> & { deleteReason?: TaskDeleteReason })
-  | SyncUpsertChange<"health_heart_rate", HealthHeartRate>
-  | SyncDeleteChange<"health_heart_rate">
-  | SyncUpsertChange<"health_hrv", HealthHrv>
-  | SyncDeleteChange<"health_hrv">
-  | SyncUpsertChange<"health_sleep", HealthSleep>
-  | SyncDeleteChange<"health_sleep">
-  | SyncUpsertChange<"health_stress", HealthStress>
-  | SyncDeleteChange<"health_stress">
-  | SyncUpsertChange<"runs", HealthRun>
-  | SyncDeleteChange<"runs">
-  | SyncUpsertChange<"health_charts", HealthChartConfig>
-  | SyncDeleteChange<"health_charts">
   | (SyncUpsertChange<"tracks", Track> & { op?: TrackStatusOp })
   | SyncDeleteChange<"tracks">
   | SyncUpsertChange<"track_steps", TrackStep>
@@ -262,4 +248,3 @@ export type SyncReasonCategory =
   | "conflict" // server_version_newer_or_same — 进入冲突流程
   | "unknown";
 
-export type { HealthHeartRate, HealthHrv, HealthSleep, HealthStress, HealthRun } from "./healthSchemas.js";
