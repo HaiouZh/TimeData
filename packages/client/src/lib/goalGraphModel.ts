@@ -80,8 +80,14 @@ export function buildGoalGraphModel(overview: GoalOverview): GoalGraphModel {
     hasDependency: false,
   });
 
+  // 已完成成员不画节点，与项目区「已完成成员只折成计数」同口径；summary.completed 照常统计，信息不丢。
+  const hiddenKeys = new Set(
+    overview.sections.completed.map((member) => goalMemberKey({ kind: member.kind, id: member.id })),
+  );
+
   for (const member of overview.members) {
     const ref: GoalMemberRef = { kind: member.kind, id: member.id };
+    if (hiddenKeys.has(goalMemberKey(ref))) continue;
     nodesById.set(goalMemberKey(ref), {
       id: goalMemberKey(ref),
       kind: member.kind,
@@ -97,11 +103,14 @@ export function buildGoalGraphModel(overview: GoalOverview): GoalGraphModel {
   }
 
   for (const ref of overview.goal.members ?? []) {
+    if (hiddenKeys.has(goalMemberKey(ref))) continue;
     const node = ensureGraphNode(nodesById, ref);
     edges.push(makeEdge("tether", GOAL_NODE_ID, node.id));
   }
 
   for (const prerequisite of overview.goal.prerequisites ?? []) {
+    if (hiddenKeys.has(goalMemberKey(prerequisite.blocker))) continue;
+    if (hiddenKeys.has(goalMemberKey(prerequisite.blocked))) continue;
     const blockerNode = ensureGraphNode(nodesById, prerequisite.blocker);
     const blockedNode = ensureGraphNode(nodesById, prerequisite.blocked);
     const blockerId = blockerNode.id;

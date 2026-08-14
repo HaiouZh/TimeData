@@ -221,7 +221,7 @@ describe("goalGraphModel", () => {
     ]);
   });
 
-  it("marks completed and parked members with their source status", () => {
+  it("已完成成员不出节点，parked 成员照常带 source status", () => {
     const overview = buildGoalOverview(
       goal({
         members: [
@@ -236,6 +236,7 @@ describe("goalGraphModel", () => {
 
     const model = buildGoalGraphModel(overview);
 
+    // summary 照常统计已完成成员——隐藏的只是节点，计数信息不丢。
     expect(model.summary).toEqual({ ready: 1, blocked: 0, completed: 1 });
     expect(model.nodes).toEqual([
       {
@@ -247,14 +248,6 @@ describe("goalGraphModel", () => {
         hasDependency: false,
       },
       {
-        id: "task:task-done",
-        kind: "task",
-        status: "completed",
-        title: "已完成",
-        ref: { kind: "task", id: "task-done" },
-        hasDependency: false,
-      },
-      {
         id: "track:track-parked",
         kind: "track",
         status: "parked",
@@ -263,5 +256,34 @@ describe("goalGraphModel", () => {
         hasDependency: false,
       },
     ]);
+  });
+
+  it("已完成成员参与的前置边不画，也不被 ensureGraphNode 变成 ghost", () => {
+    const overview = buildGoalOverview(
+      goal({
+        members: [
+          { kind: "task", id: "task-done" },
+          { kind: "task", id: "task-open" },
+        ],
+        prerequisites: [
+          {
+            blocker: { kind: "task", id: "task-done" },
+            blocked: { kind: "task", id: "task-open" },
+          },
+        ],
+      }),
+      [
+        task({ id: "task-done", title: "已完成", done: true, completedAt: "2026-06-22T09:00:00.000Z" }),
+        task({ id: "task-open", title: "未完成" }),
+      ],
+      [],
+      [],
+    );
+
+    const model = buildGoalGraphModel(overview);
+
+    expect(model.nodes.some((node) => node.id === "task:task-done")).toBe(false);
+    expect(model.nodes.some((node) => node.kind === "ghost")).toBe(false);
+    expect(model.edges.some((edge) => edge.kind === "prerequisite" || edge.kind === "broken-prerequisite")).toBe(false);
   });
 });
