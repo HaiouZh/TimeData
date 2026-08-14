@@ -124,7 +124,7 @@ last-reviewed: 2026-08-10
 | `POST /api/sync/force-push/prepare` | 生成短时确认 token，返回当前服务端摘要 |
 | `POST /api/sync/force-push` | token + 短语 `OVERWRITE_SERVER` 正确时，用客户端核心同步表覆盖服务器 |
 
-force-push 是**五个覆盖域的差异替换**：shared schema/跨记录业务校验 → 受保护 server backup → 备份后 `latestSeq` 乐观校验 → 在单事务内把 `categories`、`time_entries`、可选 `settings`、`quick_notes`、`tasks` 的快照转成 create/update/delete changes，经正常 resolver 写业务表、tombstone 与只增 `sync_seq` → 审计 → SSE。父分类删除复用一次服务端级联，不重复生成子分类/entry delete change。全局账本和全域 tombstone 不清空，健康、轨道、目标、目标钉点等非覆盖域数据/历史删除保持原样，旧游标设备可增量收到覆盖域删除。
+force-push 是**五个覆盖域的差异替换**：shared schema/跨记录业务校验 → 受保护 server backup → 备份后 `latestSeq` 乐观校验 → 在单事务内把 `categories`、`time_entries`、可选 `settings`、`quick_notes`、`tasks` 的快照转成 create/update/delete changes，经正常 resolver 写业务表、tombstone 与只增 `sync_seq` → 审计 → SSE。父分类删除复用一次服务端级联，不重复生成子分类/entry delete change。全局账本和全域 tombstone 不清空，轨道、目标、目标钉点等非覆盖域数据/历史删除保持原样，旧游标设备可增量收到覆盖域删除。
 
 客户端 force-push 在同一只读 Dexie transaction 内捕获五域快照和当时的 pending 日志 ID；成功后只确认这组 ID。请求期间新增日志和非覆盖域日志必须保留。该路径是用户确认的低频冷路径，允许为差异计算扫描五个覆盖表；普通增量热路径不增加扫描或网络往返。完整决策见 [ADR 0019](../../adr/0019-destructive-sync-operations-preserve-ledger.md)。
 

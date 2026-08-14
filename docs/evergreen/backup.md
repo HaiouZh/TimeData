@@ -68,8 +68,7 @@ TimeData 现有三种备份/可恢复文件：
     "track_steps": [/* TrackStep[] */],
     "goals": [/* Goal[] */],
     "goal_layout_pins": [/* GoalLayoutPin[] */],
-    "sessions": [/* Session[] */],
-    "health_heart_rate": [/* ... */], "health_charts": []
+    "sessions": [/* Session[] */]
     /* 键集合由 BACKUP_BUNDLED_DOMAINS 派生；完整导出写齐全部 bundled 域，空的也写 [] */
   }
 }
@@ -83,6 +82,8 @@ TimeData 现有三种备份/可恢复文件：
 - `"excluded"`：`settings` 不进备份。**缺省角色也是 `excluded`**——新域漏标 `backup` 就静默不进备份，且没有任何闸会报。
 
 `timeFormat` 恢复前必须存在且值只能是 `"utc"`。`timeEntries` 的 `startTime` / `endTime` 必须是带毫秒和 `Z` 的 UTC ISO 字符串且 `endTime > startTime`。任务时间字段同样 UTC `.sssZ` 或 `null`，重复规则满足 shared `RecurrenceSchema`；终止式重复的 `count` / `until` 随 `recurrence` JSON 保存，`completedCount` 记录已完成次数，`weight` 记录想法重力权重，`completedAt` 记录普通任务完成时间，`tags` 保存自由标签数组，`ruleId` / `skipped` 是 occurrence 实体化地基字段，`sessionId` 是手头软会话的归属指针。缺省会归一为 `completedCount=0`、`weight=0`、`completedAt=null`、`tags=[]`、`ruleId=null`、`skipped=false`、`sessionId=null`。分类树只支持两级结构。
+
+**备份里的未知域**：导入按**当前**登记簿逐域取键（`validateBackup` 遍历 `BACKUP_BUNDLED_DOMAINS`），备份文件里当前登记簿没有的键不会被读到——静默忽略，不报错也不中断导入。**因此域退役不构成备份格式的破坏性变更**：早先导出的备份仍可导入，其中已退役域的段落不落地（判例见 [ADR 0031](../adr/0031-delete-health-data-layer.md)）。
 
 **域的"缺省 vs 存在"语义（恢复安全关键）**：`domains` 里**缺省**的域恢复时**原样保留本地数据**，不清空；只有**存在**（哪怕是 `[]`）的域才会被清空+覆盖。完整导出始终写齐全部 bundled 域（空的也写 `[]`），所以完整恢复语义不变。
 

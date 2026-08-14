@@ -45,7 +45,7 @@ TimeData 是个人时间记录 PWA：
 - 本地优先：Web 端先写 IndexedDB，再异步同步。
 - 自托管：服务端是 Hono + SQLite，负责最终校验、写入、同步账本和受控 API。
 - 多入口：Web/PWA、CLI、Android / iOS 的 Capacitor 壳、Windows 的 Tauri 壳；授权 agent 只能经服务端受控 API 写入。
-- 数据域：时间记录、分类/设置、速记、待办、任务轨道、目标层、健康数据（仅数据层，无 UI）、统计/洞察、同步、备份。
+- 数据域：时间记录、分类/设置、速记、待办、任务轨道、目标层、统计/洞察、同步、备份。
 
 **不做**：多用户、协作、SaaS、复杂权限、AI 直接写 DB 或备份/导出文件。
 
@@ -72,7 +72,7 @@ desktop  Tauri Windows 壳，前端产物同样取 client/dist
 
 Web 端用户写入时，业务表 mutation 与 `syncLog(synced=0)` 必须在同一个 Dexie transaction 内完成。随后 `regularSync()` 把待同步变更 push 到 server，server 校验并分配 `sync_seq` / `updated_at`，其他设备按 seq pull。
 
-时间记录与时间轴见 [timeline](timeline.md)；速记见 [quick-notes](quick-notes.md)；待办见 [todo](todo.md)；任务轨道见 [tracks](tracks.md)；目标层见 [goals](goals.md)；分类与设置见 [categories-settings](categories-settings.md)；健康数据表与同步域见 [data-model](data-model.md#data-model-s1-1)。
+时间记录与时间轴见 [timeline](timeline.md)；速记见 [quick-notes](quick-notes.md)；待办见 [todo](todo.md)；任务轨道见 [tracks](tracks.md)；目标层见 [goals](goals.md)；分类与设置见 [categories-settings](categories-settings.md)。
 
 ### 3.2 服务端受控写入
 
@@ -88,7 +88,7 @@ CLI 写时间记录见 [cli](cli.md) 与 [timeline](timeline.md)；agent 投递�
 
 ### 3.4 统计与终端视图
 
-统计页只读 `timeEntries/categories/settings`，写入仅限 UI 设置。时间统计与洞察见 [stats-insights](stats-insights.md)。**没有健康仪表盘**：健康 Dexie 表只有数据层、无 UI 消费（见 [data-model](data-model.md#data-model-s1-1)），体征/跑步由独立项目 run-track 承担（决策见 [ADR 0024](../adr/0024-retire-health-subsystem.md)）。
+统计页只读 `timeEntries/categories/settings`，写入仅限 UI 设置。时间统计与洞察见 [stats-insights](stats-insights.md)。**没有健康数据**：本仓不含体征与跑步数据——没有页面、没有采集管线、没有表与同步域（决策见 [ADR 0024](../adr/0024-retire-health-subsystem.md) 与 [ADR 0031](../adr/0031-delete-health-data-layer.md)）；这类数据由独立项目 run-track 承担。
 
 ## 4. 启动顺序
 

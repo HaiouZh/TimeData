@@ -34,7 +34,7 @@ last-reviewed: 2026-08-07
 - **上游**：客户端数据层 `lib/tracks.ts` 可本地写入；授权 agent 只能经服务端 `/api/agent/tracks*` 受控端点写入。
 - **下游**：`tracks` / `track_steps` 走普通 [sync](sync.md) push/pull、完整 [backup](backup.md)，未来监控面读取它们渲染状态线；[goals](goals.md) 可通过 `Goal.members` typed 引用把轨道收编为目标成员。
 - **契约**：字段 schema 在 `packages/shared/src/entitySchemas.ts`；跨域表名、时间、ID 与 Dexie/SQLite 映射见 [data-model](data-model.md)。
-- **邻居**：[todo](todo.md) 是操作台，轨道只是用 `refs` 指过去；[goals](goals.md) 只读轨道状态与步骤活动做目标 roll-up；[timeline](timeline.md) 是真实时间记录域，轨道步骤的历时不写入 `time_entries`；`runs` 等健康表数据也只被 `refs` 指向（健康表只有数据层、无 UI，见 [data-model](data-model.md#data-model-s1-1)）。
+- **邻居**：[todo](todo.md) 是操作台，轨道只是用 `refs` 指过去；[goals](goals.md) 只读轨道状态与步骤活动做目标 roll-up；[timeline](timeline.md) 是真实时间记录域，轨道步骤的历时不写入 `time_entries`。
 
 ## 1. 数据模型
 

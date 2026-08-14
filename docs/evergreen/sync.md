@@ -115,7 +115,7 @@ Android 原生同步通道是显式、窄范围的 transport 选择：只有 `Ca
 - `syncPull({mode: 'incremental' | 'repair'})`：手动拉取。`incremental` 用本地读数；`repair` 用 `sinceSeq: 0` 全量，但任何仍有 pending 的本地记录/分类级联整组都不覆盖；已完整且本地更新的 entry 继续保留。
 - `syncForceReplace()`：清空本地后按 `sinceSeq: 0` 整库覆盖，同时清空本地 `syncLog`，并用返回的 `latestSeq` 推进读数。
 - `getSyncHealth()`：contentHash 深度体检 + 建议；本地 content hash 只 hash `categories`、`time_entries`、`quick_notes`、`tasks`，不覆盖 `tracks` / `track_steps` / `goals` / `goal_layout_pins` / `sessions`，主要作为诊断对照；服务端 `/api/sync/status` 的 `contentHash` 仍是全域 commit hash。公开计数字段仍只返回分类、时间记录和速记数量。
-- `syncForcePushToServer()`：确认后把本地核心同步表覆盖到服务器；当前只包含 `categories`、`time_entries`、`settings`、`quick_notes`、`tasks`，不包含健康原始数据、`health_charts`、任务轨道、`goals`、`goal_layout_pins` 或 `sessions`。目标成员关系属于 `Goal.members`，因此不随 tasks force-push 携带；`Task.sessionId` 随 `tasks` 一起搬运，但 `sessions` 本身不在兜底范围内（见 [todo/at-hand](todo/at-hand.md) 关于悬空 sessionId 的说明）。
+- `syncForcePushToServer()`：确认后把本地核心同步表覆盖到服务器；当前只包含 `categories`、`time_entries`、`settings`、`quick_notes`、`tasks`，不包含任务轨道、`goals`、`goal_layout_pins` 或 `sessions`。目标成员关系属于 `Goal.members`，因此不随 tasks force-push 携带；`Task.sessionId` 随 `tasks` 一起搬运，但 `sessions` 本身不在兜底范围内（见 [todo/at-hand](todo/at-hand.md) 关于悬空 sessionId 的说明）。
 
 ## 1.5 实时通道与调度器（已外提）
 

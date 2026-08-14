@@ -9,14 +9,10 @@ covers:
   - packages/shared/src/taskCompletion.ts
   - packages/shared/src/syncDomains.ts
   - packages/shared/src/constants.ts
-  - packages/shared/src/healthSchemas.ts
-  - packages/shared/src/chartSchemas.ts
   - packages/server/src/db/schema.ts
   - packages/server/src/db/connection.ts
   - packages/server/src/db/reset.ts
   - packages/server/src/lib/db-rows.ts
-  - packages/server/src/lib/healthRows.ts
-  - packages/server/src/lib/chartRows.ts
   - packages/server/src/lib/serverConfig.ts
   - packages/client/src/db/index.ts
   - packages/client/src/db/schemaNormalization.ts
@@ -27,11 +23,9 @@ contracts:
   - packages/shared/src/entitySchemas.ts
   - packages/shared/src/syncDomains.ts
   - packages/shared/src/constants.ts
-  - packages/shared/src/healthSchemas.ts
-  - packages/shared/src/chartSchemas.ts
   - packages/server/src/db/schema.ts
   - packages/client/src/db/index.ts
-last-reviewed: 2026-08-10
+last-reviewed: 2026-08-14
 ---
 
 # 数据模型与契约
@@ -54,16 +48,8 @@ last-reviewed: 2026-08-10
 | 手头软会话 / `Session` | `sessions` | `sessions` | [todo/at-hand](todo/at-hand.md) §Schema |
 | 同步设置 / `Setting` | `settings` | `settings` | 本文 §2；具体 key 见对应域 |
 | 客户端同步日志 / `SyncLogEntry` | 无 | `syncLog` | 本文 §3 |
-| 健康原始数据（数据层，无 UI 消费） | `health_heart_rate` / `health_hrv` / `health_sleep` / `health_stress` / `runs` | `healthHeartRate` / `healthHrv` / `healthSleep` / `healthStress` / `runs` | `shared/src/healthSchemas.ts`；本文 §1.1 |
-| 健康图表配置（数据层，无 UI 消费） | `health_charts` | `healthCharts` | `shared/src/chartSchemas.ts`；本文 §1.1 |
 
-<a id="data-model-s1-1"></a>
-
-### 1.1 健康域：只剩数据层
-
-健康子系统**只有数据层**：没有健康统计页、图表配置面板、佳明设置页、指标/块引擎，也没有服务端抓取管线；体征/跑步数据由独立项目 run-track 采集。这是有意的退役，决策、回溯点与被否决的替代方案见 [ADR 0024](../adr/0024-retire-health-subsystem.md)。
-
-**数据层完整保留**：上述 6 张表（SQLite + Dexie）、`healthSchemas.ts` / `chartSchemas.ts` 字段 schema、`healthRows.ts` / `chartRows.ts` 行映射、6 个同步域（见 [sync/domain-registry](sync/domain-registry.md)）与 backup bundled 域（见 [backup](backup.md)）。历史数据在库里，随同步和备份流转，只是没有 UI 消费。**改这些表/域仍按正常 schema 变更红线走**（见 AGENTS.md「边界 · Schema / 字段变更」）。
+本仓不承载体征与跑步数据：没有对应的表、字段 schema、行映射或同步域。这类数据归独立项目 run-track（决策见 [ADR 0024](../adr/0024-retire-health-subsystem.md) 与 [ADR 0031](../adr/0031-delete-health-data-layer.md)）。
 
 服务端辅助表：
 
@@ -117,11 +103,11 @@ type SyncLogEntry = {
 };
 ```
 
-`tableName` 来自 `packages/shared/src/syncDomains.ts` 的封闭登记簿，当前包括 `categories`、`time_entries`、`settings`、`quick_notes`、`tasks`、`tracks`、`track_steps`、`goals`、`goal_layout_pins`、`health_charts`、`sessions` 与健康原始数据域。Dexie 使用 `[tableName+synced]` 复合索引；`op` 与 `deleteReason` 都不是索引字段，加入后无需升 Dexie 版本。同步实体写入与对应 `syncLog` 追写必须在同一个 transaction 内完成；轨道父子删除由客户端数据层显式写每条 `track_steps/delete`，不能依赖数据库级联。`tasks` 完成语义和 `tracks.status` 都用可选 `op` 授权守卫列更新。
+`tableName` 来自 `packages/shared/src/syncDomains.ts` 的封闭登记簿，当前包括 `categories`、`time_entries`、`settings`、`quick_notes`、`tasks`、`tracks`、`track_steps`、`goals`、`goal_layout_pins` 与 `sessions`。Dexie 使用 `[tableName+synced]` 复合索引；`op` 与 `deleteReason` 都不是索引字段，加入后无需升 Dexie 版本。同步实体写入与对应 `syncLog` 追写必须在同一个 transaction 内完成；轨道父子删除由客户端数据层显式写每条 `track_steps/delete`，不能依赖数据库级联。`tasks` 完成语义和 `tracks.status` 都用可选 `op` 授权守卫列更新。
 
 ## 4. SyncChange / SyncPushOutcome
 
-`SyncChange` 是按 table/action 区分的判别联合；运行时 schema 由 `packages/shared/src/syncDomains.ts` 的登记簿生成，静态类型在 `packages/shared/src/types.ts` 手工维护。新增同步域必须同时改共享登记簿、服务端登记簿、类型、测试和文档。当前静态联合已覆盖 `health_charts`、`tracks`、`track_steps`、`goals`、`goal_layout_pins` 与 `sessions`；运行时登记簿与手工类型必须保持一致，不得分叉。
+`SyncChange` 是按 table/action 区分的判别联合；运行时 schema 由 `packages/shared/src/syncDomains.ts` 的登记簿生成，静态类型在 `packages/shared/src/types.ts` 手工维护。新增同步域必须同时改共享登记簿、服务端登记簿、类型、测试和文档。当前静态联合已覆盖 `tracks`、`track_steps`、`goals`、`goal_layout_pins` 与 `sessions`；运行时登记簿与手工类型必须保持一致，不得分叉。
 
 ```ts
 type SyncChange =
@@ -170,7 +156,7 @@ type SyncChange =
 
 ## 5. 全量同步兜底契约
 
-全量推送兜底当前只覆盖核心同步表：`categories`、`timeEntries`、可选 `settings`、`quickNotes`、`tasks`。服务端在导入前校验分类/记录/速记/任务的 ID 唯一性、父分类存在、记录引用分类存在、时间范围合法、记录之间不重叠等规则；随后把快照转成五域 create/update/delete 差异，经正常 resolver 追加只增账本。健康原始数据、`health_charts`、`tracks`、`track_steps`、`goals`、`goal_layout_pins` 与 `sessions` 不在 force-push 契约内，业务行、tombstone 与 seq 均保持原样。目标成员关系只存在于 `Goal.members`，因此 force-push 的 tasks payload 不携带目标归属。
+全量推送兜底当前只覆盖核心同步表：`categories`、`timeEntries`、可选 `settings`、`quickNotes`、`tasks`。服务端在导入前校验分类/记录/速记/任务的 ID 唯一性、父分类存在、记录引用分类存在、时间范围合法、记录之间不重叠等规则；随后把快照转成五域 create/update/delete 差异，经正常 resolver 追加只增账本。`tracks`、`track_steps`、`goals`、`goal_layout_pins` 与 `sessions` 不在 force-push 契约内，业务行、tombstone 与 seq 均保持原样。目标成员关系只存在于 `Goal.members`，因此 force-push 的 tasks payload 不携带目标归属。
 
 共享类型：
 
@@ -222,7 +208,7 @@ SQL 使用 `snake_case`，JS 使用 `camelCase`。没有 ORM，跨边界时手�
 
 推不出来的才列在这里：
 
-**JSON 字符串列**：`recurrence`、`tasks.tags`、`tracks.refs`、`track_steps.tags`、`track_steps.refs`、`goals.members`、`goals.prerequisites`、`health_charts.config`。
+**JSON 字符串列**：`recurrence`、`tasks.tags`、`tracks.refs`、`track_steps.tags`、`track_steps.refs`、`goals.members`、`goals.prerequisites`。
 
 **布尔以 0/1 存储**：`tasks.done`、`tasks.skipped`、`categories.is_archived`、`quick_notes.pinned` 等。
 
@@ -232,7 +218,7 @@ SQL 使用 `snake_case`，JS 使用 `camelCase`。没有 ORM，跨边界时手�
 
 **语义窄于列名**：`track_steps.edited_at` 映射为 `TrackStep.editedAt?`，只表示 user 步正文被编辑过，不参与索引。
 
-**列名不同名**（规则推不出，逐个记）：`health_charts.sort_order` → `HealthChartConfig.order`（`lib/chartRows.ts` 读写两侧都做这层改名），其余表的 `sort_order` 照常映射 `sortOrder`。
+**列名映射**：所有表的 `sort_order` 一律映射 `sortOrder`，无例外。
 
 `tasks.goal_id` / `tracks.goal_id` 不存在——目标归属改由 `Goal.members` 解引用，启动迁移幂等删除旧库残留列。
 
@@ -241,7 +227,8 @@ SQL 使用 `snake_case`，JS 使用 `camelCase`。没有 ORM，跨边界时手�
 当前 Dexie v16：
 
 ```ts
-db.version(16).stores({
+// 当前 store 全集（v17 之后）。v17 本身只声明 6 个健康 store 的删除，其余沿用 v16。
+{
   categories: "id, parentId, sortOrder",
   quickNotes: "id, occurredAt, updatedAt",
   timeEntries: "id, categoryId, startTime, endTime",
@@ -252,17 +239,11 @@ db.version(16).stores({
   goalLayoutPins: "[goalId+nodeKind+nodeId], goalId, nodeKind, nodeId, updatedAt",
   syncLog: "id, tableName, recordId, synced, [tableName+synced]",
   settings: "key",
-  healthHeartRate: "id, date",
-  healthHrv: "id, date",
-  healthSleep: "id, date",
-  healthStress: "id, date",
-  runs: "id, date",
-  healthCharts: "id, order, updatedAt",
   sessions: "id, startedAt, updatedAt",
-});
+}
 ```
 
-版本历史：v1 初始；v2 `settings`；v3 `quickNotes`；v4 健康表；v5 `tasks`；v6 `tasks.scheduledAt`；v7 `healthCharts`；v8 `tasks.parentId`（子任务=独立 Task，纯 schema 升级无 upgrade 函数）；v9 `tracks` / `trackSteps`（任务轨道数据地基，新表为空，不需要历史归一迁移）；v10 `goals` + 旧 `tasks.goalId` / `tracks.goalId` 索引；v11 移除旧目标归属索引，目标成员关系改由 `Goal.members` JSON 字段承载；v12 `goalLayoutPins`，用 `[goalId+nodeKind+nodeId]` 复合主键保存目标图钉点；v13 `tasks.weight`（想法重力引擎，**只加 upgrade hook 给旧 tasks 补 `weight=0`，`.stores()` 与 v12 逐行相同、没建索引**）；v14 `tasks.ruleId` / `tasks.skipped`（occurrence 实体化地基，`ruleId` 建索引，upgrade hook 给旧 tasks 补 `ruleId=null`、`skipped=false`）；v15 物理删除 `autoBackups`（设备端自动快照整层退役，`autoBackups: null`，见 [ADR 0015](../adr/0015-remove-client-auto-snapshots.md)）；v16 `sessions` 表 + `tasks.sessionId` 索引（手头软会话地基，upgrade hook 给旧 tasks 补 `sessionId=null`，见 [todo/at-hand](todo/at-hand.md)）。
+版本历史：v1 初始；v2 `settings`；v3 `quickNotes`；v4 健康表；v5 `tasks`；v6 `tasks.scheduledAt`；v7 `healthCharts`；v8 `tasks.parentId`（子任务=独立 Task，纯 schema 升级无 upgrade 函数）；v9 `tracks` / `trackSteps`（任务轨道数据地基，新表为空，不需要历史归一迁移）；v10 `goals` + 旧 `tasks.goalId` / `tracks.goalId` 索引；v11 移除旧目标归属索引，目标成员关系改由 `Goal.members` JSON 字段承载；v12 `goalLayoutPins`，用 `[goalId+nodeKind+nodeId]` 复合主键保存目标图钉点；v13 `tasks.weight`（想法重力引擎，**只加 upgrade hook 给旧 tasks 补 `weight=0`，`.stores()` 与 v12 逐行相同、没建索引**）；v14 `tasks.ruleId` / `tasks.skipped`（occurrence 实体化地基，`ruleId` 建索引，upgrade hook 给旧 tasks 补 `ruleId=null`、`skipped=false`）；v15 物理删除 `autoBackups`（设备端自动快照整层退役，`autoBackups: null`，见 [ADR 0015](../adr/0015-remove-client-auto-snapshots.md)）；v16 `sessions` 表 + `tasks.sessionId` 索引（手头软会话地基，upgrade hook 给旧 tasks 补 `sessionId=null`，见 [todo/at-hand](todo/at-hand.md)）；v17 物理删除 6 个健康 store（`healthHeartRate` / `healthHrv` / `healthSleep` / `healthStress` / `runs` / `healthCharts` 全部置 `null`，健康数据层整层退役，见 [ADR 0031](../adr/0031-delete-health-data-layer.md)）。
 
 ## 11. SQLite schema 迁移边界
 
@@ -277,7 +258,6 @@ db.version(16).stores({
 - `Track.id`、`TrackStep.id`、`Goal.id`、`Session.id`：UUID。
 - `GoalLayoutPin`：没有 `id` 字段，身份是 `(goalId,nodeKind,nodeId)`；sync `recordId` 由 `encodeGoalLayoutPinKey()` 生成。
 - `Setting.key`：稳定字符串 key。
-- `health_charts.id`：UUID 或稳定 seed id。
 - 客户端、服务端、CLI 都不应分配 ID 后期待另一端“修正”；ID 是不可变身份。
 
 ## 13. 服务端后台洞察响应

@@ -10,7 +10,6 @@ covers:
   - packages/server/src/sync/domains.ts
   - packages/server/src/sync/domains.test.ts
   - packages/server/src/sync/fake-domain.e2e.test.ts
-  - packages/server/src/sync/health-charts.e2e.test.ts
   - packages/server/src/sync/tracks-domain.e2e.test.ts
   - packages/server/src/sync/goals-domain.e2e.test.ts
   - packages/server/src/sync/goal-layout-pins-domain.e2e.test.ts
@@ -22,7 +21,7 @@ contracts:
   - packages/shared/src/types.ts:SyncChange
   - packages/server/src/sync/domains.ts
   - packages/client/src/sync/clientDomains.ts
-last-reviewed: 2026-08-05
+last-reviewed: 2026-08-14
 ---
 
 # 同步 · 域登记簿
@@ -49,7 +48,7 @@ last-reviewed: 2026-08-05
 
 ## 2. 当前运行时域
 
-当前十六个运行时域：
+当前十个运行时域：
 
 | 域 | 策略 | 备注 |
 |---|---|---|
@@ -62,13 +61,13 @@ last-reviewed: 2026-08-05
 | `track_steps` | lww | `countsInStatus=false`；服务端 `guard: guardTrackStepHost`——非 delete 写入找不到宿主 track 时拒收（`orphan_step_rejected`） |
 | `goals` | lww | `countsInStatus=false`，目标层 |
 | `goal_layout_pins` | lww | `countsInStatus=false`，目标图用户钉点，复合键域 |
-| `health_charts` | lww | 健康图表视图块配置；**无 UI 消费方**（见下） |
-| `health_heart_rate` / `health_hrv` / `health_sleep` / `health_stress` / `runs` | lww | 5 个健康数据域，零钩子，`countsInStatus=false`，走通用 LWW 路径；**无 UI 消费方**（见下） |
 | `sessions` | lww | 零钩子，`countsInStatus=false`；"手头"软会话元数据，`Task.sessionId` 反挂引用它，不在 force-push 五域兜底范围内，见 [todo/at-hand](../todo/at-hand.md) |
 
-**6 个健康域是「无 UI 消费但协议照旧」的域**：健康子系统没有客户端页面、也没有服务端抓取管线（退役决策见 [ADR 0024](../../adr/0024-retire-health-subsystem.md)），但表、行映射、域登记与 e2e 回环测试（`sync/health-charts.e2e.test.ts`）齐全——历史数据在库里，随 push/pull 与备份流转。**删域是破坏性协议变更，不因「没人用」而放宽**（见 [data-model](../data-model.md#data-model-s1-1)）。
+登记簿里没有健康域：本仓不承载体征与跑步数据（决策见 [ADR 0024](../../adr/0024-retire-health-subsystem.md) 与 [ADR 0031](../../adr/0031-delete-health-data-layer.md)）。`syncDomains.test.ts` 有一条封闭性断言守着这一点——任何以 `health_` 开头的域或 `runs` 被加回登记簿，都会先红一次。
 
-登记簿是封闭的：加域必须改代码、过测试。静态类型 `SyncChange`（`types.ts` 手工判别联合）与运行时 schema（登记簿生成）必须同步修改；`health_charts`、`tracks`、`track_steps`、`goals`、`goal_layout_pins` 都已有静态分支。
+**删域仍是破坏性协议变更**，判据是「这个域有没有真实的生产者与消费者」，不是「登记簿里有没有这一行」。
+
+登记簿是封闭的：加域必须改代码、过测试。静态类型 `SyncChange`（`types.ts` 手工判别联合）与运行时 schema（登记簿生成）必须同步修改；`tracks`、`track_steps`、`goals`、`goal_layout_pins` 都已有静态分支。
 
 ## 3. 新增域成本
 
@@ -88,7 +87,7 @@ last-reviewed: 2026-08-05
 
 `applyChange` 按登记簿分发：有 `apply` 钩子走钩子，否则走通用 LWW 路径。**所有路径的 `updated_at` / `deleted_at` 都取服务器当前时间 `serverNow`，不取 `change.timestamp`**。push 路由对 `baseSeq` 重叠或 unknown-base 记录启用的 staleGuard 是登记簿分发前的通用守卫，不改变任何域的 `validate` / `apply` 钩子归属。
 
-- **通用 LWW**（settings、quick_notes、tasks、tracks、track_steps、goals、health_charts、健康数据域、sessions 及未来的零钩子域）：delete = 真删除 + tombstone upsert；upsert = 删 tombstone + `INSERT ... ON CONFLICT DO UPDATE`（列来自域的 `toRow()`，主键与 `created_at` 只在插入时写）。域可以声明 `guardedColumns`：来包无 `op` 时这些列不进 `DO UPDATE SET`；tasks 用它保护完成语义字段，tracks 用于保护 `status`。`track_steps.track_id` 不建 SQL 外键，轨道删除必须由客户端或未来服务端受控入口显式发每条步骤删除。
+- **通用 LWW**（settings、quick_notes、tasks、tracks、track_steps、goals、sessions 及未来的零钩子域）：delete = 真删除 + tombstone upsert；upsert = 删 tombstone + `INSERT ... ON CONFLICT DO UPDATE`（列来自域的 `toRow()`，主键与 `created_at` 只在插入时写）。域可以声明 `guardedColumns`：来包无 `op` 时这些列不进 `DO UPDATE SET`；tasks 用它保护完成语义字段，tracks 用于保护 `status`。`track_steps.track_id` 不建 SQL 外键，轨道删除必须由客户端或未来服务端受控入口显式发每条步骤删除。
 - **复合键 LWW**（`goal_layout_pins`）：语义仍是 LWW，但不能走单列主键通用 SQL。server 用 `identity` 从 payload 算 `recordId`，custom apply/read 按 `(goal_id,node_kind,node_id)` 读写，delete 仍真删除 + tombstone。
 - **categories 钩子**：delete = 级联删除目标分类、后代分类与关联 entries，每条都写 tombstone + delete seq；根分类先记账，再记关联 entries/后代分类，分页客户端可先建立整树冲突保护；upsert 清旧 tombstone 后正常写入。
 - **time_entries 钩子**：upsert 先清该 record 的旧 tombstone，再删除与该记录时间段重叠的旧远端记录（写 tombstone + delete seq，outcome 带 `overriddenRecordIds` 和 `backupId`）；分类不存在时 skip 并带结构化 `skipReason`。分类级联与 overlap 的隐式影响集合同时进入 baseSeq 冲突分析和 staleGuard。
@@ -117,7 +116,7 @@ LWW 只定义“同一记录发生并发修改时如何自动收敛”，字段�
 5. 参照 `fake-domain.e2e.test.ts` 写一条全链路域测试，并更新对应业务域文档、[data-model](../data-model.md)、[backup](../backup.md) 与 [sync](../sync.md) 摘要。
 6. 补齐 server 里**手写 `CREATE TABLE` 建库**（不走 `initializeDatabase()`）又会触发 sync-state / commit-hash 计算的测试夹具：`computeAndPersistCommitHash` 会遍历每个 `domain.table` 查询，漏建新表即 `SqliteError: no such table: <域>`。已知需要补的是 `db/reset.test.ts`、`db/utcReset.test.ts`、`lib/entry-service.test.ts`（canonical 建表语句可从 `db/backfillSeq.test.ts` 抄）；`schema.test.ts` 走 `initializeDatabase` 不受影响。**合并前跑无参全量 `pnpm --filter @timedata/server test`**——窄过滤跑不到这几个文件，`goals` 域当年就是这么漏到合并后才暴露。
 
-校验、排序、写入、记账、seq 补差、墓碑、SSE 实时下发全部复用同步内核。任务轨道和目标层都是这个模式：`tracks.upsertPriority=70/deletePriority=71`，`track_steps.upsertPriority=71/deletePriority=70`，`goals.upsertPriority=72/deletePriority=72`。验收证明见 `packages/server/src/sync/fake-domain.e2e.test.ts`、`tracks-domain.e2e.test.ts`、`goals-domain.e2e.test.ts` 与 `health-charts.e2e.test.ts`。
+校验、排序、写入、记账、seq 补差、墓碑、SSE 实时下发全部复用同步内核。任务轨道和目标层都是这个模式：`tracks.upsertPriority=70/deletePriority=71`，`track_steps.upsertPriority=71/deletePriority=70`，`goals.upsertPriority=72/deletePriority=72`。验收证明见 `packages/server/src/sync/fake-domain.e2e.test.ts`、`tracks-domain.e2e.test.ts` 与 `goals-domain.e2e.test.ts`。
 
 复合键 LWW 域还要补：
 

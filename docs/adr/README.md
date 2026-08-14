@@ -33,12 +33,13 @@ status: living
 | [0021](0021-sse-bump-carries-changes.md) | SSE bump 携带增量数据 | 2026-07-23 | push 造成的 changes 搭 bump 车直推，收端免一轮 pull；超限即退化 | 延续 [0012](0012-sync-ledger-and-domain-registry.md)，背景见 [0020](0020-sync-push-request-idempotency.md) |
 | [0022](0022-diary-list-marker-strict-markdown.md) | 日记列表识别钉死为 Markdown 标准 | 2026-07-27 | 形近写法（全角/无空格）一律普通文本，否决识别放宽与提示机制 | |
 | [0023](0023-diary-editor-remount-on-width-breakpoint.md) | 日记编辑器跨宽窄断点重挂，知情不修 | 2026-07-26 | 1024px 断点两侧元素类型不同致重挂丢撤销栈；修法要动 APK 主场景的窄屏布局且 jsdom 验不出，风险不对称 | |
-| [0024](0024-retire-health-subsystem.md) | 退役健康子系统，数据层保留 | 2026-07-29 | 佳明体征/跑步 UI 与抓取管线全删、移交独立项目 run-track；6 张表与 6 个同步域刻意留着（删域是破坏性协议变更），回溯点 tag `retire/health` | 受 [0012](0012-sync-ledger-and-domain-registry.md) 的封闭登记簿约束 |
+| [0024](0024-retire-health-subsystem.md) | 退役健康子系统，数据层保留 | 2026-07-29 | 佳明体征/跑步 UI 与抓取管线全删、移交独立项目 run-track；6 张表与 6 个同步域刻意留着（删域是破坏性协议变更），回溯点 tag `retire/health` | 受 [0012](0012-sync-ledger-and-domain-registry.md) 的封闭登记簿约束；数据层保留部分被 [0031](0031-delete-health-data-layer.md) 取代 |
 | [0025](0025-new-ip-alert-scoped-by-asn-and-city.md) | 陌生来源提醒按「运营商+城市」收敛，不再按精确 IP | 2026-07-30 | 动态 IP 与 VPN 出口下按精确 IP 去重永远确认不完；改按 ASN+城市收敛并显示 GeoLite2 中文归属地，删 `known_ips` 换 `known_ip_scopes`，主动降低灵敏度换「用户真的会看」 | |
 | [0026](0026-content-tint-shared-palette-shape-distinguishes-type.md) | 项目与标签共用一组 tint token，类型区分靠形状不靠颜色 | 2026-07-30 | 用户内容身份色统一走 `--color-tint-1..9`；圆点 = 项目、`#` = 标签，颜色只管同类型内区分个体；旧 `TAG_PALETTE` 裸色退出 allowlist | data palette 部分被 [0027](0027-retire-unused-data-palette-and-scope-track-agent-tone.md) 修订 |
 | [0027](0027-retire-unused-data-palette-and-scope-track-agent-tone.md) | 退役失活 data palette，Track agent tone 归入业务作用域 | 2026-07-31 | 删除无生产消费的 data palette；“agent 在跑”保留原紫色外观并改用 Track scoped token | 修订 [0026](0026-content-tint-shared-palette-shape-distinguishes-type.md) 的 data palette 部分 |
 | [0028](0028-china-geo-from-builtin-ip2region-table.md) | 中国归属地改用内置 ip2region 段表，收敛键加中国省市档 | 2026-08-01 | GeoLite2 免费库对中国运营商段无 city 级数据是结构缺失；中国段改走随镜像发布的内置表（命中即中国、中文省市+运营商），收敛键中国走 `asn\|cn:省[:市]`，国外路径不变；另接可选 geoipupdate 自动更新 GeoLite2 | 修订 [0025](0025-new-ip-alert-scoped-by-asn-and-city.md) 的收敛键地名与数据源部分（仅中国段），其余决策仍有效 |
 | [0029](0029-desktop-shell-embeds-frontend.md) | Windows 桌面壳内嵌前端产物，不加载线上站点 | 2026-08-03 | 三条路线（加载线上/内嵌前端/内嵌服务端）功能等价，区别只在前端从服务器拉还是从磁盘读；内嵌服务端撞账本封闭契约属产品重选，加载线上会让 `AppUpdateProvider` 的 focus→hardRefresh 在热键唤起瞬间清缓存重载；取内嵌前端并吃不注册 SW 的 `mode=mobile` 产物，三壳同构 | 不改 [0011](0011-server-api-as-write-boundary.md) / [0012](0012-sync-ledger-and-domain-registry.md) 的边界 |
+| [0031](0031-delete-health-data-layer.md) | 删除健康数据层，6 张表与 6 个同步域全清 | 2026-08-14 | 复核 [0024](0024-retire-health-subsystem.md) 保留数据层的两条理由：客户端从不产生健康域变更（无生产者即不触发整批 409），备份导入按当前登记簿取键、多余键静默忽略——两条都不成立；删净三端与库表，物理表手工 DROP 一次、代码不留常驻 DDL，删前 dump 5511 条存档 | 取代 [0024](0024-retire-health-subsystem.md) 的数据层保留部分 |
 
 ## 按主题速查
 
@@ -48,4 +49,4 @@ status: living
 - **数据建模**：0004（UTC）、0008（Dexie 版本链）、0010（QuickNote 域）、0014（tags vs 字段）
 - **日记编辑器**：0022（列表识别口径）、0023（跨断点重挂）
 - **设计语言**：0026（用户内容身份色共用 tint 色板 + 形状分型）→ 0027（退役 data palette + Track agent scoped tone）
-- **范围决策**：0005、0009、0024（健康子系统退役）、0029（桌面壳内嵌前端）
+- **范围决策**：0005、0009、0024（健康子系统退役）→ 0031（健康数据层删除）、0029（桌面壳内嵌前端）
