@@ -57,6 +57,17 @@ const handlers = {
   onToInbox: vi.fn(),
 };
 
+/**
+ * 折叠态下「下一步」徽章也会显示首条未完成成员的标题，所以「组内没渲染任务行」这件事
+ * 不能直接用 host.textContent 查标题——要先把徽章文本摘掉再看。
+ * 用 cloneNode 摘，不动真实 DOM，后续断言不受影响。
+ */
+function textWithoutNextBadge(host: HTMLElement): string {
+  const clone = host.cloneNode(true) as HTMLElement;
+  for (const badge of clone.querySelectorAll('[data-testid="project-next-badge"]')) badge.remove();
+  return clone.textContent ?? "";
+}
+
 function sectionElement(props: Partial<Parameters<typeof TodoProjectSection>[0]> = {}) {
   return (
     <MemoryRouter>
@@ -118,7 +129,7 @@ describe("TodoProjectSection", () => {
       groups: [group({ goalId: "g1", goalTitle: "装修", tasks: [task({ id: "t1", title: "刷墙" })] })],
     });
     expect(host.textContent).toContain("装修");
-    expect(host.textContent).not.toContain("刷墙");
+    expect(textWithoutNextBadge(host)).not.toContain("刷墙");
 
     await click(host.querySelector('[data-testid="project-group-toggle"]'));
     expect(host.textContent).toContain("刷墙");
@@ -516,7 +527,7 @@ describe("TodoProjectSection", () => {
   it("revealGoals 展开指定组并回报消费（jsdom 无 scrollIntoView 也不抛）", async () => {
     const groups = [group({ goalId: "g1", tasks: [task({ id: "t1", title: "刷墙" })] })];
     const { host, root } = await renderSection({ groups });
-    expect(host.textContent).not.toContain("刷墙");
+    expect(textWithoutNextBadge(host)).not.toContain("刷墙");
 
     await unmount(root);
 
@@ -615,6 +626,43 @@ describe("TodoProjectSection", () => {
     expect(row?.querySelector('[data-slot="checkbox-placeholder"]')).not.toBeNull();
     await unmount(root);
   });
+
+  it("组标题显示「下一步」徽章，取组内第一条未完成成员", async () => {
+    const { host, root } = await renderDom(
+      sectionElement({
+        groups: [
+          group({
+            goalId: "g1",
+            tasks: [task({ id: "t1", title: "接线在等区" }), task({ id: "t2", title: "写收尾" })],
+          }),
+        ],
+      }),
+    );
+    expect(host.textContent).toContain("下一步 接线在等区");
+    expect(host.textContent).not.toContain("下一步 写收尾");
+    await unmount(root);
+  });
+
+  it("筛选激活时不显示「下一步」徽章", async () => {
+    const { host, root } = await renderDom(
+      sectionElement({
+        groups: [group({ goalId: "g1", tasks: [task({ id: "t1", title: "接线在等区" })] })],
+        filterActive: true,
+      }),
+    );
+    expect(host.textContent).not.toContain("下一步");
+    await unmount(root);
+  });
+
+  it("组内没有未完成成员时不显示「下一步」徽章", async () => {
+    const { host, root } = await renderDom(
+      sectionElement({
+        groups: [group({ goalId: "g1", tasks: [], doneCount: 3 })],
+      }),
+    );
+    expect(host.textContent).not.toContain("下一步");
+    await unmount(root);
+  });
 });
 
   describe("filterActive 属性支持", () => {
@@ -633,7 +681,7 @@ describe("TodoProjectSection", () => {
       await click(host.querySelector('[data-testid="project-group-toggle"]'));
       await act(async () => root.render(sectionElement({ groups: [g1] })));
       expect(host.querySelector('[data-testid="project-group-toggle"]')?.getAttribute("aria-expanded")).toBe("false");
-      expect(host.textContent).not.toContain("设计方案");
+      expect(textWithoutNextBadge(host)).not.toContain("设计方案");
       await unmount(root);
     });
 
@@ -654,7 +702,7 @@ describe("TodoProjectSection", () => {
 
       await act(async () => root.render(sectionElement({ groups: [g1] })));
       expect(host.querySelector('[data-testid="project-group-toggle"]')?.getAttribute("aria-expanded")).toBe("false");
-      expect(host.textContent).not.toContain("设计方案");
+      expect(textWithoutNextBadge(host)).not.toContain("设计方案");
       await unmount(root);
     });
 

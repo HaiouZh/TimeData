@@ -359,6 +359,17 @@ function ProjectGroupCard({
                     ? `还剩 ${summary.remaining} · 近 ${RECENT_DONE_WINDOW_DAYS} 天 +${summary.recentDoneCount}`
                     : `还剩 ${summary.remaining}`}
             </span>
+            {/* 「下一步」= 组内第一条未完成成员（group.tasks 已是未完成成员且排好序）。
+                筛选激活时不显示：那时标题行右侧换成「N 项匹配」、group.tasks 也被裁剪过，
+                两种口径混在一行里会互相打架。 */}
+            {!filterActive && group.tasks[0] !== undefined && (
+              <span
+                data-testid="project-next-badge"
+                className="max-w-32 shrink-0 truncate rounded-pill bg-accent-soft px-2 py-0.5 td-text-caption font-normal text-accent-ink"
+              >
+                下一步 {group.tasks[0].title}
+              </span>
+            )}
             {showCapWarning && <span className="shrink-0 td-text-caption font-normal text-warn">接近上限</span>}
           </button>
         )}
