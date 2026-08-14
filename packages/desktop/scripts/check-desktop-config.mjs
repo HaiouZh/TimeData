@@ -26,6 +26,35 @@ if (!Array.isArray(targets) || targets.length !== 1 || targets[0] !== "nsis") {
   throw new Error(`[desktop-config] bundle.targets 必须恰好是 ["nsis"]，当前：${JSON.stringify(targets)}`);
 }
 
+// updater 四项：配错时构建、测试、其余断言全绿，装机后表现为更新静默失效，
+// 或（installMode 那条）丢掉「删数据复选框不渲染」这道锁。
+if (config.bundle?.createUpdaterArtifacts !== true) {
+  throw new Error(
+    "[desktop-config] bundle.createUpdaterArtifacts 必须为 true，否则 bundler 不产 .sig，latest.json 的 signature 无处可取。",
+  );
+}
+
+const updater = config.plugins?.updater;
+if (typeof updater?.pubkey !== "string" || updater.pubkey.length === 0) {
+  throw new Error("[desktop-config] plugins.updater.pubkey 不能为空——它是更新包验签的唯一依据。");
+}
+
+const EXPECTED_ENDPOINT =
+  "https://github.com/HaiouZh/TimeData/releases/download/desktop-latest/latest.json";
+if (!Array.isArray(updater.endpoints) || updater.endpoints.length !== 1 || updater.endpoints[0] !== EXPECTED_ENDPOINT) {
+  throw new Error(
+    `[desktop-config] plugins.updater.endpoints 必须恰好是 ["${EXPECTED_ENDPOINT}"]，当前：${JSON.stringify(updater.endpoints)}。` +
+      "不可改用 releases/latest/download/——GitHub 的 latest 标记是 Android 包专属（windows job 刻意不碰），那条路会指向不含 Windows 包的 Release。",
+  );
+}
+
+if (updater.windows?.installMode !== "passive") {
+  throw new Error(
+    `[desktop-config] plugins.updater.windows.installMode 必须显式为 passive，当前：${JSON.stringify(updater.windows?.installMode)}。` +
+      "passive 让 NSIS 跳过卸载确认页（删数据复选框因此不渲染），是与 /UPDATE 参数并列的第二道锁——不能靠默认值兜着。",
+  );
+}
+
 // 按 label 取窗口，**不按下标**——加了浮窗之后 windows[0] 可能是浮窗，
 // 主窗口的 visible 断言会静默跑到错误的对象上。
 const windows = config.app?.windows ?? [];
@@ -132,7 +161,10 @@ if (listenedSet.length !== 1 || listenedSet[0] !== HOTKEY_EVENT_NAME) {
 // 入口 chunk，在没有 __TAURI_INTERNALS__ 的环境里加载即报错；动态 import 则出独立 chunk，
 // 只有 isDesktopShell() gate 内才会去取。这条约定破了没有任何现有门禁会红。
 const CLIENT_SRC = new URL("../../client/src/", import.meta.url);
-const STATIC_TAURI_IMPORT = /\bfrom\s*["']@tauri-apps\/api|^\s*import\s*["']@tauri-apps\/api/m;
+// @tauri-apps/plugin-* 与 @tauri-apps/api 同样会把 Tauri 运行时拉进入口 chunk。
+// 原正则只认 api，插件包能穿过全部门禁、然后在 Web/Android/iOS 上加载即报错。
+const STATIC_TAURI_IMPORT =
+  /\bfrom\s*["']@tauri-apps\/(api|plugin-)|^\s*import\s*["']@tauri-apps\/(api|plugin-)/m;
 
 function collectSourceFiles(dir) {
   const files = [];
@@ -148,7 +180,7 @@ for (const file of collectSourceFiles(CLIENT_SRC)) {
   if (STATIC_TAURI_IMPORT.test(readFileSync(file, "utf8"))) {
     const shown = decodeURIComponent(file.pathname).slice(decodeURIComponent(CLIENT_SRC.pathname).length);
     throw new Error(
-      `[desktop-config] packages/client/src/${shown} 静态 import 了 @tauri-apps/api。` +
+      `[desktop-config] packages/client/src/${shown} 静态 import 了 @tauri-apps 运行时包（api 或 plugin-*）。` +
         `只准写 await import("@tauri-apps/api/…") 且要在 isDesktopShell() gate 之内，否则三端 bundle 会把 Tauri 运行时打进入口 chunk。` +
         `需要类型就在 lib/desktop/api.ts 里自己声明（现有 DTO 就是这么写的）。`,
     );
