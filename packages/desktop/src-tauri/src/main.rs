@@ -5,6 +5,7 @@ mod commands;
 mod config;
 mod hotkeys;
 mod shell;
+mod updater;
 
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
