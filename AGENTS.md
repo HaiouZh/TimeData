@@ -130,7 +130,7 @@
 - 复查文档别只信脚本：脚本没报不等于没漂，结合语义判断段落是否真过时。
 - **本文件只装「怎么操作这个仓库」+「对 agent 动作的授权边界」**；产品 / 领域 / 代码机制（怎么运作、默认值、env、算法）一律归 evergreen，哪怕是硬不变量。发现机制泄漏进本文件别就地删：先确认 evergreen 有没有清楚承载（没有先补，必要时补 `covers`），再 trim 成「一句规则 + 指针」。
 - **反向同理：evergreen 只写「现在是什么样」**——机制 / 契约 / 不变量 / 边界。决策论证与取舍归 ADR，祈使式指令与授权（「改前先确认」「未经批准不改」）归本文件，改动流水与 `<!-- 复核 … -->` 注释归提交信息，在办事项归 `docs_local`。判据、准入 / 排除清单与「先补落点再 trim」的处置流程见 [`_docs-guide`](docs/evergreen/_docs-guide.md) §0。
-- 哪个 evergreen 子文档管哪块代码，**去 `architecture.md` §6「模块速查」或各文档 frontmatter 查**。
+- 哪个 evergreen 子文档管哪块代码，**去 `architecture.md` §6「文档登记簿」或各文档 frontmatter 查**（外提的子文档不进登记簿，在各主题文档的「子文档索引」里）。
 - evergreen 大调整保留代码入口 / 路由 / 测试文件路径，便于按文档反查实现。
 - evergreen 该写什么 / 不该写什么（§0）、怎么组织、新增文档放哪，见 [`docs/evergreen/_docs-guide.md`](docs/evergreen/_docs-guide.md)；单文档多大该外提见 [`_docs-guide/splitting`](docs/evergreen/_docs-guide/splitting.md)。
 - **文档撞 hard cap（25000 字符）时，合法动作只有四条**：删过时 / 越界内容（越界的先按 `_docs-guide` §0.4 补落点、再 trim 成「一句现状 + 指针」，不许就地删）/ 横切外提功能子域 / 纵切外提读者路径 / 长成主题后升格。**压缩措辞、删例子、把句子改短不是合法动作**——那是拿可读性换体量且不可逆。四条都走不通就停下来问人，不要让门禁绿变成目标。判据见 [_docs-guide/splitting](docs/evergreen/_docs-guide/splitting.md)。
