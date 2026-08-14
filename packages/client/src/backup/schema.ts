@@ -28,7 +28,7 @@ export interface BackupSummary {
   exportedAt: string;
   categoryCount: number;
   entryCount: number;
-  /** 各普通域记录数，按 table 名键入（如 `tasks`、`quick_notes`、`health_sleep`）。 */
+  /** 各普通域记录数，按 table 名键入（如 `tasks`、`quick_notes`、`track_steps`）。 */
   domainCounts: Record<string, number>;
 }
 
