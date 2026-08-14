@@ -1,6 +1,6 @@
 ---
 type: evergreen
-title: 架构 · 调度器韧性
+title: iOS 壳 · 调度器韧性
 covers:
   - packages/client/src/components/SchedulerWatchdog.tsx
   - packages/client/src/lib/schedulerHostGuard.ts
@@ -9,17 +9,17 @@ contracts:
 last-reviewed: 2026-08-14
 ---
 
-# 架构 · 调度器韧性
+# iOS 壳 · 调度器韧性
 
-> [architecture](../architecture.md) 的**子文档**：React 调度器为何会在 iOS 上永久停摆、怎么判定、怎么救回来。
-> 不讲：iOS 保留路由栈与边缘返回手势（见 [ios-page-stack](ios-page-stack.md)）、原生工程构建链路（见 [deployment/ios-ipa](../deployment/ios-ipa.md)）。
+> [ios](../ios.md) 的**子文档**：React 调度器为何会在 iOS 上永久停摆、怎么判定、怎么救回来。
+> 不讲：iOS 保留路由栈与边缘返回手势（见 [page-stack](page-stack.md)）、原生工程构建链路（见 [母文档](../ios.md) §2）。
 
 ## 承上启下
 
 - **上游**：App 被系统挂起（息屏 / 切后台）后恢复。
 - **下游**：所有经 React 调度器提交的更新——路由导航、`useLiveQuery` 回流、`startTransition` 包裹的一切。
 - **契约**：`installSchedulerPortTap()` 须在**调度器首次排队之前**装上（`main.tsx` 模块体里、`createRoot().render()` 之前）；补拍机制押在「调度器以 `postMessage(null)` 排队」这一形态上。
-- **邻居**：[architecture](../architecture.md)（主题）、[categories-settings/settings-catalog](../categories-settings/settings-catalog.md)（首帧回退的另一处 iOS 可见症状）。
+- **邻居**：[ios](../ios.md)（母文档）、[categories-settings/settings-catalog](../categories-settings/settings-catalog.md)（首帧回退的另一处 iOS 可见症状）。
 
 ## 1. 死锁怎么形成
 
@@ -37,7 +37,7 @@ React 按 lane 决定更新走哪条通道，两条通道在死锁后的存活�
 | `startTransition` 包裹的更新（react-router 的导航即在此列） | 调度器 | 停摆 |
 | 异步回调里的 `setState`（Dexie `useLiveQuery` 回流） | 调度器 | 停摆 |
 
-所以现场表现是「弹层点得开、日期选择器拉得出，但底栏 tab 点不动、打点写进库了画面不刷」。**这个组合本身就是判据**：全都点不动是别的毛病（例如保留层的 `inert` 盖在屏上，见 [ios-page-stack](ios-page-stack.md)），只有走调度器的那半停摆才是本条。
+所以现场表现是「弹层点得开、日期选择器拉得出，但底栏 tab 点不动、打点写进库了画面不刷」。**这个组合本身就是判据**：全都点不动是别的毛病（例如保留层的 `inert` 盖在屏上，见 [page-stack](page-stack.md)），只有走调度器的那半停摆才是本条。
 
 ## 3. 怎么救：补一拍
 

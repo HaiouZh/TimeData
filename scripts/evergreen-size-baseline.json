@@ -11,14 +11,11 @@
   "docs/evergreen/admin.md": {
     "covers": 12
   },
+  "docs/evergreen/android.md": {
+    "covers": 16
+  },
   "docs/evergreen/architecture.md": {
     "covers": 26
-  },
-  "docs/evergreen/architecture/ios-page-stack.md": {
-    "covers": 6
-  },
-  "docs/evergreen/architecture/scheduler-resilience.md": {
-    "covers": 2
   },
   "docs/evergreen/backup.md": {
     "covers": 18
@@ -38,17 +35,8 @@
   "docs/evergreen/deployment.md": {
     "covers": 23
   },
-  "docs/evergreen/deployment/android-apk.md": {
-    "covers": 16
-  },
   "docs/evergreen/deployment/configuration.md": {
     "covers": 0
-  },
-  "docs/evergreen/deployment/ios-ipa.md": {
-    "covers": 4
-  },
-  "docs/evergreen/deployment/windows-desktop.md": {
-    "covers": 2
   },
   "docs/evergreen/design-language.md": {
     "covers": 17
@@ -63,7 +51,7 @@
     "covers": 2
   },
   "docs/evergreen/desktop.md": {
-    "covers": 5
+    "covers": 7
   },
   "docs/evergreen/desktop/hotkeys.md": {
     "covers": 0
@@ -91,6 +79,15 @@
   },
   "docs/evergreen/goals/canvas.md": {
     "covers": 15
+  },
+  "docs/evergreen/ios.md": {
+    "covers": 4
+  },
+  "docs/evergreen/ios/page-stack.md": {
+    "covers": 6
+  },
+  "docs/evergreen/ios/scheduler-resilience.md": {
+    "covers": 2
   },
   "docs/evergreen/project-zone.md": {
     "covers": 3

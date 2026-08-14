@@ -15,14 +15,14 @@ last-reviewed: 2026-08-13
 
 > [desktop](../desktop.md) 的**热键子文档**：桌面壳配置文件、热键注册与分发、打点全程与确认卡、桥的串行队列、navigate 动作，以及两条已知界限。
 > 讲什么：`desktop-config.json` 的字段与三态读、两把锁的分工与锁序、punch 的四条出口、串行队列的身份比对、navigate 的校验分工。
-> 不讲什么：壳的构成与窗口/托盘语义、开机自启、速记浮窗与双窗口、配置闸（都在 [母文档](../desktop.md)），以及构建发布（见 [deployment/windows-desktop](../deployment/windows-desktop.md)）。
+> 不讲什么：壳的构成与窗口/托盘语义、开机自启、速记浮窗与双窗口、配置闸、构建发布（都在 [母文档](../desktop.md)）。
 
 ## 承上启下
 
 - **上游**：[母文档](../desktop.md) §1 的 Tauri 壳与 `shell.rs` 纯函数层；Windows 全局热键 API。
 - **下游**：[timeline](../timeline.md) 的 `punchNow`（热键打点复用它写库）、[categories-settings/settings-catalog](../categories-settings/settings-catalog.md) 的打点分类设置 key。
 - **契约**：Rust 是 `desktop-config.json` 的唯一写者；事件名 `desktop-hotkey` 只准出自 `hotkeys.rs` 的常量；`desktopPunch` 是桌面打点的唯一写入口并自守上限。
-- **邻居**：[母文档](../desktop.md)、[deployment/windows-desktop](../deployment/windows-desktop.md)（NSIS 安装包与发布链路）。
+- **邻居**：[母文档](../desktop.md)、[android](../android.md) / [ios](../ios.md)（同一条发布 workflow 的另两个平台）。
 
 ## 1. 配置文件
 

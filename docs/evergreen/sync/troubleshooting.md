@@ -52,6 +52,6 @@ last-reviewed: 2026-08-10
 1. **先看 `reason` 与 `waitMs`**：回前台问题应看到 `reason=resume`。`waitMs` 本身已接近用户感知延迟时，慢点在 executor 之前，优先查上一轮单飞、scheduler 防抖/退避和生命周期接线；入口是 [realtime-and-scheduler](realtime-and-scheduler.md) 第 2 节。
 2. **再看客户端阶段**：`waitMs` 很小而 `status` / `pull` 很大，说明同步已及时启动，长尾在请求阶段。Android resume 的增量补差应记录 `transport=native-android`；Web push 后再原生 pull、或 native status 后退到 `sinceSeq=0` Web 全量 pull 时是 `mixed`。出现 `transport=web` 时先核对触发原因、平台、插件可用性和是否走全量拉取。
 3. **客户端与服务端对表**：把设置页阶段耗时与服务端 `sync_logs.timings`、请求审计到达时间 / 次数放在同一时间窗。客户端阶段长而服务端 `totalMs` 只有毫秒级，瓶颈在请求到达服务端之前或响应返回客户端之后，继续查 WebView/原生连接、DNS、VPN/TUN、代理、TLS、CORS 预检；两边同时长才优先查 server/SQLite。服务端完全没有对应请求时，也不能把等待归因于数据库。
-4. **最后按平台做对照**：同一服务端、同一网络下比较 Web/PWA 与 Android APK，并重复采样看 p50/p95，不用单次秒表下结论。Android 原生 HTTP 只绕过浏览器 CORS enforcement 和 WebView 连接栈，不绕过系统 DNS、VPN、代理、TLS 或服务端链路；网络边界见 [deployment](../deployment.md) 与 [deployment/android-apk](../deployment/android-apk.md)。
+4. **最后按平台做对照**：同一服务端、同一网络下比较 Web/PWA 与 Android APK，并重复采样看 p50/p95，不用单次秒表下结论。Android 原生 HTTP 只绕过浏览器 CORS enforcement 和 WebView 连接栈，不绕过系统 DNS、VPN、代理、TLS 或服务端链路；网络边界见 [deployment](../deployment.md) 与 [android](../android.md)。
 
 取证最小集是：客户端最近一条 `waitMs/reason/connection/transport` 与 status/push/pull 分段、服务端同时间窗的 sync/request logs、APK build id、Android 当时的 VPN/代理状态。先完成这组对表，再决定改 scheduler、transport、CORS/网络还是 server；不要从“安卓慢”直接跳到全局启用 CapacitorHttp，也不要在请求可能已经发出后盲目换 transport 重发写请求。

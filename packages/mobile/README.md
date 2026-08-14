@@ -4,7 +4,7 @@ This package contains the Capacitor Android shell for TimeData, plus CI configur
 
 ## iOS（未签名 IPA，CI 生成）
 
-iOS 原生工程**不进仓库**，由 `mobile-release.yml` 的 `ios` job 在 macOS runner 上现场 `cap add ios` 生成，产出未签名 `TimeData-unsigned.ipa`。构建链路、键盘工具条补丁、Release 契约与 SideStore 装机见 [docs/evergreen/deployment/ios-ipa.md](../../docs/evergreen/deployment/ios-ipa.md)。
+iOS 原生工程**不进仓库**，由 `mobile-release.yml` 的 `ios` job 在 macOS runner 上现场 `cap add ios` 生成，产出未签名 `TimeData-unsigned.ipa`。构建链路、键盘工具条补丁、Release 契约与 SideStore 装机见 [docs/evergreen/ios.md](../../docs/evergreen/ios.md)。
 
 App 图标由 `pnpm icons:generate` 从根目录 `icon.png` 生成 `ios-assets/AppIcon-1024.png`（入库），CI 经 `scripts/ios-app-icon.mjs` 装配进生成的工程。
 

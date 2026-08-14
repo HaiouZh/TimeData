@@ -169,7 +169,7 @@ GitHub Actions 的 `mobile-release` workflow 在 android job 里用仓库 Secret
 - PWA service worker 和 PWA manifest 在 mobile 模式禁用，避免 WebView 缓存和更新提示干扰；Web/PWA 构建会由 `vite-plugin-pwa` 生成 `manifest.webmanifest`，图标来自 `packages/client/public/icons/`，Android 启动图标位于 `packages/mobile/android/app/src/main/res/mipmap-*/`；这两处和 favicon 都由 `pnpm icons:generate` 从根目录 `icon.png` 生成，换图只需替换根目录源图后重跑该命令。
 - Web/PWA 构建会额外注入 `__TIMEDATA_BUILD_ID__`（优先读 `TIMEDATA_BUILD_ID` 环境变量，否则使用构建时毫秒时间戳）并输出不进 precache 的 `version.json`；客户端 `AppUpdateProvider` 在页面加载、从后台切回可见和窗口重新聚焦时用网络 buildId 比对决定是否硬刷新（注销已有 service worker、清空 Cache Storage 并 reload，绕开 iOS standalone PWA 偶发不刷新缓存的问题），设置页也提供「刷新到最新前端」手动兜底。mobile 模式不输出这条 PWA 更新链路所需的 service worker 行为，APK 更新仍走 Android release 流程。
 - `packages/mobile/capacitor.config.ts` 固定 `androidScheme: "https"`、`cleartext: false`、`allowMixedContent: false`，正式同步应使用 HTTPS；Android 原生环境的服务器配置会拒绝保存 `http://` API 地址，自托管开发也应先配 HTTPS 反向代理或隧道后填写 `https://` 地址。`pnpm --filter @timedata/mobile test` 会静态检查生产 Manifest 不允许明文流量，并检查 `packages/client` 与 `packages/mobile` 的 Capacitor 依赖都保持 v7。
-- Android 系统返回键/边缘返回通过 `packages/mobile` 的 `@capacitor/app` 原生插件监听，并交给前端 `backNavigation` 处理。落点出自单张「层级子页 → 返回目标」语义表 `resolveBackTarget`：设置二级页（含 `/settings/more` 更多功能）回 `/settings`，数据备份历史回 `/settings/data`、分类详情回分类列表；统计子页回 `/stats`、日记回顾回 `/diary`；轨道/目标详情分别回 `/tracks`、`/goals`；新增/编辑记录与搜索页优先走 history back，兜底回时间轴；日记页同样优先 history back，兜底回速记页。**表外即非子页**：根路径退出 App，其余落兜底回时间轴——这两条是安卓返回键专属语义。同一张表导出的 `hasParentRoute` 也是 iOS 边缘返回手势的生效判据之一，见 [architecture/ios-page-stack](architecture/ios-page-stack.md)。匹配前先把 pathname 归一化（削尾斜杠 + 转小写）对齐 react-router 的匹配口径：不对齐就会出现「深链进 `/settings/data/` 页面正常、返回却当它不是子页」。
+- Android 系统返回键/边缘返回通过 `packages/mobile` 的 `@capacitor/app` 原生插件监听，并交给前端 `backNavigation` 处理。落点出自单张「层级子页 → 返回目标」语义表 `resolveBackTarget`：设置二级页（含 `/settings/more` 更多功能）回 `/settings`，数据备份历史回 `/settings/data`、分类详情回分类列表；统计子页回 `/stats`、日记回顾回 `/diary`；轨道/目标详情分别回 `/tracks`、`/goals`；新增/编辑记录与搜索页优先走 history back，兜底回时间轴；日记页同样优先 history back，兜底回速记页。**表外即非子页**：根路径退出 App，其余落兜底回时间轴——这两条是安卓返回键专属语义。同一张表导出的 `hasParentRoute` 也是 iOS 边缘返回手势的生效判据之一，见 [ios/page-stack](ios/page-stack.md)。匹配前先把 pathname 归一化（削尾斜杠 + 转小写）对齐 react-router 的匹配口径：不对齐就会出现「深链进 `/settings/data/` 页面正常、返回却当它不是子页」。
 - APK 更新直链优先走 `@capacitor/app-launcher` 交给系统 URL 处理，失败时再 fallback 到 `@capacitor/browser` / Web `window.open`。
 - 备份导出走 `@capacitor/filesystem` + `@capacitor/share`：在 native 端把 JSON 写入 `Directory.Documents` 后弹出系统分享面板。新增/删除这些 Capacitor 插件后必须重跑 `pnpm --filter @timedata/mobile android:sync` 把原生侧重新同步。
 
@@ -203,7 +203,7 @@ TimeData/
 - 后端：Node.js、Hono、better-sqlite3、Zod、TypeScript
 - CLI：Node.js、TypeScript、受控 API 命令
 - Android：Capacitor、Gradle、Android SDK
-- iOS：Capacitor、CocoaPods、Xcode——**macOS-only**，本机（Windows）编不了；原生工程不入库、CI 现场生成，验收只能走 CI 出包 + 侧载装机，见 [deployment/ios-ipa](deployment/ios-ipa.md)
+- iOS：Capacitor、CocoaPods、Xcode——**macOS-only**，本机（Windows）编不了；原生工程不入库、CI 现场生成，验收只能走 CI 出包 + 侧载装机，见 [ios](ios.md)
 - 包管理：pnpm workspaces
 
 ## 故障排查

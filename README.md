@@ -153,7 +153,7 @@ GitHub Release 与 APK 同版本附带 `TimeData-unsigned.ipa`。该 IPA **未�
 
 iOS 壳与 Safari 里的 PWA **不同源**（壳是 `capacitor://localhost`），两者本地数据互不可见。装好后先在设置里填 API 地址与 Token，靠服务器同步把数据拉下来。壳的 origin `capacitor://localhost` 由服务端内置放行，不需要写进 `ALLOWED_ORIGINS`。
 
-装机步骤、构建链路与排错见 [docs/evergreen/deployment/ios-ipa.md](docs/evergreen/deployment/ios-ipa.md)。
+装机步骤、构建链路与排错见 [docs/evergreen/ios.md](docs/evergreen/ios.md)。
 
 ## 本地开发
 

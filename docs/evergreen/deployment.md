@@ -94,7 +94,7 @@ Dockerfile 构建镜像时临时安装构建工具（python3、make、g++），�
 
 - `ci.yml`：push / PR 的基础 CI，`pnpm/action-setup` 从根 `packageManager` 读取 pnpm 11 版本并安装依赖后，先运行 `pnpm audit --audit-level=high --prod`，生产依赖存在 high/critical advisory 时直接阻断；随后按 `pnpm lint` → 四道静态闸（`check:ui`、`check:design`、`check:test`、`check:diary`，**都排在 typecheck 之前**，让廉价的闸先失败）→ `pnpm -r typecheck` → 测试 → evergreen 文档四道检查 → `pnpm build` 的顺序跑，不发布产物。**测试分两个 job**：主 job 跑 `pnpm -r --parallel --filter '!@timedata/client' test`（非 client 包）、`pnpm test:scripts` 与 client e2e；client 单测由独立的 `client-unit` 矩阵 job 用 `--shard=i/4` 切四片并行（`fail-fast: false`，一眼定位是哪片挂）。文档一致性检查只在 `pull_request` 事件下运行（main 的 push 不重跑，因为同样的 diff 在 PR 阶段已经查过），按发起人区分：依赖 bot（`dependabot[bot]` / `renovate[bot]`）触发的 PR 走 `pnpm check:docs`（warn，不阻塞），其余走 `pnpm check:docs:strict`。体量棘轮不依赖 PR diff，push 和 PR 都会跑，要求 `scripts/evergreen-size-baseline.json` 覆盖当前所有 evergreen 文档，且字符数 / `covers:` 不超过基线。`ci.yml` 配有 `concurrency`（按 ref 取消被顶掉的旧跑批）。
 - `build.yml`：main 分支发布镜像到 GHCR，自更新机制读取它的成功运行记录。
-- `mobile-release.yml`：一条 workflow 出 Android + iOS + Windows 三包，版本号与 latest 契约细节见子文档 [deployment/android-apk](deployment/android-apk.md)、[deployment/ios-ipa](deployment/ios-ipa.md) 与 [deployment/windows-desktop](deployment/windows-desktop.md)；`pnpm/action-setup`（v6，自身运行在 Node 24）必须先于 `actions/setup-node`，因为 setup-node v5 的 pnpm 缓存逻辑会在步骤执行时查找 `pnpm`。
+- `mobile-release.yml`：一条 workflow 出 Android + iOS + Windows 三包，版本号与 latest 契约细节见各平台主题 [android](android.md)、[ios](ios.md) 与 [desktop](desktop.md) §9；`pnpm/action-setup`（v6，自身运行在 Node 24）必须先于 `actions/setup-node`，因为 setup-node v5 的 pnpm 缓存逻辑会在步骤执行时查找 `pnpm`。
 - `secret-scan.yml`：push main / PR 上用 gitleaks 扫全历史找泄漏的密钥；误报白名单维护在根目录 `.gitleaks.toml`（`regexTarget = "match"`）。
 
 依赖升级由 Renovate 承担（配置在根目录 `renovate.json5`，需在 GitHub 安装 Renovate App），替代原 dependabot：原生支持 `pnpm-workspace.yaml` 的 catalog，`rangeStrategy: bump` 保证 spec 与 lockfile 同步（否则 `--frozen-lockfile` 拒绝），`minimumReleaseAge: 7 days` 与 pnpm 11 供应链发布龄闸对齐；Capacitor major 被禁用，升级需人工评估。
@@ -297,14 +297,13 @@ $env:AUTH_TOKEN='devtoken'; $env:DIARY_VAULT_DIR='D:\OneDrive\Obsidian\Time'; pn
 - [ ] 改 `serveStatic` 的 root：影响生产 Dockerfile 的拷贝路径，需要同步改。
 - [ ] 改自更新流程：要在 staging 完整跑一次“拉镜像后服务能正常重启 + 接续提供服务”。
 - [ ] 改 `/api/version` 缓存 TTL：太短会打 GitHub API 限额，太长用户看不到新版本。
-- [ ] 改 Android APK 发布、Capacitor、Gradle、Manifest 或移动端 HTTPS 策略：同步看 [deployment/android-apk](deployment/android-apk.md)。
-- [ ] 改 iOS 发布或 Release 发布步骤：确认 iOS Release 仍不带 `--latest`，见 [deployment/ios-ipa](deployment/ios-ipa.md)。
+- [ ] 改 Android APK 发布、Capacitor、Gradle、Manifest 或移动端 HTTPS 策略：同步看 [android](android.md)。
+- [ ] 改 iOS 发布或 Release 发布步骤：确认 iOS Release 仍不带 `--latest`，见 [ios](ios.md)。
 
 ## 子文档索引
 
 | 子文档 | 拥有什么 |
 |---|---|
-| [deployment/android-apk](deployment/android-apk.md) | Android 签名 release APK workflow、release keystore、Capacitor / Gradle 版本、安全配置、APK 更新入口与移动端排错 |
-| [deployment/ios-ipa](deployment/ios-ipa.md) | iOS 未签名 IPA workflow、CI 现场生成原生工程、键盘工具条与状态栏补丁、不标 latest 的 Release 契约、SideStore 装机与数据边界 |
 | [deployment/configuration](deployment/configuration.md) | 环境变量表与默认值、CORS 白名单与壳 origin 内置放行、请求头白名单与预检缓存、GeoLite2 与中国段表 |
-| [deployment/windows-desktop](deployment/windows-desktop.md) | `windows` job、版本码 semver 转换、NSIS 安装包与装机侧排错；壳机制在 [desktop](desktop.md) 主题 |
+
+三平台安装包（APK / IPA / NSIS）的发布链路归各平台主题：[android](android.md)、[ios](ios.md)、[desktop](desktop.md) §9。

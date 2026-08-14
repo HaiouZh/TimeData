@@ -37,4 +37,4 @@ Windows 是 TimeData 的主用场景，但三个平台里只有它没有独立�
 - 服务端不可用时，桌面版仍是完整可用的本地优先客户端，只是同步排队。这与 `AGENTS.md` 定位中的「本地优先」一致，而甲会让四个入口里唯独主场的桌面版依赖服务器可用性。
 - 不涉及同步账本与写入边界的任何变更，[0011](0011-server-api-as-write-boundary.md) 与 [0012](0012-sync-ledger-and-domain-registry.md) 继续成立：桌面壳只是又一个普通同步客户端。
 
-机制现状见 [deployment/windows-desktop](../evergreen/deployment/windows-desktop.md)。
+机制现状见 [desktop](../evergreen/desktop.md)。

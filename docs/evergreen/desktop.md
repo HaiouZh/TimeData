@@ -7,23 +7,26 @@ covers:
   - packages/client/src/components/desktop/**
   - packages/client/src/pages/settings/SettingsDesktopPage.tsx
   - packages/client/src/capture/**
+  - scripts/desktop-version.mjs
+  - .github/workflows/mobile-release.yml
 contracts:
   - packages/desktop/src-tauri/tauri.conf.json
   - packages/desktop/src-tauri/src/shell.rs
+  - .github/workflows/mobile-release.yml
 last-reviewed: 2026-08-14
 ---
 
 # Windows 桌面壳
 
-> Tauri 壳的机制主题：壳的构成、托盘与关窗语义、开机自启判定、速记浮窗与双窗口、数据边界、配置闸与排错。
-> 不讲全局热键与打点（见子文档 [desktop/hotkeys](desktop/hotkeys.md)）、NSIS 安装包与发布链路（见 [deployment/windows-desktop](deployment/windows-desktop.md)）、移动端两个壳（Android 见 [deployment/android-apk](deployment/android-apk.md)，iOS 见 [deployment/ios-ipa](deployment/ios-ipa.md) 与 [architecture](architecture.md) §4.4–4.6）。
+> Windows 平台主题：Tauri 壳的构成、托盘与关窗语义、开机自启判定、速记浮窗与双窗口、数据边界、配置闸、NSIS 构建发布与排错。
+> 不讲全局热键与打点（见子文档 [desktop/hotkeys](desktop/hotkeys.md)）、移动端两个壳（Android 见 [android](android.md)，iOS 见 [ios](ios.md)）、服务器部署（见 [deployment](deployment.md)）。
 
 ## 承上启下
 
-- **上游**：`packages/client` 的 `mode=mobile` 构建产物、Windows 自带的 WebView2 运行时；安装包来路见 [deployment/windows-desktop](deployment/windows-desktop.md)。
-- **下游**：用户机器上的 `%LOCALAPPDATA%\TimeData`、本机又一份独立的 IndexedDB（与浏览器数据只经服务器同步汇合，§6）。
-- **契约**：client 里的桌面专属代码一律包在 `isDesktopShell()` gate 内，`@tauri-apps/api` 只准动态 `await import(...)`——三端（Web / Android / iOS）吃的是同一份 client 产物，静态 import 会把 Tauri 运行时打进入口 chunk，在没有 `__TAURI_INTERNALS__` 的环境里加载即报错。应用 identifier 为 `icu.yanzhou.timedata`。
-- **邻居**：[desktop/hotkeys](desktop/hotkeys.md)（同主题子文档）、[deployment/windows-desktop](deployment/windows-desktop.md)（发布链路）、[sync](sync.md)（桌面壳作为又一个同步客户端）、[timeline](timeline.md)（`punchNow` 与圆环打点的本体，热键打点复用它写库）、[categories-settings/settings-catalog](categories-settings/settings-catalog.md)（打点分类等设置 key）。
+- **上游**：`packages/client` 的 `mode=mobile` 构建产物、Windows 自带的 WebView2 运行时、`main` 的 GitHub Actions windows runner（§9）。
+- **下游**：`TimeData-Setup.exe` artifact 与 `v<code>` GitHub Release（与 Android / iOS 共用）、用户机器上的 `%LOCALAPPDATA%\TimeData`、本机又一份独立的 IndexedDB（与浏览器数据只经服务器同步汇合，§6）。
+- **契约**：client 里的桌面专属代码一律包在 `isDesktopShell()` gate 内，`@tauri-apps/api` 只准动态 `await import(...)`——三端（Web / Android / iOS）吃的是同一份 client 产物，静态 import 会把 Tauri 运行时打进入口 chunk，在没有 `__TAURI_INTERNALS__` 的环境里加载即报错。应用 identifier 为 `icu.yanzhou.timedata`；`--latest` 只由 `android` job 打，`windows` job 不碰。
+- **邻居**：[desktop/hotkeys](desktop/hotkeys.md)（同主题子文档）、[android](android.md) / [ios](ios.md)（同一条发布 workflow 的另两个平台）、[sync](sync.md)（桌面壳作为又一个同步客户端）、[timeline](timeline.md)（`punchNow` 与圆环打点的本体，热键打点复用它写库）、[categories-settings/settings-catalog](categories-settings/settings-catalog.md)（打点分类等设置 key）。
 
 ## 1. 壳的构成
 
@@ -126,7 +129,7 @@ capabilities 那一条守的是另一个同形的洞：新增窗口时 `tauri.co
 
 ## 6. 数据边界
 
-Tauri 用独立的 WebView2 用户数据目录，与 Edge / Chrome 的 profile 不互通。桌面壳因此是本机上又一份独立的 IndexedDB，与浏览器里访问同一站点的数据互不可见，两者只能通过服务器同步汇合——与 Capacitor 壳和 PWA 的关系同构（见 [deployment/ios-ipa](deployment/ios-ipa.md#deployment-ios-ipa-s5)）。首次启动是空数据，需在设置里填 API 地址与 Token。
+Tauri 用独立的 WebView2 用户数据目录，与 Edge / Chrome 的 profile 不互通。桌面壳因此是本机上又一份独立的 IndexedDB，与浏览器里访问同一站点的数据互不可见，两者只能通过服务器同步汇合——与 Capacitor 壳和 PWA 的关系同构（见 [ios](ios.md#ios-s5)）。首次启动是空数据，需在设置里填 API 地址与 Token。
 
 同一个 Tauri 应用内的多个窗口共享同一个 WebView2 用户数据目录，因此共用同一份 IndexedDB。
 
@@ -153,8 +156,20 @@ Tauri 用独立的 WebView2 用户数据目录，与 Edge / Chrome 的 profile �
 - **热键连按几下只记了一条**：不是故障，是桥的串行队列，见 [desktop/hotkeys](desktop/hotkeys.md) §4。
 - **`tauri dev` 下打点没有系统通知**：dev 运行的 exe 没有带 AppUserModelID 的开始菜单快捷方式，Windows 会丢掉这条 toast。通知行为以 NSIS 装机版本为准。
 - **桌面版看不到浏览器里记的数据**：不是故障，见 §6。
+- **开始菜单里看不到条目**：快捷方式在 `%APPDATA%\Microsoft\Windows\Start Menu\Programs\TimeData.lnk`，Windows 开始菜单列表存在索引延迟，搜索能直接命中。
+- **NSIS 打包步骤找不到产物**：`bundle.targets` 被改动时 bundler 会产出到别的子目录，`Rename installer` 步骤据 `*-setup.exe` 匹配。
 
-装机侧的排错（SmartScreen、开始菜单条目、CI 产物改名）见 [deployment/windows-desktop](deployment/windows-desktop.md)。
+## 9. 构建与发布
+
+`windows` job 跑在 `windows-latest` runner 上，与 `android` / `ios` 同为 `needs: prepare` 的平台 job，先到先上架。`workflow_dispatch` 的 `platform` 选项含 `windows`，`both` 含全部三个平台。**`push` 触发不区分平台**：`mobile-release` 的 push paths 是三个壳共用的一大串（`packages/{client,mobile,desktop,shared}/**`、根 `package.json` / lockfile / workspace / tsconfig、各版本与图标脚本、workflow 自身），且 push 时 `inputs.platform` 为空串、`prepare` 显式把它当 `both`——**改 client 或 shared 照样会跑 Windows job**，不是只有 `packages/desktop/**` 与 `scripts/desktop-version.mjs` 两条路径才触发。想让 Windows 只随 desktop 变更发布，得改 workflow 的 paths 或 prepare 判定，光改文档不解决。
+
+版本号有一道转换：发布链路的版本码是 8 位数字 `YYMMDDNN`，Tauri 的 `version` 必须是合法 semver。`scripts/desktop-version.mjs` 的 `codeToSemver` 把它转成 `YY.MMDD.NN`（各段去前导零，`26080301` → `26.803.1`），三级都单调递增。转换结果经 `tauri build --config` 注入，`tauri.conf.json` 里的 `version` 字段不参与发布。
+
+产物是 NSIS 安装包，`bundle.targets` 恰好为 `["nsis"]`（该快照由 §7 的配置闸守着）。bundler 输出名带版本号，发布前统一改名为 `TimeData-Setup.exe`。安装包不做代码签名，SmartScreen 会拦一次。安装位置是 `%LOCALAPPDATA%\TimeData`，开始菜单快捷方式为 `TimeData.lnk`。
+
+`windows` job 不执行 `gh release edit --latest`——latest 归属规则见 [ios](ios.md#ios-s4)。
+
+NSIS 安装新版本时先卸载旧版本，会一并清掉自启注册项；壳下次启动会按 §3 的判定自愈（用户在应用设置里显式关过的除外）。
 
 ## 子文档索引
 

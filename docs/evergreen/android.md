@@ -1,6 +1,6 @@
 ---
 type: evergreen
-title: 部署 · Android APK 发布
+title: Android 壳
 covers:
   - .github/workflows/mobile-release.yml
   - packages/mobile/capacitor.config.ts
@@ -24,17 +24,17 @@ contracts:
 last-reviewed: 2026-08-07
 ---
 
-# 部署 · Android APK 发布
+# Android 壳
 
-> [deployment](../deployment.md) 的 Android 发布子文档：签名 release APK workflow、release keystore、Capacitor / Gradle 版本、安全配置、APK 更新入口与移动端排错。
-> 不讲服务器镜像、自更新或 Docker 数据卷；这些仍在 [deployment](../deployment.md)。iOS 侧（未签名 IPA、CI 现场生成原生工程）见 [deployment/ios-ipa](ios-ipa.md)，Windows 侧（Tauri 壳、NSIS 安装包）见 [deployment/windows-desktop](windows-desktop.md)。
+> Android 平台主题：签名 release APK workflow、release keystore、Capacitor / Gradle 契约、安全配置、APK 更新入口与移动端排错。
+> 不讲服务器镜像、自更新或 Docker 数据卷（见 [deployment](deployment.md)）；不讲 iOS 壳（见 [ios](ios.md)）与 Windows 桌面壳（见 [desktop](desktop.md)）；返回键语义与本地 mobile 构建命令在 [development](development.md)，功能页面的 Android 分叉贴各功能文档讲。
 
 ## 承上启下
 
 - **上游**：`main` 分支的 GitHub Actions、GitHub Secrets、`packages/mobile` 构建脚本与 Capacitor Android 工程。
-- **下游**：`app-release.apk` artifact、`v<versionCode>` GitHub Release（与 iOS 共用）、设置页「APK 更新」入口。
-- **契约**：APK 只包含构建时的 client/mobile 代码；服务器镜像由 [deployment](../deployment.md) 的 `build.yml` 流程发布。生产移动端必须 HTTPS-only，安全边界也见 [security](../security.md)。
-- **邻居**：[development](../development.md)（本地 mobile 构建命令）、[deployment](../deployment.md)（服务器部署与自更新）、[backup](../backup.md)（从 debug 签名包迁移到 release 前的备份要求）。
+- **下游**：`app-release.apk` artifact、`v<versionCode>` GitHub Release（与 iOS / Windows 共用）、设置页「APK 更新」入口。
+- **契约**：APK 只包含构建时的 client/mobile 代码；服务器镜像由 [deployment](deployment.md) 的 `build.yml` 流程发布。生产移动端必须 HTTPS-only，安全边界也见 [security](security.md)。
+- **邻居**：[ios](ios.md)（同一套 Capacitor 配置的 iOS 侧）、[desktop](desktop.md)（同一条发布 workflow 的 Windows 侧）、[development](development.md)（本地 mobile 构建命令）、[deployment](deployment.md)（服务器部署与自更新）、[backup](backup.md)（从 debug 签名包迁移到 release 前的备份要求）。
 
 ## 1. GitHub Actions 发布 APK
 
@@ -49,7 +49,7 @@ last-reviewed: 2026-08-07
 
 版本号由 `prepare` job 单点计算（`scripts/mobile-version.mjs`）：tag 为 `v` + 8 位数字，数字部分 = `yymmdd`（Asia/Shanghai）+ 两位当日序号。序号规则：**取 `v<日期>*` 与 `android-<日期>*` 两种 tag 中的最大序号 +1**——切换期两种前缀并存，只数一种会让新号退到已发布版本之下（客户端 `Number` 比较后判定「没有新版本」，所有人收不到更新）；取最大而非计数——中途删过 tag 时计数会算出已被占用的号。序号上限 99，超过直接报错退出（`printf "%02d" 100` 会吐出 9 位版本号）。**8 位是硬约束，不可涨位**：已分发 APK 的 `mobileUpdate.ts` 用 `\d{8,9}` 解析 release tag（更早的版本只认 `\d{8}`），位数一变它们就解析失败。`prepare` 同时输出 `source_ref`：新发版为 `$GITHUB_SHA`，补包模式为 `refs/tags/<tag>`；`android` / `ios` / `windows` 三个平台 job 的 checkout 都消费它——补包用原版本源码构建，而不是运行分支 HEAD。
 
-latest 规则：`prepare` 创建 Release 时显式 `--latest=false`（`gh` 的 `--latest` 默认是 `automatic`，非 semver tag 按创建时间自动成为 latest——不显式关掉的话 prepare 一创建就把 latest 从上一个带 APK 的 Release 抢走），**`android` job 上传 APK 成功后由 `Mark release as latest` 步骤 `gh release edit --latest` 落位**——该步骤带 `if: ${{ inputs.tag == '' }}`，补包（`inputs.tag` 非空）时整个跳过，iOS 与 Windows 侧都不碰。详见 [deployment/ios-ipa](ios-ipa.md#deployment-ios-ipa-s4)。
+latest 规则：`prepare` 创建 Release 时显式 `--latest=false`（`gh` 的 `--latest` 默认是 `automatic`，非 semver tag 按创建时间自动成为 latest——不显式关掉的话 prepare 一创建就把 latest 从上一个带 APK 的 Release 抢走），**`android` job 上传 APK 成功后由 `Mark release as latest` 步骤 `gh release edit --latest` 落位**——该步骤带 `if: ${{ inputs.tag == '' }}`，补包（`inputs.tag` 非空）时整个跳过，iOS 与 Windows 侧都不碰。详见 [ios](ios.md#ios-s4)。
 
 workflow 会先检查 `TIMEDATA_RELEASE_KEYSTORE_BASE64` 是否已配置，缺失时在 `Decode release keystore` 步骤明确失败；配置存在后把 keystore 解码到 `packages/mobile/android/timedata-release.keystore`，通过 `ORG_GRADLE_PROJECT_*` 传给 Gradle，并把同一个 versionCode 传给 Gradle 与 Vite（`TIMEDATA_ANDROID_VERSION_CODE`），然后运行 `pnpm build:mobile:release-apk`。构建步骤之后固定执行 `Cleanup release keystore`（`if: always()`），在上传 artifact 或发布 Release 前删除 workspace 内的 `packages/mobile/android/timedata-release.keystore`，即使前面的构建失败也会清理。`packages/mobile` 的 release APK 构建和 `pnpm build:mobile:release-apk` 始终保持一致，文档里的构建步骤以这个脚本为准。产物路径是：
 
@@ -61,25 +61,25 @@ packages/mobile/android/app/build/outputs/apk/release/app-release.apk
 
 设置页的「APK 更新」拉 `GET /releases?per_page=30`（列表按创建时间倒序），取第一个 tag 能解析出 Android versionCode 且带 `.apk` 资产的 Release，发现新版本时打开**该 Release 的 HTML 页面**（`html_url`），由用户在页面上自己点 APK 资产下载。**仍不能改用 `/releases/latest`**：`latest` 只由带 APK 的发布步骤打，指向的 Release 必然有 `.apk`，但客户端继续扫列表是为了兼容历史遗留的 `android-*` / `ios-*` Release（`ios-*` tag 解析不出 versionCode、`android-*` 资产结构是旧的）——合并前「iOS 顶掉 latest」的成因已消失，扫列表的理由不再是躲 latest。**刻意打 Release 页而不是 `.apk` 直链**（`getAndroidApkUpdateUrl` 只返回 `pageUrl`，虽然 `AndroidApkUpdate` 里 `apkUrl` 也存着）：Android `Intent.ACTION_VIEW` 收到 `.apk` URL 时浏览器通常静默甩给下载管理器，部分机型 / 浏览器组合下表现为「选了浏览器但什么都没发生」；Release 页是普通 HTML，任何浏览器都能渲染，链路确定性最强。打开这个 URL 时，Android 原生环境优先通过 `@capacitor/app-launcher` 交给系统处理，失败时再 fallback 到 `@capacitor/browser` / Web `window.open`。Android 仍会要求用户确认安装，首次从旧 debug 签名包迁移到 release 签名包时不能覆盖安装，需要先备份数据、卸载旧包，再安装 release 包；后续 release 包之间可以覆盖安装。
 
-<a id="deployment-android-apk-s2"></a>
+<a id="android-s2"></a>
 
 ## 2. Capacitor / Gradle 契约
 
 Capacitor 7 版本的 Android 构建要求：Node 22+、pnpm 11、Java 21、Android SDK Platform 35 / Build-tools 35.0.0、Gradle 8.11.1、Android Gradle Plugin 8.7.2。`packages/mobile/android/variables.gradle` 中 `minSdkVersion = 24`，因此 APK 支持 Android 7.0（API 24）及以上设备；CI 的 `mobile-release.yml` 也按这些版本安装 pnpm、Java 与 Android SDK。
 
-Android 端依赖的 Capacitor 插件清单：`@capacitor/app`（返回键）、`@capacitor/app-launcher`（把外链交给系统处理）、`@capacitor/browser`（外链浏览器 fallback）、`@capacitor/filesystem` + `@capacitor/share`（备份导出落盘和分享）、`@capacitor/haptics`（触感反馈，见 [design-language/invariants](../design-language/invariants.md) 第 13 条）、`@capacitor/keyboard`（软键盘事件桥接，见 [design-language/invariants](../design-language/invariants.md) 第 12 条）。新增或升级这些插件后必须重跑 `pnpm --filter @timedata/mobile android:sync`，让 `packages/mobile/android/capacitor.settings.gradle` 与 `packages/mobile/android/app/capacitor.build.gradle` 同步注册原生插件，否则原生工程拿不到新插件。
+Android 端依赖的 Capacitor 插件清单：`@capacitor/app`（返回键）、`@capacitor/app-launcher`（把外链交给系统处理）、`@capacitor/browser`（外链浏览器 fallback）、`@capacitor/filesystem` + `@capacitor/share`（备份导出落盘和分享）、`@capacitor/haptics`（触感反馈，见 [design-language/invariants](design-language/invariants.md) 第 13 条）、`@capacitor/keyboard`（软键盘事件桥接，见 [design-language/invariants](design-language/invariants.md) 第 12 条）。新增或升级这些插件后必须重跑 `pnpm --filter @timedata/mobile android:sync`，让 `packages/mobile/android/capacitor.settings.gradle` 与 `packages/mobile/android/app/capacitor.build.gradle` 同步注册原生插件，否则原生工程拿不到新插件。
 
 `packages/mobile/package.json` 与 `packages/mobile/scripts/check-capacitor-versions.mjs` 的 `sharedPackages` 登记同一份插件清单，闸住 client / mobile 两侧版本不对齐。同一个脚本另有一条**「共享清单 ⊆ Gradle 注册」**校验：`sharedPackages` 里每个插件都必须在 `capacitor.settings.gradle` 有 `include ':capacitor-<名>'`、在 `app/capacitor.build.gradle` 有 `implementation project(':capacitor-<名>')`，缺任一侧即报错点名该插件并要求重跑 `android:sync`。`@capacitor/core` 是唯一豁免（纯 JS 桥，原生侧随 `:capacitor-android` 一起进包，没有独立 Gradle 子工程），豁免表 `nativeRegistrationExemptions` 每条都带理由。这条校验存在的理由是**漏注册不会炸**：插件在 JS 侧照常 import，调用只拿到「未实现」，而 `lib/haptics.ts` 这类调用点把它当预期路径防着（先探 thenable 再挂拒绝兜底、外层再包 try 兜同步抛），业务动作不报错，功能却整层静默空转。`packages/mobile/scripts/check-capacitor-versions.test.mjs` 钉住「缺注册报错 / 齐全通过」两条，跟着 `pnpm --filter @timedata/mobile test` 跑。
 
 Android 生产 Manifest 显式设置 `android:usesCleartextTraffic="false"`，并且 `packages/mobile/capacitor.config.ts` 保持 `server.cleartext: false`、`android.allowMixedContent: false`。App 内服务器配置在原生 Android 环境会拒绝保存 `http://` API 地址；自托管服务器需要先通过 Caddy / Nginx / Tunnel 等方式暴露 HTTPS，再在 App 中填写 `https://` 地址。`pnpm --filter @timedata/mobile test` 会静态检查这些安全配置，避免 release APK 默认允许 HTTP 明文流量或混合内容。
 
-同步客户端不启用 `CapacitorHttp` 的全局 fetch/XHR patch。仅 Android 回前台时，`/api/sync/status` 与增量 `/api/sync/pull` 可由 client 显式调用 Capacitor 7 内置 `CapacitorHttp`；它使用系统 `HttpURLConnection`，不经过浏览器 CORS 预检，但仍受设备 DNS、VPN、代理、TLS 与服务器 HTTPS 链路影响，也没有逐请求取消能力。push、SSE、force-push、健康诊断、管理/日记/备份继续走 WebView `fetch`，所以 `https://localhost` 必须能过 CORS——它由服务端代码内置放行（[ADR 0030](../../adr/0030-shell-origins-allowed-by-server-code.md)），不必写进 `ALLOWED_ORIGINS`；原生路径不是放宽 CORS 或 cleartext 的理由。该内置能力无需新增 npm 依赖、Manifest 权限或原生插件注册。
+同步客户端不启用 `CapacitorHttp` 的全局 fetch/XHR patch。仅 Android 回前台时，`/api/sync/status` 与增量 `/api/sync/pull` 可由 client 显式调用 Capacitor 7 内置 `CapacitorHttp`；它使用系统 `HttpURLConnection`，不经过浏览器 CORS 预检，但仍受设备 DNS、VPN、代理、TLS 与服务器 HTTPS 链路影响，也没有逐请求取消能力。push、SSE、force-push、健康诊断、管理/日记/备份继续走 WebView `fetch`，所以 `https://localhost` 必须能过 CORS——它由服务端代码内置放行（[ADR 0030](../adr/0030-shell-origins-allowed-by-server-code.md)），不必写进 `ALLOWED_ORIGINS`；原生路径不是放宽 CORS 或 cleartext 的理由。该内置能力无需新增 npm 依赖、Manifest 权限或原生插件注册。
 
-`packages/mobile/capacitor.config.ts` 是两个平台共用的：`android` 段与 `server` 段归本文档，`ios` 段（背景色）与 iOS 构建链路归 [deployment/ios-ipa](ios-ipa.md)。`server.androidScheme` 只作用于 Android；iOS 走 Capacitor 默认的 `capacitor://localhost`，两个壳的本地库不同源。`android.backgroundColor` 与 `ios.backgroundColor` 均为 `#0e1320`（= client `--color-page`），原生背景露出时（启动瞬间、旋转过渡、滚动越界回弹）与网页底色一致。`plugins.Keyboard.resize` 同样两平台共用，值为 `none`（webview 不因键盘 reflow）——该配置项与网页层键盘避让机制的关系讲在 [deployment/ios-ipa](ios-ipa.md#deployment-ios-ipa-s3-3)。
+`packages/mobile/capacitor.config.ts` 是两个平台共用的：`android` 段与 `server` 段归本文档，`ios` 段（背景色）与 iOS 构建链路归 [ios](ios.md)。`server.androidScheme` 只作用于 Android；iOS 走 Capacitor 默认的 `capacitor://localhost`，两个壳的本地库不同源。`android.backgroundColor` 与 `ios.backgroundColor` 均为 `#0e1320`（= client `--color-page`），原生背景露出时（启动瞬间、旋转过渡、滚动越界回弹）与网页底色一致。`plugins.Keyboard.resize` 同样两平台共用，值为 `none`（webview 不因键盘 reflow）——该配置项与网页层键盘避让机制的关系讲在 [ios](ios.md#ios-s3-3)。
 
 Android 壳入口是 `packages/mobile/android/app/src/main/java/app/timedata/mobile/MainActivity.java`。Activity 启动时关闭 decor 自动适配，并在根内容视图上应用 inset padding，让 Capacitor WebView 避开状态栏与刘海区域，避免 APK 在全面屏设备上把页面顶部绘制到通知栏下面。**只让顶部与左右，底部显式传 0**：`getInsets()` 虽然取的是 `systemBars() | displayCutout()`（`systemBars()` 天然含 `navigationBars()`），但 `setPadding` 的第四个参数写死 0——产品取向是内容延伸到手势条之下、横条浮在其上，照搬 inset 会在底栏下方留一条空带。
 
-**该原生 padding 是 Android 壳顶部与左右的唯一让位机制**：edge-to-edge 下 WebView 的 `env(safe-area-inset-*)` 会照常报非零值、与原生 padding 叠加成双倍留白，故 client 在 Android 壳把 `<html data-platform="android">` 标记置上，CSS 随之把 `--safe-top` / `--safe-right` / `--safe-left` 清零（机制见 [design-language §1](../design-language.md#design-language-s1) 与 [invariants 第 11 条](../design-language/invariants.md)），iOS / 桌面 / PWA 仍走 `env()` 值。**底部不在这套清零里**：`--safe-bottom` 本就在所有平台固定为 `0px`，与原生层传 0 同源；真正需要底部安全区的底部弹层单独走 `--safe-bottom-sheet`（它照常取 `env()`）。
+**该原生 padding 是 Android 壳顶部与左右的唯一让位机制**：edge-to-edge 下 WebView 的 `env(safe-area-inset-*)` 会照常报非零值、与原生 padding 叠加成双倍留白，故 client 在 Android 壳把 `<html data-platform="android">` 标记置上，CSS 随之把 `--safe-top` / `--safe-right` / `--safe-left` 清零（机制见 [design-language §1](design-language.md#design-language-s1) 与 [invariants 第 11 条](design-language/invariants.md)），iOS / 桌面 / PWA 仍走 `env()` 值。**底部不在这套清零里**：`--safe-bottom` 本就在所有平台固定为 `0px`，与原生层传 0 同源；真正需要底部安全区的底部弹层单独走 `--safe-bottom-sheet`（它照常取 `env()`）。
 
 ## 3. 本地生成 release keystore
 

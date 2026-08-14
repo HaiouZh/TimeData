@@ -1,6 +1,6 @@
 ---
 type: evergreen
-title: 架构 · iOS 页面栈与边缘返回
+title: iOS 壳 · 页面栈与边缘返回
 covers:
   - packages/client/src/components/app-shell/KeptRouteStack.tsx
   - packages/client/src/components/app-shell/keptLayerActive.ts
@@ -15,10 +15,10 @@ contracts:
 last-reviewed: 2026-08-14
 ---
 
-# 架构 · iOS 页面栈与边缘返回
+# iOS 壳 · 页面栈与边缘返回
 
-> [architecture](../architecture.md) 的**子文档**：iOS 壳如何在钻进子页时保留上一页（`KeptRouteStack`）、保留层如何灭声（`keptLayerActive`）、边缘返回手势怎么起手与收尾（`EdgeSwipeBack`）。
-> 不讲：调度器挂起死锁（见 [scheduler-resilience](scheduler-resilience.md)）、原生工程构建链路（见 [deployment/ios-ipa](../deployment/ios-ipa.md)，工程为何不入库见 [architecture](../architecture.md) §4.4）。
+> [ios](../ios.md) 的**子文档**：iOS 壳如何在钻进子页时保留上一页（`KeptRouteStack`）、保留层如何灭声（`keptLayerActive`）、边缘返回手势怎么起手与收尾（`EdgeSwipeBack`）。
+> 不讲：调度器挂起死锁（见 [scheduler-resilience](scheduler-resilience.md)）、原生工程构建链路与工程为何不入库（见 [母文档](../ios.md) §2 / §1）。
 
 ## 承上启下
 

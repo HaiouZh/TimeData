@@ -20,7 +20,7 @@ last-reviewed: 2026-08-10
 - **上游**：[母文档](../deployment.md) §1 的运行时拓扑（容器、挂载卷、Watchtower）。
 - **下游**：部署者的 `.env` 与 `docker-compose.yml`；三个壳（Android / iOS / 桌面）能不能连上服务端由本文的 CORS 段决定。
 - **契约**：变量定义的单一来源是 `.env.example`；CORS 的 origin 集合、请求头白名单与预检缓存全部由 `cors.ts` 单点构造；限流与体积上限的**数值**以本文的环境变量表为单一来源。
-- **邻居**：[母文档](../deployment.md)、[security](../security.md)（鉴权与限流语义）、[deployment/android-apk](android-apk.md)（Android 原生通道与 CORS 的关系）。
+- **邻居**：[母文档](../deployment.md)、[security](../security.md)（鉴权与限流语义）、[android](../android.md)（Android 原生通道与 CORS 的关系）。
 
 ## 1. 关键环境变量
 
@@ -59,7 +59,7 @@ last-reviewed: 2026-08-10
 
 三个壳的 origin——Android（`androidScheme: "https"`）的 `https://localhost`、iOS（Capacitor 默认 scheme）的 `capacitor://localhost`、桌面版（Tauri v2）的 `http://tauri.localhost` / `https://tauri.localhost` / `tauri://localhost`——由壳运行时写死、部署者无从得知，已由 `cors.ts` 的 `SHELL_ORIGINS_BY_SHELL` **内置放行**，不必也不用写进 `ALLOWED_ORIGINS`。这三条以前是必配项，三个壳各因漏配踩过一次「壳内 `/api/*` 全线被拒而同源网页版毫无异常」。决策与安全论证见 [ADR 0030](../../adr/0030-shell-origins-allowed-by-server-code.md)；`cors.test.ts` 有两条闸守它，其一要求 `packages/` 下每个新包都表态是不是壳。
 
-Android `resume` 同步的原生通道（`/api/sync/status` 与增量 `/api/sync/pull`）与其余 WebView 通道的划分见 [deployment/android-apk](android-apk.md)；原生通道仍使用 Bearer/TOTP 鉴权与 HTTPS，客户端不启用全局 `CapacitorHttp` fetch/XHR patch，避免改变 SSE 的流式与取消语义。
+Android `resume` 同步的原生通道（`/api/sync/status` 与增量 `/api/sync/pull`）与其余 WebView 通道的划分见 [android](../android.md)；原生通道仍使用 Bearer/TOTP 鉴权与 HTTPS，客户端不启用全局 `CapacitorHttp` fetch/XHR patch，避免改变 SSE 的流式与取消语义。
 
 服务端 CORS 允许的请求头由 `packages/server/src/middleware/cors.ts` 的 `ALLOWED_REQUEST_HEADERS` 单点定义，`index.ts` 的 CORS 中间件直接消费：`Content-Type`、`Authorization`、`X-Confirm`、`X-TimeData-Client`、`X-TimeData-Client-Build`、`X-TOTP-Code`。`X-Confirm` 供 `/api/admin/sync-logs` 清空确认使用，`X-TimeData-Client` 供请求审计记录 client hint，`X-TimeData-Client-Build` 是 `apiFetch` 给每个请求带的构建观测头（见 [`sync`](../sync.md#sync-row-granularity)），`X-TOTP-Code` 供危险操作补码重试。**客户端新增任何跨域自定义 header 必须同步这份白名单**——漏掉会让 Capacitor 壳的每个请求预检失败，而同源网页版毫无感知。`cors.test.ts` 有一条跨包闸机检 `client/src/lib/api.ts` 里 `headers.set` 的 `X-` 头是否都在白名单内。
 

@@ -1,6 +1,6 @@
 ---
 type: evergreen
-title: 部署 · iOS 未签名 IPA
+title: iOS 壳
 covers:
   - .github/workflows/mobile-release.yml
   - packages/mobile/scripts/ios/**
@@ -11,17 +11,17 @@ contracts:
 last-reviewed: 2026-08-04
 ---
 
-# 部署 · iOS 未签名 IPA
+# iOS 壳
 
-> [deployment](../deployment.md) 的 iOS 发布子文档：CI 现场生成 iOS 原生工程、产出**未签名** IPA、键盘工具条与状态栏补丁、SideStore 装机与数据边界。
-> 不讲 Android 签名与 Gradle（见 [deployment/android-apk](android-apk.md)），也不讲服务器镜像与自更新（见 [deployment](../deployment.md)）。
+> iOS 平台主题：CI 现场生成 iOS 原生工程、产出**未签名** IPA、键盘工具条与状态栏补丁、SideStore 装机与数据边界；WKWebView 的运行时机制（保留页面栈与边缘返回、调度器死锁自救）在子文档。
+> 不讲 Android 签名与 Gradle（见 [android](android.md)），不讲服务器镜像与自更新（见 [deployment](deployment.md)）；`AppShell` 的 iOS 渲染分叉位置在 [architecture](architecture.md) §4.5。
 
 ## 承上启下
 
 - **上游**：`main` 的 GitHub Actions macOS runner、`packages/mobile` 的 Capacitor 配置与 client 的 mobile 构建产物。
-- **下游**：`TimeData-unsigned.ipa` artifact、`v<code>` GitHub Release（与 Android 共用）、用户手机上的 SideStore / AltStore。
+- **下游**：`TimeData-unsigned.ipa` artifact、`v<code>` GitHub Release（与 Android / Windows 共用）、用户手机上的 SideStore / AltStore。
 - **契约**：`--latest` 只由带 APK 的发布步骤打（`prepare` 创建时显式 `--latest=false`），iOS 侧不碰；`packages/mobile/ios/` 永不入库。
-- **邻居**：[deployment/android-apk](android-apk.md)（同一套 Capacitor 配置的 Android 侧）、[security](../security.md)（HTTPS-only 边界同样适用）。
+- **邻居**：[android](android.md)（同一套 Capacitor 配置的 Android 侧）、[desktop](desktop.md)（同一条发布 workflow 的 Windows 侧）、[security](security.md)（HTTPS-only 边界同样适用）、[ios/page-stack](ios/page-stack.md) 与 [ios/scheduler-resilience](ios/scheduler-resilience.md)（同主题子文档）。
 
 ## 1. 为什么原生工程不进仓库
 
@@ -57,25 +57,25 @@ last-reviewed: 2026-08-04
 
 `MainViewController` 覆写 `preferredStatusBarStyle` 返回 `.lightContent`——app 底色 `--color-page`（#0e1320）是深色，默认黑字读不出来。它随同一个 Swift 文件走 §3 开头那三步管线，无需额外步骤；`cap add ios` 生成的 `Info.plist` 自带 `UIViewControllerBasedStatusBarAppearance=true`，状态栏样式统一由 VC 决定，不需要 plist 补丁。同批把 `capacitor.config.ts` 的 `ios.backgroundColor`（Android 侧同步）从 `#0f172a` 对齐到 `#0e1320`，消除启动 / 旋转 / 滚动越界时露出原生背景的色差带。
 
-<a id="deployment-ios-ipa-s3-3"></a>
+<a id="ios-s3-3"></a>
 
 ### 3.3 Keyboard resize 模式
 
-`packages/mobile/capacitor.config.ts` 的 `plugins.Keyboard.resize` 设为 `KeyboardResize.None`（`@capacitor/keyboard` 插件，两平台共用配置，`capacitor.config.ts` 整体归属见 [deployment/android-apk](android-apk.md#deployment-android-apk-s2)；这条不经过**本文** §3 开头的 `patch-ios.rb` 补丁管线，是构建时随 Capacitor 配置生效的插件设置）：iOS 的 webview 不因键盘弹起自动 reflow。选 `none` 而不是让 webview 自己 resize，是为了与网页层 JS 计算避让保持一致——§3.1 已经移除了系统键盘工具条，贴底输入条与内容留白改由网页层手动抬起（见 [design-language/invariants](../design-language/invariants.md) 第 12 条）。
+`packages/mobile/capacitor.config.ts` 的 `plugins.Keyboard.resize` 设为 `KeyboardResize.None`（`@capacitor/keyboard` 插件，两平台共用配置，`capacitor.config.ts` 整体归属见 [android](android.md#android-s2)；这条不经过**本文** §3 开头的 `patch-ios.rb` 补丁管线，是构建时随 Capacitor 配置生效的插件设置）：iOS 的 webview 不因键盘弹起自动 reflow。选 `none` 而不是让 webview 自己 resize，是为了与网页层 JS 计算避让保持一致——§3.1 已经移除了系统键盘工具条，贴底输入条与内容留白改由网页层手动抬起（见 [design-language/invariants](design-language/invariants.md) 第 12 条）。
 
 **这条配置的作用范围比字面小，别当成两平台的护栏**：`resize` 只有 iOS 端读，Android 端插件根本不解析它（`KeyboardPlugin.java` 只读 `resizeOnFullScreen`，`setResizeMode` 是 `unimplemented()`）；iOS 端的 `none` 也只拦住插件自己 resize，拦不住 WebKit 因聚焦输入框而挪视口。故网页层的避让口径不建立在"壳一定不动"之上，而是实测布局视口底部被遮多少（同上第 12 条）。`check-android-config.mjs` 仍棘轮住这条配置，守的是 iOS 侧行为不被配置漂移改掉。
 
-<a id="deployment-ios-ipa-s4"></a>
+<a id="ios-s4"></a>
 
 ## 4. Release 契约：latest 只由带 APK 的发布步骤打
 
-iOS、Android 与 Windows 共用一个 `v<code>` tag 与同一个 Release（`mobile-release.yml`：`prepare` 建 Release → `android` / `ios` / `windows` 三个平台 job 各自上传附件，先到先上架、互不等待）。latest 规则是硬约束，但**当前设置页的「APK 更新」入口已经不读 latest**：它拉 `/releases?per_page=30` 扫列表，取第一个能解析出 Android versionCode 且带 `.apk` 资产的 Release（见 [deployment/android-apk](android-apk.md#deployment-android-apk-s2)）。latest 仍只由带 APK 的发布步骤打，理由变成两条：兼容更早那批走 `/releases/latest` 的客户端（合并前它们就被 iOS 顶掉的 latest 打坏过），以及不让仓库发布页的 latest 指向一个没有 APK 的 Release。
+iOS、Android 与 Windows 共用一个 `v<code>` tag 与同一个 Release（`mobile-release.yml`：`prepare` 建 Release → `android` / `ios` / `windows` 三个平台 job 各自上传附件，先到先上架、互不等待）。latest 规则是硬约束，但**当前设置页的「APK 更新」入口已经不读 latest**：它拉 `/releases?per_page=30` 扫列表，取第一个能解析出 Android versionCode 且带 `.apk` 资产的 Release（见 [android](android.md#android-s2)）。latest 仍只由带 APK 的发布步骤打，理由变成两条：兼容更早那批走 `/releases/latest` 的客户端（合并前它们就被 iOS 顶掉的 latest 打坏过），以及不让仓库发布页的 latest 指向一个没有 APK 的 Release。
 
 因此：**latest 只由含 APK 的发布步骤打**——`prepare` 创建 Release 时显式 `--latest=false`（`gh` 的 `--latest` 默认是 `automatic`，非 semver tag 按创建时间自动成为 latest，不显式关掉的话 prepare 一创建就把 latest 从上一个带 APK 的 Release 抢走，Android 构建失败时更会永久停在没 APK 的 Release 上）；`android` job 上传 APK 成功后，由单独的 `Mark release as latest` 步骤 `gh release edit --latest` 落位——该步骤带 `if: ${{ inputs.tag == '' }}` 条件，补包（`inputs.tag` 非空，即 workflow_dispatch 填了 `tag` 输入）时整个跳过。**除 `android` 外的平台 job 一律不碰这个标记**——iOS 与 Windows 侧同此规矩。合并后早期走 `/releases/latest` 的客户端一并被修复——从此 latest 指向的 Release 必然带 apk。
 
 产物同时上传为 workflow artifact（`timedata-unsigned-ipa`），Release 发布失败时仍可从 run 页面取包；发布步骤对 GitHub API 临时超时做最多 3 次重试，与 Android 侧同构。
 
-<a id="deployment-ios-ipa-s5"></a>
+<a id="ios-s5"></a>
 
 ## 5. 装机与数据边界
 
@@ -90,3 +90,10 @@ IPA 未签名，不能直接安装。手机上用 SideStore（推荐，可离机
 - **`Contents.json 声明了多个不同的 filename`**：Capacitor 换了图标模板（如拆成多尺寸变体），按新结构调整 `scripts/ios-app-icon.mjs`。
 - **包能装但键盘工具条还在**：先确认 `Patch iOS project` 步骤真跑过且 App target 里有两个 Swift 文件；再确认 storyboard 的 `customClass` 已是 `MainViewController`。
 - **签名 7 天到期后打不开**：SideStore 重签即可，不需要重装、不丢数据。
+
+## 子文档索引
+
+| 子文档 | 拥有什么 |
+|---|---|
+| [ios/page-stack](ios/page-stack.md) | 保留式页面栈（`KeptRouteStack`）的五条不变式与推进纯函数、保留层灭声（`keptLayerActive`）、边缘返回手势（`EdgeSwipeBack`）的四态状态机、起手判据与 rAF 收尾 |
+| [ios/scheduler-resilience](ios/scheduler-resilience.md) | React 调度器在 WKWebView 挂起后死锁的成因与判据、经 `MessagePort` 原型挂钩补发一拍的解法、回前台 transition 探针看门狗 |

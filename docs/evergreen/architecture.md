@@ -134,17 +134,17 @@ CLI 不直接读写 SQLite。命令面见 [cli](cli.md)。
 
 `packages/mobile/capacitor.config.ts` 指向 `../client/dist`，两平台共用。原生工程只承载壳、权限、图标和 Capacitor 插件配置；业务逻辑仍在 client。
 
-两平台在**原生工程的入库方式**上不对称：Android 工程在 `packages/mobile/android/` 随仓库走，改完直接提交；iOS 工程不入库，由 CI 现场 `cap add ios` 生成，原生定制只能表达成 `packages/mobile/scripts/ios/patch-ios.rb` 里的补丁步骤。代价是 iOS 侧改动本机验不了，只能 CI 出包后侧载装机人工确认。
+两平台在**原生工程的入库方式**上不对称：Android 工程在 `packages/mobile/android/` 随仓库走，改完直接提交；iOS 工程不入库，由 CI 现场 `cap add ios` 生成，原生定制只能表达成 `packages/mobile/scripts/ios/patch-ios.rb` 里的补丁步骤。代价是 iOS 侧改动本机验不了，只能 CI 出包后侧载装机人工确认。两个壳的发布链路与平台细节见各自主题 [android](android.md) 与 [ios](ios.md)。
 
 ### 4.5 iOS 壳：页面栈与边缘返回
 
-**主内容区**的渲染路径上 iOS 与其余平台只有一处分叉：`AppShell` 按 `Capacitor.getPlatform() === "ios"` 二选一，iOS 渲染保留式页面栈 `components/app-shell/KeptRouteStack.tsx`——钻进子页时上一页不卸载，留在 DOM 里供边缘返回手势（`components/EdgeSwipeBack.tsx`）露出；其余平台仍是单份 `<main>` + `<Routes>`，分叉之外零差异。栈的五条不变式、推进纯函数、保留层灭声与手势状态机见 [architecture/ios-page-stack](architecture/ios-page-stack.md)；构建链路与原生补丁见 [deployment/ios-ipa](deployment/ios-ipa.md)（工程为何不入库见 §4.4）。
+**主内容区**的渲染路径上 iOS 与其余平台只有一处分叉：`AppShell` 按 `Capacitor.getPlatform() === "ios"` 二选一，iOS 渲染保留式页面栈 `components/app-shell/KeptRouteStack.tsx`——钻进子页时上一页不卸载，留在 DOM 里供边缘返回手势（`components/EdgeSwipeBack.tsx`）露出；其余平台仍是单份 `<main>` + `<Routes>`，分叉之外零差异。栈的五条不变式、推进纯函数、保留层灭声与手势状态机见 [ios/page-stack](ios/page-stack.md)；构建链路与原生补丁见 [ios](ios.md)（工程为何不入库见 §4.4）。
 
 `AppShell` 里另有一处与主内容区无关的平台条件：`lib/desktop/shell.ts` 的 `isDesktopShell()` 决定挂不挂 `components/desktop/DesktopBridge.tsx`（桌面壳的全局热键桥与打点反馈层，Tauri API 只在其内部动态 import，三端 bundle 不加载）。该 gate 与设置页「桌面设置」入口是桌面专属代码在 client 里的全部落点，见 [desktop](desktop.md)。
 
 ### 4.6 iOS 壳：调度器死锁
 
-WKWebView 在 App 挂起时会丢掉 React 调度器赖以排队的 `MessageChannel` 消息，令其永久停摆：**凡走调度器的更新一起瘫**（路由导航、liveQuery 回流），而点击里直接改 state 走微任务通道、照常生效——现场是「弹层点得开、底栏 tab 点不动」。判据、补拍解法与回前台探针见 [architecture/scheduler-resilience](architecture/scheduler-resilience.md)。
+WKWebView 在 App 挂起时会丢掉 React 调度器赖以排队的 `MessageChannel` 消息，令其永久停摆：**凡走调度器的更新一起瘫**（路由导航、liveQuery 回流），而点击里直接改 state 走微任务通道、照常生效——现场是「弹层点得开、底栏 tab 点不动」。判据、补拍解法与回前台探针见 [ios/scheduler-resilience](ios/scheduler-resilience.md)。
 
 ## 5. 关键约定
 
@@ -187,17 +187,12 @@ WKWebView 在 App 挂起时会丢掉 React 调度器赖以排队的 `MessageChan
 | [stats-insights](stats-insights.md) | 域 | 时间统计、洞察模块、统计布局和趋势设置 |
 | [admin](admin.md) | 运维 | `/settings/admin-insights` 只读管理洞察 API、健康检查、异常筛选和基础分析 |
 | [categories-settings](categories-settings.md) | 域 | 分类 schema、分类管理、排序/颜色/删除、sleep/punch 分类设置 |
-| [desktop](desktop.md) | 模块 | Windows 桌面壳机制：窗口托盘、开机自启、速记浮窗与双窗口、全局热键与打点（子文档）、数据边界、配置闸 |
+| [android](android.md) | 模块 | Android 壳：签名 APK workflow、Capacitor / Gradle 契约、安全配置、APK 更新入口与移动端排错 |
+| [ios](ios.md) | 模块 | iOS 壳：CI 现场生成工程与未签名 IPA、原生补丁、装机与数据边界、页面栈与调度器韧性（子文档） |
+| [desktop](desktop.md) | 模块 | Windows 桌面壳：窗口托盘、开机自启、速记浮窗与双窗口、全局热键与打点（子文档）、数据边界、配置闸、NSIS 构建发布 |
 | [design-language](design-language.md) | 设计 | 语义颜色 token、字体与排版角色、圆角/边框/阴影、自绘控件库、Phosphor 图标、设计语言棘轮 |
 
-## 7. 子文档索引
-
-| 子文档 | 拥有什么 |
-|---|---|
-| [architecture/ios-page-stack](architecture/ios-page-stack.md) | iOS 保留式页面栈（`KeptRouteStack`）的五条不变式与推进纯函数、保留层灭声（`keptLayerActive`）、边缘返回手势（`EdgeSwipeBack`）的四态状态机、起手判据与 rAF 收尾 |
-| [architecture/scheduler-resilience](architecture/scheduler-resilience.md) | React 调度器在 WKWebView 挂起后死锁的成因与判据、经 `MessagePort` 原型挂钩补发一拍的解法、回前台 transition 探针看门狗 |
-
-## 8. 不在这份文档里的事
+## 7. 不在这份文档里的事
 
 - 具体字段 schema、页面细节、路由细节和测试清单。
 - 本地过程文档、spec、plan、review；这些在 `docs_local/**`。
