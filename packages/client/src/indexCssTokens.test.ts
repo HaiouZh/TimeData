@@ -53,6 +53,28 @@ describe("index.css design tokens", () => {
     expect(css).toContain("300ms cubic-bezier(0.2, 0, 0, 1)");
   });
 
+  it("app-main 滚动容器带键盘 scroll-padding（聚焦滚动落点让开键盘 + 保存按钮预留）", () => {
+    // iOS resize:none 下文档流表单（EntryPage 等）的聚焦滚动全靠它把落点抬到键盘上方；
+    // 变量由 KeyboardAvoidanceBridge 写入（键盘收起 / 安卓壳已让位时不落地，默认 0px 恒无副作用）。
+    expect(css).toMatch(/\.app-main\s*\{[^}]*scroll-padding-bottom:\s*var\(--keyboard-scroll-padding,\s*0px\)/);
+  });
+
+  it("keyboard-inset-pad 让固定填高容器给键盘让出底部（日记编辑器一类）", () => {
+    // 固定高、内部滚动的编辑器（日记 textarea flex-1）不走滚动落点那套：键盘盖住容器下半截时
+    // 光标行照样看不见。容器 padding-bottom 让高后 textarea 变矮，浏览器原生保证光标在其内滚窗可见。
+    expect(css).toMatch(/\.keyboard-inset-pad\s*\{[^}]*padding-bottom:\s*var\(--keyboard-inset,\s*0px\)/);
+  });
+
+  it("底部弹层族给键盘让位：overlay 抬底 + 面板高度扣掉遮挡量", () => {
+    // Sheet 从屏幕底升起（items-end），键盘弹起（iOS resize:none 悬浮）时面板下半截连同里面的
+    // 输入框（任务详情的标题/备注、多选的项目名）一起被盖。overlay 的 padding-bottom 把面板整体
+    // 抬到键盘上方；面板限高同步扣掉遮挡量，否则抬高后顶边冲出屏幕顶被截。
+    expect(css).toMatch(/\.sheet-overlay\s*\{[^}]*padding-bottom:\s*var\(--keyboard-inset,\s*0px\)/);
+    expect(css).toMatch(/\.sheet-panel\s*\{[^}]*max-height:\s*calc\(88vh - var\(--keyboard-inset,\s*0px\)\)/);
+    expect(css).toMatch(/\.task-detail-sheet\s*\{\s*max-height:\s*calc\(90vh - var\(--keyboard-inset,\s*0px\)\)/);
+    expect(css).toMatch(/\.task-detail-sheet-expanded\s*\{\s*height:\s*calc\(90vh - var\(--keyboard-inset,\s*0px\)\)/);
+  });
+
   it("disables the looping sync animations when reduced motion is requested", () => {
     expect(css).toMatch(
       /@media \(prefers-reduced-motion: reduce\) \{\s*\.animate-sync-pulse,\s*\.animate-sync-blink\s*\{\s*animation: none;\s*\}\s*\}/,

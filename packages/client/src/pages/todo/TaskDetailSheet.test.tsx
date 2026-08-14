@@ -296,6 +296,16 @@ describe("TaskDetailSheet 展示与关闭", () => {
     expect(sheet.className).toContain("task-detail-sheet-expanded");
     await unmount(root);
   });
+
+  it("overlay 挂 keyboard-inset-pad：键盘弹起时把面板（含标题/备注输入框）整体抬到键盘上方", async () => {
+    // 手写 overlay（没走通用 Sheet 的 .sheet-overlay），键盘让位得自己挂类；面板限高的联动
+    // 扣减由 index.css 的 task-detail-sheet 规则钉（见 indexCssTokens.test.ts）。
+    const t = await addTask({ title: "x" });
+    const { host, root } = await renderSheet(t.id);
+    const sheet = host.querySelector('[data-testid="detail-sheet"]') as HTMLElement;
+    expect(sheet.parentElement?.classList.contains("keyboard-inset-pad")).toBe(true);
+    await unmount(root);
+  });
 });
 
 describe("TaskDetailSheet 自动保存", () => {

@@ -6,6 +6,12 @@ import { useEffect, useState } from "react";
 // 才当作键盘遮挡，避免误报。
 const KEYBOARD_BOTTOM_GAP_THRESHOLD_PX = 80;
 
+// keyboardWillHide 后压制实测路径的时长：visualViewport 要等键盘收起动画结束（iOS 约 250ms）
+// 才恢复，动画期间实测仍报遮挡，不压会把高度顶住不落——输入条比键盘晚落一拍（用户实测
+//「收起输入法后输入框有个下滑动作」）。取动画时长 + 余量；窗口内只压「实测优先」分支，
+// 重新弹起（willShow）立即清零该窗口，不影响任何弹起路径。
+const HIDE_MEASURE_SUPPRESS_MS = 450;
+
 function readInnerHeight(): number {
   return typeof window === "undefined" ? 0 : window.innerHeight;
 }
@@ -42,6 +48,68 @@ function readViewportBottomGap(): number {
  *
  * web / PWA 没有插件桥接，插件高度恒 0，结果等于第 1 条的纯实测值——与本次改动前的 web 路径一字不差。
  */
+/**
+ * 键盘**在不在场**，与 useKeyboardHeight 的「还挡着多少」刻意解耦：安卓壳层让位
+ * （adjustResize + ime inset，见 check-android-config.mjs）后遮挡量恒 0——那是「JS 无需再让位」，
+ * 不等于「键盘没弹」。「键盘弹起时收起底栏」「composer 不算滚动隐藏」这类在场判断必须用本信号。
+ *
+ * 口径：native 平台由插件事件驱动（壳让位后 keyboardWillShow/Hide 照发，是唯一还知道键盘在场的
+ * 信源）；web / PWA 无插件桥接，用实测遮挡兜底（超阈值即在场）。插件缺席时 native 也落到实测兜底
+ * ——rejection 接法与 useKeyboardHeight 同款（addListener 缺席时返回 rejected promise，非同步抛）。
+ */
+export function useKeyboardVisible(): boolean {
+  const [visible, setVisible] = useState(false);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const handleViewportChange = () => {
+      // 实测路径只在「没有插件事件可依赖」时说了算——native 上它会在壳让位后恒 0，
+      // 不能让它把事件置起的 true 冲掉，故只升不降由事件层决定：web 平台事件层缺席，
+      // 实测是唯一信源，双向都归它。
+      if (Capacitor.getPlatform() === "web") {
+        setVisible(readViewportBottomGap() > 0);
+      }
+    };
+
+    const viewport = window.visualViewport;
+    window.addEventListener("resize", handleViewportChange);
+    viewport?.addEventListener("resize", handleViewportChange);
+    viewport?.addEventListener("scroll", handleViewportChange);
+
+    let removeNative = () => {};
+    if (Capacitor.getPlatform() !== "web") {
+      try {
+        const showListener = Keyboard.addListener("keyboardWillShow", () => {
+          setVisible(true);
+        }).catch(() => null);
+        const hideListener = Keyboard.addListener("keyboardWillHide", () => {
+          setVisible(false);
+        }).catch(() => null);
+        removeNative = () => {
+          void showListener.then((handle) => handle?.remove()).catch(() => {});
+          void hideListener.then((handle) => handle?.remove()).catch(() => {});
+        };
+      } catch {
+        // 同步抛（旧桥 shim）：native 也退回实测兜底——但上面的 handleViewportChange 只认 web；
+        // 此处刻意不补 native 实测分支：插件缺席的 native 壳里键盘行为本就未定义，宁可少收底栏
+        // 也不引入「实测把事件值冲掉」的竞态。
+      }
+    }
+
+    handleViewportChange();
+
+    return () => {
+      window.removeEventListener("resize", handleViewportChange);
+      viewport?.removeEventListener("resize", handleViewportChange);
+      viewport?.removeEventListener("scroll", handleViewportChange);
+      removeNative();
+    };
+  }, []);
+
+  return visible;
+}
+
 export function useKeyboardHeight(): number {
   const [height, setHeight] = useState(0);
 
@@ -54,12 +122,17 @@ export function useKeyboardHeight(): number {
     // 上一次实测到的壳缩量。壳的 reflow 晚于 keyboardWillShow，首帧无从判断；记住上次的结果，
     // 下次弹起就能立刻按同样的量预扣，避免「先冲高再落回」的抖动（首次弹起仍会收敛一次）。
     let lastShellShrinkPx = 0;
+    // 实测压制截止时刻（Date.now() 口径）。keyboardWillHide 竖起，willShow 清零；只有插件事件
+    // 写它，web / PWA 恒为 0、实测路径行为不变。
+    let suppressMeasureUntilMs = 0;
 
     const recompute = () => {
       // 实测**先于**「插件说键盘收起了」判断：web / PWA 没有插件桥接，rawKeyboardPx 恒 0，
       // 先判收起会把整条实测路径短路成 0（回归护栏用例「visualViewport 差值超过阈值出正值」守这里）。
+      // 唯一例外：插件刚宣布收起（HIDE_MEASURE_SUPPRESS_MS 窗口内），收起动画期间的实测残影不作数，
+      // 否则输入条要等 visualViewport 恢复才落、比键盘晚一拍。
       const measuredGap = readViewportBottomGap();
-      if (measuredGap > 0) {
+      if (measuredGap > 0 && Date.now() >= suppressMeasureUntilMs) {
         setHeight(measuredGap);
         return;
       }
@@ -86,20 +159,26 @@ export function useKeyboardHeight(): number {
     let removeNative = () => {};
     if (Capacitor.getPlatform() !== "web") {
       try {
+        // 插件缺席时 addListener **不是同步抛**而是返回 rejected promise（web 桥 UNIMPLEMENTED /
+        // native 壳未注册同理），外层 try/catch 逮不住——必须在返回处同步 .catch 接住，否则是
+        // unhandled rejection（AppShell 挂 KeyboardAvoidanceBridge 后，凡 mock 平台为 native 又
+        // 没 mock 插件的测试整文件炸掉，App.keptStack.test.tsx 曾如此）。接住后静默降级到实测路径。
         const showListener = Keyboard.addListener("keyboardWillShow", (info: KeyboardInfo) => {
           rawKeyboardPx = Number.isFinite(info.keyboardHeight) ? info.keyboardHeight : 0;
+          suppressMeasureUntilMs = 0;
           recompute();
-        });
+        }).catch(() => null);
         const hideListener = Keyboard.addListener("keyboardWillHide", () => {
           rawKeyboardPx = 0;
+          suppressMeasureUntilMs = Date.now() + HIDE_MEASURE_SUPPRESS_MS;
           recompute();
-        });
+        }).catch(() => null);
         removeNative = () => {
-          void showListener.then((handle) => handle.remove()).catch(() => {});
-          void hideListener.then((handle) => handle.remove()).catch(() => {});
+          void showListener.then((handle) => handle?.remove()).catch(() => {});
+          void hideListener.then((handle) => handle?.remove()).catch(() => {});
         };
       } catch {
-        // 插件缺席（未装 / 未同步）时只剩实测路径，仍好过整条 effect 挂掉。
+        // addListener 同步抛（旧桥 shim / 插件对象缺失）时只剩实测路径，仍好过整条 effect 挂掉。
       }
     }
 

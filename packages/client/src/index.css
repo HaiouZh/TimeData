@@ -134,14 +134,29 @@ html[data-platform="android"] {
 
 @keyframes overlay-fade { from { opacity: 0; } to { opacity: 1; } }
 @keyframes sheet-rise { from { transform: translateY(6%); opacity: 0.5; } to { transform: none; opacity: 1; } }
-.sheet-overlay { animation: overlay-fade 150ms ease-out; }
+/* padding-bottom：键盘弹起（iOS resize:none 悬浮遮挡）时把 items-end 的面板整体抬到键盘上方，
+   面板里的输入框（项目名 / 表单）才够得着；变量不落地（键盘收起 / 安卓壳已让位）时恒 0。 */
+.sheet-overlay { animation: overlay-fade 150ms ease-out; padding-bottom: var(--keyboard-inset, 0px); }
 /* 面板限高与动画同属弹层外壳，一处声明；调用方不传 max-h，故留在顶层不进 components 层。
    限高要有滚动配套：面板从屏幕底部锚定、内容超高时尾部（确认/取消按钮）会溢出屏幕点不到，
    overflow-y: auto 让内容在 88vh 内可滚。 */
-.sheet-panel { animation: sheet-rise 200ms ease-out; max-height: 88vh; overflow-y: auto; }
+/* max-height 扣掉键盘遮挡量：overlay 抬底后面板顶边会往上顶，不扣会冲出屏幕顶被截。 */
+.sheet-panel { animation: sheet-rise 200ms ease-out; max-height: calc(88vh - var(--keyboard-inset, 0px)); overflow-y: auto; }
 @media (prefers-reduced-motion: reduce) {
   .sheet-overlay, .sheet-panel { animation: none; }
 }
+
+/* App 两条渲染路径（普通 main / iOS KeptRouteStack 的每层 main）共用的滚动容器类。
+   scroll-padding-bottom：聚焦滚动（KeyboardAvoidanceBridge 的 scrollIntoView 与浏览器
+   自带的聚焦跟随）的落点在键盘上方再留一段（保存按钮预留）。变量只在键盘真挡着时由
+   Bridge 写入；键盘收起 / 安卓壳层已让位 / 桌面浏览器下不落地，默认 0px 恒无副作用。
+   只影响滚动落点、不改布局，与页内既有的内容 padding 避让不叠加。 */
+.app-main { scroll-padding-bottom: var(--keyboard-scroll-padding, 0px); }
+
+/* 固定填高、内部滚动的编辑器容器（日记页）：滚动落点那套帮不了它——键盘盖住容器下半截时
+   光标行照样看不见。padding-bottom 让出键盘遮挡量后 flex-1 的 textarea 变矮，浏览器原生
+   保证光标在缩短后的内滚窗里可见。变量语义同上：键盘没挡着时不落地，恒零让位。 */
+.keyboard-inset-pad { padding-bottom: var(--keyboard-inset, 0px); }
 
 /* 全站正文用书卷体（霞鹭文楷+Times）；markdown 代码块保留等宽。 */
 body {
@@ -397,12 +412,13 @@ details[open] > summary .ts-collapse-caret {
     max-height: 40vh;
   }
 
-  /* 任务详情抽屉：常态限高、放大态定高，均为九成视口。 */
+  /* 任务详情抽屉：常态限高、放大态定高，均为九成视口再扣掉键盘遮挡量
+     （overlay 挂 keyboard-inset-pad 抬底后，不扣顶边会冲出屏幕顶，见 sheet-panel 同款注释）。 */
   .task-detail-sheet {
-    max-height: 90vh;
+    max-height: calc(90vh - var(--keyboard-inset, 0px));
   }
   .task-detail-sheet-expanded {
-    height: 90vh;
+    height: calc(90vh - var(--keyboard-inset, 0px));
   }
   /* 子任务进度条：比 h-px 粗一档但不占版面的发丝条。 */
   .task-subtask-progress {

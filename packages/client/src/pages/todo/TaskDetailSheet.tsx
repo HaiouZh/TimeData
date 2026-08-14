@@ -347,7 +347,9 @@ export function TaskDetailSheet({ id, onClose, onTagsChange, onTimeChanged }: Ta
       role="dialog"
       aria-modal="true"
       aria-label="任务详情"
-      className="fixed inset-0 z-[var(--z-modal)] flex items-end justify-center bg-backdrop/60"
+      // keyboard-inset-pad：键盘弹起时把面板（含标题/备注输入框）抬到键盘上方（手写 overlay，
+      // 没走通用 Sheet 的 .sheet-overlay，键盘让位自己挂）；面板限高的联动扣减在 index.css。
+      className="keyboard-inset-pad fixed inset-0 z-[var(--z-modal)] flex items-end justify-center bg-backdrop/60"
       onClick={(event) => {
         if (event.target === event.currentTarget) handleClose();
       }}

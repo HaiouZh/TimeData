@@ -21,7 +21,7 @@ import { BOTTOM_NAV_HEIGHT_PX, useBottomNav } from "../contexts/BottomNavContext
 import { db } from "../db/index.js";
 import { useActionToast } from "../hooks/useActionToast.js";
 import { useConfirm } from "../hooks/useConfirm.tsx";
-import { useKeyboardHeight } from "../hooks/useKeyboardHeight.ts";
+import { useKeyboardHeight, useKeyboardVisible } from "../hooks/useKeyboardHeight.ts";
 import { composeBottomInset } from "../lib/bottomInset.ts";
 import { hapticDestructive, hapticDrop, hapticGrab, hapticToggle } from "../lib/haptics.ts";
 import { projectAssignBlock, projectAssignBlockMessage } from "../lib/tasks/goalMembership.js";
@@ -224,19 +224,25 @@ export function TodoPage() {
   const [composerHeightPx, setComposerHeightPx] = useState(0);
   const { hidden: navHidden, setHidden: setNavHidden } = useBottomNav();
   const wide = useIsWideScreen();
-  // 此前 Todo 页无键盘避让，本任务补上：并入 composerAvoidancePx 的合成（见下方），收起为 0。
+  // 避让量（还挡着多少，进合成）与在场信号（键盘弹没弹，管收底栏/守 composer）分开取：
+  // 安卓壳层让位后 height 恒 0 而键盘确实在场，在场判断混用 height 会让底栏不收、composer 误藏。
   const keyboardHeightPx = useKeyboardHeight();
+  const keyboardVisible = useKeyboardVisible();
   const rootIdsWithChildren =
     useLiveQuery(async () => {
       const children = await db.tasks.filter((task) => task.parentId !== null).toArray();
       return new Set(children.map((child) => child.parentId).filter((id): id is string => Boolean(id)));
     }, []) ?? new Set<string>();
-  // 键盘弹起时 nav 不该再占避让空间，故加 keyboardHeightPx===0 守卫；键盘收起
-  // （桌面浏览器恒如此）时 = 原公式，逐值不变，安全不变量守住（fix round 1，见 task-3-report.md）。
+  // 键盘弹起时 nav 不该再占避让空间，故加 !keyboardVisible 守卫；键盘收起（桌面浏览器恒如此）
+  // 时 = 原公式，逐值不变，安全不变量守住（fix round 1，见 task-3-report.md）。
   // 与下方「收起 nav 实体」的 effect 是两回事：本条只管避让量，effect 才动 nav 本身；
   // effect 结算前的那一帧也靠本守卫兜住，避免输入条闪跳。
-  const navOffsetPx = !wide && !navHidden && keyboardHeightPx === 0 ? BOTTOM_NAV_HEIGHT_PX : 0;
-  const composerHiddenByScroll = !wide && navHidden;
+  const navOffsetPx = !wide && !navHidden && !keyboardVisible ? BOTTOM_NAV_HEIGHT_PX : 0;
+  // !keyboardVisible 守卫：键盘弹起会触发下方「收起底栏实体」的 effect（setNavHidden(true)），
+  // 不加守卫时这里把「键盘引起的收 nav」误判成「滚动收起」，composer 自己 translateY(100%) 滑进
+  // 键盘后面——用户实测两平台「唤起输入法后看不见输入框」的根因。键盘态下 composer 恒可见。
+  // 用在场信号而非 height：安卓壳让位后 height 恒 0，判不出「这次收 nav 是键盘引起的」。
+  const composerHiddenByScroll = !wide && navHidden && !keyboardVisible;
   /**
    * 底部**实际占位者**的高度。照 QuickNotesPage 的 `bottomInsetPx` 那条路子：避让量按「此刻底部
    * 站着谁」算，不是按 composer 一个人算。
@@ -286,16 +292,17 @@ export function TodoPage() {
   }, [deepLinkedTask, taskIdParam]);
 
   // 键盘弹起时收起底栏**实体**。只把 navOffsetPx 守卫成 0 不够——那改的是避让量，nav 那 49px 仍在
-  // 流里占位；Keyboard resize:none 下 webview 不 reflow，它就实打实杵在输入条与键盘之间
-  //（用户报「待办页输入框和输入法之间隔着一条 tab 行」）。速记页早有同款（QuickNotesPage 的
-  // inputInteractionActive effect），本页此前漏了。
+  // 流里占位；无论 iOS（resize:none 不 reflow）还是安卓（壳缩 webview），它都实打实杵在输入条与
+  // 键盘之间（用户报「待办页输入框和输入法之间隔着一条 tab 行」）。速记页早有同款（QuickNotesPage
+  // 的 inputInteractionActive effect），本页此前漏了。信号用「在场」而非 height：安卓壳让位后
+  // height 恒 0，键盘弹着底栏也不收。
   //
-  // 用 ref 记「这次隐藏是键盘引起的」，而不是无条件 setNavHidden(keyboardHeightPx > 0)：挂载时键盘
-  // 恒为 0，无条件写会把进场时已有的隐藏态冲掉——App 层滚动驱动（useHideBottomNavOnScroll）刚藏起来
-  // 的底栏会瞬间弹回。TodoPage.test.tsx 的 hideBottomNav 用例正是钉这条。
+  // 用 ref 记「这次隐藏是键盘引起的」，而不是无条件 setNavHidden(keyboardVisible)：挂载时键盘
+  // 恒不在场，无条件写会把进场时已有的隐藏态冲掉——App 层滚动驱动（useHideBottomNavOnScroll）刚藏
+  // 起来的底栏会瞬间弹回。TodoPage.test.tsx 的 hideBottomNav 用例正是钉这条。
   const navHiddenByKeyboardRef = useRef(false);
   useEffect(() => {
-    if (keyboardHeightPx > 0) {
+    if (keyboardVisible) {
       navHiddenByKeyboardRef.current = true;
       setNavHidden(true);
       return;
@@ -304,7 +311,7 @@ export function TodoPage() {
     if (!navHiddenByKeyboardRef.current) return;
     navHiddenByKeyboardRef.current = false;
     setNavHidden(false);
-  }, [keyboardHeightPx, setNavHidden]);
+  }, [keyboardVisible, setNavHidden]);
 
   const measureComposer = useCallback(() => {
     const composer = composerRef.current;

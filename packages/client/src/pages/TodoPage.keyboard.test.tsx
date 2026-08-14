@@ -17,8 +17,11 @@ import { renderDom, unmount } from "../test/domHarness.js";
 // 而不是真的模拟 @capacitor/keyboard 事件——这条钉的是 TodoPage 内 navOffsetPx 守卫 +
 // fixedBarBottomPx 合成的接线是否正确，keyboard hook 自身的行为已由 useKeyboardHeight.test.tsx 钉过。
 const keyboardHeightMock = vi.hoisted(() => vi.fn(() => 0));
+// 「键盘在不在场」独立信号：安卓壳层让位后 height 恒 0，收底栏/守 composer 的在场判断走它。
+const keyboardVisibleMock = vi.hoisted(() => vi.fn(() => false));
 vi.mock("../hooks/useKeyboardHeight.ts", () => ({
   useKeyboardHeight: keyboardHeightMock,
+  useKeyboardVisible: keyboardVisibleMock,
 }));
 
 import { TodoPage } from "./TodoPage.js";
@@ -27,8 +30,16 @@ beforeEach(async () => {
   localStorage.clear();
   keyboardHeightMock.mockReset();
   keyboardHeightMock.mockReturnValue(0);
+  keyboardVisibleMock.mockReset();
+  keyboardVisibleMock.mockReturnValue(false);
   await resetDb();
 });
+
+/** iOS（壳不让位）：键盘在场且仍挡着 height px。height > 0 时在场恒真，成对设置。 */
+function mockKeyboardShown(heightPx: number) {
+  keyboardHeightMock.mockReturnValue(heightPx);
+  keyboardVisibleMock.mockReturnValue(true);
+}
 
 async function renderPage() {
   return renderDom(
@@ -118,7 +129,7 @@ describe("TodoPage 键盘弹起时收起底部导航栏", () => {
   // webview 不 reflow，那 49px 就实打实杵在输入条与键盘之间，用户看到的就是「隔着一条 tab 行」。
   // 速记页早有这条（QuickNotesPage 的 inputInteractionActive effect），待办页漏了。
   it("键盘弹起时底栏被收起，不再杵在输入条与键盘之间", async () => {
-    keyboardHeightMock.mockReturnValue(300);
+    mockKeyboardShown(300);
     const { host, root } = await renderPageWithNavProbe();
 
     expect(navHidden(host)).toBe("true");
@@ -151,7 +162,7 @@ describe("TodoPage 键盘弹起时收起底部导航栏", () => {
 
 describe("TodoPage 底部输入条键盘避让（fix round 1）", () => {
   it("键盘弹起时，composer 输入条 bottom 稳贴键盘上沿——nav 让位，不与 navOffsetPx 叠加", async () => {
-    keyboardHeightMock.mockReturnValue(300);
+    mockKeyboardShown(300);
     const { host, root } = await renderPage();
 
     const form = composerForm(host);
@@ -169,6 +180,44 @@ describe("TodoPage 底部输入条键盘避让（fix round 1）", () => {
     const form = composerForm(host);
     expect(form).not.toBeNull();
     expect(form?.style.bottom).toBe(`calc(${BOTTOM_NAV_HEIGHT_PX}px + var(--safe-bottom))`);
+
+    await unmount(root);
+  });
+
+  // 用户实测（安卓/iOS 都是）：待办页唤起输入法后整条输入框消失。根因不在 bottom——键盘弹起
+  // 触发本页「收起底栏实体」的 effect（setNavHidden(true)，上一个 describe 钉的正确行为），而
+  // composerHiddenByScroll 直接复用了 navHidden，把「键盘引起的收 nav」误判成「滚动收起」，
+  // 输入条自己 translateY(100%) 滑进键盘后面。上面只断言 bottom 的用例拦不住它（bottom 正确、
+  // transform 把人藏了，测试照样绿），这条专钉 transform。
+  it("键盘弹起时，composer 不得随 navHidden 联动 translateY(100%) 自藏", async () => {
+    mockKeyboardShown(300);
+    const { host, root } = await renderPage();
+
+    const form = composerForm(host);
+    expect(form).not.toBeNull();
+    expect(form?.style.transform).toBe("translateY(0)");
+
+    await unmount(root);
+  });
+
+  // 安卓壳层让位（adjustResize + ime inset）后：webview 变矮、useKeyboardHeight 恒 0（JS 无需
+  // 再让位），但键盘确实在场。在场判断若还看 height，三件事一起坏：底栏不收（杵在输入条与
+  // 键盘之间一条 tab 行）、composer 被 navHidden 联动误藏、守卫全部失灵。在场判断必须走
+  // useKeyboardVisible（插件事件驱动，壳让位后事件照发）。
+  it("安卓壳已让位（height=0 但键盘在场）：底栏收起、composer 不自藏、bottom 不再叠避让", async () => {
+    keyboardHeightMock.mockReturnValue(0);
+    keyboardVisibleMock.mockReturnValue(true);
+    const { host, root } = await renderPageWithNavProbe();
+
+    // 底栏收起（否则 webview 缩短后它杵在键盘正上方）。
+    expect(navHidden(host)).toBe("true");
+
+    const form = composerForm(host);
+    expect(form).not.toBeNull();
+    // composer 不被 navHidden 联动藏掉。
+    expect(form?.style.transform).toBe("translateY(0)");
+    // 壳已让位：JS 不叠加避让（height=0、nav 已收 → navOffset 0），bottom 恒 0 贴 webview 底。
+    expect(form?.style.bottom).toBe("calc(0px + var(--safe-bottom))");
 
     await unmount(root);
   });
@@ -195,7 +244,7 @@ describe("TodoPage 底部输入条键盘避让（fix round 1）", () => {
       return originalGetBoundingClientRect.call(this);
     });
 
-    keyboardHeightMock.mockReturnValue(300);
+    mockKeyboardShown(300);
     const { host, root } = await renderPage();
 
     const form = composerForm(host);
@@ -211,7 +260,7 @@ describe("TodoPage 底部输入条键盘避让（fix round 1）", () => {
 describe("TodoPage 多选态操作栏键盘避让", () => {
   it("多选态下键盘弹起，SelectionBar bottom 计入键盘高", async () => {
     await addTask({ title: "买灯", toInbox: true });
-    keyboardHeightMock.mockReturnValue(300);
+    mockKeyboardShown(300);
     const { host, root } = await renderPage();
     await waitForText(host, "买灯");
 

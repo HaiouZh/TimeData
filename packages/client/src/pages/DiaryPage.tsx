@@ -454,7 +454,9 @@ export default function DiaryPage() {
   );
 
   return (
-    <div className="flex h-full min-h-0 flex-col bg-page text-ink">
+    // keyboard-inset-pad：键盘弹起（iOS resize:none 悬浮遮挡）时给底部让出遮挡量，flex-1 的
+    // textarea 随之变矮、内滚窗缩到键盘上方——光标行才看得见（安卓壳层已让位 / 桌面时恒 0）。
+    <div className="keyboard-inset-pad flex h-full min-h-0 flex-col bg-page text-ink">
       {dialog}
       <PageHeader
         title="日记"

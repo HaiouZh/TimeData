@@ -30,7 +30,7 @@
     "covers": 8
   },
   "docs/evergreen/data-model.md": {
-    "covers": 18
+    "covers": 14
   },
   "docs/evergreen/deployment.md": {
     "covers": 23
@@ -39,7 +39,7 @@
     "covers": 0
   },
   "docs/evergreen/design-language.md": {
-    "covers": 17
+    "covers": 18
   },
   "docs/evergreen/design-language/controls.md": {
     "covers": 8
@@ -114,7 +114,7 @@
     "covers": 36
   },
   "docs/evergreen/sync/domain-registry.md": {
-    "covers": 14
+    "covers": 13
   },
   "docs/evergreen/sync/push-pull.md": {
     "covers": 0

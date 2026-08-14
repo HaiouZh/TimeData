@@ -16,8 +16,11 @@ import { renderDom, unmount } from "../test/domHarness.js";
 // 计入三处消费点，keyboard=0 时落回合成前口径（安全不变量）。keyboard hook 自身行为已由
 // useKeyboardHeight.test.tsx 钉过，这里只钉 QuickNotesPage 内的接线。
 const keyboardHeightMock = vi.hoisted(() => vi.fn(() => 0));
+// 「键盘在不在场」独立信号：安卓壳层让位后 height 恒 0，inputInteractionActive 的在场判断走它。
+const keyboardVisibleMock = vi.hoisted(() => vi.fn(() => false));
 vi.mock("../hooks/useKeyboardHeight.ts", () => ({
   useKeyboardHeight: keyboardHeightMock,
+  useKeyboardVisible: keyboardVisibleMock,
 }));
 
 import QuickNotesPage from "./QuickNotesPage.js";
@@ -31,6 +34,8 @@ beforeEach(async () => {
   localStorage.clear();
   keyboardHeightMock.mockReset();
   keyboardHeightMock.mockReturnValue(0);
+  keyboardVisibleMock.mockReset();
+  keyboardVisibleMock.mockReturnValue(false);
   await resetDb();
 });
 
@@ -55,6 +60,7 @@ function composerForm(host: HTMLElement): HTMLFormElement | null {
 describe("QuickNotesPage 底部避让接线（键盘高并入合成）", () => {
   it("键盘弹起时，内容区 paddingBottom 与 composer 输入条 bottom 都计入键盘高", async () => {
     keyboardHeightMock.mockReturnValue(300);
+    keyboardVisibleMock.mockReturnValue(true);
     const { host, root } = await renderPage();
 
     const list = contentSection(host);
@@ -88,11 +94,28 @@ describe("QuickNotesPage 底部避让接线（键盘高并入合成）", () => {
     await unmount(root);
   });
 
+  // 安卓壳层让位（adjustResize + ime inset）后：webview 变矮、height 恒 0，但键盘在场。
+  // inputInteractionActive 的在场判断若还看 height>0，nav 不收——缩短的视口里输入条与键盘之间
+  // 杵着一条 tab 行。在场判断走 useKeyboardVisible（插件事件驱动，壳让位后事件照发）。
+  it("安卓壳已让位（height=0 但键盘在场）：nav 收起，composer bottom 归 0 贴 webview 底", async () => {
+    keyboardHeightMock.mockReturnValue(0);
+    keyboardVisibleMock.mockReturnValue(true);
+    const { host, root } = await renderPage();
+
+    const form = composerForm(host);
+    expect(form).not.toBeNull();
+    // inputInteractionActive 恒真 → navHidden 结算 → navOffsetPx 0；height=0 无 JS 避让叠加。
+    expect(form?.style.bottom).toBe("calc(0px + var(--safe-bottom))");
+
+    await unmount(root);
+  });
+
   it("键盘弹起时，贴 composer 上沿的状态浮层 bottom 也计入键盘高", async () => {
     // 挂载时若本地存着未发出的草稿会弹一条状态提示（见 QuickNotesPage.test.tsx 同款用例），
     // 借它让 floatBottomInsetPx 消费点在 DOM 里现身，不用另造专属 hook。
     localStorage.setItem(STORAGE_KEYS.quickNoteComposerDraft, "写了一半");
     keyboardHeightMock.mockReturnValue(300);
+    keyboardVisibleMock.mockReturnValue(true);
     const { host, root } = await renderPage();
 
     // 按 data-tone 取，不按标签取：状态浮层是 StatusBanner（渲染 div），标签会随组件走，

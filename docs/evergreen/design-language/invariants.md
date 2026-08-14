@@ -9,7 +9,7 @@ contracts:
   - packages/client/src/lib/haptics.ts
   - packages/client/src/pages/stats/chartColors.ts
   - packages/client/src/lib/navigation/navRegistry.ts
-last-reviewed: 2026-08-10
+last-reviewed: 2026-08-14
 ---
 
 # 设计语言 · 关键不变量与红线
@@ -45,7 +45,13 @@ last-reviewed: 2026-08-10
     1. `visualViewport` 与 `innerHeight` 的差值（`innerHeight - viewport.height - viewport.offsetTop`）实测布局视口底部被遮多少，差值 > 80px 才算数（避免地址栏收合等抖动误报）。这一步自动涵盖壳的两种让位方式——壳缩了 webview 则实测为 0，壳整体上移视口则实测已扣掉挪动量——不需要事先知道壳会怎么做。
     2. 实测报不出遮挡时，回落到 `@capacitor/keyboard` 的 `keyboardWillShow` 高度，再减去壳实际缩掉的高度（`innerHeight` 相对「键盘收起时基线」的落差）。壳的 reflow 晚于 `keyboardWillShow`，首帧无从判断，故记住上一次实测到的缩量、下次弹起直接预扣，避免"先冲高再落回"（**首次**弹起仍会收敛一次，是已知界限）。
 
-    **为什么不能直接信 `Keyboard.resize: none`**：该配置**只有 iOS 读**——Android 端 `KeyboardPlugin.java` 只读 `resizeOnFullScreen`，`setResizeMode` 是 `unimplemented()`；而 iOS 侧 `none` 也只拦住插件自己 resize，拦不住 WebKit 因聚焦输入框而挪视口。即"壳不会自己让位"这个前提两个平台都没人保证，直接加键盘高会双倍避让（安卓表现为输入条飞到屏幕顶上，iOS 表现为钻进顶栏底下看不见）。配置本身仍保留并由 `check-android-config.mjs` 棘轮住（对 iOS 有效），但它不再是避让正确性的依据，见 [ios](../ios.md#ios-s3-3)。
+    **收起走插件事件优先**：`keyboardWillHide` 一到立即归零，并在 450ms 窗口内压制实测路径——iOS 的 `visualViewport` 要等键盘收起动画结束才恢复，动画期间实测仍报遮挡，不压会把高度顶住不落，输入条比键盘晚落一拍（用户实测「收起输入法后输入框有个下滑动作」）。窗口只压「实测优先」分支：重新弹起（`keyboardWillShow`）立即清窗，web / PWA 没有插件事件、窗口恒不生效，实测路径行为不变。
+
+    **「还挡着多少」与「在不在场」是两个信号，不可混用**：同文件另导出 `useKeyboardVisible()`——native 平台由插件事件驱动（安卓壳层让位后 `keyboardWillShow/Hide` 照发，是唯一还知道键盘在场的信源），web 实测兜底。「键盘弹起时收起底栏」「composer 的隐藏是不是键盘引起的」这类**在场判断**必须用它：拿 `keyboardHeightPx > 0` 判在场，在安卓壳层让位后恒假——底栏不收、缩短的视口里输入条与键盘之间杵一条 tab 行，composer 还会被 navHidden 联动误藏。消费点：Todo 页的收底栏 effect / `navOffsetPx` 守卫 / `composerHiddenByScroll` 守卫，速记页的 `inputInteractionActive`。避让量合成（`composeBottomInset` 的 `keyboardHeightPx`）仍走 `useKeyboardHeight`，两者各管各的。插件的 `addListener` 在插件缺席时**返回 rejected promise 而非同步抛**，两个 hook 都在返回处同步 `.catch` 接住（否则 AppShell 挂 `KeyboardAvoidanceBridge` 后，凡 mock 平台为 native 又没 mock 插件的测试整文件炸 unhandled rejection）。
+
+    **为什么不能直接信 `Keyboard.resize: none`**：该配置**只有 iOS 读**——Android 端 `KeyboardPlugin.java` 只读 `resizeOnFullScreen`，`setResizeMode` 是 `unimplemented()`；而 iOS 侧 `none` 也只拦住插件自己 resize，拦不住 WebKit 因聚焦输入框而挪视口。即"壳不会自己让位"这个前提两个平台都没人保证，直接加键盘高会双倍避让（安卓表现为输入条飞到屏幕顶上，iOS 表现为钻进顶栏底下看不见）。配置本身仍保留并由 `check-android-config.mjs` 棘轮住（对 iOS 有效），但它不再是避让正确性的依据，见 [ios](../ios.md#ios-s3-3)。**Android 侧现走壳层让位**：manifest `adjustResize` + `MainActivity` 消费 `ime()` inset（两条同被 `check-android-config.mjs` 棘轮住，机制见 [android](../android.md#android-s2)），键盘弹起时 webview 整体变矮、本条实测口径自动归零，JS 不再叠加——双倍避让从根上拆除，实测口径退居防漂移兜底。
+
+    **文档流表单与弹层的避让底座（`KeyboardAvoidanceBridge`，挂在 `AppShell`）**：没有 fixed 输入条那套 JS 合成的页面不接 `composeBottomInset`，走全局 CSS 变量——Bridge 把 `useKeyboardHeight()` 写成 `--keyboard-inset`（纯遮挡量）与 `--keyboard-scroll-padding`（遮挡量 + 96px 保存按钮预留），键盘收起时移除变量；并在键盘 0→正 的那一跳把聚焦的文档流输入元素 `scrollIntoView({block:"nearest"})`（iOS resize:none 下 WebKit 在「body 不滚、内层 main 滚」的结构里不会替我们滚）。消费点：`.app-main`（两条渲染路径的滚动容器）拿 `--keyboard-scroll-padding` 当 `scroll-padding-bottom`，聚焦滚动落点自动让开键盘（EntryPage 一类）；`.keyboard-inset-pad`（日记页编辑器容器、任务详情 overlay）与 `.sheet-overlay` 拿 `--keyboard-inset` 让底，`.sheet-panel` / `.task-detail-sheet(-expanded)` 的限高同步扣掉遮挡量（overlay 抬底后不扣会冲出屏幕顶）。变量语义与 hook 一致（「还挡着多少」）：安卓壳已让位 / 桌面浏览器下不落地，整套底座自动歇业、零双算。闸：`indexCssTokens.test.ts`（CSS 规则）、`KeyboardAvoidanceBridge.test.tsx`（变量写入与聚焦滚动）、`App.keyboardInset.test.tsx`（AppShell 接线）。
 
     回归护栏：web / PWA 没有插件桥接、插件高度恒 0，结果等于纯实测值，与引入实测口径前的 web 路径逐值相等；`keyboardHeightPx = 0`（桌面浏览器 / 键盘收起）时合成结果与合成前逐值相等，见 `bottomInset.test.ts`。安全区值不参与本次合成，仍按上一条经 CSS 变量单独叠加。
 

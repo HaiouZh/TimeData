@@ -18,11 +18,20 @@ vi.mock("@capacitor/keyboard", () => ({
   },
 }));
 
-import { useKeyboardHeight } from "./useKeyboardHeight.js";
+import { useKeyboardHeight, useKeyboardVisible } from "./useKeyboardHeight.js";
 
 function Probe() {
   const height = useKeyboardHeight();
   return createElement("div", { "data-keyboard-height": String(height) });
+}
+
+function VisibleProbe() {
+  const visible = useKeyboardVisible();
+  return createElement("div", { "data-keyboard-visible": String(visible) });
+}
+
+function readVisible(host: HTMLElement): string | null {
+  return host.firstElementChild?.getAttribute("data-keyboard-visible") ?? null;
 }
 
 type ViewportListener = () => void;
@@ -118,6 +127,36 @@ describe("useKeyboardHeight — native", () => {
 
     const { root } = await renderDom(createElement(Probe));
     expect(addListenerMock).toHaveBeenCalledTimes(2);
+
+    await unmount(root);
+  });
+
+  it("插件 addListener 返回 rejected promise（插件缺席）时静默降级，实测路径照常", async () => {
+    // 插件缺席时 Capacitor 的 addListener **不是同步抛**而是返回 rejected promise（web 桥
+    // UNIMPLEMENTED / native 壳未注册同理），只包 try/catch 逮不住——rejection 无人接就是
+    // unhandled rejection（AppShell 挂 KeyboardAvoidanceBridge 后 App.keptStack.test.tsx 在
+    // mock 平台 android/ios 下整文件炸掉的根因）。本用例若 rejection 未被接住会以
+    // Unhandled Rejection 失败。
+    getPlatformMock.mockReturnValue("android");
+    // 异步 reject，贴近真实 web 桥的时序（同步 Promise.reject 会被 unmount 时后补的 catch
+    // 抵消记账，复现不了）；rejection 必须在 addListener 返回处**同步**接住才防得住。
+    addListenerMock.mockImplementation(() =>
+      Promise.resolve().then(() => {
+        throw new Error("UNIMPLEMENTED");
+      }),
+    );
+    Object.defineProperty(window, "innerHeight", { value: 800, configurable: true });
+    const viewport = createViewportMock({ height: 500, offsetTop: 0 });
+    (window as unknown as { visualViewport?: unknown }).visualViewport = viewport;
+
+    const { host, root } = await renderDom(createElement(Probe));
+    // 让 rejection 的微任务链走完——未接住的话 vitest 以 Unhandled Rejection 判整个 run 失败。
+    await act(async () => {
+      await new Promise((resolve) => window.setTimeout(resolve, 0));
+    });
+
+    // 只剩实测路径：800 - 500 - 0 = 300，好过整条 effect 挂掉。
+    expect(readHeight(host)).toBe("300");
 
     await unmount(root);
   });
@@ -217,6 +256,95 @@ describe("useKeyboardHeight — 壳已经让过位时不再重复避让", () => 
     await unmount(root);
   });
 
+  it("keyboardWillHide 后即使 visualViewport 仍报遮挡（收起动画残影），也立即归零", async () => {
+    // 用户实测（iOS 速记页）：收起输入法后输入条有个滞后的下滑动作。根因：willHide 已把插件高度
+    // 归零，但 recompute 实测优先——visualViewport 要等键盘收起动画结束才恢复，动画期间实测仍报
+    // 遮挡，高度被它顶着不落，输入条比键盘晚落一拍。插件明确宣布收起后，动画残影不作数。
+    getPlatformMock.mockReturnValue("ios");
+    setInnerHeight(800);
+    const viewport = createViewportMock({ height: 500, offsetTop: 0 });
+    (window as unknown as { visualViewport?: unknown }).visualViewport = viewport;
+    const callbacks = mockNativeKeyboard();
+
+    const { host, root } = await renderDom(createElement(Probe));
+
+    await act(async () => {
+      callbacks.keyboardWillShow?.({ keyboardHeight: 300 });
+    });
+    // 实测路径活跃：800 - 500 - 0 = 300。
+    expect(readHeight(host)).toBe("300");
+
+    // 键盘开始收起：插件事件先到，viewport 数值原封未动（动画没结束）。
+    await act(async () => {
+      callbacks.keyboardWillHide?.();
+    });
+    expect(readHeight(host)).toBe("0");
+
+    await unmount(root);
+  });
+
+  it("收起后的抑制窗口内，visualViewport 的动画中间帧不把高度弹回", async () => {
+    getPlatformMock.mockReturnValue("ios");
+    setInnerHeight(800);
+    const viewport = createViewportMock({ height: 500, offsetTop: 0 });
+    (window as unknown as { visualViewport?: unknown }).visualViewport = viewport;
+    const callbacks = mockNativeKeyboard();
+
+    const { host, root } = await renderDom(createElement(Probe));
+
+    await act(async () => {
+      callbacks.keyboardWillShow?.({ keyboardHeight: 300 });
+    });
+    await act(async () => {
+      callbacks.keyboardWillHide?.();
+    });
+    expect(readHeight(host)).toBe("0");
+
+    // 键盘收起动画的中间帧：viewport 恢复到一半（实测 150），事件打进来也不得弹回。
+    viewport.height = 650;
+    await act(async () => {
+      viewport.fire("resize");
+    });
+    expect(readHeight(host)).toBe("0");
+
+    await unmount(root);
+  });
+
+  it("抑制窗口过期后，实测路径恢复效力", async () => {
+    // 抑制只为吞掉收起动画的残影（~250ms），不能永久闭眼——过期后 visualViewport 再报遮挡
+    //（如 web 外接场景、壳行为变化）仍要能避让。实现读 Date.now()，这里直接 mock 它推进时间，
+    // 不涉及定时器等待。
+    getPlatformMock.mockReturnValue("ios");
+    setInnerHeight(800);
+    const viewport = createViewportMock({ height: 500, offsetTop: 0 });
+    (window as unknown as { visualViewport?: unknown }).visualViewport = viewport;
+    const callbacks = mockNativeKeyboard();
+    const nowSpy = vi.spyOn(Date, "now").mockReturnValue(100_000);
+
+    try {
+      const { host, root } = await renderDom(createElement(Probe));
+
+      await act(async () => {
+        callbacks.keyboardWillShow?.({ keyboardHeight: 300 });
+      });
+      await act(async () => {
+        callbacks.keyboardWillHide?.();
+      });
+      expect(readHeight(host)).toBe("0");
+
+      // 过了抑制窗口（500ms 后），viewport 仍在报遮挡 → 实测重新说了算。
+      nowSpy.mockReturnValue(100_500);
+      await act(async () => {
+        viewport.fire("resize");
+      });
+      expect(readHeight(host)).toBe("300");
+
+      await unmount(root);
+    } finally {
+      nowSpy.mockRestore();
+    }
+  });
+
   it("visualViewport 报不出遮挡（gap 在阈值内）时，回落到插件高度", async () => {
     // iOS resize:none 下 WebKit 可能既不缩 webview 也不更新 visualViewport，
     // 此时实测为 0 而键盘确实在遮——必须由插件高度兜底，否则输入条被键盘盖住。
@@ -232,6 +360,63 @@ describe("useKeyboardHeight — 壳已经让过位时不再重复避让", () => 
       callbacks.keyboardWillShow?.({ keyboardHeight: 300 });
     });
     expect(readHeight(host)).toBe("300");
+
+    await unmount(root);
+  });
+});
+
+describe("useKeyboardVisible — 键盘在不在场，与「还挡着多少」解耦", () => {
+  // 安卓壳层让位（adjustResize + ime inset）后 useKeyboardHeight 恒 0——那是「JS 无需再让位」，
+  // 不等于「键盘没弹」。「键盘弹起时收起底栏 / composer 不算滚动隐藏」这类**在场判断**必须用
+  // 本信号：native 平台由插件事件驱动（壳让位后事件照发），web 无插件、实测兜底。
+  it("native：壳已让位（实测恒 0）时 keyboardWillShow 仍给出 true，willHide 归 false", async () => {
+    getPlatformMock.mockReturnValue("android");
+    const callbacks: Record<string, (arg?: unknown) => void> = {};
+    addListenerMock.mockImplementation((eventName: string, cb: (arg?: unknown) => void) => {
+      callbacks[eventName] = cb;
+      return Promise.resolve({ remove: vi.fn() });
+    });
+    // 壳缩了 webview：innerHeight 与 visualViewport 一致，实测遮挡恒 0。
+    Object.defineProperty(window, "innerHeight", { value: 500, configurable: true });
+    const viewport = createViewportMock({ height: 500, offsetTop: 0 });
+    (window as unknown as { visualViewport?: unknown }).visualViewport = viewport;
+
+    const { host, root } = await renderDom(createElement(VisibleProbe));
+    expect(readVisible(host)).toBe("false");
+
+    await act(async () => {
+      callbacks.keyboardWillShow?.({ keyboardHeight: 300 });
+    });
+    expect(readVisible(host)).toBe("true");
+
+    await act(async () => {
+      callbacks.keyboardWillHide?.();
+    });
+    expect(readVisible(host)).toBe("false");
+
+    await unmount(root);
+  });
+
+  it("web：无插件事件，实测遮挡超阈值即在场、回落即离场", async () => {
+    getPlatformMock.mockReturnValue("web");
+    Object.defineProperty(window, "innerHeight", { value: 800, configurable: true });
+    const viewport = createViewportMock({ height: 800, offsetTop: 0 });
+    (window as unknown as { visualViewport?: unknown }).visualViewport = viewport;
+
+    const { host, root } = await renderDom(createElement(VisibleProbe));
+    expect(readVisible(host)).toBe("false");
+
+    viewport.height = 500;
+    await act(async () => {
+      viewport.fire("resize");
+    });
+    expect(readVisible(host)).toBe("true");
+
+    viewport.height = 800;
+    await act(async () => {
+      viewport.fire("resize");
+    });
+    expect(readVisible(host)).toBe("false");
 
     await unmount(root);
   });

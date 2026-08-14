@@ -15,6 +15,7 @@ covers:
   - packages/client/src/lib/contentTint.ts
   - packages/client/src/hooks/useKeyboardHeight.ts
   - packages/client/src/lib/bottomInset.ts
+  - packages/client/src/components/KeyboardAvoidanceBridge.tsx
   - packages/client/src/App.tsx
   - packages/client/src/contexts/BottomNavContext.tsx
   - packages/client/src/lib/haptics.ts
@@ -22,7 +23,7 @@ covers:
 contracts:
   - packages/client/src/index.css
   - packages/client/src/lib/navigation/navRegistry.ts
-last-reviewed: 2026-08-10
+last-reviewed: 2026-08-14
 ---
 
 # 设计语言
@@ -62,6 +63,7 @@ last-reviewed: 2026-08-10
 - **阴影**：`--shadow-elev1`（小表面）/ `--shadow-elev2`（浮层），仅大表面用；两者均叠了顶部 `inset 0 1px 0` hairline 高光，暗色下给大表面一道微亮上沿。
 - **动效**：普通过渡使用 Tailwind `duration-150/200/300`、`duration-0` 与 `ease-out`；sheet `150/200ms ease-out`、Todo occurrence `300ms cubic-bezier(0.2, 0, 0, 1)` 等 keyframe 在 `index.css` 邻近声明具体值。长循环动画保留自身值；所有动画尊重 `prefers-reduced-motion`。
 - **z-index 层级**：`--z-dropdown`(30) / `--z-backdrop`(40) / `--z-modal`(50) / `--z-top`(70)，只治理**全局浮层**；普通 sticky header、画布 HUD 与 notice 属局部 stacking，使用 `z-10`/`z-20`。CSS 是单一事实源，内联 `style.zIndex` 走 JS 镜像 `lib/zLayers.ts` 的 `Z`（类比图表色镜像），`zLayers.test.ts` 守 JS 与 CSS 阶梯一致。
+- **键盘避让语义类**：`--keyboard-inset` / `--keyboard-scroll-padding` 两个全局变量由 `KeyboardAvoidanceBridge` 在键盘真挡着页面时写入 `documentElement`（安卓壳层已让位 / 桌面浏览器下不落地，消费点默认 0px 恒无副作用）；消费类 `.app-main`（滚动容器聚焦滚动落点）与 `.keyboard-inset-pad`（固定填高容器让底）定义在 `index.css`，弹层族（`.sheet-overlay` / `.sheet-panel` / `.task-detail-sheet(-expanded)`）同源扣减。信号口径、消费点清单与闸见 [invariants](design-language/invariants.md) 第 12 条。
 - **安全区语义类**：安全区值统一由 `:root` 的 `--safe-*` 变量供给（`--safe-top/right/bottom/left`，默认 `env(safe-area-inset-*)`；`html[data-platform="android"]` 时清零——Android 壳由 MainActivity 在原生层做唯一让位，WebView 里 `env()` 照常报非零值、会与原生 inset padding 叠成双倍留白，见 [android](android.md#android-s2)）。`.td-safe-top`（`padding-top: var(--safe-top)`）、`.td-safe-x`（左右）、`.td-safe-bottom`（底部）定义在 `index.css` 的 `@layer components`（同 [ratchets](design-language/ratchets.md) 里「功能几何语义类」的理由：顶层规则会压过 Tailwind utilities，调用方盖不住）。生效前置是 `index.html` 的 viewport meta 带 `viewport-fit=cover`；桌面浏览器 `env()` 恒为 0，挂上即零变化。挂点必须是**非滚动根容器**——padding 区域由容器自身底色绘制，内容不会钻进刘海/圆角底下。当前消费方只有 AppShell 根 div（`td-safe-top td-safe-x`）；`.td-safe-bottom` 尚无消费方，底部让位由各实际占位者自己做（分工见 [invariants](design-language/invariants.md) 第 11 条）。
 - **用户内容身份色**：`--color-tint-1..9`。约束是 WCAG 对比度（圆点 ≥3:1、caption 档 `#` 与填充态深字 ≥4.5:1），色相尽量避开 accent / ok / warn / danger 四个已占用值；支数定在 9 是因为四禁区吃掉 160° 色相环后，再多就有相邻支在 6px 圆点上分不出（取舍见 [ADR 0026](../adr/0026-content-tint-shared-palette-shape-distinguishes-type.md)）。取色内核 `lib/contentTint.ts` 两条路都不存储：**标签** `contentTint(标签名)` 哈希取模、允许撞色；**项目** `assignProjectTints(按 createdAt 升序的 goalId)` 集合内避撞——首选位由哈希决定（色因此散布在整个色板上，不是从 `tint-1` 依次发号），被占才顺移，≤9 个项目保证互不同色。项目分配由 `listTasks` 基于**全部 active project** 算出、随 `TodoBuckets.projectTints` 下发，组件不自行取色。**类型区分靠形状不靠颜色**：圆点 = 项目，`#` = 标签——同一行 meta 区两者并排时，颜色只表达「是哪一个」，形状表达「是哪一类」，故两者共用一组色板、偶尔撞色不构成歧义。真实形态（6px 圆点 / caption 档 `#` / 筛选面板填充态）在 `/dev/styleguide` 的「身份色的真实形态」一节验收——色值与支数都由这一节定，色块预览不作为验收依据。因由见 [ADR 0026](../adr/0026-content-tint-shared-palette-shape-distinguishes-type.md)。
 - **token 分账**：`core 33 / business identity 10 / Goal scoped 12 = 55`（另加字体 2 支 `--font-*` 归 §2 单独治理）；business identity 是 tint 9 支与 Track agent 1 支。按 owner 与生产消费审计，不为 `<50` 合并跨域职责（见 [ADR 0027](../adr/0027-retire-unused-data-palette-and-scope-track-agent-tone.md)）。

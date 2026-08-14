@@ -1,6 +1,7 @@
 [
   "dirty-in-clean-bucket:App.goalsNav.test.tsx",
   "dirty-in-clean-bucket:App.keptStack.test.tsx",
+  "dirty-in-clean-bucket:App.keyboardInset.test.tsx",
   "dirty-in-clean-bucket:App.navHide.test.tsx",
   "dirty-in-clean-bucket:App.router.test.tsx",
   "dirty-in-clean-bucket:App.test.tsx",
@@ -17,6 +18,7 @@
   "dirty-in-clean-bucket:components/EntryForm.test.tsx",
   "dirty-in-clean-bucket:components/ErrorBoundary.test.tsx",
   "dirty-in-clean-bucket:components/Icon.test.tsx",
+  "dirty-in-clean-bucket:components/KeyboardAvoidanceBridge.test.tsx",
   "dirty-in-clean-bucket:components/SchedulerWatchdog.test.tsx",
   "dirty-in-clean-bucket:components/SyncIndicator.test.tsx",
   "dirty-in-clean-bucket:components/SyncTimingsPanel.test.tsx",

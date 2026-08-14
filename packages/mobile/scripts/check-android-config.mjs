@@ -21,13 +21,35 @@ if (!/allowMixedContent:\s*false/.test(capacitorConfig)) {
 
 // resize:none 让 **iOS** 的 webview 不因键盘弹起自己 reflow。**这条只有 iOS 端插件读**——Android 端
 // KeyboardPlugin.java 只读 resizeOnFullScreen、setResizeMode 是 unimplemented()，本断言对安卓行为
-// 没有任何约束力（曾被误当成两平台的双倍避让护栏，真机上安卓照样双倍）。避让正确性现在由网页层
-// 实测承担（useKeyboardHeight 读 visualViewport 的遮挡量，插件高度只兜底）；这条棘轮留着是防配置
-// 漂移改掉 iOS 行为。见 docs/evergreen/design-language/invariants.md 第 12 条。
+// 没有任何约束力（曾被误当成两平台的双倍避让护栏，真机上安卓照样双倍）。两平台键盘让位分工：
+// iOS = webview 不动 + 网页层 JS 避让（useKeyboardHeight）；Android = 壳层让位（下方 adjustResize
+// + MainActivity ime inset 两条棘轮），壳让位后 useKeyboardHeight 实测归零、JS 不再叠加。
+// 见 docs/evergreen/design-language/invariants.md 第 12 条。
 if (!/Keyboard:\s*\{\s*resize:\s*(?:KeyboardResize\.None|["']none["'])/.test(capacitorConfig)) {
   throw new Error(
     "[android-config] capacitor.config.ts 的 plugins.Keyboard.resize 必须为 none（KeyboardResize.None）——" +
-      "JS 键盘避让依赖它，改动见 docs/evergreen/design-language/invariants.md 第 12 条",
+      "iOS 的 JS 键盘避让依赖它，改动见 docs/evergreen/design-language/invariants.md 第 12 条",
+  );
+}
+
+// Android 键盘让位走壳层标准路径：manifest 声明 adjustResize 禁掉系统 adjustPan（pan 对
+// visualViewport 无感，网页层实测失明后插件兜底会再抬一次 = 双倍避让，速记页输入条飞到顶上）。
+// edge-to-edge（MainActivity setDecorFitsSystemWindows(false)）下 adjustResize 本身不缩 view，
+// 还必须由 MainActivity 的 insets listener 消费 Type.ime() 才真正让位——两条缺一即回到双倍避让。
+if (!/android:name="\.MainActivity"[\s\S]{0,400}?android:windowSoftInputMode="adjustResize"/.test(manifest)) {
+  throw new Error(
+    "[android-config] AndroidManifest.xml 的 MainActivity 必须声明 android:windowSoftInputMode=\"adjustResize\"——" +
+      "缺失时系统落 adjustPan，与网页层避让叠成双倍（键盘弹起输入条飞到屏幕顶）",
+  );
+}
+const mainActivityText = readFileSync(
+  new URL("../android/app/src/main/java/app/timedata/mobile/MainActivity.java", import.meta.url),
+  "utf8",
+);
+if (!/WindowInsetsCompat\.Type\.ime\(\)/.test(mainActivityText)) {
+  throw new Error(
+    "[android-config] MainActivity.java 的 insets 处理必须消费 WindowInsetsCompat.Type.ime()——" +
+      "edge-to-edge 下 adjustResize 不自动缩 view，键盘让位全靠这里的 ime inset padding",
   );
 }
 

@@ -22,7 +22,7 @@ last-reviewed: 2026-08-14
 
 ## 承上启下
 
-- **上游**：`AppShell` 按 `Capacitor.getPlatform() === "ios"` 二选一——iOS 渲染 `KeptRouteStack`，其余平台仍是单份 `<main>` + `<Routes>`，分叉之外零差异（分叉位置见 [architecture](../architecture.md) §4.5）。
+- **上游**：`AppShell` 按 `Capacitor.getPlatform() === "ios"` 二选一——iOS 渲染 `KeptRouteStack`，其余平台仍是单份 `<main>` + `<Routes>`，分叉之外零差异（分叉位置见 [architecture](../architecture.md) §4.5）。两条路径的 `<main>` 同挂 `.app-main`（键盘 scroll-padding 挂点，机制见 [invariants](../design-language/invariants.md) 第 12 条）——分叉内新增滚动容器时该类要跟着挂，否则 iOS 栈内页面的聚焦滚动不让键盘。
 - **下游**：每层各渲染一份 `<AppRoutes location={...}>`，全部页面路由都活在层内；「注册到全局、注册后不再自查可见性」的钩子（首个是 `hooks/useUnsavedChangesGuard`）要读保留层的活跃旗子（§3）。
 - **契约**：栈的五条不变式与推进纯函数 `nextStack`（§1–§2）、`KeptLayerActiveContext` 缺省 `true`（§3）、手势四态状态机与起手判据（§4）。
 - **邻居**：[scheduler-resilience](scheduler-resilience.md)（同属 iOS 壳：诊断「半瘫」现场时先与本文保留层 `inert` 盖屏鉴别）、[development](../development.md)（Android 返回键与手势共用 `backNavigation` 的同一张语义表）。

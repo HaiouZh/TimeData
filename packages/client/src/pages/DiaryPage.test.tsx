@@ -171,6 +171,18 @@ describe("DiaryPage", () => {
     await unmount(root);
   });
 
+  // 用户实测：内容长了之后，正在输入的内容（光标行）被键盘盖住看不见。textarea 是固定填高 +
+  // 内部滚动，键盘弹起时它自己不知道下半截被盖了；容器挂 keyboard-inset-pad（消费
+  // KeyboardAvoidanceBridge 写的 --keyboard-inset）让出键盘高后 textarea 变矮，
+  // 浏览器原生保证光标在缩短后的内滚窗里可见。键盘收起 / 安卓壳已让位时变量不落地、恒零让位。
+  it("编辑器容器挂 keyboard-inset-pad，键盘弹起时给光标行让出键盘高", async () => {
+    const { host, root } = await renderPage();
+
+    expect(textarea(host).closest(".keyboard-inset-pad")).not.toBeNull();
+
+    await unmount(root);
+  });
+
   // 契约「窄屏（<1024px，含 APK）整个不渲染参考栏」此前零覆盖：实测把挂载三元的 `wide` 判断
   // 去掉（`) : true || wide ? (`），本文件 + successPath + wide 三个文件 68 条全绿。
   // 本文件默认就是窄屏——jsdom 无 matchMedia，useIsWideScreen 恒 false。

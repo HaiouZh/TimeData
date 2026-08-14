@@ -36,7 +36,7 @@ import { useConfirm } from "../hooks/useConfirm.tsx";
 import { useDebouncedValue } from "../hooks/useDebouncedValue.ts";
 import { useActionToast } from "../hooks/useActionToast.ts";
 import { useEntryMutations } from "../hooks/useEntries.js";
-import { useKeyboardHeight } from "../hooks/useKeyboardHeight.ts";
+import { useKeyboardHeight, useKeyboardVisible } from "../hooks/useKeyboardHeight.ts";
 import { useLongPress } from "../hooks/useLongPress.ts";
 import { composeBottomInset } from "../lib/bottomInset.ts";
 import { hapticDestructive } from "../lib/haptics.ts";
@@ -153,6 +153,7 @@ export default function QuickNotesPage() {
   // 宽屏（≥1024px）回车发送；窄屏（手机）回车交给 textarea 默认换行，靠「记录」按钮发送。
   const isWideScreen = useIsWideScreen();
   const keyboardHeight = useKeyboardHeight();
+  const keyboardVisible = useKeyboardVisible();
 
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -211,7 +212,9 @@ export default function QuickNotesPage() {
   const timeline = useQuickNoteTimeline();
   const unsyncedQuickNoteIds = useUnsyncedQuickNoteIds();
   const pinnedNotes = useLiveQuery(() => listPinnedQuickNotes(), []) ?? [];
-  const inputInteractionActive = composerFocused || searchOpen || keyboardHeight > 0;
+  // 在场判断用 keyboardVisible 而非 keyboardHeight > 0：安卓壳层让位后 height 恒 0（JS 无需再
+  // 让位），键盘弹着 nav 也得收，否则缩短的视口里输入条与键盘之间杵一条 tab 行。
+  const inputInteractionActive = composerFocused || searchOpen || keyboardVisible;
   const navOffsetPx = !isWideScreen && !navHidden ? BOTTOM_NAV_HEIGHT_PX : 0;
   const bottomInsetPx = selectionMode || searchOpen ? COMPOSER_BOTTOM_GAP_PX : composerInsetPx;
   // 底部避让量单一合成来源（composeBottomInset，见 lib/bottomInset.ts）：bottomInsetPx/navOffsetPx

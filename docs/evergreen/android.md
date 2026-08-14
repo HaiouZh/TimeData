@@ -21,7 +21,7 @@ covers:
 contracts:
   - .github/workflows/mobile-release.yml
   - packages/mobile/capacitor.config.ts
-last-reviewed: 2026-08-07
+last-reviewed: 2026-08-14
 ---
 
 # Android 壳
@@ -77,7 +77,9 @@ Android 生产 Manifest 显式设置 `android:usesCleartextTraffic="false"`，�
 
 `packages/mobile/capacitor.config.ts` 是两个平台共用的：`android` 段与 `server` 段归本文档，`ios` 段（背景色）与 iOS 构建链路归 [ios](ios.md)。`server.androidScheme` 只作用于 Android；iOS 走 Capacitor 默认的 `capacitor://localhost`，两个壳的本地库不同源。`android.backgroundColor` 与 `ios.backgroundColor` 均为 `#0e1320`（= client `--color-page`），原生背景露出时（启动瞬间、旋转过渡、滚动越界回弹）与网页底色一致。`plugins.Keyboard.resize` 同样两平台共用，值为 `none`（webview 不因键盘 reflow）——该配置项与网页层键盘避让机制的关系讲在 [ios](ios.md#ios-s3-3)。
 
-Android 壳入口是 `packages/mobile/android/app/src/main/java/app/timedata/mobile/MainActivity.java`。Activity 启动时关闭 decor 自动适配，并在根内容视图上应用 inset padding，让 Capacitor WebView 避开状态栏与刘海区域，避免 APK 在全面屏设备上把页面顶部绘制到通知栏下面。**只让顶部与左右，底部显式传 0**：`getInsets()` 虽然取的是 `systemBars() | displayCutout()`（`systemBars()` 天然含 `navigationBars()`），但 `setPadding` 的第四个参数写死 0——产品取向是内容延伸到手势条之下、横条浮在其上，照搬 inset 会在底栏下方留一条空带。
+Android 壳入口是 `packages/mobile/android/app/src/main/java/app/timedata/mobile/MainActivity.java`。Activity 启动时关闭 decor 自动适配，并在根内容视图上应用 inset padding，让 Capacitor WebView 避开状态栏与刘海区域，避免 APK 在全面屏设备上把页面顶部绘制到通知栏下面。**顶部与左右照 `systemBars() | displayCutout()` 让位；底部只让键盘（IME），不让手势条**：`setPadding` 第四个参数传 `ime()` 的 bottom——键盘收起时它是 0（产品取向是内容延伸到手势条之下、横条浮在其上，照搬 systemBars 的 bottom 会在底栏下方留一条空带），键盘弹起时它就是键盘高，WebView 整体变矮、网页层 `useKeyboardHeight` 实测归零，贴底输入条以 `bottom:0` 自然贴住键盘上沿。
+
+**键盘让位是「manifest + insets」两件套，缺一即回到双倍避让**：`AndroidManifest.xml` 的 MainActivity 声明 `android:windowSoftInputMode="adjustResize"` 禁掉系统 adjustPan（此前 manifest 没声明，系统落 pan——整个窗口被平移，`visualViewport` 对此无感，网页层实测失明后按插件高度再抬一次，速记页输入条飞到屏幕顶、时间轴编辑页被推出屏外就是这个）；而 edge-to-edge（`setDecorFitsSystemWindows(false)`）下 `adjustResize` 本身不缩任何 view，真正的让位靠上一段的 `ime()` inset padding。两条均由 `check-android-config.mjs` 棘轮住。
 
 **该原生 padding 是 Android 壳顶部与左右的唯一让位机制**：edge-to-edge 下 WebView 的 `env(safe-area-inset-*)` 会照常报非零值、与原生 padding 叠加成双倍留白，故 client 在 Android 壳把 `<html data-platform="android">` 标记置上，CSS 随之把 `--safe-top` / `--safe-right` / `--safe-left` 清零（机制见 [design-language §1](design-language.md#design-language-s1) 与 [invariants 第 11 条](design-language/invariants.md)），iOS / 桌面 / PWA 仍走 `env()` 值。**底部不在这套清零里**：`--safe-bottom` 本就在所有平台固定为 `0px`，与原生层传 0 同源；真正需要底部安全区的底部弹层单独走 `--safe-bottom-sheet`（它照常取 `env()`）。
 
