@@ -12,10 +12,13 @@
     "covers": 12
   },
   "docs/evergreen/architecture.md": {
-    "covers": 31
+    "covers": 26
+  },
+  "docs/evergreen/architecture/ios-page-stack.md": {
+    "covers": 6
   },
   "docs/evergreen/architecture/scheduler-resilience.md": {
-    "covers": 3
+    "covers": 2
   },
   "docs/evergreen/backup.md": {
     "covers": 18
