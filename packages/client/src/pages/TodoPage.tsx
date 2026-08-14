@@ -142,7 +142,8 @@ export function TodoPage() {
   // 项目成员用可点的项目名 chip 表达归属，绿竖条退回只表达 theme 归属——同屏两种说法是重复信号。
   const projectChips = projectChipIndex(buckets.projects, buckets.projectTints);
   const goalLinkedIds = goalBarTaskIds(buckets.goalLinkedIds, projectChips);
-  const taskTrackIndex = useTaskTrackIndex();
+  const trackData = useTaskTrackIndex();
+  const taskTrackIndex = trackData.index;
   const resumable = useLiveQuery(() => listResumableSessions(), []) ?? [];
   // biome-ignore lint/correctness/useExhaustiveDependencies: handSession.id 是触发器而非读取项——换了手头会话才重新自愈一次。删掉它，自愈就只在挂载时跑一次。
   useEffect(() => {

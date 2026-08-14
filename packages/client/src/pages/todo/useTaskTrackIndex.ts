@@ -1,3 +1,4 @@
+import type { Track, TrackStep } from "@timedata/shared";
 import { useLiveQuery } from "dexie-react-hooks";
 import { useMemo } from "react";
 import { useAgentExecTags } from "../../lib/settings/trackAgentExecTagsSetting.js";
@@ -16,13 +17,24 @@ import { groupStepsByTrack } from "../../lib/tracksView.js";
  * `listTracks("active")` 的参数不是冗余的下游二次过滤：传 status 才走 Dexie 的 status 索引，
  * 不传则全表扫（含全部历史 concluded 轨道）——删了它功能测试照绿、代价随归档堆积只增不减。
  */
-export function useTaskTrackIndex(): Map<string, TaskTrackInfo> {
+export interface TaskTrackData {
+  index: Map<string, TaskTrackInfo>;
+  tracks: Track[];
+  stepsByTrack: Map<string, TrackStep[]>;
+  /** 已被某任务行徽章认领的轨道 id；轨道行去重的唯一判据。 */
+  claimedTrackIds: Set<string>;
+}
+
+export function useTaskTrackIndex(): TaskTrackData {
   const tracks = useLiveQuery(() => listTracks("active"), [], []);
   const steps = useLiveQuery(() => listAllTrackSteps(), [], []);
   const actionTags = useTrackActionTags();
   const agentExecTags = useAgentExecTags();
-  return useMemo(
-    () => buildTaskTrackIndex(tracks, groupStepsByTrack(steps), actionTags, agentExecTags),
-    [tracks, steps, actionTags, agentExecTags],
-  );
+  return useMemo(() => {
+    const stepsByTrack = groupStepsByTrack(steps);
+    const index = buildTaskTrackIndex(tracks, stepsByTrack, actionTags, agentExecTags);
+    const claimedTrackIds = new Set<string>();
+    for (const info of index.values()) claimedTrackIds.add(info.track.id);
+    return { index, tracks, stepsByTrack, claimedTrackIds };
+  }, [tracks, steps, actionTags, agentExecTags]);
 }
