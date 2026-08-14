@@ -14,6 +14,7 @@ import {
   diffSizeBaseline,
   evaluateDocSync,
   evaluateLinks,
+  evaluateAgentsEntrySize,
   evaluateSizes,
   getAddedFiles,
   getChangedFiles,
@@ -464,6 +465,30 @@ test("evaluateSizes fails when baseline contains a removed evergreen doc", () =>
     current: 0,
     limit: 0,
   });
+});
+
+test("evaluateAgentsEntrySize stays silent at or under the cap and flags over it", () => {
+  assert.equal(evaluateAgentsEntrySize(9000, 9000), null);
+  assert.equal(evaluateAgentsEntrySize(null, 9000), null);
+  const v = evaluateAgentsEntrySize(9500, 9000);
+  assert.equal(v.kind, "entry-too-long");
+  assert.equal(v.filePath, "AGENTS.md");
+  assert.equal(v.limit, 9000);
+});
+
+test("modeSize fails when AGENTS.md exceeds the entry cap", () => {
+  const errors = [];
+  const exitCode = modeSize(
+    [{ filePath: "docs/evergreen/ok.md", covers: ["a"], contracts: [], chars: 1000, frontmatterIssues: [] }],
+    {
+      baseline: { "docs/evergreen/ok.md": { covers: 1 } },
+      error: (line) => errors.push(line),
+      log: () => {},
+      agentsEntryChars: 99999,
+    },
+  );
+  assert.equal(exitCode, 1);
+  assert.ok(errors.some((line) => String(line).includes("入口体量闸")));
 });
 
 test("modeSize does not suggest rewriting the baseline for a pure no-gate failure", () => {

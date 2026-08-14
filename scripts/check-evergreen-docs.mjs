@@ -16,6 +16,9 @@ const STALE_DAYS = 180;
 // 四档阈值：softChars 起软提示，warnChars / criticalChars 逐级加重措辞，hardChars 硬报错。
 // 分级是为了破提示疲劳——长期驻留区间的文档若每次都印同一句，警告等于不存在。
 export const SIZE_CAPS = { softChars: 15000, warnChars: 20000, criticalChars: 23000, hardChars: 25000 };
+// AGENTS.md 每次会话全文进 agent context，体量直接换算成常驻 token 与信噪比；
+// 超闸的出路不是压缩措辞：机制沉 docs/evergreen、操作细则沉 skill，入口留一句规则 + 指针。
+export const AGENTS_ENTRY_CAP = 9000;
 const SIZE_BASELINE_PATH = "scripts/evergreen-size-baseline.json";
 // 覆盖率检查：这些源根下的新增文件必须被某份 evergreen 文档的 covers 认领。
 const COVERAGE_ROOTS = [
@@ -662,6 +665,17 @@ export function evaluateSizes(docs, baseline, caps) {
   };
 }
 
+// 入口文档体量闸：AGENTS.md 不在 evergreen 集合里，单独按绝对上限守，无 covers / 棘轮语义。
+export function evaluateAgentsEntrySize(chars, cap = AGENTS_ENTRY_CAP) {
+  if (chars == null || chars <= cap) return null;
+  return { filePath: "AGENTS.md", kind: "entry-too-long", current: chars, limit: cap };
+}
+
+function readAgentsEntryChars() {
+  const p = path.join(REPO_ROOT, "AGENTS.md");
+  return fs.existsSync(p) ? fs.readFileSync(p, "utf8").length : null;
+}
+
 function buildSizeBaseline(docs) {
   // 基线只记 covers 数（管辖范围棘轮）与文档存在性；字符数不再入基线——正文长度由 hard cap 绝对上限守，不做棘轮。
   return Object.fromEntries(
@@ -798,12 +812,17 @@ export function formatSizeViolationKind(kind) {
       return "基线包含已移除文档";
     case "no-gate":
       return "covers/contracts 双空（请补 covers 或 contracts）";
+    case "entry-too-long":
+      return "入口文档超体量闸（机制沉 evergreen / 细则沉 skill，入口留一句规则 + 指针）";
     default:
       return kind;
   }
 }
 
-export function modeSize(docs, { baseline = readSizeBaseline(), error = console.error, log = console.log } = {}) {
+export function modeSize(
+  docs,
+  { baseline = readSizeBaseline(), error = console.error, log = console.log, agentsEntryChars = readAgentsEntryChars() } = {},
+) {
   if (!baseline) {
     error(`✗ 缺少 evergreen 文档体量基线：${SIZE_BASELINE_PATH}`);
     error("  请运行 node scripts/check-evergreen-docs.mjs --write-size-baseline 后提交基线。");
@@ -820,6 +839,8 @@ export function modeSize(docs, { baseline = readSizeBaseline(), error = console.
   }
   const evergreenDocs = docs.filter(isEvergreenDoc);
   const res = evaluateSizes(docs, baseline, SIZE_CAPS);
+  const entryViolation = evaluateAgentsEntrySize(agentsEntryChars);
+  if (entryViolation) res.violations.push(entryViolation);
   // soft cap 软提示：不失败，只给「快到该拆了」一个提前量。分三档不是为了更精确，
   // 而是破提示疲劳——同一句警告长期不变会退化成背景噪音，措辞随余量加重才还能被看见。
   const hints = buildSizeHints(evergreenDocs, SIZE_CAPS);
@@ -850,6 +871,11 @@ export function modeSize(docs, { baseline = readSizeBaseline(), error = console.
   if (res.violations.some((v) => v.kind === "no-gate")) {
     error(
       "\n✗ 有 evergreen 文档 covers/contracts 双空：请补 covers 或 contracts；纵切契约文档可 covers 留空，但必须列 contracts，纯代码入口地图应列精确 covers。",
+    );
+  }
+  if (res.violations.some((v) => v.kind === "entry-too-long")) {
+    error(
+      `\n✗ AGENTS.md 超过入口体量闸（${AGENTS_ENTRY_CAP} 字符）：它每次会话全文进 context。压缩措辞不是出路——机制沉到 docs/evergreen 对应主题、操作细则沉到 skill，入口留「一句规则 + 指针」（处置流程见 AGENTS.md「文档 / 变更日志」节与 docs/evergreen/_docs-guide.md §0.4）。`,
     );
   }
   return 1;

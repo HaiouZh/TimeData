@@ -63,9 +63,13 @@ pnpm gate              # 全量门禁唯一入口，本机全局互斥
 pnpm icons:generate    # 从根目录 icon.png 生成 PWA / Android / favicon / iOS 全套图标
 ```
 
-**两档分工**：日常提交走**聚焦验证**——按路径窄测 + 命中的那几道 check，快且够用。**收工 / 合并前走 `pnpm gate`**：它串行跑 CI 同集棘轮（lint、四道静态闸、typecheck、test、e2e、四道 docs、roadmap、build），是全量门禁的唯一入口，不必再手工挨个敲。gate 本机全局互斥，同一时刻只允许一份在跑，多 worktree 撞上会自动排队。
+**两档分工**：日常提交走**聚焦验证**——按路径窄测 + 命中的那几道 check，快且够用。**收工 / 合并前走 `pnpm gate`**：它串行跑 CI 同集棘轮（lint、四道静态闸、typecheck、test、e2e、四道 docs、roadmap、build），是全量门禁的唯一入口，不必再手工挨个敲。gate 本机全局互斥，同一时刻只允许一份在跑，多 worktree 撞上会自动排队（`--no-wait` 则立即退出）；锁在主仓 `.git/timedata-gate.lock/`，进程被强杀留下的残锁 60 秒后自动接管，不用手删。
 
 `check:docs:strict` 与 `check:docs:coverage` **不带 `--since` 等于没跑**：默认比对 `HEAD`，对已提交的改动是空 diff、必然假通过。本地自测带 `--since=main`，CI 带 `--since=origin/main`。
+
+**验证命令的退出码不穿透管道**：`pnpm gate 2>&1 | tail -40` 这类写法拿到的退出码是管道末端那个命令的，前面的失败会被吃成 exit 0，据被截断的输出报「全绿」就是假绿。要取结论就直跑读退出码；必须接管道时 bash 读 `${PIPESTATUS[0]}`、PowerShell 读 `$LASTEXITCODE`。
+
+按名字窄测用 `pnpm --filter @timedata/server test routes` 这类**不带 `--` 的形式**；`pnpm --filter … test -- <name>` **不做文件过滤**，会把整包套件全跑一遍。聚焦单个文件也可在该包目录下 `npx vitest run <路径>`。
 
 `packages/shared` 的运行时契约测试使用 Vitest，覆盖 `packages/shared/src/schemas.ts` 中的 schema；改跨端类型或同步 payload 形状时先跑 `pnpm --filter @timedata/shared test` 和 `pnpm --filter @timedata/shared build`。`@timedata/cli` 的 `typecheck` 会先构建 shared，因为 CLI 在 package 解析时读取 `packages/shared/dist/index.d.ts`；干净 CI 环境不能依赖本地已有 dist。
 

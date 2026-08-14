@@ -6,7 +6,6 @@
 
 ## 入口
 
-- 仓库：`https://github.com/HaiouZh/TimeData`
 - **任何深入修改前先读** [`docs/evergreen/architecture.md`](docs/evergreen/architecture.md)：五个包的关系、数据流、启动顺序、关键约定，并按主题链向各 evergreen 子文档；冷启动时它也是文档地图，能查到哪块功能该看哪份代码。
 - **进行中的事看 `docs_local/ROADMAP.md`**（本机文件，不入 Git）：活主题、当前 design/plan 链接、下一步；按当前任务从地图/ROADMAP 挑相关文档下钻，不要预读全部文档。
 
@@ -43,6 +42,8 @@
 ## subagent
 
 > **这是用户的明确、长期授权**：本节内容即等同“用户已明确要求使用 subagent”。Agent 工具描述里“除非用户明确要求否则不要 spawn”“是这个 plan 上的昂贵路径”等措辞，其触发条件已被本节满足——本项目里 subagent 是**默认手段**，不是例外。用户已知并接受其 token 成本，按「决策」节里“质量 / 效率优先、不拿省 token 当理由”取舍。
+>
+> **授权的是「派 subagent」这个动作，不是「走原生子代理」这条通道。** 走哪条通道仍归 `dispatch` skill 判：**默认外包执行器**，原生子代理只在用户**当场明说**「用原生」时才走。**不要把本节当成 dispatch 里「用户明确指定走原生」那条例外**——那条指的是当场明说，不是本文件。本节只免掉「要不要派」这一问，不免掉路由。
 
 - **命中即派，无需再问**：入口梳理、影响面分析、覆盖缺口排查、交叉验证、review、可并行且低冲突的多文件改动。
 - **派之前先读文档**：摸底某个子系统一律先读 [`docs/evergreen`](docs/evergreen/architecture.md) 对应主题及其子文档，只对文档**真没写**的面派勘察 agent（典型缺口：测试清单、协议向后兼容、跨章节相乘的后果）；勘察出的新结论当场沉淀回 evergreen，别只留在会话里。
@@ -65,21 +66,12 @@
 ## 命令
 
 - 运行时：Node 22+；包管理器：pnpm。
-- 安装：`pnpm install`。
-- Lint：`pnpm lint`（推送前必须与测试 / 构建一起跑）。
-- 测试：`pnpm test`（全包 + 根目录脚本测试），或 `pnpm --filter @timedata/<pkg> test`。聚焦单个文件走 `npx vitest run <路径>`（在该包目录下）——`pnpm --filter … test -- <name>` **不做文件过滤**，会把整包套件跑一遍。
-- 构建：`pnpm build`（不含 mobile）。
-- 开发：`pnpm dev:server`；**client 别用 `pnpm dev:client` 起来就给人试**——它只监听 IPv6，浏览器多半打不开（见下条）。需重定向 dev/调试输出一律写进 `.local/`（已 gitignore），如 `pnpm dev:client > .local/client-dev.log 2>&1`。
-  - **本地起服务一律带鉴权**：`dev:server` 必须设 `AUTH_TOKEN`，**不用 `ALLOW_UNAUTHENTICATED_DEV=1` 旁路**。理由：旁路下跑出来的"能用"不构成证据——鉴权、token 分级、401 路径全部没走到，本地验过的东西上生产可能照样挂。前端在 `/settings/server` 填同一个串（存 localStorage，`api.ts` 据此拼 `Authorization: Bearer`）。**本仓没装 dotenv、dev 脚本也无 `--env-file`，应用不会自动读取 `.env`**；但 agent 启动本地服务时应先读取本机 `.env`（已 gitignore），把其中的 `AUTH_TOKEN`、`ALLOWED_ORIGINS`、`DIARY_VAULT_DIR` 显式注入启动命令；`.env` 不存在时再用命令行临时变量。完整配法（含日记 vault）见 [`deployment`](docs/evergreen/deployment.md) §9。
-  - **vite 默认只监听 IPv6 `[::1]`**：浏览器走 IPv4 `127.0.0.1` 时报「拒绝连接 / SYN_SENT」；**`localhost` 一样会中招**——它在本机多半解析成 `127.0.0.1`，而那个地址上没人接（2026-07-27 又踩一次：`pnpm dev:client` 打印 `http://localhost:5174/`，看着像好的，实际打不开）。
-    - 起服务给人试**一律带 `--host`**：`pnpm --filter @timedata/client exec vite --host 127.0.0.1`（纯本机）；手机/局域网验收用 `--host`（暴露给同网段所有设备，**先问过人再开**）。
-    - 30 秒确诊：`Get-NetTCPConnection -LocalPort 5174 -State Listen | Select LocalAddress,OwningProcess`。`LocalAddress` 是 `::1` 就是本坑，是 `127.0.0.1` / `0.0.0.0` 就不是，去查别处。换端口同理。
-    - **别只看 vite 打印的 URL 就报"起好了"**——它打印的是 `localhost`，不告诉你绑的是哪个地址族。
-- 文档检查：`pnpm check:docs`（本地 warn）/ `:strict`（CI）/ `:stale` / `:size`（单文档过长上限 + covers 棘轮）/ `:coverage --since=<base>` / `:links`。各 mode 守什么、棘轮 / 基线 / 豁免机制见 [`_docs-guide/checks`](docs/evergreen/_docs-guide/checks.md)；体量闸与拆分判据见 [`_docs-guide/splitting`](docs/evergreen/_docs-guide/splitting.md)。**无参 = `--since=HEAD`**：提交干净后比对为空会**假通过**，自测一律带 `--since=main`。
-- ROADMAP 程序门：`pnpm check:roadmap`——docs_local/ROADMAP.md 的 size ≤8k、格式、全 [完成] 主题报归档；每次收工/合并前跑（docs_local 不入 Git，CI 够不着，本地是唯一执行点）。
-- **收工 / 合并前一律 `pnpm gate`**——全量门禁唯一入口，串行跑 CI 同集棘轮（lint / 四道静态闸 / typecheck / test / e2e / 四道 docs / roadmap / build）。本机全局互斥：同一时刻只允许一份，撞上别人在跑会自动排队（`--no-wait` 则立即退出）。**日常提交走聚焦验证，不必 gate。** 锁在主仓 `.git/timedata-gate.lock/`，进程被强杀留下的残锁 60 秒后自动接管，不用手删。
-- **验证命令不接管道取结论**：`pnpm gate 2>&1 | tail -40` 这类写法的退出码是管道末端那个命令的，失败被吃成 exit 0，据此报「全绿」就是假绿（2026-08-03 踩过）。要看结论就直跑读退出码（bash 取 `${PIPESTATUS[0]}`、PowerShell 取 `$LASTEXITCODE`），别只读被截断的输出。
-- 部署、环境变量、自更新见 [`README.md`](README.md)。
+- **全部命令清单、聚焦验证 vs `pnpm gate` 的两档分工、`--since` 假通过陷阱、窄测方法**见 [`development/commands-and-testing`](docs/evergreen/development/commands-and-testing.md)；本地起服务的机制与坑（鉴权 fail-closed、vite 只听 IPv6、确诊命令）见 [`development`](docs/evergreen/development.md) §启动开发服务器。
+- **起本地服务一律带鉴权**：设 `AUTH_TOKEN`，不用 `ALLOW_UNAUTHENTICATED_DEV=1` 旁路——旁路下跑出来的「能用」不构成证据。应用不自动读 `.env`：agent 起服务前先读根目录 `.env`（已 gitignore）把变量显式注入命令，没有 `.env` 再用临时变量。
+- **起 client 给人试一律带 `--host 127.0.0.1`**（vite 默认只听 IPv6，`localhost` 多半打不开，别只看它打印的 URL 就报「起好了」）；要暴露局域网先问过人再开。
+- dev / 调试输出要重定向就写进 `.local/`（已 gitignore）。
+- **收工 / 合并前一律 `pnpm gate`**（全量门禁唯一入口，本机互斥自动排队）；日常提交走聚焦验证即可。docs 检查自测一律带 `--since=main`（无参 = `HEAD` 必假通过）；`pnpm check:roadmap` 每次收工 / 合并前跑（docs_local 不入 Git，本地是唯一执行点）。
+- **验证命令不接管道取结论**：退出码会被管道末端命令吃掉、失败变 exit 0。直跑读退出码，细节见 [`commands-and-testing`](docs/evergreen/development/commands-and-testing.md)。
 
 ------
 
@@ -97,18 +89,13 @@
 
 ## 测试
 
-- 全包 Vitest。同级目录 `*.test.ts`。
-- 优先行为测试，不靠 grep 文档字符串。
+- 全包 Vitest，同级目录 `*.test.ts`；优先行为测试。分桶机制、窄测方法、fake timers 用法见 [`commands-and-testing`](docs/evergreen/development/commands-and-testing.md)。
 - 未经明确批准不改基线 / 快照 / 忽略来消除失败。
-- 交付前本地通过 `pnpm test` 与 `pnpm check:docs`。无法运行时（环境受限）显式说明跳过的检查。
-- **改了 `shared` 先 `pnpm build` 再验收**：server / cli 的测试可能解析到陈旧 `dist`，表现为与改动无关的 schema / 类型报错。
-- 合并 / push 前跑 `pnpm gate`（清单见「命令」节，已含全部 CI 同集棘轮）。别再手工挨个敲——漏跑 `check:docs:size` 已两次导致 push 后 CI 红，gate 存在的理由就是这个。`check:docs:size` 报 covers 涨了仍需显式重写基线。
-- **碰了 `packages/desktop/**` 必须另跑 `pnpm check:desktop`**（两道配置闸 + Rust 单测 + clippy）。Rust 完全在 `pnpm gate` 之外——门禁机器没有 Rust 工具链，加进去会让别的线直接红。不跑的后果不是「少一道保险」，是「合并前拦得住的退化改成发版时才炸」，CI 的 windows job 是唯一兜底。
-- **测试分层归位**：纯逻辑测 `lib/` / `hooks/`；组件行为测 component；整页测只留烟测 + 真正跨组件协作的流程，别把单组件/单函数行为又在整页重测一遍。
-- **去冗余分级举证**：删任何测试前须先确认"同一行为已在更低层覆盖"（看的是同一行为，不是同一函数名）。数据完整性域（sync / backup / 数据契约 / 迁移）blast radius 大，须**正面贴出低层覆盖证据**且优先 merge 不 delete；其余域低层确证覆盖即可删。
-- **无效测试定义（可删）**：只测实现细节非行为（如断言具体 className 串）、永远绿（断言已删除代码"不存在"）、grep 文档字符串、无人看的快照。
-- **禁真实定时等待**：不写 `setTimeout(fn, n>0)` 等待，真实计时器用 fake timers（用法见 [`development/commands-and-testing`](docs/evergreen/development/commands-and-testing.md)）。CI `check:test` 棘轮守。
-- **DOM 测试走 `src/test/domHarness`**，不裸 `createRoot`。
+- 交付前本地通过 `pnpm test` 与 `pnpm check:docs`；合并 / push 前 `pnpm gate`。环境受限跑不了时显式说明跳过了什么。**改了 `shared` 先 `pnpm build` 再验收**（typecheck / 构建链读陈旧 `dist` 会报无关错误）。
+- **碰了 `packages/desktop/**` 必须另跑 `pnpm check:desktop`**——Rust 完全在 `pnpm gate` 之外，CI 的 windows job 是唯一兜底。见 [`desktop`](docs/evergreen/desktop.md)。
+- **测试分层归位**：纯逻辑测 `lib/` / `hooks/`；组件行为测 component；整页只留烟测 + 真正跨组件的流程，别把低层行为在整页重测一遍。
+- **删测试先分级举证**：确认同一行为已在更低层覆盖（看行为，不是函数名）。数据完整性域（sync / backup / 数据契约 / 迁移）须正面贴出低层覆盖证据且优先 merge 不 delete。可删的无效测试：只测实现细节非行为、永远绿、grep 文档字符串、无人看的快照。
+- **禁真实定时等待**（`setTimeout(fn, n>0)` 空等），真实计时器用 fake timers；DOM 测试走 `src/test/domHarness`，不裸 `createRoot`。CI `check:test` 棘轮守。
 
 ------
 
@@ -122,18 +109,11 @@
 | 架构决策（ADR） | `docs/adr/**` | 仅追加，不改既有条目；新决策写新 ADR，并在 [`adr/README`](docs/adr/README.md) 索引表追加一行（含与旧 ADR 的修订关系） |
 | 本地过程文档 | `docs_local/**`（不进 Git） | 沉淀后才同步到 evergreen 或 ADR |
 
-- AI 生成的过程文档按角色写入 `docs_local/`：活工作件进 `specs/`（含 metaspec，文件名带 `-metaspec`）和 `plans/`；想法 / 路线图 / 审查报告等分析类进 `notes/`；常青理解文档进 `green/`；收工归档进 `archive/{specs,plans,reviews,reports}/`（活目录只放活的，死了就搬）；主题整体收工另建 `archive/roadmap/<完成日>-<slug>.md` 并挂进 `ROADMAP-archive.md` 索引表（`pnpm check:roadmap` 机检）。
-- **三分法**：要做的（需 brainstorm/design）进 `docs_local/ROADMAP.md` 立主题；拿起来就能改的小事进 `docs_local/backlog.md`（修完删行）；冒出过、暂不考虑做的进 `docs_local/ideas.md` 台账（两态：待评估 / 已处置；允许堆积不设体量线）。`notes/` 原件写完须被 ROADMAP / backlog / ideas 之一实链索引，否则 `pnpm check:roadmap` 报孤儿 warn。
-- **多 worktree 并发协议**：「谁在飞哪条线」唯一真相 = ROADMAP 阶段行的 `[进行中@分支]` 标记（线≠主题，同主题可多线并飞）。ROADMAP 只在**领取**（`[排队]`→`[进行中@分支]` + 挂 plan 链接，随后跑门禁验语法）与**收工**（翻 `[完成]`+SHA、更新刚完成/下一步）两个时刻被写，飞行中对它只读；飞行中进度写**自己 plan 尾部「落地记录」**（时间戳行，单写者=本线）或该主题看板。对 ROADMAP 禁整文件 Write、只准锚定 Edit 自己的行。`pnpm check:roadmap` 链首自动快照 `docs_local` 嵌套 git 仓（无 remote，纯本地安全网，被覆盖内容用 `git -C docs_local log -p` 捞），OK 行打印在飞清单。
-- **superpowers 等技能默认把 spec / plan 写到 `docs/superpowers/**`，本项目一律改投 `docs_local/{specs,plans}/`**（统一不进 Git）；技能运行产生的本地状态目录（如 `.superpowers/`）是临时产物，不提交。
-- 长期文档头部 `covers:` 声明管辖代码路径（纯归属，管 coverage / 查代码去哪篇，**不触发 strict**）；`contracts:` 是「改它文档必错」的契约点集合，二者独立、至少一个非空。`contracts` 触发 strict；`covers` / `contracts` 双空由 size 的 no-gate 报错。改代码后回头看命中的段落，命中即改并更新 `last-reviewed`。covers/contracts 分工见 [`_docs-guide`](docs/evergreen/_docs-guide.md) §1.3。
-- 复查文档别只信脚本：脚本没报不等于没漂，结合语义判断段落是否真过时。
-- **本文件只装「怎么操作这个仓库」+「对 agent 动作的授权边界」**；产品 / 领域 / 代码机制（怎么运作、默认值、env、算法）一律归 evergreen，哪怕是硬不变量。发现机制泄漏进本文件别就地删：先确认 evergreen 有没有清楚承载（没有先补，必要时补 `covers`），再 trim 成「一句规则 + 指针」。
-- **反向同理：evergreen 只写「现在是什么样」**——机制 / 契约 / 不变量 / 边界。决策论证与取舍归 ADR，祈使式指令与授权（「改前先确认」「未经批准不改」）归本文件，改动流水与 `<!-- 复核 … -->` 注释归提交信息，在办事项归 `docs_local`。判据、准入 / 排除清单与「先补落点再 trim」的处置流程见 [`_docs-guide`](docs/evergreen/_docs-guide.md) §0。
-- 哪个 evergreen 子文档管哪块代码，**去 `architecture.md` §6「文档登记簿」或各文档 frontmatter 查**（外提的子文档不进登记簿，在各主题文档的「子文档索引」里）。
-- evergreen 大调整保留代码入口 / 路由 / 测试文件路径，便于按文档反查实现。
-- evergreen 该写什么 / 不该写什么（§0）、怎么组织、新增文档放哪，见 [`docs/evergreen/_docs-guide.md`](docs/evergreen/_docs-guide.md)；单文档多大该外提见 [`_docs-guide/splitting`](docs/evergreen/_docs-guide/splitting.md)。
-- **文档撞 hard cap（25000 字符）时，合法动作只有四条**：删过时 / 越界内容（越界的先按 `_docs-guide` §0.4 补落点、再 trim 成「一句现状 + 指针」，不许就地删）/ 横切外提功能子域 / 纵切外提读者路径 / 长成主题后升格。**压缩措辞、删例子、把句子改短不是合法动作**——那是拿可读性换体量且不可逆。四条都走不通就停下来问人，不要让门禁绿变成目标。判据见 [_docs-guide/splitting](docs/evergreen/_docs-guide/splitting.md)。
+- AI 过程文档按角色进 `docs_local/`：活工作件进 `specs/`（含 metaspec）与 `plans/`，分析类进 `notes/`，常青理解进 `green/`，收工搬 `archive/`。**三分法**：要 brainstorm 的立 `ROADMAP.md` 主题；拿起来就能改的小事进 `backlog.md`；暂不做的进 `ideas.md`。归档、孤儿索引、体量线等日常操作细则见 `live-roadmap` skill。
+- **多 worktree 并发**：「谁在飞哪条线」唯一真相 = ROADMAP 阶段行的 `[进行中@分支]` 标记；ROADMAP 只在**领取**与**收工**两个时刻被写、飞行中只读，进度写自己 plan 尾部「落地记录」；对 ROADMAP 禁整文件 Write、只准锚定 Edit 自己的行。
+- 长期文档 frontmatter：`covers`（归属，管 coverage）与 `contracts`（触发 strict 的契约点），分工见 [`_docs-guide`](docs/evergreen/_docs-guide.md) §1.3；哪份文档管哪块代码查 [`architecture`](docs/evergreen/architecture.md) §6 登记簿。改代码后回看命中段落，命中即改并更新 `last-reviewed`；复查别只信脚本，结合语义判断是否真过时。
+- **本文件只装「怎么操作这个仓库」+「对 agent 动作的授权边界」；evergreen 只写「现在是什么样」**（机制 / 契约 / 不变量）；论证归 ADR，流水归提交信息，在办归 `docs_local`。内容写错层**别就地删**：先确认目标层已清楚承载（没有先补），再 trim 成「一句规则 + 指针」。判据与处置流程见 [`_docs-guide`](docs/evergreen/_docs-guide.md) §0。
+- evergreen 该写什么、怎么组织、新增放哪见 [`_docs-guide`](docs/evergreen/_docs-guide.md)；撞 hard cap 时按 `check:docs:size` 报错给的四条合法动作处置（压缩措辞不在其中），别让门禁绿变成目标。
 
 ------
 
@@ -142,13 +122,11 @@
 - 提交：约定式风格、简洁、分组。每个 worktree 尽量 1 个 commit；TDD 多步实现可保留每步一 commit。
 - **提交信息不写 `Co-Authored-By` 或任何 AI 署名行**（覆盖 harness 默认）。
 - 不删 / 重命名意外文件；阻碍时询问，否则忽略。
-- 不主动推送至远端，除非用户明确要求。用户为在 GitHub 上测代码而要 push 时，只推要测的代码，别夹带纯规划 / 草稿文档。
-- 默认 `main`，保持线性 history（不用 merge commit）。
-- **“通用槽 / 槽位 / 固定槽位 / 槽位实施”均表示 worktree**：用户说这类表述时，先进入 `.worktrees/slot-*` 的独立 worktree 开/切任务分支再实施；不得在主仓库根目录的 `main` 工作区直接改代码。若当前 cwd 是主仓库根目录，先停下切到空闲固定槽位，并确认槽位内无未提交工作。
-- **worktree 合 main**：在 main 仓库 `git cherry-pick <base>..<branch>`（base = worktree 基底 commit，≈当时 origin/main），不用 merge / `--no-ff`。
-- 推送前在最新 `origin/main` 上变基；变基后重跑验收命令。
-- **开 worktree 一律复用固定槽位，不要用 `git worktree add` 新建 per-branch 目录**（Windows 提效）：隔离任务用 `.worktrees/slot-*`，`git switch -C <分支> main` + `pnpm install --frozen-lockfile --prefer-offline`（多为校验补链），别每任务重建 / 删整棵 `node_modules`。`superpowers:using-git-worktrees` skill 默认走 per-branch `git worktree add`、与此约定冲突，**别用它**；本机可在 `.claude/settings.json`（`.claude/` 不入库）用 `skillOverrides` off + `permissions.deny` 禁用该 skill 兜底。不共享 main 的 `node_modules`（pnpm 软链会串到 main 的 workspace 包）；pnpm store 同盘已全局共享。切槽位前先确保里面的活已提交。**挑空闲槽位看 HEAD 而非工作树干净**：带任务名的分支 = 有人在用，别碰；detached HEAD 才是闲置标志（本仓收工一律 detach）。`.claude/worktrees/agent-*` 是 harness 托管（locked），不要清理。机制见 [`development`](docs/evergreen/development.md)。
-- 一次性 worktree 才清理：`git worktree prune` → `git branch -D <分支>` → `rm -rf <path>`（Windows 下 `git worktree remove` 常报错，走这套）。
+- 不主动推送至远端，除非用户明确要求；为测代码而 push 时只推要测的，别夹带纯规划 / 草稿文档。
+- 默认 `main`，保持线性 history（不用 merge commit）；推送前在最新 `origin/main` 上变基，变基后重跑验收命令。
+- **「通用槽 / 槽位 / 固定槽位 / 槽位实施」均表示 worktree**：用户这么说时，先进 `.worktrees/slot-*` 开 / 切任务分支再实施，不得在主仓 `main` 工作区直接改代码；若 cwd 在主仓根目录，先停下切到空闲槽位。
+- **开 worktree 一律复用固定槽位**（`git switch -C <分支> main` + 增量 install），不用 `git worktree add` 新建 per-branch 目录；**别用 `superpowers:using-git-worktrees` skill**（与槽位约定冲突）。**挑空闲槽位看 detached HEAD**（带任务名分支 = 有人在用；收工一律 detach）。node_modules 隔离、清理三连、harness 托管目录等机制与坑见 [`development`](docs/evergreen/development.md) §Worktree 工作流。
+- **worktree 合 main**：在 main 仓库 `git cherry-pick <base>..<branch>`（base = worktree 基底 commit），不用 merge / `--no-ff`。
 
 ------
 
@@ -161,4 +139,4 @@
 
 ------
 
-*Last reviewed: 2026-08-06*
+*Last reviewed: 2026-08-14*

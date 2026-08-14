@@ -118,5 +118,6 @@ last-reviewed: YYYY-MM-DD
 - **`covers` 数是棘轮**：`scripts/evergreen-size-baseline.json` 只记每篇文档的 `covers` 数与存在性。数目比基线大即报错，防止悄悄扩大管辖；字符数不记入基线。
 - 基线必须覆盖当前全部 evergreen 文档；新增、删除或重命名 evergreen 文档而未更新基线都会失败。
 - ADR 是决策记录，只追加，不参与体量闸。
+- **`AGENTS.md` 走独立的入口体量闸**：它不属 evergreen 集合、无 frontmatter / covers 语义，`check:docs:size` 只按绝对上限（9000 字符）守它。超闸不走本文的拆分四条——入口不拆子文档，出路是把机制沉到 evergreen 对应主题、操作细则沉到 skill，入口留一句规则 + 指针（处置见母文档 §0.4 与 [checks](checks.md)）。
 
 真实职责扩展而要扩大 `covers` 时，运行 `node scripts/check-evergreen-docs.mjs --write-size-baseline` 并在提交信息说明原因。这个命令整体重写 filePath 到 covers 的完整映射，会把工作树中全部 covers 变化一起收编；因此写完必须看输出的 ⚠️ 清单，只保留本次应有的抬高、新增、移除和收窄。其他改动说明重写得过早，应先提交或还原无关变更。字符增长不需要重写基线。

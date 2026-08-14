@@ -81,6 +81,7 @@ lockfile 不变时 `install` 基本只校验 / 补链接，很快；变了也只
 - **槽位的 `node_modules` 不共享、不 junction 到 main**。pnpm 把 workspace 包（`@timedata/*`）按当前 checkout 路径建软链；共享后槽位里的测试 / 构建会解析到 **main 的 `packages/`**，你以为在测分支代码、其实在测 main——静默串线，极难查。
 - **pnpm store 安全且默认已共享**：store 全盘内容寻址，槽位与 main 同盘时自动 hardlink，无需任何配置。给单个槽位另设 `store-dir`、或把槽位放到别的盘，反而会退化成各自复制。
 - **切分支前先确保槽位里的活已提交**：`git switch -C <分支> main` 会重置工作树，未提交改动会丢。
+- **挑空闲槽位看 HEAD 而不是工作树干净**：本仓约定收工后把槽位 detach——detached HEAD = 闲置可领用；HEAD 停在带任务名的分支 = 有人在用，别碰。`.claude/worktrees/agent-*` 是 harness 托管的 worktree（locked），不参与槽位复用，也不要清理。
 - **偶发 stale 构建**：`dist` / `.vite` / `*.tsbuildinfo` 跨分支留在槽位里；遇到构建产物串味时定点删它们即可，不必删 `node_modules`。
 - 清理：复用槽位平时只 `git switch` / 删旧分支；真要回收一次性 worktree 才 `git worktree prune` → `git branch -D <分支>` → `rm -rf <path>`（Windows 下 `git worktree remove` 常报错，走这套）。
 
@@ -95,6 +96,8 @@ AUTH_TOKEN=dev-token pnpm dev:server
 ```
 
 默认监听 `http://localhost:3000`。`AUTH_TOKEN` 为空且未显式设 `ALLOW_UNAUTHENTICATED_DEV=1` 时，受保护的 `/api/*` 一律返回 500——这是 fail-closed，不是启动失败；前端设置页填的 token 要与它一致。
+
+仓库没装 dotenv、dev 脚本也没有 `--env-file`，应用**不会自动读取 `.env`**。根目录 `.env`（已 gitignore）是给起服务的人 / agent 自己读取、再把 `AUTH_TOKEN`、`ALLOWED_ORIGINS`、`DIARY_VAULT_DIR` 等显式注入启动命令用的；`.env` 不存在时用命令行临时变量。完整环境变量与日记 vault 配法见 [deployment](deployment.md)。
 
 探活走公开端点 `GET /api/health`：
 

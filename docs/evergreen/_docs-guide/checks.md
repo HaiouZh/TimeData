@@ -19,7 +19,7 @@ last-reviewed: 2026-08-05
 |---|---|---|
 | `check:docs:strict --since=<base>` | 改了契约点就同步对应文档 | 改动命中文档 `contracts`，而该文档没有一起改。`covers` 不触发 strict |
 | `check:docs:coverage --since=<base>` | 新源码必须有文档认领 | 新增文件落在 `COVERAGE_ROOTS` 下却不匹配任何 covers，且不属于测试、`.d.ts`、mock、夹具、story 或 `src/test/` 这类测试基建目录豁免 |
-| `check:docs:size` | frontmatter 有效、单文档别膨胀到该拆 | frontmatter 形状错误、`covers`/`contracts` 双空、字符数超 hard cap、covers 数超基线，或基线漏项、保留已删除文档。拆分处置见 [拆分与体量](splitting.md) |
+| `check:docs:size` | frontmatter 有效、单文档别膨胀到该拆 | frontmatter 形状错误、`covers`/`contracts` 双空、字符数超 hard cap、covers 数超基线，或基线漏项、保留已删除文档；另守 `AGENTS.md` 的入口体量闸（9000 字符——入口每次会话全文进 agent context，超闸的出路是机制沉 evergreen、细则沉 skill、入口留一句规则 + 指针，不是压缩措辞）。拆分处置见 [拆分与体量](splitting.md) |
 | `check:docs:links` | 互链和指针不指向消失目标 | 链接源（`docs/evergreen` + `docs/adr` 全部文档，外加 `AGENTS.md` / `README.md`）里的 Markdown `.md` 链接不存在；目标 `.md#id` 缺独立 `<a id="..."></a>` 显式锚点；独立锚点行畸形；锚点 ID 重复 |
 | `check:docs:stale` | `last-reviewed` 不过期 | **不失败,只列清单**——缺字段或超过 180 天的文档会被打印,但退出码始终为 0(脚本 help 里这一 mode 标的就是 warn)。它是给人看的复查提醒,不是闸;真要拦住过期文档需要另加机制 |
 
