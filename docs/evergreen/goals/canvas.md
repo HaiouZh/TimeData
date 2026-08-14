@@ -17,7 +17,7 @@ covers:
   - packages/client/src/lib/galaxyEngineMode.ts
   - packages/client/src/lib/goalUnassigned.ts
   - packages/client/src/pages/goals/**
-last-reviewed: 2026-08-07
+last-reviewed: 2026-08-14
 ---
 
 # 目标层 · 星图画布
@@ -62,6 +62,8 @@ last-reviewed: 2026-08-07
 ## 2. 局部星图编辑器
 
 `/goals/:id` 默认进入局部图编辑器，不提供文字详情 fallback。图节点只表达 Goal 锚、真实 Task/Track 成员和 ghost 失效引用；前置边方向固定为 `blocker -> blocked`，Goal 锚和 ghost 不参与新建前置边。归属 tether 只表示成员属于 Goal，不作为可编辑前置关系。
+
+**已完成成员不出节点**：`buildGoalGraphModel` 从 `overview.sections.completed` 算出隐藏集合，在**三处**都跳过——成员节点循环、tether 边循环、prerequisite 边循环。只跳第一处不够：后两处的 `ensureGraphNode` 查不到节点就建 ghost，被跳过的成员会以 `ghost:` 前缀重新出现在图上，并把与它相连的前置边判成 `broken-prerequisite`。`summary.completed` 仍按 `sections.completed` 计数，隐藏的只是节点。已完成的 blocker 在 `splitGoalMembers` 的 `waitingOn` 判定里也不再挡任何人，那条边画出来不起作用。全局星图的 `goalGalaxyModel` 复用同一函数（见 §1 分层），这条对两个画布同时生效。
 
 `GoalDetailPage` 壳层的加载门与 `/goals` 壳同口径：Goal、Task、Track、TrackStep、布局钉点**五个 live query 全部返回**才挂编辑器，一律不给 `useLiveQuery` 传 `[]` 默认初值。用 `[]` 兜底会让 `buildGoalOverview` 把全部成员判成失效引用，首帧渲染成 ghost、数据到位后整图重排跳位。
 
