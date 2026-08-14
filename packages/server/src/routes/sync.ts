@@ -31,7 +31,7 @@ import { errorJson, ErrorCode } from "../lib/errors.js";
 import { createServerBackup } from "../sync/backup.js";
 import type { Database } from "better-sqlite3";
 import {
-  getServerDomain,
+  SERVER_SYNC_DOMAINS,
   predictChangeImpactRecords,
   predictOverlappingDeletions,
 } from "../sync/domains.js";
@@ -743,6 +743,12 @@ function readChangesSinceSeq(db: Database, sinceSeq: number | null, limit?: numb
   const seqRows = getChangesSinceSeq(sinceSeq, limit);
   const changes: SyncChange[] = [];
   for (const seq of seqRows) {
+    // 域退役后账本里仍留着它的历史记录——账本只增，破坏性操作也不清它（ADR 0019）。
+    // 这类记录没有域登记可查，按本函数既定的「读不到就跳过、游标照常前进」处理。
+    // 不跳而抛错，会让每台游标早于该记录的设备（含 sinceSeq=0 的新设备）整个 pull 挂掉。
+    const domain = SERVER_SYNC_DOMAINS[seq.tableName];
+    if (!domain) continue;
+
     if (seq.action === "delete") {
       const tombstone = db
         .prepare("SELECT * FROM sync_tombstones WHERE table_name = ? AND record_id = ?")
@@ -751,7 +757,7 @@ function readChangesSinceSeq(db: Database, sinceSeq: number | null, limit?: numb
       continue;
     }
 
-    const change = getServerDomain(seq.tableName).readRecord(db, seq.recordId);
+    const change = domain.readRecord(db, seq.recordId);
     if (change) changes.push(change);
   }
   const lastSeqId = seqRows.length > 0 ? seqRows[seqRows.length - 1].id : null;

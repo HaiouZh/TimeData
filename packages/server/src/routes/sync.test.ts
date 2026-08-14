@@ -283,6 +283,30 @@ describe("sync route", () => {
     expect(Array.isArray(body.changes)).toBe(true);
   });
 
+  it("skips ledger rows of a retired domain instead of failing the whole pull", async () => {
+    // 只增账本（ADR 0019）永远留着已退役域的历史 seq 记录，而登记簿里已经没有这个域。
+    // 这类记录必须按本函数既定的「读不到就跳过、游标照常前进」处理：若让它抛错，
+    // 所有游标早于该记录的设备（含全新设备的 sinceSeq=0）会再也拉不到任何数据。
+    db.prepare("INSERT INTO sync_seq (table_name, record_id, action, created_at) VALUES (?, ?, ?, ?)")
+      .run("health_heart_rate", "hr-legacy", "create", "2026-01-01T00:00:00.000Z");
+    db.prepare("INSERT INTO sync_seq (table_name, record_id, action, created_at) VALUES (?, ?, ?, ?)")
+      .run("runs", "run-legacy", "delete", "2026-01-01T00:00:00.000Z");
+    const maxSeq = (db.prepare("SELECT MAX(id) AS id FROM sync_seq").get() as { id: number }).id;
+
+    const response = await app.request("/api/sync/pull", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: "Bearer test-token" },
+      body: JSON.stringify({ sinceSeq: 0 }),
+    });
+
+    expect(response.status).toBe(200);
+    const body = await response.json() as { changes: Array<{ tableName: string }>; nextSinceSeq: number };
+    expect(body.changes.some((change) => change.tableName === "health_heart_rate")).toBe(false);
+    expect(body.changes.some((change) => change.tableName === "runs")).toBe(false);
+    // 游标不能卡在退役记录之前，否则设备每次拉都从同一处重来。
+    expect(body.nextSinceSeq).toBe(maxSeq);
+  });
+
   it("records timings in pull_returned detail without changing response shape", async () => {
     const response = await app.request("/api/sync/pull", {
       method: "POST",

@@ -54,4 +54,6 @@ last-reviewed: 2026-08-10
 3. **客户端与服务端对表**：把设置页阶段耗时与服务端 `sync_logs.timings`、请求审计到达时间 / 次数放在同一时间窗。客户端阶段长而服务端 `totalMs` 只有毫秒级，瓶颈在请求到达服务端之前或响应返回客户端之后，继续查 WebView/原生连接、DNS、VPN/TUN、代理、TLS、CORS 预检；两边同时长才优先查 server/SQLite。服务端完全没有对应请求时，也不能把等待归因于数据库。
 4. **最后按平台做对照**：同一服务端、同一网络下比较 Web/PWA 与 Android APK，并重复采样看 p50/p95，不用单次秒表下结论。Android 原生 HTTP 只绕过浏览器 CORS enforcement 和 WebView 连接栈，不绕过系统 DNS、VPN、代理、TLS 或服务端链路；网络边界见 [deployment](../deployment.md) 与 [android](../android.md)。
 
+**pull 返回的 changes 条数少于账本区间跨度是正常现象，不是丢数据**：`readChangesSinceSeq` 跳过两类账本记录——读不到当前业务行的（已被后续变更覆盖或删除），以及 `table_name` 已不在域登记簿的（账本只增，已退役域的历史记录永久保留，见 [domain-registry](domain-registry.md)）。游标 `nextSinceSeq` 按 seq 号前进而非按 change 数前进，因此**响应里的 seq 跳号本身不构成故障信号**；判断是否真丢数据要比对具体 record，不能数条数。
+
 取证最小集是：客户端最近一条 `waitMs/reason/connection/transport` 与 status/push/pull 分段、服务端同时间窗的 sync/request logs、APK build id、Android 当时的 VPN/代理状态。先完成这组对表，再决定改 scheduler、transport、CORS/网络还是 server；不要从“安卓慢”直接跳到全局启用 CapacitorHttp，也不要在请求可能已经发出后盲目换 transport 重发写请求。

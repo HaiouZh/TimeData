@@ -65,7 +65,9 @@ last-reviewed: 2026-08-14
 
 登记簿里没有健康域：本仓不承载体征与跑步数据（决策见 [ADR 0024](../../adr/0024-retire-health-subsystem.md) 与 [ADR 0031](../../adr/0031-delete-health-data-layer.md)）。`syncDomains.test.ts` 有一条封闭性断言守着这一点——任何以 `health_` 开头的域或 `runs` 被加回登记簿，都会先红一次。
 
-**删域仍是破坏性协议变更**，判据是「这个域有没有真实的生产者与消费者」，不是「登记簿里有没有这一行」。
+**删域仍是破坏性协议变更。** 判据是三问，缺一不可：谁在写（生产者）、谁在读（消费者）、**只增账本 `sync_seq` 与既有备份文件里已经留下了什么**。第三问最容易漏——账本永不清理（[ADR 0019](../../adr/0019-destructive-sync-operations-preserve-ledger.md)），已退役域的历史记录会永远躺在里面。
+
+**pull 对此已有兜底**：`readChangesSinceSeq` 遇到登记簿里没有的 `table_name` 就跳过该条、游标照常前进，不让历史记录炸掉整个 pull（回归测试见 `routes/sync.test.ts`）。没有这道兜底时，游标早于那些历史 seq 的设备会整个 pull 拿到 500——判例见 [ADR 0031](../../adr/0031-delete-health-data-layer.md)。
 
 登记簿是封闭的：加域必须改代码、过测试。静态类型 `SyncChange`（`types.ts` 手工判别联合）与运行时 schema（登记簿生成）必须同步修改；`tracks`、`track_steps`、`goals`、`goal_layout_pins` 都已有静态分支。
 
