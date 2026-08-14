@@ -10,6 +10,10 @@ import "@fontsource/tinos/700.css";
 import "./index.css";
 import { CaptureApp } from "./capture/CaptureApp.tsx";
 import { isCaptureWindow } from "./lib/desktop/shell.ts";
+import { installSchedulerPortTap } from "./lib/schedulerHostGuard.ts";
+
+// 挂在 React 首次调度之前即可（渲染在下面才发生），与 import 求值顺序无关——原因见该模块注释。
+installSchedulerPortTap();
 
 const rootElement = document.getElementById("root");
 if (!rootElement) {

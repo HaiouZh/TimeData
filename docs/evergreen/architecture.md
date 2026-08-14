@@ -35,7 +35,7 @@ covers:
   - packages/mobile/android/app/src/main/AndroidManifest.xml
 contracts:
   - packages/client/src/components/app-shell/AppRoutes.tsx
-last-reviewed: 2026-08-06
+last-reviewed: 2026-08-14
 ---
 
 # 架构总览
@@ -178,6 +178,10 @@ CLI 不直接读写 SQLite。命令面见 [cli](cli.md)。
 
 **返回一律 `navigate(-1)`**——换成 `navigate(父页, { replace: true })` 会生成新 `location.key`，保留层被当新页重挂，整套机制静默失效。发出后按帧比对 `location.key` 是否变化：变了就清理收工；短暂窗口内没变即视为被「未保存就别走」守卫拦下，当场弹回原位——不能让当前页停在屏外干等，那时屏上铺的是带 `inert` 的上一页，点哪都没反应。
 
+### 4.6 iOS 壳：调度器死锁
+
+WKWebView 在 App 挂起时会丢掉 React 调度器赖以排队的 `MessageChannel` 消息，令其永久停摆：**凡走调度器的更新一起瘫**（路由导航、liveQuery 回流），而点击里直接改 state 走微任务通道、照常生效——现场是「弹层点得开、底栏 tab 点不动」。判据、补拍解法与回前台探针见 [architecture/scheduler-resilience](architecture/scheduler-resilience.md)。
+
 ## 5. 关键约定
 
 1. **写入边界**：Web 本地写 Dexie；脚本/AI/agent 经 server API；server 内部受控服务可写 SQLite 并追加 `sync_seq`。禁止直接编辑 SQLite / IndexedDB / syncLog / Backup / JSONL / CSV。
@@ -221,7 +225,13 @@ CLI 不直接读写 SQLite。命令面见 [cli](cli.md)。
 | [categories-settings](categories-settings.md) | 域 | 分类 schema、分类管理、排序/颜色/删除、sleep/punch 分类设置 |
 | [design-language](design-language.md) | 设计 | 语义颜色 token、字体与排版角色、圆角/边框/阴影、自绘控件库、Phosphor 图标、设计语言棘轮 |
 
-## 7. 不在这份文档里的事
+## 7. 子文档索引
+
+| 子文档 | 拥有什么 |
+|---|---|
+| [architecture/scheduler-resilience](architecture/scheduler-resilience.md) | React 调度器在 WKWebView 挂起后死锁的成因与判据、经 `MessagePort` 原型挂钩补发一拍的解法、回前台 transition 探针看门狗 |
+
+## 8. 不在这份文档里的事
 
 - 具体字段 schema、页面细节、路由细节和测试清单。
 - 本地过程文档、spec、plan、review；这些在 `docs_local/**`。

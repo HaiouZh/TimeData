@@ -14,9 +14,11 @@ const rawSetting = vi.hoisted(() => ({
   value: JSON.stringify(["/quick-notes", "/", "/todo"]),
 }));
 
+// 打桩 useSettingLoad 而非 useSetting：底栏走的是保留三态的那个入口（未回流 = undefined，
+// 见 navVisibleTabsSetting 的 useTabOrder），只桩 useSetting 会让底栏读真库、拿到全量默认。
 vi.mock("../../lib/settings/index.ts", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../../lib/settings/index.ts")>();
-  return { ...actual, useSetting: (key: string) => (key === NAV_VISIBLE_TABS_KEY ? rawSetting.value : null) };
+  return { ...actual, useSettingLoad: (key: string) => (key === NAV_VISIBLE_TABS_KEY ? rawSetting.value : null) };
 });
 
 beforeEach(async () => {

@@ -4,8 +4,10 @@ import { db, resetDb } from "../../test/dbReset.js";
 import {
   CONFIGURABLE_TABS,
   NAV_VISIBLE_TABS_KEY,
+  type NavTabConfig,
   readTabOrder,
   readVisibleTabs,
+  resolveTabOrder,
   sanitizeTabOrder,
   setTabOrder,
 } from "./navVisibleTabsSetting.js";
@@ -110,5 +112,33 @@ describe("navVisibleTabsSetting", () => {
   it("covers every main nav route except the always-visible /settings", () => {
     const expected = MAIN_NAV_ITEMS.map((item) => item.to).filter((to) => to !== "/settings");
     expect([...CONFIGURABLE_TABS]).toEqual(expected);
+  });
+});
+
+/**
+ * 「未回流」与「读到了但没设过」必须分开处理，否则 iOS 保留栈里新挂载的底栏会先闪出
+ * 用户已隐藏的 tab 再收回去（安卓只有一份常驻底栏、从不重挂，故看不到）。
+ */
+describe("resolveTabOrder 的三态回退", () => {
+  const onlyTodo: NavTabConfig[] = CONFIGURABLE_TABS.map((to) => ({ to, hidden: to !== "/todo" }));
+
+  it("未回流且无上次已知值时才回落全量默认", () => {
+    expect(resolveTabOrder(undefined, null)).toEqual(CONFIGURABLE_TABS.map((to) => ({ to, hidden: false })));
+  });
+
+  it("未回流时沿用上次已知值——这一条就是不闪的全部理由", () => {
+    expect(resolveTabOrder(undefined, onlyTodo)).toEqual(onlyTodo);
+  });
+
+  // 真闸：把实现里的 `raw === undefined` 写成 `!raw`，本条立刻红——
+  // null 是「查过了，该键没值」，语义上必须落回默认，不能拿上次的顶上。
+  it("读到了但没设过则落回默认，不吃缓存", () => {
+    expect(resolveTabOrder(null, onlyTodo)).toEqual(CONFIGURABLE_TABS.map((to) => ({ to, hidden: false })));
+  });
+
+  it("读到真值时以真值为准", () => {
+    expect(resolveTabOrder(JSON.stringify([{ to: "/", hidden: false }]), onlyTodo)).toEqual(
+      CONFIGURABLE_TABS.map((to) => ({ to, hidden: to !== "/" })),
+    );
   });
 });

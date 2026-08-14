@@ -12,7 +12,7 @@ covers:
   - packages/client/src/pages/settings/SettingsMorePage.tsx
 contracts:
   - packages/client/src/lib/settings/index.ts
-last-reviewed: 2026-08-06
+last-reviewed: 2026-08-14
 ---
 
 # 设置 · 同步键值表
@@ -29,12 +29,13 @@ last-reviewed: 2026-08-06
 
 ## 1. 持久化机制（`lib/settings/index.ts`）
 
-通用读写 `getSetting` / `setSetting` / `useSetting`：
+通用读写 `getSetting` / `setSetting` / `useSetting` / `useSettingLoad`：
 
 - `setSetting` 事务表 = `settings, syncLog`。
 - `value=null` 时删除并写 `settings/delete`（仅当已存在）；否则 `put` 并按是否已存在写 `settings/update` 或 `settings/create`。
 - settings 域走**通用 LWW**（`server/src/sync/domains.ts`），`conflictPolicy:"lww"`、`countsInStatus:false`（不进 `/api/sync/status` 业务计数）。
 - 各具体设置用「包装文件」封装 key + 序列化 + sanitize，不直接散调 `getSetting`。
+- 两个 hook 的差别只在**首帧**：`useSettingLoad` 保留 liveQuery 三态（`undefined` = 查询未回流、`null` = 该键无值），`useSetting` 把两者一并抹成 `null`。对首帧外观有要求的消费方必须用前者——把「未回流」当成「无值」会让它先按默认值渲染一帧再跳变，而**在 iOS 上这一帧是看得见的**：底栏渲染在保留路由栈的每一层内部（见 [architecture](../architecture.md)），切 tab 新挂载的那份底栏必然从未回流态起步。`nav.visibleTabs.v1` 的包装因此额外持一份进程内 last-known 顺序当首帧值；它是进程内状态，清库的测试须一并 `resetTabOrderCache()`。
 
 ## 2. settings key 全表
 
@@ -79,7 +80,7 @@ localStorage 偏好不在 `settings` 同步表，不随设备同步：`timedata_
 
 | 入口 | 职责 |
 |---|---|
-| `lib/settings/index.ts` | `getSetting`/`setSetting`/`useSetting` + syncLog 同事务 |
+| `lib/settings/index.ts` | `getSetting`/`setSetting`/`useSetting`/`useSettingLoad` + syncLog 同事务 |
 | `lib/settings/desktopSidebarSetting.ts` | 桌面侧栏排序 + 更多收纳设置 + sanitize |
 | `lib/settings/navVisibleTabsSetting.ts` | 手机底栏 / 更多功能入口归属设置 + sanitize |
 | `lib/settings/punchCategorySetting.ts` | 打点分类 ID 设置（`punch.categoryId.v1`） |

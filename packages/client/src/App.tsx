@@ -11,6 +11,7 @@ import { MobileBottomNav } from "./components/app-shell/MobileBottomNav.tsx";
 import { DesktopBridge } from "./components/desktop/DesktopBridge.tsx";
 import EdgeSwipeBack from "./components/EdgeSwipeBack.tsx";
 import { ErrorBoundary, RouteErrorFallback } from "./components/ErrorBoundary.tsx";
+import { SchedulerWatchdog } from "./components/SchedulerWatchdog.tsx";
 import { TotpPromptDialog } from "./components/TotpPromptDialog.tsx";
 import { isDesktopShell } from "./lib/desktop/shell.ts";
 import { BottomNavProvider } from "./contexts/BottomNavContext.tsx";
@@ -47,6 +48,8 @@ export function AppShell() {
       <AndroidBackButtonHandler />
       {/* 自身按平台 gate（非 iOS 连监听都不挂），故与 AndroidBackButtonHandler 一样无条件渲染。 */}
       <EdgeSwipeBack />
+      {/* 回前台时探一枚 transition 探针，卡住即判定调度器死锁并自救；正常路径永不触发。 */}
+      <SchedulerWatchdog />
       {isWideScreen && <DesktopSidebar />}
       {useKeptStack ? (
         <KeptRouteStack isWideScreen={isWideScreen} onMainScroll={onMainScroll} />

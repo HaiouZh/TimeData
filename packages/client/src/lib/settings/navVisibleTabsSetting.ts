@@ -1,5 +1,5 @@
-import { useMemo } from "react";
-import { getSetting, setSetting, useSetting } from "./index.js";
+import { useEffect, useMemo } from "react";
+import { getSetting, setSetting, useSettingLoad } from "./index.js";
 
 export const NAV_VISIBLE_TABS_KEY = "nav.visibleTabs.v1";
 // 顺序 = 底栏与设置页勾选列表的展示顺序，须与 navRegistry 的 MAIN_NAV_ITEMS 一致
@@ -81,9 +81,42 @@ export function setTabOrder(tabs: readonly NavTabConfig[]): Promise<void> {
   return setSetting(NAV_VISIBLE_TABS_KEY, JSON.stringify(sanitizeTabOrder([...tabs])));
 }
 
+/**
+ * 三态到顺序的纯映射。`undefined`（liveQuery 还没回流）必须落到上次已知值，**不能**跟 `null`
+ * 一样落到全量默认——那正是底栏闪出已隐藏 tab 的成因，见 {@link useNavBarTabOrder}。
+ */
+export function resolveTabOrder(raw: string | null | undefined, lastKnown: NavTabConfig[] | null): NavTabConfig[] {
+  if (raw === undefined) return lastKnown ?? defaultTabOrder();
+  return parseTabOrder(raw);
+}
+
+/**
+ * 上一次**真正读到**的 tab 顺序（进程内）。
+ *
+ * 底栏渲染在 iOS 保留路由栈的**每一层内部**（见 `KeptRouteStack`），切 tab 会新挂载一层、
+ * 也就新挂载一份底栏。那一份的 liveQuery 首帧必然还没回流，而未回流的回退是全量可见——
+ * 于是新底栏先闪出用户已隐藏的 tab，回流后才收回去。安卓只有一份常驻底栏、从不重挂，
+ * 所以没这个症状。拿上次已知值当首帧值即可消掉这一帧。
+ *
+ * 边界一：库里的值被外部清空（重置数据 / 恢复备份）后本缓存仍是旧值，直到下一次回流纠正——
+ * 那些路径都会重载页面，故不额外处理。
+ * 边界二：**测试里清了 db 就要一并 {@link resetTabOrderCache}**，否则上个用例的配置会在下个
+ * 用例的首帧复活（曾令 SettingsNavPage 的开关测试因初始态反了而超时）。
+ */
+let lastKnownOrder: NavTabConfig[] | null = null;
+
+/** 清掉进程内缓存。测试在清 db 时必须一并调用，见 {@link lastKnownOrder} 的边界二。 */
+export function resetTabOrderCache(): void {
+  lastKnownOrder = null;
+}
+
 export function useTabOrder(): NavTabConfig[] {
-  const raw = useSetting(NAV_VISIBLE_TABS_KEY);
-  return useMemo(() => parseTabOrder(raw), [raw]);
+  const raw = useSettingLoad(NAV_VISIBLE_TABS_KEY);
+  const order = useMemo(() => resolveTabOrder(raw, lastKnownOrder), [raw]);
+  useEffect(() => {
+    if (raw !== undefined) lastKnownOrder = order;
+  }, [raw, order]);
+  return order;
 }
 
 // —— 派生便捷 API：语义与旧版一致（底栏 / 更多页消费）——

@@ -23,6 +23,18 @@ export async function setSetting(key: string, value: string | null): Promise<voi
   });
 }
 
+/**
+ * 与 {@link useSetting} 同源，但**保留 liveQuery 的三态**：`undefined` = 首帧、查询还没回流；
+ * `null` = 已读到、该键没值。
+ *
+ * `useSetting` 把这两种一并抹成 `null`，对多数消费方无所谓；但对「首帧长什么样」有要求的地方
+ * 两者的正确回退是相反的——未回流该沿用上次已知值，真没值才该落到默认值（见
+ * `navVisibleTabsSetting` 的 `useTabOrder`）。
+ */
+export function useSettingLoad(key: string): string | null | undefined {
+  return useLiveQuery(async () => (await db.settings.get(key))?.value ?? null, [key]);
+}
+
 export function useSetting(key: string): string | null {
-  return useLiveQuery(async () => (await db.settings.get(key))?.value ?? null, [key]) ?? null;
+  return useSettingLoad(key) ?? null;
 }

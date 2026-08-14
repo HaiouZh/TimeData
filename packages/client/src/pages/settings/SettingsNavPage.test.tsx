@@ -10,6 +10,7 @@ import {
   NAV_VISIBLE_TABS_KEY,
   readTabOrder,
   readVisibleTabs,
+  resetTabOrderCache,
 } from "../../lib/settings/navVisibleTabsSetting.js";
 import { renderDom, unmount } from "../../test/domHarness.js";
 import { SettingsNavPage } from "./SettingsNavPage.js";
@@ -53,6 +54,9 @@ vi.mock("../../components/SortableCategoryItem.tsx", () => ({
 beforeEach(async () => {
   await db.settings.clear();
   await db.syncLog.clear();
+  // 清库必须连进程内缓存一起清：useTabOrder 拿上次已知值当首帧值（底栏不闪的机制，见
+  // navVisibleTabsSetting），不清就会让上个用例关掉的 tab 在下个用例首帧复活，开关初始态反了。
+  resetTabOrderCache();
 });
 
 async function renderPage() {
