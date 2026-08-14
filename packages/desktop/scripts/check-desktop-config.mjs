@@ -187,4 +187,42 @@ for (const file of collectSourceFiles(CLIENT_SRC)) {
   }
 }
 
+// ---- 跨语言契约：updater 的 phase 串与命令名两端必须恰好一致 ----
+// 四态串（"disabled" / "idle" / "busy" / "ready"）与三个 updater_* 命令名是 Rust / TypeScript
+// 之间的裸字符串契约：两端没有共享类型，typecheck 管不到字符串字面量。Rust 侧改一个字，
+// 两边测试全绿、CI 全绿，而前端把未知 phase 一律当 idle 静默降级——检查期间设置页显示
+// 「当前版本：X」直到完成，没有任何报错。与上文 hotkey 事件名是同一类洞，照同款全匹配写法。
+const PHASE_CONST = /pub const PHASE_\w+: &str = "([^"]+)";/g;
+const rustPhases = [...readFileSync(new URL("../src-tauri/src/updater.rs", import.meta.url), "utf8").matchAll(PHASE_CONST)]
+  .map((m) => m[1])
+  .sort();
+const apiSource = readFileSync(new URL("../../client/src/lib/desktop/api.ts", import.meta.url), "utf8");
+// desktopUpdateSubtitleOf 的 if 链对 disabled / busy / ready 各有一句 status.phase === "…" 显式
+// 判定，idle 走最后那个 fallback。故 TS 侧显式集合 = 那三句的字面量，且 Rust 侧恰好一个值落在
+// 显式集合之外、由 fallback 兜住——多了 TS 无法区分、会静默折叠成 idle，漏了 fallback 语义也没了。
+const subtitleFn = /export function desktopUpdateSubtitleOf[\s\S]*?\n}/.exec(apiSource)?.[0] ?? "";
+const explicitPhases = [...subtitleFn.matchAll(/status\.phase === "([^"]+)"/g)].map((m) => m[1]).sort();
+const rustOnlyPhases = rustPhases.filter((p) => !explicitPhases.includes(p));
+if (explicitPhases.some((p) => !rustPhases.includes(p)) || rustOnlyPhases.length !== 1) {
+  throw new Error(
+    `[desktop-config] updater phase 串两端不一致：Rust 的 PHASE_* 值是 ${JSON.stringify(rustPhases)}，` +
+      `而 api.ts 的 desktopUpdateSubtitleOf 显式判定用到 ${JSON.stringify(explicitPhases)}。` +
+      "前端把未知 phase 一律当 idle 静默降级，只改一侧会让更新链路静默失效且没有任何报错。",
+  );
+}
+
+const rustCommands = [
+  ...readFileSync(new URL("../src-tauri/src/main.rs", import.meta.url), "utf8").matchAll(/commands::(updater_\w+)/g),
+].map((m) => m[1]).sort();
+const invokedCommands = [
+  ...apiSource.matchAll(/invokeDesktop<\s*\w+\s*>\s*\(\s*"(updater_[^"]+)"/g),
+].map((m) => m[1]).sort();
+if (JSON.stringify(rustCommands) !== JSON.stringify(invokedCommands)) {
+  throw new Error(
+    `[desktop-config] updater 命令名两端不一致：Rust generate_handler! 注册了 ${JSON.stringify(rustCommands)}，` +
+      `而 api.ts 的 invokeDesktop 用了 ${JSON.stringify(invokedCommands)}。` +
+      "Rust 改了命令名而前端没跟上时 invoke 直接 reject；反过来则命令注册了却没人调。",
+  );
+}
+
 console.log("[desktop-config] snapshot checks passed");

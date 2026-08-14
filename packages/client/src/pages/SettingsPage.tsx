@@ -464,7 +464,7 @@ export default function SettingsPage() {
             title="桌面版更新"
             subtitle={desktopUpdateSubtitleOf(desktopUpdate)}
             accessory={desktopUpdate.phase === "ready" ? "可更新" : undefined}
-            disabled={desktopUpdateBusy || desktopUpdate.phase === "disabled"}
+            disabled={desktopUpdateBusy || desktopUpdate.phase === "disabled" || desktopUpdate.phase === "busy"}
             onClick={handleDesktopUpdate}
           />
         )}

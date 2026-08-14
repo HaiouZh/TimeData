@@ -70,9 +70,10 @@ describe("desktopUpdateSubtitleOf", () => {
     ).toBe("正在检查更新…");
   });
 
-  // 失败必须看得见但不喧宾夺主：仍显示当前版本，后面缀一句失败。
-  // 只显示「上次检查失败」会让用户不知道自己在哪个版本上。
-  it("上次失败时当前版本与失败并列", () => {
+  // 失败必须看得见但不喧宾夺主：仍显示当前版本，后面缀失败原因。
+  // 只显示「上次检查失败」会把 Rust 侧有区分度的原因（网络 / 验签 / 安装失败）丢掉，
+  // 而三者处置完全不同。
+  it("上次失败时当前版本与失败原因并列", () => {
     expect(
       desktopUpdateSubtitleOf({
         phase: "idle",
@@ -81,7 +82,31 @@ describe("desktopUpdateSubtitleOf", () => {
         lastCheckedMs: 1,
         lastError: "检查更新失败：network error",
       }),
-    ).toBe("当前版本：26.814.2 · 上次检查失败");
+    ).toBe("当前版本：26.814.2 · 检查更新失败：network error");
+  });
+
+  it("失败原因短文本时原样拼在副标题后", () => {
+    expect(
+      desktopUpdateSubtitleOf({
+        phase: "idle",
+        currentVersion: "26.814.2",
+        availableVersion: null,
+        lastCheckedMs: 1,
+        lastError: "安装更新失败：拒绝访问",
+      }),
+    ).toBe("当前版本：26.814.2 · 安装更新失败：拒绝访问");
+  });
+
+  it("失败原因超过60字符时截断并以省略号结尾", () => {
+    expect(
+      desktopUpdateSubtitleOf({
+        phase: "idle",
+        currentVersion: "26.814.2",
+        availableVersion: null,
+        lastCheckedMs: 1,
+        lastError: "e".repeat(80),
+      }),
+    ).toBe(`当前版本：26.814.2 · ${"e".repeat(60)}…`);
   });
 
   it("开发构建明说不检查", () => {

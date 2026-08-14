@@ -348,44 +348,45 @@ pub fn updater_install(state: State<'_, UpdaterState>) -> Result<(), String> {
     };
     let (update, bytes) = pending.ok_or_else(|| "没有已下载好的更新".to_string())?;
     // install() 之后进程立即退出（Windows 安装器限制），安装器带 /ARGS 把应用重新拉起。
-    // 这一行之后的代码正常情况下不会执行。
-    update.install(bytes).map_err(|e| format!("安装更新失败：{e}"))
+    // 下面的 Err 分支只在安装器**根本起不来**时才走到（磁盘满 / 权限不足 / 杀软拦截）。
+    // 那时 bytes 已被 install 消费掉、还不回去，所以必须把 ready_version 一并清掉：
+    // 留着它会让 resolve_phase 恒报 ready、而重下决策又因版本相等恒 Skip，
+    // 更新链路就永久停在「显示可装、实际没货」上，且错误对用户不可见。
+    match update.install(bytes) {
+        Ok(()) => Ok(()),
+        Err(e) => {
+            let message = format!("安装更新失败：{e}");
+            let mut inner = state.0.lock().expect("updater state poisoned");
+            inner.ready_version = None;
+            inner.last_error = Some(message.clone());
+            Err(message)
+        }
+    }
 }
 
 /// 查一轮：check → 按决策决定下不下 → 落状态。全程静默，失败只记 lastError。
 pub async fn run_update_check(app: AppHandle, manual: bool) {
     {
         let state = app.state::<UpdaterState>();
-        let inner = state.0.lock().expect("updater state poisoned");
-        if inner.phase_is_busy {
-            return;
-        }
-        if !updater::should_check(inner.last_checked_ms, now_ms(), updater::CHECK_INTERVAL_MS, manual) {
-            return;
-        }
-    }
-    {
-        let state = app.state::<UpdaterState>();
         let mut inner = state.0.lock().expect("updater state poisoned");
-        inner.phase_is_busy = true;
-        inner.last_error = None;
+        if !inner.try_begin_check(now_ms(), manual) {
+            return;
+        }
     }
 
     let outcome = check_and_download(&app).await;
 
     let state = app.state::<UpdaterState>();
     let mut inner = state.0.lock().expect("updater state poisoned");
-    inner.phase_is_busy = false;
-    inner.last_checked_ms = Some(now_ms());
+    inner.finish_check(now_ms(), outcome.as_ref().err().cloned());
     match outcome {
         Ok(Some((update, bytes, version))) => {
             inner.ready_version = Some(version);
             inner.pending = Some((update, bytes));
         }
         Ok(None) => {}
-        // 区分网络失败 / 验签失败 / 解析失败：验签失败几乎必然是 CI 侧配错
-        // （典型为 latest.json 的 signature 字段读空），与网络抖动的处置完全不同。
-        Err(message) => inner.last_error = Some(message),
+        // finish_check 已把错误写进 last_error，这里只剩 Ok 分支要落 ready/pending。
+        Err(_) => {}
     }
 }
 

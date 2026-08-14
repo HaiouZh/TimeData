@@ -65,6 +65,30 @@ pub struct UpdaterInner {
     pub last_error: Option<String>,
 }
 
+impl UpdaterInner {
+    /// 尝试开始一轮检查。**busy 的判定与置位必须在同一次可变借用内完成**——
+    /// 拆成「先读一次锁判断、放锁、再拿一次锁置位」会让两个并发调用者同时通过，
+    /// 各自跑一轮下载。返回 false 表示被 busy 或节流挡下，调用方应直接返回。
+    pub fn try_begin_check(&mut self, now_ms: u64, manual: bool) -> bool {
+        if self.phase_is_busy {
+            return false;
+        }
+        if !should_check(self.last_checked_ms, now_ms, CHECK_INTERVAL_MS, manual) {
+            return false;
+        }
+        self.phase_is_busy = true;
+        true
+    }
+
+    /// 一轮检查收尾：**无论成败都要清 busy**。漏了这一步，首轮之后
+    /// `try_begin_check` 恒返回 false，更新链路永久停摆且界面恒显「正在检查更新…」。
+    pub fn finish_check(&mut self, now_ms: u64, error: Option<String>) {
+        self.phase_is_busy = false;
+        self.last_checked_ms = Some(now_ms);
+        self.last_error = error;
+    }
+}
+
 pub struct UpdaterState(pub Mutex<UpdaterInner>);
 
 impl Default for UpdaterState {
@@ -156,5 +180,48 @@ mod tests {
     #[test]
     fn 版本串不同即重下() {
         assert_eq!(resolve_download_decision(Some("26.814.2"), "26.813.1"), DownloadDecision::Download);
+    }
+
+    /// 核心守卫：finish_check 里漏清 busy 会让整条更新链路永久停摆，这条抓的就是那个变异。
+    #[test]
+    fn 一轮结束后可以再开新的一轮() {
+        let mut inner = UpdaterInner::default();
+        assert!(inner.try_begin_check(1_000, true));
+        inner.finish_check(1_000, None);
+        assert!(inner.try_begin_check(1_001, true));
+    }
+
+    #[test]
+    fn 一轮在跑时再开会被挡下() {
+        let mut inner = UpdaterInner::default();
+        assert!(inner.try_begin_check(1_000, true));
+        assert!(!inner.try_begin_check(1_001, true));
+    }
+
+    #[test]
+    fn 节流未到不开新的一轮() {
+        let mut inner = UpdaterInner::default();
+        inner.last_checked_ms = Some(1_000);
+        assert!(!inner.try_begin_check(1_001, false));
+    }
+
+    #[test]
+    fn 手动检查绕过节流但绕不过busy() {
+        let mut inner = UpdaterInner::default();
+        inner.last_checked_ms = Some(1_000);
+        assert!(inner.try_begin_check(1_001, true));
+        let mut inner = UpdaterInner::default();
+        inner.phase_is_busy = true;
+        assert!(!inner.try_begin_check(1_001, true));
+    }
+
+    #[test]
+    fn 收尾无论成败都清busy并推进时间戳() {
+        let mut inner = UpdaterInner::default();
+        inner.phase_is_busy = true;
+        inner.finish_check(1_000, Some("x".into()));
+        assert!(!inner.phase_is_busy);
+        assert_eq!(inner.last_checked_ms, Some(1_000));
+        assert_eq!(inner.last_error, Some("x".into()));
     }
 }

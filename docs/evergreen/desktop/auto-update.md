@@ -77,6 +77,16 @@ https://github.com/HaiouZh/TimeData/releases/download/desktop-latest/latest.json
 
 `desktop-latest` 是一个**固定 tag 的 prerelease Release**，只放 `latest.json`，每次发版 `--clobber` 覆盖；安装包本体仍躺在各自的 `v<code>` Release 里，由 json 的 `url` 指过去。
 
+**这个 Release 是人工一次性创建的**，CI 从不创建它：
+
+```
+gh release create desktop-latest --prerelease --title "桌面版更新源"
+```
+
+CI 的发布步骤只往它上面 `--clobber` 覆盖 `latest.json` 这一个 asset——workflow 里没有、也不该有 `gh release create`。[ADR 0032](../../adr/0032-desktop-auto-update-via-github-release.md) 说的「由 CI 自动维护」指的是 `latest.json` 的**内容**，不是 Release 条目本身。
+
+**它被误删后必须人工重建**（同样的命令），否则每次发版都会在发布 `latest.json` 那一步硬失败，且全部已装机客户端持续拿到 404、静默停在旧版。
+
 **不能改用 `releases/latest/download/`**：GitHub 的「Latest」标记在本仓是**带 APK 的 Release 专属**（母文档 §9：windows job 刻意不碰 latest），那条路会指向错误版本、甚至指向根本不含 Windows 包的 Release。
 
 ### 2.3 `latest.json` 由带单测的脚本产出

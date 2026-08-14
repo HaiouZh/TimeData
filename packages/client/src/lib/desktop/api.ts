@@ -78,7 +78,11 @@ export function desktopUpdateSubtitleOf(status: DesktopUpdaterStatus): string {
     return `新版 ${status.availableVersion} 已下载好，点这里更新并重启`;
   }
   const base = `当前版本：${status.currentVersion}`;
-  return status.lastError ? `${base} · 上次检查失败` : base;
+  if (!status.lastError) return base;
+  // Rust 侧存的是有区分度的原因（网络 / 验签 / 安装失败），三者处置完全不同，
+  // 折叠成一句「上次检查失败」等于把这个区分丢掉。副标题是单行，超长要截。
+  const detail = status.lastError.length > 60 ? `${status.lastError.slice(0, 60)}…` : status.lastError;
+  return `${base} · ${detail}`;
 }
 
 export async function fetchDesktopUpdaterStatus(): Promise<DesktopUpdaterStatus> {
