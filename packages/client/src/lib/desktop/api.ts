@@ -61,3 +61,34 @@ export async function listenDesktopHotkey(handler: (event: DesktopHotkeyEvent) =
   const { listen } = await import("@tauri-apps/api/event");
   return listen<DesktopHotkeyEvent>("desktop-hotkey", (e) => handler(e.payload));
 }
+
+export interface DesktopUpdaterStatus {
+  /** "disabled" | "idle" | "busy" | "ready" */
+  phase: string;
+  currentVersion: string;
+  availableVersion: string | null;
+  lastCheckedMs: number | null;
+  lastError: string | null;
+}
+
+export function desktopUpdateSubtitleOf(status: DesktopUpdaterStatus): string {
+  if (status.phase === "disabled") return "开发构建不检查更新";
+  if (status.phase === "busy") return "正在检查更新…";
+  if (status.phase === "ready" && status.availableVersion) {
+    return `新版 ${status.availableVersion} 已下载好，点这里更新并重启`;
+  }
+  const base = `当前版本：${status.currentVersion}`;
+  return status.lastError ? `${base} · 上次检查失败` : base;
+}
+
+export async function fetchDesktopUpdaterStatus(): Promise<DesktopUpdaterStatus> {
+  return invokeDesktop<DesktopUpdaterStatus>("updater_status");
+}
+
+export async function checkDesktopUpdateNow(): Promise<void> {
+  return invokeDesktop<void>("updater_check_now");
+}
+
+export async function installDesktopUpdate(): Promise<void> {
+  return invokeDesktop<void>("updater_install");
+}

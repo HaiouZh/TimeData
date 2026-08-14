@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { invokeDesktop, listenDesktopHotkey, messageOf } from "./api.js";
+import { desktopUpdateSubtitleOf, invokeDesktop, listenDesktopHotkey, messageOf } from "./api.js";
 
 // node 环境无 window → isDesktopShell() 为 false，守卫在动态 import 之前就抛，
 // 故本文件不会真去加载 @tauri-apps/api（无需 mock）。
@@ -30,5 +30,69 @@ describe("messageOf", () => {
     expect(messageOf("")).toBe("操作失败");
     expect(messageOf(new Error(""))).toBe("操作失败");
     expect(messageOf(null, "打点失败")).toBe("打点失败");
+  });
+});
+
+describe("desktopUpdateSubtitleOf", () => {
+  it("已就绪时报新版本号", () => {
+    expect(
+      desktopUpdateSubtitleOf({
+        phase: "ready",
+        currentVersion: "26.814.2",
+        availableVersion: "26.815.1",
+        lastCheckedMs: 1,
+        lastError: null,
+      }),
+    ).toBe("新版 26.815.1 已下载好，点这里更新并重启");
+  });
+
+  it("空闲时报当前版本", () => {
+    expect(
+      desktopUpdateSubtitleOf({
+        phase: "idle",
+        currentVersion: "26.814.2",
+        availableVersion: null,
+        lastCheckedMs: 1,
+        lastError: null,
+      }),
+    ).toBe("当前版本：26.814.2");
+  });
+
+  it("忙碌时报进行中", () => {
+    expect(
+      desktopUpdateSubtitleOf({
+        phase: "busy",
+        currentVersion: "26.814.2",
+        availableVersion: null,
+        lastCheckedMs: 1,
+        lastError: null,
+      }),
+    ).toBe("正在检查更新…");
+  });
+
+  // 失败必须看得见但不喧宾夺主：仍显示当前版本，后面缀一句失败。
+  // 只显示「上次检查失败」会让用户不知道自己在哪个版本上。
+  it("上次失败时当前版本与失败并列", () => {
+    expect(
+      desktopUpdateSubtitleOf({
+        phase: "idle",
+        currentVersion: "26.814.2",
+        availableVersion: null,
+        lastCheckedMs: 1,
+        lastError: "检查更新失败：network error",
+      }),
+    ).toBe("当前版本：26.814.2 · 上次检查失败");
+  });
+
+  it("开发构建明说不检查", () => {
+    expect(
+      desktopUpdateSubtitleOf({
+        phase: "disabled",
+        currentVersion: "0.1.0",
+        availableVersion: null,
+        lastCheckedMs: null,
+        lastError: null,
+      }),
+    ).toBe("开发构建不检查更新");
   });
 });

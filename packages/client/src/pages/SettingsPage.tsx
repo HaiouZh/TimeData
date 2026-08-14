@@ -4,6 +4,14 @@ import { Link } from "react-router";
 import { useAppUpdate } from "../appUpdate.tsx";
 import { useSyncContext } from "../contexts/SyncContext.tsx";
 import { useConfirm } from "../hooks/useConfirm.tsx";
+import {
+  checkDesktopUpdateNow,
+  desktopUpdateSubtitleOf,
+  fetchDesktopUpdaterStatus,
+  installDesktopUpdate,
+  messageOf,
+  type DesktopUpdaterStatus,
+} from "../lib/desktop/api.js";
 import { isDesktopShell } from "../lib/desktop/shell.js";
 import { type AndroidApkUpdate, fetchAndroidApkUpdate, openAndroidApkUpdate } from "../lib/mobileUpdate.ts";
 import { fetchServerVersion, pollServerUpdate, triggerServerUpdate } from "../lib/serverVersion.ts";
@@ -290,6 +298,47 @@ export default function SettingsPage() {
     setServerUpdating(false);
   }
 
+  const [desktopUpdate, setDesktopUpdate] = useState<DesktopUpdaterStatus | null>(null);
+  const [desktopUpdateBusy, setDesktopUpdateBusy] = useState(false);
+
+  useEffect(() => {
+    if (!isDesktopShell()) return;
+    let alive = true;
+    // 后台每 4 小时查一轮，页面停留期间状态可能变（下载完成）。10 秒轮询一次
+    // 足够让「下好了」在不刷新页面的情况下自己显出来。
+    const tick = () => {
+      void fetchDesktopUpdaterStatus()
+        .then((s) => {
+          if (alive) setDesktopUpdate(s);
+        })
+        .catch(() => {});
+    };
+    tick();
+    const timer = window.setInterval(tick, 10_000);
+    return () => {
+      alive = false;
+      window.clearInterval(timer);
+    };
+  }, []);
+
+  async function handleDesktopUpdate() {
+    if (!desktopUpdate) return;
+    setDesktopUpdateBusy(true);
+    try {
+      if (desktopUpdate.phase === "ready") {
+        // 装完进程立即退出、安装器把应用重新拉起，这行之后的代码不会执行。
+        await installDesktopUpdate();
+        return;
+      }
+      await checkDesktopUpdateNow();
+      setDesktopUpdate(await fetchDesktopUpdaterStatus());
+    } catch (e) {
+      setDesktopUpdate((prev) => (prev ? { ...prev, lastError: messageOf(e) } : prev));
+    } finally {
+      setDesktopUpdateBusy(false);
+    }
+  }
+
   return (
     <div className="mx-auto max-w-xl space-y-5 bg-page p-4 pb-10 text-ink">
       {dialog}
@@ -408,6 +457,17 @@ export default function SettingsPage() {
           disabled={serverUpdating || !apiUrl}
           onClick={handleServerUpdate}
         />
+        {isDesktopShell() && desktopUpdate && (
+          <SettingsRow
+            icon={<Icon icon={ArrowsClockwise} size={20} />}
+            tone="accent"
+            title="桌面版更新"
+            subtitle={desktopUpdateSubtitleOf(desktopUpdate)}
+            accessory={desktopUpdate.phase === "ready" ? "可更新" : undefined}
+            disabled={desktopUpdateBusy || desktopUpdate.phase === "disabled"}
+            onClick={handleDesktopUpdate}
+          />
+        )}
         <SettingsRow
           icon={<Icon icon={ArrowsClockwise} size={20} />}
           tone="accent"
