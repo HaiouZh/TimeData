@@ -58,6 +58,7 @@ import { splitInboxByGravity } from "../lib/tasks/gravity.js";
 import type { GravitySurfacedMap } from "../lib/tasks/gravity.js";
 import { markGravityTasksSurfaced, useGravitySurfacedMap } from "../lib/tasks/gravityReviewStorage.js";
 import { currentGravityDate, msUntilNextLocalDay } from "../lib/tasks/gravityClock.js";
+import { todoTrackRows } from "../lib/tasks/todoTrackRows.js";
 import { useTodoGravitySettings } from "../lib/settings/todoGravitySetting.ts";
 import {
   endActiveSession,
@@ -94,6 +95,7 @@ import { TaskColumn } from "./todo/TaskColumn.js";
 import { TaskDetailSheet } from "./todo/TaskDetailSheet.js";
 import { TaskList } from "./todo/TaskList.js";
 import { TaskTrackChip } from "./todo/TaskTrackChip.js";
+import { TrackRowGroup } from "./todo/TrackRowGroup.js";
 import { useTaskTrackIndex } from "./todo/useTaskTrackIndex.js";
 import { TodoComposer } from "./todo/TodoComposer.js";
 import { TodoSelectionBar } from "./todo/TodoSelectionBar.js";
@@ -144,6 +146,10 @@ export function TodoPage() {
   const goalLinkedIds = goalBarTaskIds(buckets.goalLinkedIds, projectChips);
   const trackData = useTaskTrackIndex();
   const taskTrackIndex = trackData.index;
+  const todayTrackRows = useMemo(
+    () => todoTrackRows(trackData.tracks, trackData.stepsByTrack, trackData.claimedTrackIds, gravityNow).filter((row) => row.zone === "today"),
+    [trackData, gravityNow],
+  );
   const resumable = useLiveQuery(() => listResumableSessions(), []) ?? [];
   // biome-ignore lint/correctness/useExhaustiveDependencies: handSession.id 是触发器而非读取项——换了手头会话才重新自愈一次。删掉它，自愈就只在挂载时跑一次。
   useEffect(() => {
@@ -1230,6 +1236,7 @@ export function TodoPage() {
       indentTargetId={indentTargetId}
       revealChildren={revealChildren}
       {...rowHandlers}
+      extra={<TrackRowGroup rows={todayTrackRows} />}
     />
   );
 

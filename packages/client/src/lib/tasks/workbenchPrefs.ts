@@ -70,3 +70,12 @@ export function getScheduledCollapsed(): boolean {
 export function setScheduledCollapsed(collapsed: boolean): void {
   safeSetItem(STORAGE_KEYS.todoScheduledCollapsed, collapsed ? "true" : "false");
 }
+
+export function getTodoTrackGroupCollapsed(): boolean {
+  // 默认展开：轨道进区是本阶段要验的形态，默认收起等于没做。
+  return safeGetItem(STORAGE_KEYS.todoTrackGroupCollapsed) === "true";
+}
+
+export function setTodoTrackGroupCollapsed(collapsed: boolean): void {
+  safeSetItem(STORAGE_KEYS.todoTrackGroupCollapsed, collapsed ? "true" : "false");
+}
