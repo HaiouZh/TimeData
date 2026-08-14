@@ -197,16 +197,24 @@ const rustPhases = [...readFileSync(new URL("../src-tauri/src/updater.rs", impor
   .map((m) => m[1])
   .sort();
 const apiSource = readFileSync(new URL("../../client/src/lib/desktop/api.ts", import.meta.url), "utf8");
-// desktopUpdateSubtitleOf 的 if 链对 disabled / busy / ready 各有一句 status.phase === "…" 显式
-// 判定，idle 走最后那个 fallback。故 TS 侧显式集合 = 那三句的字面量，且 Rust 侧恰好一个值落在
-// 显式集合之外、由 fallback 兜住——多了 TS 无法区分、会静默折叠成 idle，漏了 fallback 语义也没了。
-const subtitleFn = /export function desktopUpdateSubtitleOf[\s\S]*?\n}/.exec(apiSource)?.[0] ?? "";
-const explicitPhases = [...subtitleFn.matchAll(/status\.phase === "([^"]+)"/g)].map((m) => m[1]).sort();
+const settingsSource = readFileSync(new URL("../../client/src/pages/SettingsPage.tsx", import.meta.url), "utf8");
+// TS 侧的 phase 显式判定散在**两个**文件里，两个都要扫：`api.ts` 决定副标题文案，
+// `SettingsPage.tsx` 决定点击是装还是查（`=== "ready"`）、「可更新」角标显不显示、行禁不禁用。
+// 只扫 api.ts 就等于只堵了一半——Rust 侧改名时同步改了副标题却漏改 SettingsPage，闸照绿，
+// 而那时角标永不显示、点击永远走「查」而非「装」，安装链路静默断裂。这与上文事件名那类
+// 「只认 app.emit( 就会被 emit_to 绕开」是同一个形状：闸的扫描面漏一处，等于那一处没有闸。
+// idle 不出现在任何显式判定里（它是 if 链末尾的 fallback），故 Rust 侧恰好一个值落在显式集合
+// 之外——多了说明 TS 分不出、会静默折叠成 idle，一个都不剩说明 fallback 语义没了。
+const explicitPhases = [
+  ...new Set(
+    [apiSource, settingsSource].flatMap((src) => [...src.matchAll(/\.phase === "([^"]+)"/g)].map((m) => m[1])),
+  ),
+].sort();
 const rustOnlyPhases = rustPhases.filter((p) => !explicitPhases.includes(p));
 if (explicitPhases.some((p) => !rustPhases.includes(p)) || rustOnlyPhases.length !== 1) {
   throw new Error(
     `[desktop-config] updater phase 串两端不一致：Rust 的 PHASE_* 值是 ${JSON.stringify(rustPhases)}，` +
-      `而 api.ts 的 desktopUpdateSubtitleOf 显式判定用到 ${JSON.stringify(explicitPhases)}。` +
+      `而 api.ts 与 SettingsPage.tsx 里 .phase === "…" 显式判定用到 ${JSON.stringify(explicitPhases)}。` +
       "前端把未知 phase 一律当 idle 静默降级，只改一侧会让更新链路静默失效且没有任何报错。",
   );
 }
