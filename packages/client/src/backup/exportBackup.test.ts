@@ -108,7 +108,7 @@ const goalLayoutPin = {
 beforeEach(resetDb);
 
 describe("exportBackup", () => {
-  it("exports core tables plus every bundled domain (tasks, quick notes, health) keyed by table name", async () => {
+  it("exports core tables plus every bundled domain (tasks, quick notes, tracks) keyed by table name", async () => {
     await db.categories.add(category);
     await db.timeEntries.add(entry);
     await db.tasks.add(task);
@@ -144,6 +144,6 @@ describe("exportBackup", () => {
     for (const domain of BACKUP_BUNDLED_DOMAINS) {
       expect(backup.domains[domain.table]).toBeDefined();
     }
-    expect(backup.domains.health_sleep).toEqual([]);
+    expect(backup.domains.sessions).toEqual([]);
   });
 });

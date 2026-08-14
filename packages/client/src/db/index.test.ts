@@ -1,4 +1,5 @@
 import "fake-indexeddb/auto";
+import Dexie from "dexie";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { STORAGE_KEYS } from "../lib/storageKeys.js";
 import {
@@ -69,6 +70,49 @@ describe("resetSyncCursors", () => {
 });
 
 describe("Dexie database", () => {
+  it("drops health stores on upgrade from v16 and keeps other data", async () => {
+    db.close();
+    await db.delete();
+
+    // 造一个 v16 老库：健康 store 齐全且有数据，另有一条要活下来的分类。
+    const legacy = new Dexie("timedata");
+    legacy.version(16).stores({
+      categories: "id, parentId, sortOrder",
+      quickNotes: "id, occurredAt, updatedAt",
+      timeEntries: "id, categoryId, startTime, endTime",
+      tasks: "id, parentId, ruleId, sessionId, scheduledAt, sortOrder, updatedAt",
+      tracks: "id, status, updatedAt",
+      trackSteps: "id, trackId, [trackId+seq], updatedAt",
+      goals: "id, kind, status, updatedAt",
+      goalLayoutPins: "[goalId+nodeKind+nodeId], goalId, nodeKind, nodeId, updatedAt",
+      syncLog: "id, tableName, recordId, synced, [tableName+synced]",
+      settings: "key",
+      healthHeartRate: "id, date",
+      healthHrv: "id, date",
+      healthSleep: "id, date",
+      healthStress: "id, date",
+      runs: "id, date",
+      healthCharts: "id, order, updatedAt",
+      sessions: "id, startedAt, updatedAt",
+    });
+    await legacy.open();
+    await legacy.table("healthHeartRate").put({ id: "hr-1", date: "2026-01-01" });
+    await legacy.table("runs").put({ id: "run-1", date: "2026-01-01" });
+    await legacy.table("categories").put({ id: "cat-keep", name: "保留我", parentId: null, color: "#111111", sortOrder: 0 });
+    legacy.close();
+
+    await db.open();
+
+    const tableNames = db.tables.map((table) => table.name);
+    expect(tableNames).not.toContain("healthHeartRate");
+    expect(tableNames).not.toContain("healthHrv");
+    expect(tableNames).not.toContain("healthSleep");
+    expect(tableNames).not.toContain("healthStress");
+    expect(tableNames).not.toContain("runs");
+    expect(tableNames).not.toContain("healthCharts");
+    await expect(db.categories.get("cat-keep")).resolves.toMatchObject({ name: "保留我" });
+  });
+
   it("creates the current schema and seeds default categories on a fresh open", async () => {
     await db.delete();
 
@@ -76,7 +120,7 @@ describe("Dexie database", () => {
     await seedDefaultCategories();
 
     expect(await db.categories.count()).toBeGreaterThan(0);
-    expect(db.verno).toBe(16);
+    expect(db.verno).toBe(17);
     expect(db.tables.some((table) => table.name === "autoBackups")).toBe(false);
     expect(db.settings.schema.primKey.keyPath).toBe("key");
     expect(db.quickNotes.schema.primKey.keyPath).toBe("id");
@@ -93,9 +137,10 @@ describe("Dexie database", () => {
     expect(db.sessions.schema.idxByName.startedAt).toBeDefined();
     expect(db.sessions.schema.idxByName.updatedAt).toBeDefined();
     expect(db.sessions.schema.idxByName.endedAt).toBeUndefined();
-    expect(db.healthCharts.schema.primKey.keyPath).toBe("id");
-    expect(db.healthCharts.schema.idxByName.order).toBeDefined();
-    expect(db.healthCharts.schema.idxByName.updatedAt).toBeDefined();
+    // 健康数据层已退役（ADR 0031）：全新建库不得再出现这些 store。
+    expect(db.tables.some((table) => table.name === "healthCharts")).toBe(false);
+    expect(db.tables.some((table) => table.name === "healthHeartRate")).toBe(false);
+    expect(db.tables.some((table) => table.name === "runs")).toBe(false);
     expect(db.tracks.schema.primKey.keyPath).toBe("id");
     expect(db.tracks.schema.idxByName.goalId).toBeUndefined();
     expect(db.tracks.schema.idxByName.status).toBeDefined();

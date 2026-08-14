@@ -10,12 +10,6 @@ import {
   SettingSchema,
   TaskSchema,
   TimeEntrySchema,
-  HealthHeartRateSchema,
-  HealthHrvSchema,
-  HealthSleepSchema,
-  HealthStressSchema,
-  HealthRunSchema,
-  HealthChartConfigSchema,
   TrackSchema,
   TrackStepSchema,
 } from "@timedata/shared";
@@ -165,42 +159,6 @@ export const CLIENT_SYNC_DOMAINS: Record<string, ClientDomainConfig> = {
     schema: TaskSchema,
     needsApply: (existing, remote) =>
       taskNeedsApply(existing as Task | undefined, remote as Task),
-    backup: "bundled",
-  },
-  health_heart_rate: {
-    table: "health_heart_rate",
-    storeName: "healthHeartRate",
-    schema: HealthHeartRateSchema,
-    backup: "bundled",
-  },
-  health_hrv: {
-    table: "health_hrv",
-    storeName: "healthHrv",
-    schema: HealthHrvSchema,
-    backup: "bundled",
-  },
-  health_sleep: {
-    table: "health_sleep",
-    storeName: "healthSleep",
-    schema: HealthSleepSchema,
-    backup: "bundled",
-  },
-  health_stress: {
-    table: "health_stress",
-    storeName: "healthStress",
-    schema: HealthStressSchema,
-    backup: "bundled",
-  },
-  runs: {
-    table: "runs",
-    storeName: "runs",
-    schema: HealthRunSchema,
-    backup: "bundled",
-  },
-  health_charts: {
-    table: "health_charts",
-    storeName: "healthCharts",
-    schema: HealthChartConfigSchema,
     backup: "bundled",
   },
   tracks: {

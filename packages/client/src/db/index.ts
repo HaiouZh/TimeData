@@ -1,7 +1,6 @@
 import Dexie, { type EntityTable, type Table } from "dexie";
 import type {
   Category, Goal, GoalLayoutPin, QuickNote, Session, Setting, Task, TimeEntry, SyncLogEntry, Track, TrackStep,
-  HealthHeartRate, HealthHrv, HealthSleep, HealthStress, HealthRun, HealthChartConfig,
 } from "@timedata/shared";
 import { createDefaultCategories } from "@timedata/shared";
 import { v4 as uuid } from "uuid";
@@ -25,12 +24,6 @@ export const db = new Dexie("timedata") as Dexie & {
   tasks: EntityTable<Task, "id">;
   syncLog: EntityTable<SyncLogEntry, "id">;
   settings: EntityTable<Setting, "key">;
-  healthHeartRate: EntityTable<HealthHeartRate, "id">;
-  healthHrv: EntityTable<HealthHrv, "id">;
-  healthSleep: EntityTable<HealthSleep, "id">;
-  healthStress: EntityTable<HealthStress, "id">;
-  runs: EntityTable<HealthRun, "id">;
-  healthCharts: EntityTable<HealthChartConfig, "id">;
   tracks: EntityTable<Track, "id">;
   trackSteps: EntityTable<TrackStep, "id">;
   goals: EntityTable<Goal, "id">;
@@ -310,6 +303,17 @@ db.version(16)
       if (task.sessionId === undefined) task.sessionId = null;
     });
   });
+
+// 退役健康数据层（ADR 0031）：6 个健康 store 置 null 删除，本地数据随之清空。
+// 服务端同步域已一并删除，本地不再有任何生产者或消费者；历史数据存于服务端 SQL 存档与 run-track。
+db.version(17).stores({
+  healthHeartRate: null,
+  healthHrv: null,
+  healthSleep: null,
+  healthStress: null,
+  runs: null,
+  healthCharts: null,
+});
 
 export async function seedDefaultCategories(): Promise<void> {
   const count = await db.categories.count();
