@@ -38,9 +38,19 @@
       "csp": null
     }
   },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEEyNDVDMzZDNTM5Q0I2MEIKUldRTHRweFRiTU5Gb3BKNC9vZjFnZ1hmcFNuSy9rMkZvNTJndVNDUGRyQWZURGI2QXg3UU80dFkK",
+      "endpoints": [
+        "https://github.com/HaiouZh/TimeData/releases/download/desktop-latest/latest.json"
+      ],
+      "windows": { "installMode": "passive" }
+    }
+  },
   "bundle": {
     "active": true,
     "targets": ["nsis"],
+    "createUpdaterArtifacts": true,
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",

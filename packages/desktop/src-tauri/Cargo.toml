@@ -13,8 +13,12 @@ tauri = { version = "2", features = ["tray-icon"] }
 tauri-plugin-autostart = "2"
 tauri-plugin-global-shortcut = "2"
 tauri-plugin-notification = "2"
+tauri-plugin-updater = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+# 只用 time（定时轮询检查更新）。tokio 本就在 tauri 的依赖树里，但传递依赖不能直接
+# `use`，要在代码里调 sleep 就必须显式声明成直接依赖。
+tokio = { version = "1", features = ["time"] }
 
 # 前台判定要直接问 Win32：tao 的 is_focused() 在 WebView2 抢走焦点后会误报（见 shell.rs
 # resolve_is_foreground）。版本与 features 跟 tauri 自己的这条依赖对齐，复用同一份编译产物。
