@@ -421,6 +421,10 @@ jobs:
 
       - name: Build NSIS installer
         shell: bash
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          # 密钥生成时用的是空密码短语，已实测该形态可正常签名，故不建第二个 Secret。
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ""
         run: |
           pnpm --filter @timedata/desktop exec tauri build \
             --config "{\"version\":\"${{ steps.semver.outputs.semver }}\"}"
@@ -437,6 +441,24 @@ jobs:
           fi
           mv "$SRC" "$RUNNER_TEMP/TimeData-Setup.exe"
           ls -la "$RUNNER_TEMP/TimeData-Setup.exe"
+          if [ ! -f "$SRC.sig" ]; then
+            echo "没找到 $SRC.sig。createUpdaterArtifacts 没开，或签名密钥没注入。"
+            ls -la "$(dirname "$SRC")"
+            exit 1
+          fi
+          cp "$SRC.sig" "$RUNNER_TEMP/TimeData-Setup.exe.sig"
+
+      # latest.json 的 signature 是 .sig 的内容（不是路径）。校验逻辑在
+      # scripts/updater-manifest.mjs 里，有单测锁着，此处只负责调用。
+      - name: Build latest.json
+        shell: bash
+        run: |
+          node scripts/updater-manifest.mjs \
+            --version "${{ steps.semver.outputs.semver }}" \
+            --tag "${{ needs.prepare.outputs.tag }}" \
+            --repo "$GITHUB_REPOSITORY" \
+            --sig-file "$RUNNER_TEMP/TimeData-Setup.exe.sig" \
+            --out "$RUNNER_TEMP/latest.json"
 
       - name: Upload installer artifact
         uses: actions/upload-artifact@v7
@@ -462,4 +484,22 @@ jobs:
             sleep $((attempt * 10))
           done
           echo "安装包上传三次均失败。"
+          exit 1
+
+      # 更新源固定在 desktop-latest 这个 tag 上，与各版本自己的 Release 分离。
+      # 不用 releases/latest/download/：那个 latest 标记是带 APK 的 Release 专属。
+      - name: Publish latest.json to updater channel
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          JSON_PATH: ${{ runner.temp }}/latest.json
+        run: |
+          for attempt in 1 2 3; do
+            if gh release upload desktop-latest "$JSON_PATH" --clobber; then
+              exit 0
+            fi
+            echo "latest.json 上传第 $attempt 次失败，重试中..."
+            sleep $((attempt * 10))
+          done
+          echo "latest.json 上传三次均失败。"
           exit 1
