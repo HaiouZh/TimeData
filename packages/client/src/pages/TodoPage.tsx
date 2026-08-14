@@ -96,6 +96,7 @@ import { TaskDetailSheet } from "./todo/TaskDetailSheet.js";
 import { TaskList } from "./todo/TaskList.js";
 import { TaskTrackChip } from "./todo/TaskTrackChip.js";
 import { TrackRowGroup } from "./todo/TrackRowGroup.js";
+import { WaitingSection } from "./todo/WaitingSection.js";
 import { useTaskTrackIndex } from "./todo/useTaskTrackIndex.js";
 import { TodoComposer } from "./todo/TodoComposer.js";
 import { TodoSelectionBar } from "./todo/TodoSelectionBar.js";
@@ -146,10 +147,12 @@ export function TodoPage() {
   const goalLinkedIds = goalBarTaskIds(buckets.goalLinkedIds, projectChips);
   const trackData = useTaskTrackIndex();
   const taskTrackIndex = trackData.index;
-  const todayTrackRows = useMemo(
-    () => todoTrackRows(trackData.tracks, trackData.stepsByTrack, trackData.claimedTrackIds, gravityNow).filter((row) => row.zone === "today"),
+  const trackRows = useMemo(
+    () => todoTrackRows(trackData.tracks, trackData.stepsByTrack, trackData.claimedTrackIds, gravityNow),
     [trackData, gravityNow],
   );
+  const todayTrackRows = trackRows.filter((row) => row.zone === "today");
+  const waitingTrackRows = trackRows.filter((row) => row.zone === "waiting");
   const resumable = useLiveQuery(() => listResumableSessions(), []) ?? [];
   // biome-ignore lint/correctness/useExhaustiveDependencies: handSession.id 是触发器而非读取项——换了手头会话才重新自愈一次。删掉它，自愈就只在挂载时跑一次。
   useEffect(() => {
@@ -1236,9 +1239,12 @@ export function TodoPage() {
       indentTargetId={indentTargetId}
       revealChildren={revealChildren}
       {...rowHandlers}
-      extra={<TrackRowGroup rows={todayTrackRows} />}
+      extra={todayTrackRows.length > 0 ? <TrackRowGroup rows={todayTrackRows} /> : null}
     />
   );
+
+  // 空区整块不渲染——写法与下方 completedBlock 同形（`length > 0 &&`）。
+  const waitingBlock = waitingTrackRows.length > 0 && <WaitingSection rows={waitingTrackRows} />;
 
   const completedFiltered = f(buckets.completed);
   // 已完成区只挂轨道徽章、不挂项目 chip（项目 chip 按 project-zone 契约只出现在手头/今天/已排期）：
@@ -1550,6 +1556,7 @@ export function TodoPage() {
                 <>
                   {dimWhenSelecting(atHandBlock)}
                   {dimWhenSelecting(todayBlock)}
+                  {dimWhenSelecting(waitingBlock)}
                   {gravityReviewBlock}
                   {dimWhenSelecting(completedBlock)}
                 </>
@@ -1566,6 +1573,7 @@ export function TodoPage() {
             <div className="flex flex-col gap-4">
               {dimWhenSelecting(atHandBlock)}
               {dimWhenSelecting(todayBlock)}
+              {dimWhenSelecting(waitingBlock)}
               {gravityReviewBlock}
               {dimWhenSelecting(completedBlock)}
               {dimWhenSelecting(scheduledBlock)}

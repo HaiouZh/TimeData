@@ -281,6 +281,15 @@ function stubWideScreen(): void {
 }
 
 describe("TodoPage", () => {
+  it("今天区没有任务也没有轨道时，显示空态文案而不是空白卡片", async () => {
+    // 回归闸：轨道组以 extra 传进 TaskColumn，而 JSX 元素恒为 truthy——
+    // 调用点必须在无轨道时传 null，否则 TaskColumn 的空态判据被恒真的 extra 顶掉。
+    const { host, root } = await renderPage();
+    await flushAsync();
+    const today = host.querySelector('[data-section="today"]');
+    expect(today?.textContent).toContain("今天没有任务");
+    await unmount(root);
+  });
   it("已归入 active theme 目标的收件箱任务带外圈标记，未归入的不带", async () => {
     const now = "2026-06-28T09:00:00.000Z";
     const linked = await addTask({ title: "已归目标任务", toInbox: true });
