@@ -40,6 +40,7 @@ status: living
 | [0028](0028-china-geo-from-builtin-ip2region-table.md) | 中国归属地改用内置 ip2region 段表，收敛键加中国省市档 | 2026-08-01 | GeoLite2 免费库对中国运营商段无 city 级数据是结构缺失；中国段改走随镜像发布的内置表（命中即中国、中文省市+运营商），收敛键中国走 `asn\|cn:省[:市]`，国外路径不变；另接可选 geoipupdate 自动更新 GeoLite2 | 修订 [0025](0025-new-ip-alert-scoped-by-asn-and-city.md) 的收敛键地名与数据源部分（仅中国段），其余决策仍有效 |
 | [0029](0029-desktop-shell-embeds-frontend.md) | Windows 桌面壳内嵌前端产物，不加载线上站点 | 2026-08-03 | 三条路线（加载线上/内嵌前端/内嵌服务端）功能等价，区别只在前端从服务器拉还是从磁盘读；内嵌服务端撞账本封闭契约属产品重选，加载线上会让 `AppUpdateProvider` 的 focus→hardRefresh 在热键唤起瞬间清缓存重载；取内嵌前端并吃不注册 SW 的 `mode=mobile` 产物，三壳同构 | 不改 [0011](0011-server-api-as-write-boundary.md) / [0012](0012-sync-ledger-and-domain-registry.md) 的边界 |
 | [0031](0031-delete-health-data-layer.md) | 删除健康数据层，6 张表与 6 个同步域全清 | 2026-08-14 | 复核 [0024](0024-retire-health-subsystem.md) 保留数据层的两条理由：客户端从不产生健康域变更（无生产者即不触发整批 409），备份导入按当前登记簿取键、多余键静默忽略——两条都不成立；删净三端与库表，物理表手工 DROP 一次、代码不留常驻 DDL，删前 dump 5511 条存档 | 取代 [0024](0024-retire-health-subsystem.md) 的数据层保留部分 |
+| [0032](0032-desktop-auto-update-via-github-release.md) | 桌面自动更新走 tauri-plugin-updater，更新源托管在 GitHub 固定 tag | 2026-08-14 | 手动装新版会撞 NSIS「删除应用数据」复选框、一次手滑清空本机全部记录；走 updater 则 `/UPDATE` 与 `passive` 两道独立的锁让它结构上不可能发生。托管走 GitHub 固定 tag `desktop-latest`（实测比自建快 12 倍，且 `releases/latest/` 被 Android 包占用）；静默下载 + 设置页手点安装，逻辑全在 Rust 侧 | 补充 [0029](0029-desktop-shell-embeds-frontend.md) |
 
 ## 按主题速查
 
@@ -49,4 +50,4 @@ status: living
 - **数据建模**：0004（UTC）、0008（Dexie 版本链）、0010（QuickNote 域）、0014（tags vs 字段）
 - **日记编辑器**：0022（列表识别口径）、0023（跨断点重挂）
 - **设计语言**：0026（用户内容身份色共用 tint 色板 + 形状分型）→ 0027（退役 data palette + Track agent scoped tone）
-- **范围决策**：0005、0009、0024（健康子系统退役）→ 0031（健康数据层删除）、0029（桌面壳内嵌前端）
+- **范围决策**：0005、0009、0024（健康子系统退役）→ 0031（健康数据层删除）、0029（桌面壳内嵌前端）→ 0032（桌面自动更新）

@@ -53,6 +53,9 @@
   "docs/evergreen/desktop.md": {
     "covers": 7
   },
+  "docs/evergreen/desktop/auto-update.md": {
+    "covers": 1
+  },
   "docs/evergreen/desktop/hotkeys.md": {
     "covers": 0
   },

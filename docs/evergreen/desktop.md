@@ -19,7 +19,7 @@ last-reviewed: 2026-08-14
 # Windows 桌面壳
 
 > Windows 平台主题：Tauri 壳的构成、托盘与关窗语义、开机自启判定、速记浮窗与双窗口、数据边界、配置闸、NSIS 构建发布与排错。
-> 不讲全局热键与打点（见子文档 [desktop/hotkeys](desktop/hotkeys.md)）、移动端两个壳（Android 见 [android](android.md)，iOS 见 [ios](ios.md)）、服务器部署（见 [deployment](deployment.md)）。
+> 不讲全局热键与打点（见子文档 [desktop/hotkeys](desktop/hotkeys.md)）、自动更新（见子文档 [desktop/auto-update](desktop/auto-update.md)）、移动端两个壳（Android 见 [android](android.md)，iOS 见 [ios](ios.md)）、服务器部署（见 [deployment](deployment.md)）。
 
 ## 承上启下
 
@@ -139,7 +139,7 @@ Tauri 用独立的 WebView2 用户数据目录，与 Edge / Chrome 的 profile �
 
 1. **`tauri.conf.json` 快照**：`frontendDist` 为 `../../client/dist`、两个 before 命令都调 `build:mobile`、`identifier` 为 `icu.yanzhou.timedata`、`bundle.targets` 恰好 `["nsis"]`。窗口按 **label** 取（不按数组下标），主窗口 `visible` 为 `true`，浮窗的 `url` 与 `visible` / `decorations` / `skipTaskbar` / `alwaysOnTop` / `resizable` 五项逐一断言——浮窗少一项 `decorations: false` 就是一个带标题栏的窗口，少一项 `skipTaskbar` 就多一个任务栏图标，都不会让任何测试变红。这些字段配错时构建不一定报错，产出的却是空壳、旧产物或注册了 service worker 的包。
 2. **跨语言事件名（全匹配）**：`hotkeys.rs` 必须声明 `pub const HOTKEY_EVENT: &str = "…";`；`src-tauri/src/` 下**任何 `.rs` 里一处裸字面量 emit 都不许有**（正则覆盖 `emit` / `emit_to` / `emit_filter` 三种形态，集合必须为空——只认 `app.emit(` 的话，改用 `emit_to` 点名投递的那条路径会整个绕开闸）；`api.ts` 里 `listen<…>("…")` 的名字集合必须恰好等于那个常量的值。闸不能写成「文件里出现过一次」——`commands.rs` 有两处 emit（实时投递、就绪后补投），那种写法在改名时只改到第一处就照绿：日常按键正常，唯独「WebView 就绪前排队的那批」发的是旧名字、前端永远收不到，正好打掉 [desktop/hotkeys](desktop/hotkeys.md) §2 承诺的「开机第一秒按下也生效」。两端之间没有共享类型，typecheck 管不到字符串字面量。
-3. **禁静态 import Tauri API**：扫 `packages/client/src/**/*.{ts,tsx}`，任何 `from "@tauri-apps/api…"` / `import "@tauri-apps/api…"` 形态（含 type-only 与单引号）都报红，只准 `await import(...)`。这是三端 bundle 不加载 Tauri 运行时的唯一保证。需要类型就在 `lib/desktop/api.ts` 里自己声明。
+3. **禁静态 import Tauri 运行时包**：扫 `packages/client/src/**/*.{ts,tsx}`，任何 `from "@tauri-apps/api…"` / `import "@tauri-apps/api…"` 形态（含 type-only 与单引号）都报红，只准 `await import(...)`。**`@tauri-apps/plugin-*` 同样在内**——插件包一样会把 Tauri 运行时拉进入口 chunk。这是三端 bundle 不加载 Tauri 运行时的唯一保证。需要类型就在 `lib/desktop/api.ts` 里自己声明。
 4. **capabilities 授权列表 == 窗口集合**：`capabilities/default.json` 的 `windows` 列表必须逐字等于 `tauri.conf.json` 的窗口 label 集合。新增窗口时漏改 capabilities，构建 / 测试 / 其余断言全绿，装机后那个窗口却一片空白（§5.6）。
 
 ## 8. 排错
@@ -167,12 +167,13 @@ Tauri 用独立的 WebView2 用户数据目录，与 Edge / Chrome 的 profile �
 
 产物是 NSIS 安装包，`bundle.targets` 恰好为 `["nsis"]`（该快照由 §7 的配置闸守着）。bundler 输出名带版本号，发布前统一改名为 `TimeData-Setup.exe`。安装包不做代码签名，SmartScreen 会拦一次。安装位置是 `%LOCALAPPDATA%\TimeData`，开始菜单快捷方式为 `TimeData.lnk`。
 
-`windows` job 不执行 `gh release edit --latest`——latest 归属规则见 [ios](ios.md#ios-s4)。
+`windows` job 不执行 `gh release edit --latest`——latest 归属规则见 [ios](ios.md#ios-s4)。同一个 job 另产出更新包签名与 `latest.json`，发布到固定 tag `desktop-latest`（自动更新的整条链路见子文档 [desktop/auto-update](desktop/auto-update.md)）。
 
-NSIS 安装新版本时先卸载旧版本，会一并清掉自启注册项；壳下次启动会按 §3 的判定自愈（用户在应用设置里显式关过的除外）。
+**手动**安装新版本时 NSIS 先卸载旧版本，会一并清掉自启注册项；壳下次启动会按 §3 的判定自愈（用户在应用设置里显式关过的除外）。走自动更新则是覆盖安装、不执行卸载流程。
 
 ## 子文档索引
 
 | 子文档 | 拥有什么 |
 |---|---|
 | [desktop/hotkeys](desktop/hotkeys.md) | `desktop-config.json` 字段与三态读、热键注册分发与锁序、打点四条出口与确认卡、桥的串行队列、`navigate` 动作、两条已知界限 |
+| [desktop/auto-update](desktop/auto-update.md) | `/UPDATE` + `passive` 双保险（更新为何删不掉数据）、minisign 签名链、`latest.json` 的固定 tag 托管、状态机与节流、`updater_*` 三命令、设置页四态、四条已知界限 |
