@@ -369,3 +369,197 @@ describe("POST /api/agent/tasks/:id/status", () => {
     expect(invalidTurn.status).toBe(400);
   });
 });
+
+describe("POST /api/agent/tasks", () => {
+  async function createTask(body: unknown) {
+    return app.request("/api/agent/tasks", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(body),
+    });
+  }
+
+  it("creates a root task with a backfilled createdAt", async () => {
+    const res = await createTask({
+      title: "修 dispatch 跑 5 小时无输出",
+      createdAt: "2026-08-14T14:53:00.000Z",
+      requestId: "req-1",
+    });
+
+    expect(res.status).toBe(201);
+    expect(await res.json()).toMatchObject({
+      ok: true,
+      idempotent: false,
+      task: {
+        id: "req-1",
+        parentId: null,
+        title: "修 dispatch 跑 5 小时无输出",
+        done: false,
+        completedAt: null,
+        scheduledAt: null,
+        completedCount: 0,
+        skipped: false,
+        recurrence: null,
+        tags: [],
+        createdAt: "2026-08-14T14:53:00.000Z",
+      },
+    });
+
+    const row = db.prepare("SELECT parent_id, done, created_at FROM tasks WHERE id = ?").get("req-1");
+    expect(row).toMatchObject({ parent_id: null, done: 0, created_at: "2026-08-14T14:53:00.000Z" });
+  });
+
+  it("assigns updatedAt on the server, not from the request", async () => {
+    const res = await createTask({ title: "记账", createdAt: "2026-08-14T01:00:00.000Z", requestId: "req-2" });
+
+    const { task } = await res.json();
+    expect(task.updatedAt).not.toBe("2026-08-14T01:00:00.000Z");
+    expect(Date.parse(task.updatedAt)).toBeGreaterThan(Date.parse(task.createdAt));
+  });
+
+  it("returns the existing record when requestId repeats, without writing twice", async () => {
+    await createTask({ title: "第一次", createdAt: "2026-08-14T02:00:00.000Z", requestId: "same-id" });
+    const res = await createTask({ title: "第二次改了标题", createdAt: "2026-08-14T03:00:00.000Z", requestId: "same-id" });
+
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.idempotent).toBe(true);
+    expect(body.task.title).toBe("第一次");
+
+    const count = db.prepare("SELECT COUNT(*) AS n FROM tasks WHERE id = ?").get("same-id") as { n: number };
+    expect(count.n).toBe(1);
+  });
+
+  it("rejects a request body carrying parentId", async () => {
+    const res = await createTask({
+      title: "子任务",
+      createdAt: "2026-08-14T04:00:00.000Z",
+      parentId: "task-1",
+    });
+
+    expect(res.status).toBe(400);
+    expect(await res.json()).toMatchObject({ ok: false, error: { code: "INVALID_REQUEST" } });
+  });
+
+  it("rejects an empty title", async () => {
+    const res = await createTask({ title: "   ", createdAt: "2026-08-14T05:00:00.000Z" });
+    expect(res.status).toBe(400);
+  });
+
+  it("rejects a createdAt that is not strict UTC ISO", async () => {
+    const res = await createTask({ title: "格式不对", createdAt: "2026-08-14T05:00:00Z" });
+    expect(res.status).toBe(400);
+  });
+
+  it("creates an already-completed task carrying its real completion timestamp", async () => {
+    const res = await createTask({
+      title: "星图不再画已完成成员",
+      createdAt: "2026-08-14T07:10:00.000Z",
+      done: true,
+      completedAt: "2026-08-14T13:20:00.000Z",
+      requestId: "req-done",
+    });
+
+    expect(res.status).toBe(201);
+    const { task } = await res.json();
+    expect(task).toMatchObject({
+      done: true,
+      createdAt: "2026-08-14T07:10:00.000Z",
+      completedAt: "2026-08-14T13:20:00.000Z",
+      lastDoneAt: null,
+      completedCount: 0,
+      skipped: false,
+      recurrence: null,
+    });
+
+    const row = db
+      .prepare("SELECT done, completed_at, completed_count, last_done_at FROM tasks WHERE id = ?")
+      .get("req-done");
+    expect(row).toMatchObject({
+      done: 1,
+      completed_at: "2026-08-14T13:20:00.000Z",
+      completed_count: 0,
+      last_done_at: null,
+    });
+  });
+
+  it("defaults done to false when omitted", async () => {
+    const res = await createTask({ title: "没说做没做", createdAt: "2026-08-14T08:00:00.000Z", requestId: "req-default" });
+
+    const { task } = await res.json();
+    expect(task.done).toBe(false);
+    expect(task.completedAt).toBeNull();
+  });
+
+  it("rejects createdAt more than 5 minutes in the future", async () => {
+    const future = new Date(Date.now() + 10 * 60_000).toISOString();
+    const res = await createTask({ title: "未来的事", createdAt: future });
+
+    expect(res.status).toBe(400);
+    expect(await res.json()).toMatchObject({
+      ok: false,
+      error: { code: "INVALID_REQUEST", message: expect.stringContaining("future") },
+    });
+  });
+
+  it("accepts createdAt inside the 5-minute future tolerance", async () => {
+    const soon = new Date(Date.now() + 60_000).toISOString();
+    const res = await createTask({ title: "时钟略快", createdAt: soon, requestId: "req-skew" });
+
+    expect(res.status).toBe(201);
+  });
+
+  it("accepts arbitrarily old createdAt (history is unbounded)", async () => {
+    const res = await createTask({ title: "补跑上周", createdAt: "2026-01-02T03:04:05.000Z", requestId: "req-old" });
+
+    expect(res.status).toBe(201);
+  });
+
+  it("rejects done=true without completedAt", async () => {
+    const res = await createTask({ title: "做完了但没说几点", createdAt: "2026-08-14T09:00:00.000Z", done: true });
+
+    expect(res.status).toBe(400);
+    expect(await res.json()).toMatchObject({
+      ok: false,
+      error: { code: "INVALID_REQUEST", message: expect.stringContaining("completedAt") },
+    });
+  });
+
+  it("rejects completedAt when done is false", async () => {
+    const res = await createTask({
+      title: "没做完却带了完成时间",
+      createdAt: "2026-08-14T09:00:00.000Z",
+      done: false,
+      completedAt: "2026-08-14T10:00:00.000Z",
+    });
+
+    expect(res.status).toBe(400);
+  });
+
+  it("rejects completedAt earlier than createdAt", async () => {
+    const res = await createTask({
+      title: "先完成后创建",
+      createdAt: "2026-08-14T10:00:00.000Z",
+      done: true,
+      completedAt: "2026-08-14T09:00:00.000Z",
+    });
+
+    expect(res.status).toBe(400);
+    expect(await res.json()).toMatchObject({
+      ok: false,
+      error: { code: "INVALID_REQUEST", message: expect.stringContaining("earlier") },
+    });
+  });
+
+  it("allows completedAt equal to createdAt (instant task)", async () => {
+    const res = await createTask({
+      title: "顺手就做完了",
+      createdAt: "2026-08-14T11:00:00.000Z",
+      done: true,
+      completedAt: "2026-08-14T11:00:00.000Z",
+      requestId: "req-instant",
+    });
+
+    expect(res.status).toBe(201);
+  });
+});
