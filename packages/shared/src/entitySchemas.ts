@@ -93,6 +93,22 @@ export const GoalPrerequisiteSchema = z.object({
   blocked: GoalMemberRefSchema,
 });
 
+export const TaskRelationSchema = z
+  .object({
+    blockerKind: z.enum(["task", "track"]),
+    blockerId: NonEmptyTrimmedStringSchema,
+    blockedKind: z.enum(["task", "track"]),
+    blockedId: NonEmptyTrimmedStringSchema,
+    type: z.literal("blocks").default("blocks"),
+    createdAt: UtcIsoStringSchema,
+    updatedAt: UtcIsoStringSchema,
+  })
+  .superRefine((relation, ctx) => {
+    if (relation.blockerKind === relation.blockedKind && relation.blockerId === relation.blockedId) {
+      ctx.addIssue({ code: "custom", message: "task relation cannot reference itself" });
+    }
+  });
+
 export const GoalLayoutPinNodeKindSchema = z.enum(["goal", "task", "track"]);
 
 export const GoalLayoutPinSchema = z.object({

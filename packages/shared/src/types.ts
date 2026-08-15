@@ -19,6 +19,7 @@ import type {
   SyncPushReasonCodeSchema,
   SyncPushRequestSchema,
   SyncStatusResponseSchema,
+  TaskRelationSchema,
   TaskSchema,
   TimeEntrySchema,
   TrackSchema,
@@ -40,6 +41,8 @@ export type Goal = z.infer<typeof GoalSchema>;
 export type GoalLayoutPinNodeKind = z.infer<typeof GoalLayoutPinNodeKindSchema>;
 
 export type GoalLayoutPin = z.infer<typeof GoalLayoutPinSchema>;
+
+export type TaskRelation = z.infer<typeof TaskRelationSchema>;
 
 export type QuickNote = z.infer<typeof QuickNoteSchema>;
 
@@ -118,7 +121,9 @@ export type SyncChange =
   | SyncUpsertChange<"goal_layout_pins", GoalLayoutPin>
   | SyncDeleteChange<"goal_layout_pins">
   | SyncUpsertChange<"sessions", Session>
-  | SyncDeleteChange<"sessions">;
+  | SyncDeleteChange<"sessions">
+  | SyncUpsertChange<"task_relations", TaskRelation>
+  | SyncDeleteChange<"task_relations">;
 
 export type SyncPushOutcomeStatus = "accepted" | "rejected" | "conflict";
 

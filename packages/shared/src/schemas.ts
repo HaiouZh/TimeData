@@ -29,6 +29,7 @@ export {
   RefSchema,
   SessionSchema,
   SettingSchema,
+  TaskRelationSchema,
   TaskSchema,
   TimeEntrySchema,
   TrackSchema,

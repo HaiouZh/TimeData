@@ -11,4 +11,5 @@ export * from "./trackBoardSignals.js";
 export * from "./trackStepOrder.js";
 export * from "./trackStatusOp.js";
 export * from "./goalLayoutPins.js";
+export * from "./taskRelations.js";
 export * from "./occurrence.js";

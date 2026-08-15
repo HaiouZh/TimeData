@@ -15,6 +15,7 @@ describe("sync domain registry", () => {
       "goals",
       "goal_layout_pins",
       "sessions",
+      "task_relations",
     ]);
   });
 
