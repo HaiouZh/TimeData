@@ -19,9 +19,9 @@ import {
   removeGoalMember,
   removeGoalMemberInCurrentTransaction,
   updateGoal,
-  updateGoalPrerequisites,
 } from "./goals.js";
 import { addTask } from "./tasks.js";
+import { addTaskRelation, listTaskRelations } from "./taskRelations.js";
 import { GOAL_MEMBERS_MAX } from "./tasks/goalMembership.js";
 
 const now = "2026-06-22T01:00:00.000Z";
@@ -168,19 +168,17 @@ describe("goals data helpers", () => {
     await seedMembers();
     await addGoalMember(goal.id, { kind: "task", id: "task-1" });
     await addGoalMember(goal.id, { kind: "track", id: "track-1" });
-    await updateGoalPrerequisites(
-      goal.id,
-      [{ blocker: { kind: "task", id: "task-1" }, blocked: { kind: "track", id: "track-1" } }],
-      { now: date("2026-06-22T02:00:00.000Z") },
-    );
-    await seedRelation("task-1", "track-1", "task", "track");
+    // 写入路径已从「updateGoalPrerequisites 写旧字段」切到 addTaskRelation 写关系表
+    await addTaskRelation({
+      blocker: { kind: "task", id: "task-1" },
+      blocked: { kind: "track", id: "track-1" },
+      now: date("2026-06-22T02:00:00.000Z"),
+    });
     await expect(getGoal(goal.id)).resolves.toMatchObject({
       prerequisites: [{ blocker: { kind: "task", id: "task-1" }, blocked: { kind: "track", id: "track-1" } }],
     });
     await expect(
-      updateGoalPrerequisites(goal.id, [
-        { blocker: { kind: "task", id: "task-1" }, blocked: { kind: "task", id: "task-1" } },
-      ]),
+      addTaskRelation({ blocker: { kind: "task", id: "task-1" }, blocked: { kind: "task", id: "task-1" } }),
     ).rejects.toThrow();
   });
 
@@ -189,9 +187,7 @@ describe("goals data helpers", () => {
     await seedMembers();
     await addGoalMember(goal.id, { kind: "task", id: "task-1" });
     await addGoalMember(goal.id, { kind: "track", id: "track-1" });
-    await updateGoalPrerequisites(goal.id, [
-      { blocker: { kind: "task", id: "task-1" }, blocked: { kind: "track", id: "track-1" } },
-    ]);
+    await seedRelation("task-1", "track-1", "task", "track");
 
     await removeGoalMember(goal.id, { kind: "task", id: "task-1" });
 
@@ -199,6 +195,8 @@ describe("goals data helpers", () => {
       members: [{ kind: "track", id: "track-1" }],
       prerequisites: [],
     });
+    // 连带清理走关系表：那行边也没了
+    expect(await db.taskRelations.count()).toBe(0);
   });
 
   it("deletes a goal and keeps members untouched", async () => {
@@ -985,9 +983,6 @@ describe("批量归属写入", () => {
     const old = await addGoal({ title: "旧组", kind: "project", now: date(now) });
     await addGoalMember(old.id, { kind: "task", id: "t1" }, { now: date(now) });
     await addGoalMember(old.id, { kind: "task", id: "t2" }, { now: date(now) });
-    await updateGoalPrerequisites(old.id, [
-      { blocker: { kind: "task", id: "t1" }, blocked: { kind: "task", id: "t2" } },
-    ]);
     await seedRelation("t1", "t2");
     await updateGoal(old.id, { status: "archived", now: date(now) });
     const target = await addGoal({ title: "目标组", kind: "project", now: date(now) });
@@ -1135,9 +1130,6 @@ describe("prerequisiteLossOnAssignMany", () => {
     const source = await addGoal({ title: "源组", kind: "project", now: date(now) });
     await addGoalMember(source.id, { kind: "task", id: "t1" }, { now: date(now) });
     await addGoalMember(source.id, { kind: "task", id: "t2" }, { now: date(now) });
-    await updateGoalPrerequisites(source.id, [
-      { blocker: { kind: "task", id: "t1" }, blocked: { kind: "task", id: "t2" } },
-    ]);
     await seedRelation("t1", "t2");
 
     // 单条版逐条问会数出 2（t1 一次、t2 一次），但真正被删的边只有 1 条。
@@ -1153,16 +1145,10 @@ describe("prerequisiteLossOnAssignMany", () => {
     const a = await addGoal({ title: "组A", kind: "project", now: date(now) });
     await addGoalMember(a.id, { kind: "task", id: "t1" }, { now: date(now) });
     await addGoalMember(a.id, { kind: "task", id: "other" }, { now: date(now) });
-    await updateGoalPrerequisites(a.id, [
-      { blocker: { kind: "task", id: "t1" }, blocked: { kind: "task", id: "other" } },
-    ]);
     await seedRelation("t1", "other");
     const b = await addGoal({ title: "组B", kind: "project", now: date(now) });
     await addGoalMember(b.id, { kind: "task", id: "t2" }, { now: date(now) });
     await addGoalMember(b.id, { kind: "task", id: "other" }, { now: date(now) });
-    await updateGoalPrerequisites(b.id, [
-      { blocker: { kind: "task", id: "other" }, blocked: { kind: "task", id: "t2" } },
-    ]);
     await seedRelation("other", "t2");
 
     const loss = await prerequisiteLossOnAssignMany(["t1", "t2"], null);
@@ -1176,9 +1162,7 @@ describe("prerequisiteLossOnAssignMany", () => {
     const target = await addGoal({ title: "目标组", kind: "project", now: date(now) });
     await addGoalMember(target.id, { kind: "task", id: "t1" }, { now: date(now) });
     await addGoalMember(target.id, { kind: "task", id: "t2" }, { now: date(now) });
-    await updateGoalPrerequisites(target.id, [
-      { blocker: { kind: "task", id: "t1" }, blocked: { kind: "task", id: "t2" } },
-    ]);
+    await seedRelation("t1", "t2");
     expect(await prerequisiteLossOnAssignMany(["t1", "t2"], target.id)).toBeNull();
   });
 
@@ -1191,9 +1175,7 @@ describe("prerequisiteLossOnAssignMany", () => {
     const archived = await addGoal({ title: "归档组", kind: "project", now: date(now) });
     await addGoalMember(archived.id, { kind: "task", id: "t1" }, { now: date(now) });
     await addGoalMember(archived.id, { kind: "task", id: "t2" }, { now: date(now) });
-    await updateGoalPrerequisites(archived.id, [
-      { blocker: { kind: "task", id: "t1" }, blocked: { kind: "task", id: "t2" } },
-    ]);
+    await seedRelation("t1", "t2");
     await updateGoal(archived.id, { status: "archived", now: date(now) });
 
     expect(await prerequisiteLossOnAssignMany(["t1", "t2"], null)).toBeNull();
@@ -1208,9 +1190,7 @@ describe("prerequisiteLossOnAssignMany", () => {
     const theme = await addGoal({ title: "主题组", kind: "theme", now: date(now) });
     await addGoalMember(theme.id, { kind: "task", id: "t1" }, { now: date(now) });
     await addGoalMember(theme.id, { kind: "task", id: "t2" }, { now: date(now) });
-    await updateGoalPrerequisites(theme.id, [
-      { blocker: { kind: "task", id: "t1" }, blocked: { kind: "task", id: "t2" } },
-    ]);
+    await seedRelation("t1", "t2");
 
     expect(await prerequisiteLossOnAssignMany(["t1", "t2"], null)).toBeNull();
   });
@@ -1237,7 +1217,7 @@ describe("removeGoalMemberInCurrentTransaction", () => {
     await addGoalMember(goal.id, { kind: "task", id: "task-1" });
 
     const ts = "2026-08-02T00:00:00.000Z";
-    await db.transaction("rw", db.goals, db.goalLayoutPins, db.tasks, db.syncLog, async () => {
+    await db.transaction("rw", db.goals, db.goalLayoutPins, db.tasks, db.taskRelations, db.syncLog, async () => {
       const row = await db.goals.get(goal.id);
       await removeGoalMemberInCurrentTransaction(row as Goal, { kind: "task", id: "task-1" }, ts);
     });
@@ -1253,7 +1233,7 @@ describe("removeGoalMemberInCurrentTransaction", () => {
     const goal = await addGoal({ title: "P2", kind: "project" });
     const before = await db.goals.get(goal.id);
 
-    await db.transaction("rw", db.goals, db.goalLayoutPins, db.tasks, db.syncLog, async () => {
+    await db.transaction("rw", db.goals, db.goalLayoutPins, db.tasks, db.taskRelations, db.syncLog, async () => {
       const row = await db.goals.get(goal.id);
       await removeGoalMemberInCurrentTransaction(
         row as Goal,
@@ -1263,5 +1243,132 @@ describe("removeGoalMemberInCurrentTransaction", () => {
     });
 
     expect((await db.goals.get(goal.id))?.updatedAt).toBe(before?.updatedAt);
+  });
+});
+
+describe("摘成员的关系表连带清理（规格 6d）", () => {
+  /** 照抄本文件 seedMembers 的裸行形态：不带 ruleId/weight/sessionId/skipped。 */
+  async function seedBareTask(id: string): Promise<void> {
+    await db.tasks.add({
+      id,
+      parentId: null,
+      title: id,
+      done: false,
+      recurrence: null,
+      lastDoneAt: null,
+      startAt: null,
+      scheduledAt: null,
+      completedCount: 0,
+      completedAt: null,
+      tags: [],
+      sortOrder: 0,
+      createdAt: now,
+      updatedAt: now,
+    } as never);
+  }
+
+  it("摘掉成员后：涉及它且两端都在目标内的关系行被删；一端在目标外的行不受影响", async () => {
+    await seedBareTask("t1");
+    await seedBareTask("t2");
+    await seedBareTask("t3");
+    const goal = await addGoal({ title: "P", kind: "project", now: date(now) });
+    await addGoalMember(goal.id, { kind: "task", id: "t1" }, { now: date(now) });
+    await addGoalMember(goal.id, { kind: "task", id: "t2" }, { now: date(now) });
+    await addGoalMember(goal.id, { kind: "task", id: "t3" }, { now: date(now) });
+    // 两端都在目标内、一端是 t1 → 会被删
+    await seedRelation("t1", "t2");
+    await seedRelation("t3", "t1");
+    // 两端都在目标内但都不涉及 t1 → 保留
+    await seedRelation("t2", "t3");
+    // 一端在目标外 → 保留
+    await seedRelation("t1", "outside");
+    // 旧字段里留一条「不涉及被摘成员」的边（存量迁移前的世界）：
+    // 摘成员后旧字段必须被清空（prerequisites: []），而不是从旧字段派生存留
+    await db.goals.update(goal.id, {
+      prerequisites: [{ blocker: { kind: "task", id: "t2" }, blocked: { kind: "task", id: "t3" } }],
+    });
+
+    await removeGoalMember(goal.id, { kind: "task", id: "t1" });
+
+    const remaining = await listTaskRelations();
+    expect(remaining.map((r) => `${r.blockerId}->${r.blockedId}`).sort()).toEqual(["t1->outside", "t2->t3"]);
+    expect((await db.goals.get(goal.id))?.prerequisites).toEqual([]);
+  });
+
+  it("摘成员删边也逐条记 delete syncLog", async () => {
+    await seedBareTask("t1");
+    await seedBareTask("t2");
+    const goal = await addGoal({ title: "P", kind: "project", now: date(now) });
+    await addGoalMember(goal.id, { kind: "task", id: "t1" }, { now: date(now) });
+    await addGoalMember(goal.id, { kind: "task", id: "t2" }, { now: date(now) });
+    await seedRelation("t1", "t2");
+    await db.syncLog.clear();
+
+    await removeGoalMember(goal.id, { kind: "task", id: "t1" });
+
+    const logs = await db.syncLog.where("tableName").equals("task_relations").toArray();
+    expect(logs).toHaveLength(1);
+    expect(logs[0]?.action).toBe("delete");
+  });
+});
+
+describe("prerequisiteLossOnAssign 与实际删除数一致（规格 6f）", () => {
+  /** 照抄本文件 seedMembers 的裸行形态：不带 ruleId/weight/sessionId/skipped。 */
+  async function seedBareTask(id: string): Promise<void> {
+    await db.tasks.add({
+      id,
+      parentId: null,
+      title: id,
+      done: false,
+      recurrence: null,
+      lastDoneAt: null,
+      startAt: null,
+      scheduledAt: null,
+      completedCount: 0,
+      completedAt: null,
+      tags: [],
+      sortOrder: 0,
+      createdAt: now,
+      updatedAt: now,
+    } as never);
+  }
+
+  it("loss 报 N 条，摘除后关系表正好少 N 行", async () => {
+    await seedBareTask("t1");
+    await seedBareTask("t2");
+    await seedBareTask("t3");
+    const source = await addGoal({ title: "源组", kind: "project", now: date(now) });
+    await addGoalMember(source.id, { kind: "task", id: "t1" }, { now: date(now) });
+    await addGoalMember(source.id, { kind: "task", id: "t2" }, { now: date(now) });
+    await addGoalMember(source.id, { kind: "task", id: "t3" }, { now: date(now) });
+    await seedRelation("t1", "t2");
+    await seedRelation("t3", "t1");
+    // 不涉及 t1 的边：loss 不数它，摘除也不删它
+    await seedRelation("t2", "t3");
+
+    const loss = await prerequisiteLossOnAssign("t1", "unrelated");
+    expect(loss).toEqual({ count: 2, groupCount: 1, goalTitle: "源组" });
+
+    await removeGoalMember(source.id, { kind: "task", id: "t1" });
+
+    const remaining = await listTaskRelations();
+    expect(remaining).toHaveLength(1);
+    expect(remaining[0]?.blockerId).toBe("t2");
+    expect(remaining[0]?.blockedId).toBe("t3");
+  });
+
+  it("loss 为 null 时摘除不删任何关系行", async () => {
+    await seedBareTask("t1");
+    await seedBareTask("t2");
+    const source = await addGoal({ title: "源组", kind: "project", now: date(now) });
+    await addGoalMember(source.id, { kind: "task", id: "t1" }, { now: date(now) });
+    await addGoalMember(source.id, { kind: "task", id: "t2" }, { now: date(now) });
+    // 一端在目标外：hydrate 不收录，loss 不算，摘除也不删
+    await seedRelation("t2", "x");
+
+    expect(await prerequisiteLossOnAssign("t1", "unrelated")).toBeNull();
+
+    await removeGoalMember(source.id, { kind: "task", id: "t1" });
+    expect(await listTaskRelations()).toHaveLength(1);
   });
 });

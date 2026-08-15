@@ -151,3 +151,25 @@ export async function removeTaskRelationsForInCurrentTransaction(
     await recordSyncLog("task_relations", taskRelationKey(row), "delete", timestamp);
   }
 }
+
+/** 在调用方事务内，删掉「两端都在 memberKeys 内、且一端是 ref」的边（成员被移出目标时用）。
+ *  调用方事务必须已含 db.taskRelations + db.syncLog。 */
+export async function removeTaskRelationsWithinScopeInCurrentTransaction(
+  memberKeys: Set<string>, // 目标全部成员的 `${kind}:${id}`
+  ref: TaskRelationEnd,
+  now?: Date,
+): Promise<void> {
+  const timestamp = nowIso(now);
+  const refKey = endKey(ref);
+  const rows = await db.taskRelations.toArray();
+  for (const row of rows) {
+    const blockerKey = endKey({ kind: row.blockerKind, id: row.blockerId });
+    const blockedKey = endKey({ kind: row.blockedKind, id: row.blockedId });
+    const bothInScope = memberKeys.has(blockerKey) && memberKeys.has(blockedKey);
+    if (!bothInScope) continue;
+    const touchesRef = blockerKey === refKey || blockedKey === refKey;
+    if (!touchesRef) continue;
+    await db.taskRelations.delete([row.blockerKind, row.blockerId, row.blockedKind, row.blockedId]);
+    await recordSyncLog("task_relations", taskRelationKey(row), "delete", timestamp);
+  }
+}

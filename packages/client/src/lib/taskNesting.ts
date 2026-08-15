@@ -22,7 +22,7 @@ export async function nestTaskUnderParent(
   const ref = { kind: "task" as const, id: taskId };
   let moved: Task | null = null;
 
-  await db.transaction("rw", db.tasks, db.goals, db.goalLayoutPins, db.syncLog, async () => {
+  await db.transaction("rw", db.tasks, db.goals, db.goalLayoutPins, db.taskRelations, db.syncLog, async () => {
     moved = await moveTaskToParentInCurrentTransaction(taskId, newParentId, now);
     // 一条任务可能被多个 goal 收，全部清——子任务不占任何项目名单。
     for (const goal of await db.goals.toArray()) {

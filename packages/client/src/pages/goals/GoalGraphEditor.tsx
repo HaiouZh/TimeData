@@ -13,13 +13,13 @@ import {
   type NodeMouseHandler,
   type Viewport,
 } from "@xyflow/react";
-import type { Goal, GoalLayoutPin, GoalMemberRef, GoalPrerequisite, Task, Track, TrackStep } from "@timedata/shared";
+import type { Goal, GoalLayoutPin, GoalMemberRef, Task, Track, TrackStep } from "@timedata/shared";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ConfirmSheet } from "../../components/ui/ConfirmSheet.js";
 import { Sheet } from "../../components/ui/Sheet.js";
 import { StatusBanner } from "../../components/ui/StatusBanner.js";
 import { computeEdgeRoutings, type HandleBox } from "../../lib/goalEdgeRouting.js";
-import { addPrerequisiteEdge, removePrerequisiteEdge, validatePrerequisiteEdge } from "../../lib/goalGraphEdges.js";
+import { validatePrerequisiteEdge } from "../../lib/goalGraphEdges.js";
 import type { GoalGraphOrientation } from "../../lib/goalGraphLayout.js";
 import {
   buildGoalGraphModel,
@@ -34,9 +34,9 @@ import {
   deleteGoal,
   removeGoalMember,
   updateGoal,
-  updateGoalPrerequisites,
 } from "../../lib/goals.js";
 import { buildGoalOverview } from "../../lib/goalsView.js";
+import { addTaskRelation, listTaskRelations, removeTaskRelation } from "../../lib/taskRelations.js";
 import { useTrackActionTags } from "../../lib/settings/trackActionTagsSetting.js";
 import { useTodoDefaultDestination } from "../../lib/settings/todoDefaultDestinationSetting.js";
 import { buildTrackConcludeUndo, toggleTaskDoneWithTrackConclude } from "../../lib/taskTrackPromote.js";
@@ -85,8 +85,6 @@ interface ConnectDraft {
   direction: "from-current" | "to-current" | null;
 }
 
-type GraphGoalLike = Pick<Goal, "members" | "prerequisites">;
-
 type WidePanel = "add-member" | "goal-menu" | null;
 type FlowPosition = { x: number; y: number };
 
@@ -108,12 +106,11 @@ function edgeRefs(edge: GoalGraphEdgeModel): { blocker: GoalMemberRef; blocked: 
   return blocker && blocked ? { blocker, blocked } : null;
 }
 
-function nextPrerequisitesWithEdge(goal: GraphGoalLike, blocker: GoalMemberRef, blocked: GoalMemberRef): GoalPrerequisite[] {
-  return addPrerequisiteEdge(goal, blocker, blocked).prerequisites;
-}
-
-function nextPrerequisitesWithoutEdge(goal: GraphGoalLike, blocker: GoalMemberRef, blocked: GoalMemberRef): GoalPrerequisite[] {
-  return removePrerequisiteEdge(goal, blocker, blocked).prerequisites;
+function relationReason(error: unknown, copy: typeof REASON_COPY): string | null {
+  const reason = error instanceof Error ? error.message : "";
+  if (reason === "RELATION_SELF_REFERENCE") return copy["self-reference"];
+  if (reason === "RELATION_WOULD_CREATE_CYCLE") return copy.cycle;
+  return null;
 }
 
 function isRealMemberNode(node: GoalGraphNodeModel): boolean {
@@ -300,7 +297,16 @@ function GoalGraphEditorInner({ goal, tasks, tracks, steps, layoutPins, onNaviga
       return;
     }
 
-    await updateGoalPrerequisites(goal.id, nextPrerequisitesWithEdge(goal, blocker, blocked));
+    try {
+      await addTaskRelation({ blocker, blocked });
+    } catch (error) {
+      // 前置校验读的是 goal 快照，关系表可能在快照之后被别处改过（成环/自反），
+      // 写入时才抛——必须接住，不能冒泡成未处理的 rejection。
+      const reason = relationReason(error, REASON_COPY);
+      if (reason === null) throw error;
+      setErrorMessage(reason);
+      return;
+    }
     setErrorMessage(null);
     setConnectDraft(null);
   }
@@ -309,12 +315,35 @@ function GoalGraphEditorInner({ goal, tasks, tracks, steps, layoutPins, onNaviga
     const ref = node.ref ?? refFromNodeId(node.id);
     if (!ref) return;
     const previousMembers = [...(goal.members ?? [])];
-    const previousPrerequisites = goal.prerequisites ?? [];
+    // 摘成员前先记下会被连带删掉的关系行：undo 时要按行恢复，旧字段那条路已经没了。
+    const memberKeys = new Set(previousMembers.map((member) => `${member.kind}:${member.id}`));
+    const refKey = `${ref.kind}:${ref.id}`;
+    const removedRelations = (await listTaskRelations()).filter(
+      (relation) =>
+        memberKeys.has(`${relation.blockerKind}:${relation.blockerId}`) &&
+        memberKeys.has(`${relation.blockedKind}:${relation.blockedId}`) &&
+        (`${relation.blockerKind}:${relation.blockerId}` === refKey ||
+          `${relation.blockedKind}:${relation.blockedId}` === refKey),
+    );
     await removeGoalMember(goal.id, ref);
     setUndo({
       message: "已移出成员",
       onUndo: async () => {
-        await updateGoal(goal.id, { members: previousMembers, prerequisites: previousPrerequisites });
+        await updateGoal(goal.id, { members: previousMembers });
+        for (const relation of removedRelations) {
+          try {
+            await addTaskRelation({
+              blocker: { kind: relation.blockerKind, id: relation.blockerId },
+              blocked: { kind: relation.blockedKind, id: relation.blockedId },
+            });
+          } catch (error) {
+            // 同主连边：undo 恢复的边也可能撞上关系表现状（成环/自反），接住而不是冒泡成 rejection。
+            const reason = relationReason(error, REASON_COPY);
+            if (reason === null) throw error;
+            setErrorMessage(reason);
+            return;
+          }
+        }
       },
     });
   }
@@ -365,12 +394,18 @@ function GoalGraphEditorInner({ goal, tasks, tracks, steps, layoutPins, onNaviga
   async function runEdgeAction(edge: GoalGraphEdgeModel): Promise<void> {
     const refs = edgeRefs(edge);
     if (!refs) return;
-    const previousPrerequisites = goal.prerequisites ?? [];
-    await updateGoalPrerequisites(goal.id, nextPrerequisitesWithoutEdge(goal, refs.blocker, refs.blocked));
+    await removeTaskRelation({ blocker: refs.blocker, blocked: refs.blocked });
     setUndo({
       message: "已删除前置",
       onUndo: async () => {
-        await updateGoalPrerequisites(goal.id, previousPrerequisites);
+        try {
+          await addTaskRelation({ blocker: refs.blocker, blocked: refs.blocked });
+        } catch (error) {
+          // 同主连边：undo 恢复也可能撞上关系表现状（成环/自反），接住而不是冒泡成 rejection。
+          const reason = relationReason(error, REASON_COPY);
+          if (reason === null) throw error;
+          setErrorMessage(reason);
+        }
       },
     });
   }

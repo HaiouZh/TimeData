@@ -11,7 +11,8 @@ const deleteGoalLayoutPinMock = vi.hoisted(() => vi.fn());
 const toggleTaskDoneMock = vi.hoisted(() => vi.fn());
 const toggleTaskDoneWithTrackConcludeMock = vi.hoisted(() => vi.fn());
 const removeGoalMemberMock = vi.hoisted(() => vi.fn());
-const updateGoalPrerequisitesMock = vi.hoisted(() => vi.fn());
+const addTaskRelationMock = vi.hoisted(() => vi.fn());
+const removeTaskRelationMock = vi.hoisted(() => vi.fn());
 const addGoalMemberMock = vi.hoisted(() => vi.fn());
 const addTaskForGoalMock = vi.hoisted(() => vi.fn());
 const updateGoalMock = vi.hoisted(() => vi.fn());
@@ -40,7 +41,10 @@ vi.mock("../../lib/goals.js", () => ({
   deleteGoal: deleteGoalMock,
   removeGoalMember: removeGoalMemberMock,
   updateGoal: updateGoalMock,
-  updateGoalPrerequisites: updateGoalPrerequisitesMock,
+}));
+vi.mock("../../lib/taskRelations.js", () => ({
+  addTaskRelation: addTaskRelationMock,
+  removeTaskRelation: removeTaskRelationMock,
 }));
 vi.mock("../../lib/settings/trackActionTagsSetting.js", () => ({
   useTrackActionTags: () => ["待我处理", "agent在做"],
@@ -199,7 +203,8 @@ describe("GoalGalaxyCanvas", () => {
     toggleTaskDoneMock.mockReset().mockResolvedValue(undefined);
     toggleTaskDoneWithTrackConcludeMock.mockReset().mockResolvedValue(undefined);
     removeGoalMemberMock.mockReset().mockResolvedValue(undefined);
-    updateGoalPrerequisitesMock.mockReset().mockResolvedValue(undefined);
+    addTaskRelationMock.mockReset().mockResolvedValue(undefined);
+    removeTaskRelationMock.mockReset().mockResolvedValue(undefined);
     addGoalMemberMock.mockReset().mockResolvedValue(undefined);
     addTaskForGoalMock.mockReset().mockResolvedValue(undefined);
     updateGoalMock.mockReset().mockResolvedValue(undefined);
@@ -1087,7 +1092,7 @@ describe("GoalGalaxyCanvas", () => {
     await click(host.querySelector("[data-rf-connect='true']"));
     await flushPromises();
 
-    expect(updateGoalPrerequisitesMock).toHaveBeenCalledWith("g1", [{ blocker: firstRef, blocked: secondRef }]);
+    expect(addTaskRelationMock).toHaveBeenCalledWith({ blocker: firstRef, blocked: secondRef });
     await unmount(root);
   });
 
@@ -1254,9 +1259,10 @@ describe("GoalGalaxyCanvas", () => {
     await click(host.querySelector('[data-node-id="task:b"]'));
     await flushPromises();
 
-    expect(updateGoalPrerequisitesMock).toHaveBeenCalledWith("g1", [
-      { blocker: { kind: "task", id: "a" }, blocked: { kind: "task", id: "b" } },
-    ]);
+    expect(addTaskRelationMock).toHaveBeenCalledWith({
+      blocker: { kind: "task", id: "a" },
+      blocked: { kind: "task", id: "b" },
+    });
     await unmount(root);
   });
 
@@ -1344,7 +1350,7 @@ describe("GoalGalaxyCanvas", () => {
 
     expect(host.textContent).toContain("Goal 锚不参与前置");
     expect(host.querySelector("[data-connect-hint]")).not.toBeNull();
-    expect(updateGoalPrerequisitesMock).not.toHaveBeenCalled();
+    expect(addTaskRelationMock).not.toHaveBeenCalled();
 
     // 红条没有关闭入口也没有计时器：取消草稿必须把它一起带走，否则它会永久压掉确认提示与灵动提示
     await click(buttonByLabel(host.querySelector("[data-connect-hint]") ?? host, "取消连前置"));
@@ -1410,11 +1416,40 @@ describe("GoalGalaxyCanvas", () => {
     await click(host.querySelector('[data-node-id="task:b"]'));
     await flushPromises();
 
-    expect(updateGoalPrerequisitesMock).not.toHaveBeenCalled();
+    expect(addTaskRelationMock).not.toHaveBeenCalled();
     expect(host.textContent).toContain("只能连当前目标里的有效成员");
     // 给了解释就该让用户接着点别的目标：草稿保留，且不把这个非法目标选中弹动作单
     expect(host.querySelector("[data-connect-hint]")).not.toBeNull();
     expect(document.body.querySelector('button[aria-label="移除成员 B"]')).toBeNull();
+    await unmount(root);
+  });
+
+  it("连前置撞环：写入层抛错被接住，草稿保留并给出解释", async () => {
+    addTaskRelationMock.mockRejectedValue(new Error("RELATION_WOULD_CREATE_CYCLE"));
+    const goalValue = goal({
+      members: [
+        { kind: "task", id: "a" },
+        { kind: "task", id: "b" },
+      ],
+    });
+    const { host, root } = await renderDom(
+      <GoalGalaxyCanvas
+        goals={[goalValue]}
+        tasks={[task("a", { title: "A" }), task("b", { title: "B" })]}
+        tracks={[]}
+        steps={[]}
+        layoutPins={[]}
+        onNavigate={vi.fn()}
+      />,
+    );
+
+    await click(host.querySelector('[data-node-id="task:a"]'));
+    await click(buttonByLabel(document.body, "连前置 A"));
+    await click(host.querySelector('[data-node-id="task:b"]'));
+    await flushPromises();
+
+    expect(host.textContent).toContain("会形成循环前置");
+    expect(host.querySelector("[data-connect-hint]")).not.toBeNull();
     await unmount(root);
   });
 
@@ -1440,7 +1475,7 @@ describe("GoalGalaxyCanvas", () => {
     await click(buttonByLabel(document.body, "删除前置"));
     await flushPromises();
 
-    expect(updateGoalPrerequisitesMock).toHaveBeenCalledWith("g1", []);
+    expect(removeTaskRelationMock).toHaveBeenCalledWith({ blocker: firstRef, blocked: secondRef });
     await unmount(root);
   });
 
@@ -1467,7 +1502,10 @@ describe("GoalGalaxyCanvas", () => {
     await click(buttonByLabel(document.body, "删除前置"));
     await flushPromises();
 
-    expect(updateGoalPrerequisitesMock).toHaveBeenCalledWith("g1", []);
+    expect(removeTaskRelationMock).toHaveBeenCalledWith({
+      blocker: { kind: "task", id: "a:1" },
+      blocked: { kind: "task", id: "b->2" },
+    });
     await unmount(root);
   });
 
@@ -1702,7 +1740,7 @@ describe("GoalGalaxyCanvas", () => {
     await click(buttonByLabel(document.body, "连前置 A"));
     await click(buttonByLabel(document.body, "在 G1 中编辑"));
 
-    expect(updateGoalPrerequisitesMock).not.toHaveBeenCalled();
+    expect(addTaskRelationMock).not.toHaveBeenCalled();
     expect(onNavigate).toHaveBeenCalledWith("/goals/g1");
     await unmount(root);
   });

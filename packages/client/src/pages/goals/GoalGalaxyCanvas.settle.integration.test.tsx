@@ -10,7 +10,8 @@ const deleteGoalLayoutPinMock = vi.hoisted(() => vi.fn());
 const toggleTaskDoneMock = vi.hoisted(() => vi.fn());
 const toggleTaskDoneWithTrackConcludeMock = vi.hoisted(() => vi.fn());
 const removeGoalMemberMock = vi.hoisted(() => vi.fn());
-const updateGoalPrerequisitesMock = vi.hoisted(() => vi.fn());
+const addTaskRelationMock = vi.hoisted(() => vi.fn());
+const removeTaskRelationMock = vi.hoisted(() => vi.fn());
 const addGoalMemberMock = vi.hoisted(() => vi.fn());
 const addTaskForGoalMock = vi.hoisted(() => vi.fn());
 const updateGoalMock = vi.hoisted(() => vi.fn());
@@ -52,7 +53,10 @@ vi.mock("../../lib/goals.js", () => ({
   deleteGoal: deleteGoalMock,
   removeGoalMember: removeGoalMemberMock,
   updateGoal: updateGoalMock,
-  updateGoalPrerequisites: updateGoalPrerequisitesMock,
+}));
+vi.mock("../../lib/taskRelations.js", () => ({
+  addTaskRelation: addTaskRelationMock,
+  removeTaskRelation: removeTaskRelationMock,
 }));
 vi.mock("../../lib/settings/trackActionTagsSetting.js", () => ({
   useTrackActionTags: () => ["待我处理", "agent在做"],

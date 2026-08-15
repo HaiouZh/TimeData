@@ -6,6 +6,7 @@ import {
   listTaskRelations,
   removeTaskRelation,
   removeTaskRelationsForInCurrentTransaction,
+  removeTaskRelationsWithinScopeInCurrentTransaction,
   wouldCreateCycle,
 } from "./taskRelations.js";
 
@@ -182,6 +183,84 @@ describe("removeTaskRelationsForInCurrentTransaction", () => {
     const logs = await db.syncLog.where("tableName").equals("task_relations").toArray();
     expect(logs).toHaveLength(2);
     expect(logs.every((log) => log.action === "delete")).toBe(true);
+  });
+});
+
+describe("removeTaskRelationsWithinScopeInCurrentTransaction", () => {
+  beforeEach(async () => {
+    await db.taskRelations.clear();
+    await db.syncLog.clear();
+  });
+
+  it("两端都在 memberKeys 内且一端是 ref → 删，并记 delete syncLog", async () => {
+    await addTaskRelation({ blocker: t("a"), blocked: t("b") });
+    await addTaskRelation({ blocker: t("a"), blocked: t("c") });
+    await db.syncLog.clear();
+
+    await db.transaction("rw", db.taskRelations, db.syncLog, async () => {
+      await removeTaskRelationsWithinScopeInCurrentTransaction(new Set(["task:a", "task:b"]), t("a"));
+    });
+
+    expect(await db.taskRelations.count()).toBe(1);
+    const remaining = await listTaskRelations();
+    expect(remaining[0]?.blockedId).toBe("c");
+    const logs = await db.syncLog.where("tableName").equals("task_relations").toArray();
+    expect(logs).toHaveLength(1);
+    expect(logs[0]?.action).toBe("delete");
+  });
+
+  it("一端在 memberKeys 外 → 不删，不记 syncLog", async () => {
+    await addTaskRelation({ blocker: t("a"), blocked: t("b") });
+    await db.syncLog.clear();
+
+    await db.transaction("rw", db.taskRelations, db.syncLog, async () => {
+      await removeTaskRelationsWithinScopeInCurrentTransaction(new Set(["task:a"]), t("a"));
+    });
+
+    expect(await db.taskRelations.count()).toBe(1);
+    expect(await db.syncLog.where("tableName").equals("task_relations").count()).toBe(0);
+  });
+
+  it("两端都在范围内但都不是 ref → 不删，不记 syncLog", async () => {
+    await addTaskRelation({ blocker: t("a"), blocked: t("b") });
+    await db.syncLog.clear();
+
+    await db.transaction("rw", db.taskRelations, db.syncLog, async () => {
+      await removeTaskRelationsWithinScopeInCurrentTransaction(new Set(["task:a", "task:b"]), t("c"));
+    });
+
+    expect(await db.taskRelations.count()).toBe(1);
+    expect(await db.syncLog.where("tableName").equals("task_relations").count()).toBe(0);
+  });
+
+  it("范围内涉及 ref 的每条删除都记一条 delete syncLog，范围外的不动", async () => {
+    await addTaskRelation({ blocker: t("a"), blocked: t("b") });
+    await addTaskRelation({ blocker: t("a"), blocked: t("c") });
+    await addTaskRelation({ blocker: t("a"), blocked: t("x") });
+    await db.syncLog.clear();
+
+    await db.transaction("rw", db.taskRelations, db.syncLog, async () => {
+      await removeTaskRelationsWithinScopeInCurrentTransaction(new Set(["task:a", "task:b", "task:c"]), t("a"));
+    });
+
+    expect(await db.taskRelations.count()).toBe(1);
+    const remaining = await listTaskRelations();
+    expect(remaining[0]?.blockedId).toBe("x");
+    const logs = await db.syncLog.where("tableName").equals("task_relations").toArray();
+    expect(logs).toHaveLength(2);
+    expect(logs.every((log) => log.action === "delete")).toBe(true);
+  });
+
+  it("ref 按 kind+id 整体匹配：task:a 与 track:a 不是同一个端点", async () => {
+    await addTaskRelation({ blocker: t("a"), blocked: t("b") });
+    await db.syncLog.clear();
+
+    await db.transaction("rw", db.taskRelations, db.syncLog, async () => {
+      await removeTaskRelationsWithinScopeInCurrentTransaction(new Set(["task:a", "task:b"]), tr("a"));
+    });
+
+    expect(await db.taskRelations.count()).toBe(1);
+    expect(await db.syncLog.where("tableName").equals("task_relations").count()).toBe(0);
   });
 });
 

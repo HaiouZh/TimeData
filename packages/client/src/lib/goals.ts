@@ -1,7 +1,8 @@
-import { GoalSchema, TaskSchema, TrackSchema, type Goal, type GoalMemberRef, type GoalPrerequisite, type Task, type Track } from "@timedata/shared";
+import { GoalSchema, TaskSchema, TrackSchema, type Goal, type GoalMemberRef, type Task, type Track } from "@timedata/shared";
 import { v4 as uuid } from "uuid";
 import { db } from "../db/index.js";
 import { hydrateGoalPrerequisites } from "./goalPrerequisiteHydration.js";
+import { removeTaskRelationsWithinScopeInCurrentTransaction } from "./taskRelations.js";
 import {
   deleteGoalLayoutPinsForGoalInCurrentTransaction,
   deleteGoalMemberPinInCurrentTransaction,
@@ -32,7 +33,6 @@ export interface UpdateGoalPatch {
   status?: Goal["status"];
   note?: string | null;
   members?: GoalMemberRef[];
-  prerequisites?: GoalPrerequisite[];
   now?: Date;
 }
 
@@ -107,7 +107,6 @@ export async function updateGoal(id: string, patch: UpdateGoalPatch): Promise<Go
   if (patch.kind !== undefined) candidate.kind = patch.kind;
   if (patch.status !== undefined) candidate.status = patch.status;
   if (patch.members !== undefined) candidate.members = patch.members;
-  if (patch.prerequisites !== undefined) candidate.prerequisites = patch.prerequisites;
   if (patch.note === null) {
     candidate = omitGoalNote(candidate);
   } else if (patch.note !== undefined) {
@@ -124,14 +123,6 @@ export async function updateGoal(id: string, patch: UpdateGoalPatch): Promise<Go
     await touchTasksInCurrentTransaction(released, next.updatedAt);
   });
   return next;
-}
-
-export async function updateGoalPrerequisites(
-  id: string,
-  prerequisites: GoalPrerequisite[],
-  options: { now?: Date } = {},
-): Promise<Goal> {
-  return updateGoal(id, { prerequisites, now: options.now });
 }
 
 export async function getGoal(id: string): Promise<Goal | undefined> {
@@ -197,9 +188,8 @@ export async function addGoalMember(
 
 /**
  * 移除成员的事务内原语。**必须在已开启的 rw 事务内调用**，事务表须含
- * goals / goalLayoutPins / tasks / syncLog。抽出来是为了让「拖拽收纳时清项目归属」
- * 与「手动移出项目」共用同一份连带逻辑（钉点回收、prerequisites 边、touch），
- * 两条路径行为不会漂。
+ * goals / goalLayoutPins / tasks / taskRelations / syncLog。抽出来是为了让「拖拽收纳时清项目归属」
+ * 与「手动移出项目」共用同一份连带逻辑（钉点回收、关系表边、touch），两条路径行为不会漂。
  */
 export async function removeGoalMemberInCurrentTransaction(
   goal: Goal,
@@ -213,19 +203,21 @@ export async function removeGoalMemberInCurrentTransaction(
   }
 
   const nextMembers = members.filter((member) => !sameGoalMember(member, ref));
-  const nextPrerequisites = (goal.prerequisites ?? []).filter(
-    (edge) => !sameGoalMember(edge.blocker, ref) && !sameGoalMember(edge.blocked, ref),
-  );
+  // 成员摘除前快照的 memberKeys：删边判据（两端都在目标内、一端是被摘成员）用的是摘除前口径。
+  const memberKeys = new Set(members.map((member) => `${member.kind}:${member.id}`));
   const next = GoalSchema.parse({
     ...goal,
     members: nextMembers,
-    prerequisites: nextPrerequisites,
+    prerequisites: [],
     updatedAt: timestamp,
   });
   await db.goals.put(next);
   await recordSyncLog("goals", next.id, "update", timestamp);
   // 移出成员：同事务回收它在本 Goal 下的布局钉点，不留孤儿。
   await deleteGoalMemberPinInCurrentTransaction({ goalId: goal.id, nodeKind: ref.kind, nodeId: ref.id }, now);
+  // 移出成员：同事务删掉「两端都在本目标内、且一端是被移出者」的关系行。旧模型下边存在目标里，
+  // 成员一走边就没了；保持该行为，与确认弹窗「移动会一并删除」的提示一致。
+  await removeTaskRelationsWithinScopeInCurrentTransaction(memberKeys, { kind: ref.kind, id: ref.id }, now);
   await touchTasksInCurrentTransaction(releasedProjectTaskIds(goal, next), timestamp);
   return next;
 }
@@ -238,7 +230,7 @@ export async function removeGoalMember(
   const timestamp = nowIso(options.now);
   let nextGoal: Goal | null = null;
 
-  await db.transaction("rw", db.goals, db.goalLayoutPins, db.tasks, db.syncLog, async () => {
+  await db.transaction("rw", db.goals, db.goalLayoutPins, db.tasks, db.taskRelations, db.syncLog, async () => {
     const goal = await db.goals.get(goalId);
     if (!goal) throw new Error("目标不存在");
     nextGoal = await removeGoalMemberInCurrentTransaction(goal as Goal, ref, timestamp, options.now);
@@ -283,36 +275,40 @@ export async function assignTaskToProject(
 ): Promise<Goal> {
   let nextGoal: Goal | null = null;
 
-  await db.transaction("rw", db.goals, db.goalLayoutPins, db.tasks, db.tracks, db.syncLog, async () => {
-    const task = await db.tasks.get(taskId);
-    if (!task) throw new Error("任务不存在");
+  await db.transaction(
+    "rw",
+    [db.goals, db.goalLayoutPins, db.tasks, db.tracks, db.taskRelations, db.syncLog],
+    async () => {
+      const task = await db.tasks.get(taskId);
+      if (!task) throw new Error("任务不存在");
 
-    const goalRows = await db.goals.toArray();
-    const target = goalRows.find((row) => row.id === goalId);
-    if (!target) throw new Error("目标不存在");
-    // 目标组必须**仍然**是 active project。缺了这道闸，另一端归档 / 改成 theme 后（本页项目区还没刷新完，
-    // droppable 仍在）拖进来会照常摘除、照常写入，而读侧只认 active project——这条任务从此不属于任何组，
-    // 是静默的归属丢失。同文件 `addTaskForGoal` 早有同款闸，此处缺失属不对称。
-    if (target.status !== "active" || target.kind !== "project") {
-      throw new ProjectAssignError("inactive", target.title);
-    }
+      const goalRows = await db.goals.toArray();
+      const target = goalRows.find((row) => row.id === goalId);
+      if (!target) throw new Error("目标不存在");
+      // 目标组必须**仍然**是 active project。缺了这道闸，另一端归档 / 改成 theme 后（本页项目区还没刷新完，
+      // droppable 仍在）拖进来会照常摘除、照常写入，而读侧只认 active project——这条任务从此不属于任何组，
+      // 是静默的归属丢失。同文件 `addTaskForGoal` 早有同款闸，此处缺失属不对称。
+      if (target.status !== "active" || target.kind !== "project") {
+        throw new ProjectAssignError("inactive", target.title);
+      }
 
-    const members = target.members ?? [];
-    const already = members.some((member) => member.kind === "task" && member.id === taskId);
-    // 已在组内时不看 full：幂等重入不会让数组变长，此时报「满员」是假拒绝。
-    const block = projectAssignBlock(task, members.length);
-    if (block !== null && !(block === "full" && already)) throw new ProjectAssignError(block, target.title);
+      const members = target.members ?? [];
+      const already = members.some((member) => member.kind === "task" && member.id === taskId);
+      // 已在组内时不看 full：幂等重入不会让数组变长，此时报「满员」是假拒绝。
+      const block = projectAssignBlock(task, members.length);
+      if (block !== null && !(block === "full" && already)) throw new ProjectAssignError(block, target.title);
 
-    for (const row of goalRows) {
-      if (row.id === goalId) continue;
-      // 只摘 active project：theme 归属走绿竖条那条独立通道，归档目标读侧本来就不认。
-      if (row.status !== "active" || row.kind !== "project") continue;
-      if (!(row.members ?? []).some((member) => member.kind === "task" && member.id === taskId)) continue;
-      await removeGoalMember(row.id, { kind: "task", id: taskId }, options);
-    }
+      for (const row of goalRows) {
+        if (row.id === goalId) continue;
+        // 只摘 active project：theme 归属走绿竖条那条独立通道，归档目标读侧本来就不认。
+        if (row.status !== "active" || row.kind !== "project") continue;
+        if (!(row.members ?? []).some((member) => member.kind === "task" && member.id === taskId)) continue;
+        await removeGoalMember(row.id, { kind: "task", id: taskId }, options);
+      }
 
-    nextGoal = await addGoalMember(goalId, { kind: "task", id: taskId }, options);
-  });
+      nextGoal = await addGoalMember(goalId, { kind: "task", id: taskId }, options);
+    },
+  );
 
   if (!nextGoal) throw new Error("目标不存在");
   return nextGoal;
@@ -390,46 +386,50 @@ export async function assignTasksToProject(
   const uniqueTaskIds = [...new Set(taskIds)];
   let nextGoal: Goal | null = null;
 
-  await db.transaction("rw", db.goals, db.goalLayoutPins, db.tasks, db.tracks, db.syncLog, async () => {
-    const goalRows = await db.goals.toArray();
-    const target = goalRows.find((row) => row.id === goalId);
-    if (!target) throw new Error("目标不存在");
-    // 目标组必须**仍然**是 active project。缺了这道闸，另一端归档 / 改成 theme 后拖进来会照常摘除、
-    // 照常写入，而读侧只认 active project——这批任务从此不属于任何组，是静默的归属丢失。
-    if (target.status !== "active" || target.kind !== "project") {
-      throw new ProjectAssignError("inactive", target.title);
-    }
-
-    const members = target.members ?? [];
-    const existing = new Set(members.filter((member) => member.kind === "task").map((member) => member.id));
-
-    // 先把整批验完再动手：任一条不合格就整批拒绝，不留「写了一半」的中间态。
-    let addCount = 0;
-    for (const taskId of uniqueTaskIds) {
-      const task = await db.tasks.get(taskId);
-      if (!task) throw new Error("任务不存在");
-      const block = taskAssignBlock(task);
-      if (block !== null) throw new ProjectAssignError(block, target.title);
-      // 已在组内的不计入新增：幂等重入不会让数组变长，把它算进去会造出假的满员。
-      if (!existing.has(taskId)) addCount += 1;
-    }
-    if (exceedsGoalMemberCap(members.length, addCount)) {
-      throw new ProjectAssignError("full", target.title);
-    }
-
-    for (const taskId of uniqueTaskIds) {
-      for (const row of goalRows) {
-        if (row.id === goalId) continue;
-        // 只摘 active project：theme 归属走绿竖条那条独立通道，归档目标读侧本来就不认。
-        if (row.status !== "active" || row.kind !== "project") continue;
-        if (!(row.members ?? []).some((member) => member.kind === "task" && member.id === taskId)) continue;
-        // goalRows 是事务入口的快照，摘除会让它过期——但只用于「要不要调一次」，
-        // removeGoalMember 自己重读最新行，快照过期最多多调一次无害的 no-op。
-        await removeGoalMember(row.id, { kind: "task", id: taskId }, options);
+  await db.transaction(
+    "rw",
+    [db.goals, db.goalLayoutPins, db.tasks, db.tracks, db.taskRelations, db.syncLog],
+    async () => {
+      const goalRows = await db.goals.toArray();
+      const target = goalRows.find((row) => row.id === goalId);
+      if (!target) throw new Error("目标不存在");
+      // 目标组必须**仍然**是 active project。缺了这道闸，另一端归档 / 改成 theme 后拖进来会照常摘除、
+      // 照常写入，而读侧只认 active project——这批任务从此不属于任何组，是静默的归属丢失。
+      if (target.status !== "active" || target.kind !== "project") {
+        throw new ProjectAssignError("inactive", target.title);
       }
-      nextGoal = await addGoalMember(goalId, { kind: "task", id: taskId }, options);
-    }
-  });
+
+      const members = target.members ?? [];
+      const existing = new Set(members.filter((member) => member.kind === "task").map((member) => member.id));
+
+      // 先把整批验完再动手：任一条不合格就整批拒绝，不留「写了一半」的中间态。
+      let addCount = 0;
+      for (const taskId of uniqueTaskIds) {
+        const task = await db.tasks.get(taskId);
+        if (!task) throw new Error("任务不存在");
+        const block = taskAssignBlock(task);
+        if (block !== null) throw new ProjectAssignError(block, target.title);
+        // 已在组内的不计入新增：幂等重入不会让数组变长，把它算进去会造出假的满员。
+        if (!existing.has(taskId)) addCount += 1;
+      }
+      if (exceedsGoalMemberCap(members.length, addCount)) {
+        throw new ProjectAssignError("full", target.title);
+      }
+
+      for (const taskId of uniqueTaskIds) {
+        for (const row of goalRows) {
+          if (row.id === goalId) continue;
+          // 只摘 active project：theme 归属走绿竖条那条独立通道，归档目标读侧本来就不认。
+          if (row.status !== "active" || row.kind !== "project") continue;
+          if (!(row.members ?? []).some((member) => member.kind === "task" && member.id === taskId)) continue;
+          // goalRows 是事务入口的快照，摘除会让它过期——但只用于「要不要调一次」，
+          // removeGoalMember 自己重读最新行，快照过期最多多调一次无害的 no-op。
+          await removeGoalMember(row.id, { kind: "task", id: taskId }, options);
+        }
+        nextGoal = await addGoalMember(goalId, { kind: "task", id: taskId }, options);
+      }
+    },
+  );
 
   if (!nextGoal) throw new Error("目标不存在");
   return nextGoal;
@@ -453,21 +453,25 @@ export async function createProjectWithMembers(input: {
   const goalId = uuid();
   let nextGoal: Goal | null = null;
 
-  await db.transaction("rw", db.goals, db.goalLayoutPins, db.tasks, db.tracks, db.syncLog, async () => {
-    const seed = GoalSchema.parse({
-      id: goalId,
-      title,
-      kind: "project",
-      status: "active",
-      members: [],
-      prerequisites: [],
-      createdAt,
-      updatedAt: createdAt,
-    });
-    await db.goals.add(seed);
-    await recordSyncLog("goals", seed.id, "create", seed.updatedAt);
-    nextGoal = await assignTasksToProject(goalId, input.taskIds, input.now ? { now: input.now } : {});
-  });
+  await db.transaction(
+    "rw",
+    [db.goals, db.goalLayoutPins, db.tasks, db.tracks, db.taskRelations, db.syncLog],
+    async () => {
+      const seed = GoalSchema.parse({
+        id: goalId,
+        title,
+        kind: "project",
+        status: "active",
+        members: [],
+        prerequisites: [],
+        createdAt,
+        updatedAt: createdAt,
+      });
+      await db.goals.add(seed);
+      await recordSyncLog("goals", seed.id, "create", seed.updatedAt);
+      nextGoal = await assignTasksToProject(goalId, input.taskIds, input.now ? { now: input.now } : {});
+    },
+  );
 
   if (!nextGoal) throw new Error("建项目失败");
   return nextGoal;
@@ -543,11 +547,15 @@ export async function createTaskForProject(
   const task = await buildNewRootTask({ title: input.title, toInbox: true, now: input.now });
   let created: Task | null = null;
 
-  await db.transaction("rw", db.goals, db.goalLayoutPins, db.tasks, db.tracks, db.syncLog, async () => {
-    await insertNewTaskInCurrentTransaction(task);
-    await assignTaskToProject(goalId, task.id, input.now ? { now: input.now } : {});
-    created = (await db.tasks.get(task.id)) ?? task;
-  });
+  await db.transaction(
+    "rw",
+    [db.goals, db.goalLayoutPins, db.tasks, db.tracks, db.taskRelations, db.syncLog],
+    async () => {
+      await insertNewTaskInCurrentTransaction(task);
+      await assignTaskToProject(goalId, task.id, input.now ? { now: input.now } : {});
+      created = (await db.tasks.get(task.id)) ?? task;
+    },
+  );
 
   if (!created) throw new Error("项目内创建任务失败");
   return created;

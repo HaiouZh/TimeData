@@ -3,8 +3,9 @@ import "fake-indexeddb/auto";
 
 import { act, createElement } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { Goal, GoalLayoutPin, GoalMemberRef, Task, Track, TrackStep } from "@timedata/shared";
+import type { Goal, GoalLayoutPin, GoalMemberRef, Task, TaskRelation, Track, TrackStep } from "@timedata/shared";
 import { db } from "../../db/index.js";
+import { getGoal } from "../../lib/goals.js";
 import { click, renderDom, unmount } from "../../test/domHarness.js";
 import { getReactFlowMock, resetReactFlowMock } from "./test/reactFlowMock.js";
 
@@ -543,6 +544,16 @@ describe("GoalGraphEditor", () => {
     const first = task("task-1", { title: "A" });
     const second = task("task-2", { title: "B" });
     await seed(goalValue, [first, second]);
+    // 生产态镜像：迁移之后旧字段与新表同时持边；移出成员连带清理走关系表
+    await db.taskRelations.add({
+      blockerKind: "task",
+      blockerId: "task-1",
+      blockedKind: "task",
+      blockedId: "task-2",
+      type: "blocks",
+      createdAt: now,
+      updatedAt: now,
+    });
 
     const { host } = await renderEditor({ goal: goalValue, tasks: [first, second] });
 
@@ -553,16 +564,26 @@ describe("GoalGraphEditor", () => {
     let row = await db.goals.get("goal-1");
     expect(row?.members).toEqual([members[1]]);
     expect(row?.prerequisites).toEqual([]);
+    expect(await db.taskRelations.count()).toBe(0);
     await waitForStatusText("撤销");
 
     await click(document.body.querySelector("[data-goal-undo-action]"));
 
     row = await waitForGoalWhere((candidate) => candidate?.members.length === 2, "restored members");
     expect(row?.members).toEqual(members);
-    expect(row?.prerequisites).toEqual([{ blocker: members[0], blocked: members[1] }]);
+    // undo 恢复的是关系行，旧字段不被写回非空值
+    expect(row?.prerequisites).toEqual([]);
+    let relations: TaskRelation[] | null = null;
+    for (let index = 0; index < 30; index++) {
+      relations = await db.taskRelations.toArray();
+      if (relations.length === 1) break;
+      await tick();
+    }
+    expect(relations).toHaveLength(1);
+    expect(relations?.[0]).toMatchObject({ blockerKind: "task", blockerId: "task-1", blockedKind: "task", blockedId: "task-2" });
   });
 
-  it("onConnect 校验通过后写入 blocker -> blocked 前置", async () => {
+  it("onConnect 校验通过后连边写入关系表，旧字段不被倒灌", async () => {
     const members: GoalMemberRef[] = [
       { kind: "task", id: "t1" },
       { kind: "task", id: "t2" },
@@ -575,9 +596,28 @@ describe("GoalGraphEditor", () => {
     const { host } = await renderEditor({ goal: goalValue, tasks: [first, second] });
 
     await click(host.querySelector("[data-rf-connect='true']"));
-    await tick();
 
-    expect((await db.goals.get("goal-1"))?.prerequisites).toEqual([{ blocker: members[0], blocked: members[1] }]);
+    // 等 addTaskRelation 的事务落库（关系行可见）
+    let rows: TaskRelation[] | null = null;
+    for (let index = 0; index < 30; index++) {
+      rows = await db.taskRelations.toArray();
+      if (rows.length === 1) break;
+      await tick();
+    }
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ blockerKind: "task", blockerId: "t1", blockedKind: "task", blockedId: "t2" });
+    // 核心闸：连边后裸行 prerequisites 不得出现任何非空值（守住「不再倒灌旧字段」）。
+    // 轮询而不直接读一次：倒灌写入是连边事务之后的第二次写入，直接断言会与它赛跑。
+    let polluted = false;
+    for (let index = 0; index < 30; index++) {
+      const row = await db.goals.get("goal-1");
+      if ((row?.prerequisites ?? []).length > 0) {
+        polluted = true;
+        break;
+      }
+      await tick();
+    }
+    expect(polluted).toBe(false);
   });
 
   it("连前置校验失败时错误显示在 ConnectSheet 内部", async () => {
@@ -688,6 +728,15 @@ describe("GoalGraphEditor", () => {
     const first = task("task-1", { title: "A" });
     const second = task("task-2", { title: "B" });
     await seed(goalValue, [first, second]);
+    await db.taskRelations.add({
+      blockerKind: "task",
+      blockerId: "task-1",
+      blockedKind: "task",
+      blockedId: "task-2",
+      type: "blocks",
+      createdAt: now,
+      updatedAt: now,
+    });
 
     const { host } = await renderEditor({ goal: goalValue, tasks: [first, second] });
     const edgeId = "prerequisite:task:task-1->task:task-2";
@@ -696,16 +745,58 @@ describe("GoalGraphEditor", () => {
     await click(buttonByLabel(document.body, "删除前置"));
     await tick();
 
-    expect((await db.goals.get("goal-1"))?.prerequisites).toEqual([]);
+    // 断边走关系表：关系行没了；旧字段不被改写
+    expect(await db.taskRelations.count()).toBe(0);
+    expect((await db.goals.get("goal-1"))?.prerequisites).toEqual([{ blocker: members[0], blocked: members[1] }]);
+    // 重新读取（hydrate）时那条边确实消失了
+    const readAfterDelete = await getGoal("goal-1");
+    expect(readAfterDelete?.prerequisites).toEqual([]);
     await waitForStatusText("撤销");
 
     await click(document.body.querySelector("[data-goal-undo-action]"));
 
-    const restored = await waitForGoalWhere(
-      (candidate) => candidate?.prerequisites.length === 1,
-      "restored prerequisite",
-    );
-    expect(restored?.prerequisites).toEqual([{ blocker: members[0], blocked: members[1] }]);
+    let relations: TaskRelation[] | null = null;
+    for (let index = 0; index < 30; index++) {
+      relations = await db.taskRelations.toArray();
+      if (relations.length === 1) break;
+      await tick();
+    }
+    expect(relations).toHaveLength(1);
+    expect(relations?.[0]).toMatchObject({ blockerKind: "task", blockerId: "task-1", blockedKind: "task", blockedId: "task-2" });
+  });
+
+  it("连前置撞上关系表里已有的环 → 错误被接住并显示在 ConnectSheet 内", async () => {
+    const members: GoalMemberRef[] = [
+      { kind: "task", id: "t1" },
+      { kind: "task", id: "t2" },
+    ];
+    const goalValue = goal({ members });
+    const first = task("t1", { title: "A" });
+    const second = task("t2", { title: "B" });
+    await seed(goalValue, [first, second]);
+    // 关系表里已有 t2→t1，goal prop（旧快照）不知道：前端校验通过，写入时才抛 RELATION_WOULD_CREATE_CYCLE
+    await db.taskRelations.add({
+      blockerKind: "task",
+      blockerId: "t2",
+      blockedKind: "task",
+      blockedId: "t1",
+      type: "blocks",
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    const { host } = await renderEditor({ goal: goalValue, tasks: [first, second] });
+
+    await click(nodeButton(host, "task:t1"));
+    await click(buttonByLabel(document.body, "连前置 A"));
+    await click(buttonByText(document.body, "让它先于别人"));
+    await click(buttonByLabel(document.body, "选择前置目标 B"));
+    await tick();
+
+    const sheetError = document.body.querySelector("[data-connect-sheet-error]");
+    expect(sheetError?.textContent).toContain("会形成循环前置");
+    // 环没写进去
+    expect(await db.taskRelations.count()).toBe(1);
   });
 
   it("添加已有成员和快建任务写入 db", async () => {

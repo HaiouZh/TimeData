@@ -1,7 +1,7 @@
 import "@xyflow/react/dist/style.css";
 
 import { CornersOut } from "@phosphor-icons/react";
-import type { Goal, GoalLayoutPin, GoalMemberRef, GoalPrerequisite, Task, Track, TrackStep } from "@timedata/shared";
+import type { Goal, GoalLayoutPin, GoalMemberRef, Task, Track, TrackStep } from "@timedata/shared";
 import {
   applyNodeChanges,
   Background,
@@ -29,7 +29,7 @@ import { goalGalaxyLayout, type XY } from "../../lib/goalGalaxyLayout.js";
 import { type ClusterLod, clusterLod, type GalaxyViewport } from "../../lib/goalGalaxyLod.js";
 import { buildGoalGalaxyModel, type GalaxyNode } from "../../lib/goalGalaxyModel.js";
 import { goalGalaxyRollup } from "../../lib/goalGalaxyRollup.js";
-import { addPrerequisiteEdge, removePrerequisiteEdge, validatePrerequisiteEdge } from "../../lib/goalGraphEdges.js";
+import { validatePrerequisiteEdge } from "../../lib/goalGraphEdges.js";
 import type { GoalGraphEdge, GoalGraphNode } from "../../lib/goalGraphModel.js";
 import { goalPinFromCanvas, memberPinFromCanvas } from "../../lib/goalLayoutCoords.js";
 import { upsertGoalLayoutPin } from "../../lib/goalLayoutPins.js";
@@ -40,9 +40,9 @@ import {
   deleteGoal,
   removeGoalMember,
   updateGoal,
-  updateGoalPrerequisites,
 } from "../../lib/goals.js";
 import { buildGoalOverview } from "../../lib/goalsView.js";
+import { addTaskRelation, removeTaskRelation } from "../../lib/taskRelations.js";
 import { unassignedTasks, unassignedTracks } from "../../lib/goalUnassigned.js";
 import { useTrackActionTags } from "../../lib/settings/trackActionTagsSetting.js";
 import { buildTrackConcludeUndo, toggleTaskDoneWithTrackConclude, type TrackConcludeUndo } from "../../lib/taskTrackPromote.js";
@@ -100,7 +100,6 @@ interface GoalGalaxyEdgeData extends Record<string, unknown> {
 type GoalGalaxyFlowEdge = Edge<GoalGalaxyEdgeData, "goal-graph-edge">;
 type PendingRemoveMember = { goalId: string; node: GoalGraphNode };
 type ConnectDraft = { goalId: string; node: GoalGraphNode };
-type GraphGoalLike = Pick<Goal, "members" | "prerequisites">;
 type BridgeRouteChoice = { goalIds: string[]; nodeTitle: string } | null;
 
 const ADD_MEMBER_ACTION: GoalAction = { id: "add-member", label: "添加成员", tone: "primary" };
@@ -318,20 +317,11 @@ function refFromNodeId(id: string): GoalMemberRef | null {
   return { kind, id: refId };
 }
 
-function nextPrerequisitesWithEdge(
-  goal: GraphGoalLike,
-  blocker: GoalMemberRef,
-  blocked: GoalMemberRef,
-): GoalPrerequisite[] {
-  return addPrerequisiteEdge(goal, blocker, blocked).prerequisites;
-}
-
-function nextPrerequisitesWithoutEdge(
-  goal: GraphGoalLike,
-  blocker: GoalMemberRef,
-  blocked: GoalMemberRef,
-): GoalPrerequisite[] {
-  return removePrerequisiteEdge(goal, blocker, blocked).prerequisites;
+function relationReason(error: unknown, copy: typeof REASON_COPY): string | null {
+  const reason = error instanceof Error ? error.message : "";
+  if (reason === "RELATION_SELF_REFERENCE") return copy["self-reference"];
+  if (reason === "RELATION_WOULD_CREATE_CYCLE") return copy.cycle;
+  return null;
 }
 
 function translate(position: XY, delta: XY, factor = 1): XY {
@@ -906,7 +896,16 @@ function GoalGalaxyCanvasInner({
       return false;
     }
 
-    await updateGoalPrerequisites(goal.id, nextPrerequisitesWithEdge(goal, blocker, blocked));
+    try {
+      await addTaskRelation({ blocker, blocked });
+    } catch (error) {
+      // 前置校验读的是 goal 快照，关系表可能在快照之后被别处改过（成环/自反），
+      // 写入时才抛——必须接住，不能冒泡成未处理的 rejection。
+      const reason = relationReason(error, REASON_COPY);
+      if (reason === null) throw error;
+      setErrorMessage(reason);
+      return false;
+    }
     setConnectDraft(null);
     setErrorMessage(null);
     return true;
@@ -1143,10 +1142,8 @@ function GoalGalaxyCanvasInner({
     const blocker = refFromNodeId(selectedGraphEdge.source);
     const blocked = refFromNodeId(selectedGraphEdge.target);
     if (!blocker || !blocked) return;
-    const goal = goalById.get(edgeGoalId);
-    if (!goal) return;
 
-    await updateGoalPrerequisites(goal.id, nextPrerequisitesWithoutEdge(goal, blocker, blocked));
+    await removeTaskRelation({ blocker, blocked });
     setSelectedEdgeId(null);
   }
 
