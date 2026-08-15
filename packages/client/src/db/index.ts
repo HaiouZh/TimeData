@@ -1,6 +1,6 @@
 import Dexie, { type EntityTable, type Table } from "dexie";
 import type {
-  Category, Goal, GoalLayoutPin, QuickNote, Session, Setting, Task, TaskRelation, TimeEntry, SyncLogEntry, Track, TrackStep,
+  Category, Goal, GoalLayoutPin, GoalPrerequisite, QuickNote, Session, Setting, Task, TaskRelation, TimeEntry, SyncLogEntry, Track, TrackStep,
 } from "@timedata/shared";
 import { createDefaultCategories, taskRelationKey, TaskRelationSchema } from "@timedata/shared";
 import { v4 as uuid } from "uuid";
@@ -30,7 +30,15 @@ export const db = new Dexie("timedata") as Dexie & {
   goalLayoutPins: Table<GoalLayoutPin, [string, GoalLayoutPin["nodeKind"], string]>;
   sessions: EntityTable<Session, "id">;
   taskRelations: Table<TaskRelation, [string, string, string, string]>;
+  migrationSnapshots: EntityTable<MigrationSnapshot, "key">;
 };
+
+/** 纯本地快照行：value 存 JSON 字符串，不进任何同步域（见 v19 注释）。 */
+export interface MigrationSnapshot {
+  key: string;
+  value: string;
+  updatedAt: string;
+}
 
 db.version(1).stores({
   categories: "id, parentId, sortOrder",
@@ -317,9 +325,16 @@ db.version(17).stores({
 });
 
 // 阶段3 关系表：前置边从 goal.prerequisites 内嵌数组搬进独立 store。
-// goal.prerequisites 原样保留不删——它是回滚底牌。
+// 搬入完成后旧字段会被清空（见 migrateGoalPrerequisitesToRelations），原样数组存进 v19 快照表作回滚底牌。
 db.version(18).stores({
   taskRelations: "[blockerKind+blockerId+blockedKind+blockedId], blockerId, blockedId, updatedAt",
+});
+
+// 阶段3 底牌：迁移清空 goal.prerequisites 前把原样数组快照进这张纯本地表（key → JSON 字符串）。
+// 纯本地有两层含义：不登记任何同步域（force-push 的 settings 整表推送、resetLocalDataToDefaults 的
+// settings.clear() 都会毁掉它），也不进 resetLocalDataToDefaults 的清空清单。
+db.version(19).stores({
+  migrationSnapshots: "key",
 });
 
 export async function seedDefaultCategories(): Promise<void> {
@@ -329,16 +344,23 @@ export async function seedDefaultCategories(): Promise<void> {
   await db.categories.bulkAdd(createDefaultCategories());
 }
 
+/** 迁移快照在 migrationSnapshots 表里的 key。 */
+export const GOAL_PREREQUISITES_SNAPSHOT_KEY = "migration.v18.prerequisitesSnapshot";
+
 /** 把存量 goal.prerequisites 搬进 taskRelations，返回新搬入的条数。
  *  幂等：复合主键天然去重，已存在的边跳过、不重复记 syncLog。
- *  **不删除 goal.prerequisites**——它是回滚底牌。 */
+ *  每个旧字段非空的 goal 搬完边后：原样数组并入快照（GOAL_PREREQUISITES_SNAPSHOT_KEY，含坏边）、
+ *  清空旧字段并直写 update syncLog——否则「用户删边 → 关系行没了 → 下次启动把旧字段的边搬回来」会复活。
+ *  快照由 restoreGoalPrerequisitesFromSnapshot 消费，可重复跑。 */
 export async function migrateGoalPrerequisitesToRelations(now: Date = new Date()): Promise<number> {
   const timestamp = now.toISOString();
   let migrated = 0;
 
-  await db.transaction("rw", db.goals, db.taskRelations, db.syncLog, async () => {
+  await db.transaction("rw", db.goals, db.taskRelations, db.syncLog, db.migrationSnapshots, async () => {
     const goals = await db.goals.toArray();
+    const delta: Record<string, GoalPrerequisite[]> = {};
     for (const goal of goals) {
+      if ((goal.prerequisites ?? []).length === 0) continue;
       for (const edge of goal.prerequisites ?? []) {
         const raw = {
           blockerKind: edge?.blocker?.kind,
@@ -373,10 +395,92 @@ export async function migrateGoalPrerequisitesToRelations(now: Date = new Date()
         });
         migrated += 1;
       }
+
+      // 原样并入快照（含坏边，不过滤）：底牌要能完整还原，坏边同样会被下一步清掉。
+      delta[goal.id] = goal.prerequisites ?? [];
+      // 清空旧字段并刷新 updatedAt——不刷新的话 LWW 下这次清空推不过服务端上的旧版本。
+      await db.goals.put({ ...goal, prerequisites: [], updatedAt: timestamp });
+      await db.syncLog.add({
+        id: uuid(),
+        tableName: "goals",
+        recordId: goal.id,
+        action: "update",
+        timestamp,
+        synced: 0,
+      });
     }
+
+    // delta 为空时一个字都不许写：不新建行、不更新 updatedAt。
+    if (Object.keys(delta).length === 0) return;
+
+    // 合并而非覆盖：新设备首启时 goals 是空的会先落空快照，等真数据同步进来、下次启动搬走时，
+    // 「已存在就不写」会让底牌永远停在空对象上；合并没有这个洞——已搬过的 goal 旧字段已空、进不来。
+    const existing = await db.migrationSnapshots.get(GOAL_PREREQUISITES_SNAPSHOT_KEY);
+    let merged: Record<string, GoalPrerequisite[]> = {};
+    if (existing) {
+      try {
+        const parsed: unknown = JSON.parse(existing.value);
+        if (typeof parsed === "object" && parsed !== null && !Array.isArray(parsed)) {
+          merged = parsed as Record<string, GoalPrerequisite[]>;
+        }
+      } catch {
+        merged = {};
+      }
+    }
+    await db.migrationSnapshots.put({
+      key: GOAL_PREREQUISITES_SNAPSHOT_KEY,
+      value: JSON.stringify({ ...merged, ...delta }),
+      updatedAt: timestamp,
+    });
   });
 
   return migrated;
+}
+
+/** 把迁移快照里的 goal.prerequisites 写回目标，返回成功/失败条数。
+ *  每个 goal 一个独立事务：单条写不回去（如原数据过不了 GoalSchema 的 superRefine）不拖垮其余的，
+ *  goal 已删除同样计入 failed。不删快照，可重复跑。 */
+export async function restoreGoalPrerequisitesFromSnapshot(
+  now?: Date,
+): Promise<{ restored: number; failed: number }> {
+  const row = await db.migrationSnapshots.get(GOAL_PREREQUISITES_SNAPSHOT_KEY);
+  if (!row) return { restored: 0, failed: 0 };
+
+  let snapshot: Record<string, GoalPrerequisite[]>;
+  try {
+    const parsed: unknown = JSON.parse(row.value);
+    if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+      return { restored: 0, failed: 0 };
+    }
+    snapshot = parsed as Record<string, GoalPrerequisite[]>;
+  } catch {
+    return { restored: 0, failed: 0 };
+  }
+
+  const timestamp = (now ?? new Date()).toISOString();
+  let restored = 0;
+  let failed = 0;
+  for (const [goalId, prerequisites] of Object.entries(snapshot)) {
+    try {
+      await db.transaction("rw", db.goals, db.syncLog, async () => {
+        const goal = await db.goals.get(goalId);
+        if (!goal) throw new Error("快照里的目标已不存在");
+        await db.goals.put({ ...goal, prerequisites, updatedAt: timestamp });
+        await db.syncLog.add({
+          id: uuid(),
+          tableName: "goals",
+          recordId: goalId,
+          action: "update",
+          timestamp,
+          synced: 0,
+        });
+      });
+      restored += 1;
+    } catch {
+      failed += 1;
+    }
+  }
+  return { restored, failed };
 }
 
 export async function migrateLocalSettingsToDexie(): Promise<void> {
@@ -402,6 +506,8 @@ export async function migrateLocalSettingsToDexie(): Promise<void> {
 }
 
 export async function resetLocalDataToDefaults(): Promise<void> {
+  // 有意不清 migrationSnapshots（迁移快照是纯本地底牌，见 v19 注释）：重置本地数据之后
+  // goals 会从服务端重新拉到「已清空」的版本，那正是最需要底牌的时刻。
   await db.transaction("rw", [db.categories, db.timeEntries, db.tasks, db.tracks, db.trackSteps, db.goals, db.goalLayoutPins, db.taskRelations, db.syncLog, db.settings], async () => {
     const nonQuickNoteLogs = await db.syncLog.filter((log) => log.tableName !== "quick_notes").toArray();
     await db.timeEntries.clear();

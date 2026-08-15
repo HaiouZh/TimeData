@@ -1,9 +1,12 @@
 import { createElement } from "react";
 // @vitest-environment jsdom
+import { act } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { MemoryRouter } from "react-router";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { db, resetDb } from "../../test/dbReset.js";
 import { renderDom, unmount } from "../../test/domHarness.js";
+import { GOAL_PREREQUISITES_SNAPSHOT_KEY } from "../../db/index.ts";
 import SettingsDataPage from "./SettingsDataPage.js";
 
 const syncContextMock = vi.hoisted(() => ({
@@ -161,6 +164,105 @@ describe("SettingsDataPage", () => {
     expect(details?.open).toBe(true);
     expect(host.textContent).toContain("普通同步已连续失败 3 次");
     expect(host.querySelector("[data-tone='warn']")).toBeInstanceOf(HTMLElement);
+
+    await unmount(root);
+  });
+});
+
+const RESTORE_GOAL = {
+  id: "goal-1",
+  title: "装修",
+  kind: "project",
+  status: "active",
+  members: [
+    { kind: "task" as const, id: "t-1" },
+    { kind: "task" as const, id: "t-2" },
+  ],
+  prerequisites: [],
+  createdAt: "2026-08-01T00:00:00.000Z",
+  updatedAt: "2026-08-01T00:00:00.000Z",
+};
+
+const RESTORE_EDGE = {
+  blocker: { kind: "task" as const, id: "t-1" },
+  blocked: { kind: "task" as const, id: "t-2" },
+};
+
+describe("SettingsDataPage 前置依赖快照恢复按钮", () => {
+  // fake-indexeddb 用真实 setImmediate 驱动事务回调：只伪造 Date/setTimeout 系列，别动 setImmediate。
+  beforeEach(async () => {
+    await resetDb();
+    vi.useFakeTimers({ toFake: ["Date", "setTimeout", "clearTimeout", "setInterval", "clearInterval"] });
+  });
+
+  afterEach(async () => {
+    vi.useRealTimers();
+  });
+
+  /** 推进计时器让 useLiveQuery 与恢复事务结算（fake-indexeddb 回调走真实 setImmediate，需要让出事件循环）。 */
+  async function settle(rounds = 3): Promise<void> {
+    await act(async () => {
+      for (let index = 0; index < rounds; index += 1) {
+        await vi.advanceTimersByTimeAsync(300);
+      }
+    });
+  }
+
+  function restoreButtonOf(host: HTMLElement): HTMLButtonElement | undefined {
+    return [...host.querySelectorAll("button")].find((button) =>
+      button.textContent?.includes("从快照恢复前置依赖"),
+    );
+  }
+
+  it("快照存在时按钮出现，不存在时不出现", async () => {
+    await db.migrationSnapshots.put({
+      key: GOAL_PREREQUISITES_SNAPSHOT_KEY,
+      value: JSON.stringify({ "goal-1": [RESTORE_EDGE] }),
+      updatedAt: "2026-08-01T00:00:00.000Z",
+    });
+    const { host, root } = await renderDom(createElement(MemoryRouter, null, createElement(SettingsDataPage)));
+    await settle();
+    expect(restoreButtonOf(host)).toBeDefined();
+    await unmount(root);
+
+    await resetDb();
+    const { host: emptyHost, root: emptyRoot } = await renderDom(
+      createElement(MemoryRouter, null, createElement(SettingsDataPage)),
+    );
+    await settle();
+    expect(restoreButtonOf(emptyHost)).toBeUndefined();
+    await unmount(emptyRoot);
+  });
+
+  it("点击后确认弹窗出现，确认后调用恢复函数并在状态区显示结果", async () => {
+    await db.goals.add(RESTORE_GOAL);
+    await db.migrationSnapshots.put({
+      key: GOAL_PREREQUISITES_SNAPSHOT_KEY,
+      value: JSON.stringify({ "goal-1": [RESTORE_EDGE] }),
+      updatedAt: "2026-08-01T00:00:00.000Z",
+    });
+    const { host, root } = await renderDom(createElement(MemoryRouter, null, createElement(SettingsDataPage)));
+    await settle();
+
+    const restoreButton = restoreButtonOf(host);
+    expect(restoreButton).toBeDefined();
+    await act(async () => {
+      restoreButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    const dialogTitle = [...document.body.querySelectorAll("button")]
+      .find((button) => button.textContent?.trim() === "确认");
+    expect(dialogTitle).toBeDefined();
+    expect(document.body.textContent).toContain("确认从快照恢复前置依赖");
+
+    await act(async () => {
+      dialogTitle?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    await settle();
+
+    expect(host.textContent).toContain("成功 1 条，失败 0 条");
+    const goal = await db.goals.get("goal-1");
+    expect(goal?.prerequisites).toEqual([RESTORE_EDGE]);
 
     await unmount(root);
   });

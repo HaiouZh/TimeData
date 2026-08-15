@@ -3,6 +3,7 @@ import Dexie from "dexie";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { STORAGE_KEYS } from "../lib/storageKeys.js";
 import {
+  GOAL_PREREQUISITES_SNAPSHOT_KEY,
   LAST_SYNCED_SEQ_KEY,
   db,
   migrateLocalSettingsToDexie,
@@ -69,6 +70,20 @@ describe("resetLocalDataToDefaults", () => {
     await resetLocalDataToDefaults();
 
     expect(await db.taskRelations.count()).toBe(0);
+  });
+
+  it("resetLocalDataToDefaults 不清 migrationSnapshots（迁移底牌必须留下）", async () => {
+    await db.open();
+    await db.migrationSnapshots.put({
+      key: GOAL_PREREQUISITES_SNAPSHOT_KEY,
+      value: JSON.stringify({ "g-1": [] }),
+      updatedAt: "2026-08-01T00:00:00.000Z",
+    });
+
+    await resetLocalDataToDefaults();
+
+    const snapshot = await db.migrationSnapshots.get(GOAL_PREREQUISITES_SNAPSHOT_KEY);
+    expect(snapshot).toMatchObject({ key: GOAL_PREREQUISITES_SNAPSHOT_KEY });
   });
 });
 
@@ -137,7 +152,7 @@ describe("Dexie database", () => {
     await seedDefaultCategories();
 
     expect(await db.categories.count()).toBeGreaterThan(0);
-    expect(db.verno).toBe(18);
+    expect(db.verno).toBe(19);
     expect(db.tables.some((table) => table.name === "autoBackups")).toBe(false);
     expect(db.settings.schema.primKey.keyPath).toBe("key");
     expect(db.quickNotes.schema.primKey.keyPath).toBe("id");
@@ -175,6 +190,7 @@ describe("Dexie database", () => {
     expect(db.goalLayoutPins.schema.idxByName.nodeKind).toBeDefined();
     expect(db.goalLayoutPins.schema.idxByName.nodeId).toBeDefined();
     expect(db.goalLayoutPins.schema.idxByName.updatedAt).toBeDefined();
+    expect(db.migrationSnapshots.schema.primKey.keyPath).toBe("key");
   });
 
   it("exposes a tasks table keyed by id", async () => {

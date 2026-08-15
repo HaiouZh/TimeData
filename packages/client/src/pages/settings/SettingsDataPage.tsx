@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { ChangeEvent } from "react";
+import { useLiveQuery } from "dexie-react-hooks";
 import { useLocation } from "react-router";
 import { exportBackup } from "../../backup/exportBackup.ts";
 import { describeDomainCounts, domainCountsFromBackup } from "../../backup/domainLabels.ts";
@@ -11,7 +12,12 @@ import { DateField } from "../../components/ui/DateField.js";
 import { StatusBanner } from "../../components/ui/StatusBanner.js";
 import { Switch } from "../../components/ui/Switch.js";
 import { useSyncContext } from "../../contexts/SyncContext.tsx";
-import { resetLocalDataToDefaults } from "../../db/index.ts";
+import {
+  GOAL_PREREQUISITES_SNAPSHOT_KEY,
+  db,
+  resetLocalDataToDefaults,
+  restoreGoalPrerequisitesFromSnapshot,
+} from "../../db/index.ts";
 import { useConfirm } from "../../hooks/useConfirm.tsx";
 import { getCloudSyncEnabled } from "../../lib/cloudSyncSetting.ts";
 import { safeGetItem } from "../../lib/safeStorage.js";
@@ -71,6 +77,9 @@ export default function SettingsDataPage() {
   const restoreInputRef = useRef<HTMLInputElement>(null);
   const quickNotesImportInputRef = useRef<HTMLInputElement>(null);
   const apiUrl = safeGetItem(STORAGE_KEYS.apiUrl) || "";
+  // 首帧为 undefined（查询未回）也算「无快照」，按钮不渲染，不会闪一下又消失。
+  const prerequisiteSnapshot = useLiveQuery(() => db.migrationSnapshots.get(GOAL_PREREQUISITES_SNAPSHOT_KEY));
+  const hasPrerequisiteSnapshot = prerequisiteSnapshot !== undefined;
 
   useEffect(() => {
     if (needsSyncDiagnostics) setRecoveryOpen(true);
@@ -322,6 +331,28 @@ export default function SettingsDataPage() {
       setDataStatus("本地时间记录和任务已清空，分类已恢复为默认预设。");
     } catch (e: unknown) {
       setDataStatus(`本地清空失败：${e instanceof Error ? e.message : "未知错误"}`);
+    } finally {
+      setDataBusy(false);
+    }
+  }
+
+  async function handleRestorePrerequisitesFromSnapshot() {
+    if (
+      !(await confirm({
+        title: "确认从快照恢复前置依赖",
+        body: "把启动迁移时从目标搬进关系表的前置依赖，从本机快照写回目标。用于回滚迁移或补救同步异常。",
+        danger: true,
+      }))
+    )
+      return;
+
+    setDataBusy(true);
+    setDataStatus("");
+    try {
+      const result = await restoreGoalPrerequisitesFromSnapshot();
+      setDataStatus(`已从快照恢复前置依赖：成功 ${result.restored} 条，失败 ${result.failed} 条。`);
+    } catch (e: unknown) {
+      setDataStatus(`前置依赖恢复失败：${e instanceof Error ? e.message : "未知错误"}`);
     } finally {
       setDataBusy(false);
     }
@@ -595,6 +626,21 @@ export default function SettingsDataPage() {
             >
               清空本地并恢复预设
             </button>
+            {hasPrerequisiteSnapshot && (
+              <div className="space-y-2">
+                <button
+                  type="button"
+                  onClick={() => void handleRestorePrerequisitesFromSnapshot()}
+                  disabled={dataBusy}
+                  className={warnButtonClassName}
+                >
+                  从快照恢复前置依赖
+                </button>
+                <div className="td-text-caption text-ink-3">
+                  把启动迁移时从目标搬走的前置依赖从本机快照写回目标，用于回滚迁移。
+                </div>
+              </div>
+            )}
           </section>
         </div>
       </details>
