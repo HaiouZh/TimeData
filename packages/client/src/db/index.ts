@@ -2,7 +2,7 @@ import Dexie, { type EntityTable, type Table } from "dexie";
 import type {
   Category, Goal, GoalLayoutPin, QuickNote, Session, Setting, Task, TaskRelation, TimeEntry, SyncLogEntry, Track, TrackStep,
 } from "@timedata/shared";
-import { createDefaultCategories, taskRelationKey } from "@timedata/shared";
+import { createDefaultCategories, taskRelationKey, TaskRelationSchema } from "@timedata/shared";
 import { v4 as uuid } from "uuid";
 import { safeGetItem, safeRemoveItem } from "../lib/safeStorage.js";
 import { STORAGE_KEYS } from "../lib/storageKeys.js";
@@ -340,15 +340,21 @@ export async function migrateGoalPrerequisitesToRelations(now: Date = new Date()
     const goals = await db.goals.toArray();
     for (const goal of goals) {
       for (const edge of goal.prerequisites ?? []) {
-        const relation = {
-          blockerKind: edge.blocker.kind,
-          blockerId: edge.blocker.id,
-          blockedKind: edge.blocked.kind,
-          blockedId: edge.blocked.id,
+        const raw = {
+          blockerKind: edge?.blocker?.kind,
+          blockerId: edge?.blocker?.id,
+          blockedKind: edge?.blocked?.kind,
+          blockedId: edge?.blocked?.id,
           type: "blocks" as const,
           createdAt: goal.createdAt ?? timestamp,
           updatedAt: timestamp,
         };
+        const parsed = TaskRelationSchema.safeParse(raw);
+        if (!parsed.success) {
+          console.warn("[migration] 跳过形状不合的前置边", { goalId: goal.id, edge });
+          continue;
+        }
+        const relation = parsed.data;
         const key: [string, string, string, string] = [
           relation.blockerKind,
           relation.blockerId,
@@ -396,7 +402,7 @@ export async function migrateLocalSettingsToDexie(): Promise<void> {
 }
 
 export async function resetLocalDataToDefaults(): Promise<void> {
-  await db.transaction("rw", [db.categories, db.timeEntries, db.tasks, db.tracks, db.trackSteps, db.goals, db.goalLayoutPins, db.syncLog, db.settings], async () => {
+  await db.transaction("rw", [db.categories, db.timeEntries, db.tasks, db.tracks, db.trackSteps, db.goals, db.goalLayoutPins, db.taskRelations, db.syncLog, db.settings], async () => {
     const nonQuickNoteLogs = await db.syncLog.filter((log) => log.tableName !== "quick_notes").toArray();
     await db.timeEntries.clear();
     await db.goals.clear();
@@ -404,6 +410,7 @@ export async function resetLocalDataToDefaults(): Promise<void> {
     await db.tasks.clear();
     await db.trackSteps.clear();
     await db.tracks.clear();
+    await db.taskRelations.clear();
     await db.syncLog.bulkDelete(nonQuickNoteLogs.map((log) => log.id));
     await db.settings.clear();
     await db.categories.clear();

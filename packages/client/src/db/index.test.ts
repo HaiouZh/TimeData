@@ -53,6 +53,23 @@ describe("resetLocalDataToDefaults", () => {
     expect(localStorage.getItem(STORAGE_KEYS.quickNoteComposerDraft)).toBeNull();
     expect(localStorage.getItem(STORAGE_KEYS.captureComposerDraft)).toBeNull();
   });
+
+  it("clears taskRelations along with the rest of the local data", async () => {
+    await db.open();
+    await db.taskRelations.add({
+      blockerKind: "task",
+      blockerId: "t-1",
+      blockedKind: "task",
+      blockedId: "t-2",
+      type: "blocks",
+      createdAt: "2026-08-01T00:00:00.000Z",
+      updatedAt: "2026-08-01T00:00:00.000Z",
+    });
+
+    await resetLocalDataToDefaults();
+
+    expect(await db.taskRelations.count()).toBe(0);
+  });
 });
 
 describe("resetSyncCursors", () => {
