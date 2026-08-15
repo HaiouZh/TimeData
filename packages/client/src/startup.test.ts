@@ -10,6 +10,9 @@ vi.mock("./db/index.ts", () => ({
   migrateLocalSettingsToDexie: vi.fn(async () => {
     calls.push("migrate");
   }),
+  migrateGoalPrerequisitesToRelations: vi.fn(async () => {
+    calls.push("relations");
+  }),
 }));
 
 vi.mock("./db/schemaNormalization.ts", () => ({
@@ -33,9 +36,9 @@ beforeEach(() => {
 });
 
 describe("runStartupTasks", () => {
-  it("按 seed -> migrate -> normalize -> materialize 顺序执行", async () => {
+  it("按 seed -> migrate -> relations -> normalize -> materialize 顺序执行", async () => {
     await runStartupTasks();
-    expect(calls).toEqual(["seed", "migrate", "normalize", "materialize"]);
+    expect(calls).toEqual(["seed", "migrate", "relations", "normalize", "materialize"]);
   });
 
   it("中途抛错时吞掉异常不上抛", async () => {

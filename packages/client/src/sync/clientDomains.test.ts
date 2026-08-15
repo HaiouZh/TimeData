@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { TaskSchema, type Task } from "@timedata/shared";
+import { TaskSchema, taskRelationKey, type Task, type TaskRelation } from "@timedata/shared";
 import { BACKUP_BUNDLED_DOMAINS, CLIENT_SYNC_DOMAINS, __test, getClientDomain } from "./clientDomains.js";
 
 function task(overrides: Partial<Task> = {}): Task {
@@ -161,5 +161,34 @@ describe("sessions client domain", () => {
     const domain = getClientDomain("sessions");
     expect(domain).toMatchObject({ table: "sessions", storeName: "sessions" });
     expect(BACKUP_BUNDLED_DOMAINS.map((item) => item.table)).toContain("sessions");
+  });
+});
+
+describe("task relations client domain", () => {
+  it("registers compound-key relations with bundled backup", () => {
+    const domain = getClientDomain("task_relations");
+    const relation: TaskRelation = {
+      blockerKind: "task",
+      blockerId: "t-1",
+      blockedKind: "track",
+      blockedId: "tr-2",
+      type: "blocks",
+      createdAt: "2026-08-01T00:00:00.000Z",
+      updatedAt: "2026-08-01T00:00:00.000Z",
+    };
+
+    expect(domain).toMatchObject({
+      table: "task_relations",
+      storeName: "taskRelations",
+      backup: "bundled",
+    });
+    expect(domain.keyOf?.(relation)).toBe(taskRelationKey(relation));
+    expect(domain.keyFromRecordId?.(taskRelationKey(relation))).toEqual([
+      relation.blockerKind,
+      relation.blockerId,
+      relation.blockedKind,
+      relation.blockedId,
+    ]);
+    expect(BACKUP_BUNDLED_DOMAINS.map((item) => item.table)).toContain("task_relations");
   });
 });

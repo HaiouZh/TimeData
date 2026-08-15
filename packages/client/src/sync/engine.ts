@@ -93,7 +93,7 @@ interface CompactedSyncLog extends SyncLog {
   sourceLogIds: string[];
 }
 
-function storeKeyForRecordId(domain: ClientDomainConfig, recordId: string): string | [string, string, string] {
+function storeKeyForRecordId(domain: ClientDomainConfig, recordId: string): string | string[] {
   return domain.keyFromRecordId ? domain.keyFromRecordId(recordId) : recordId;
 }
 

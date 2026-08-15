@@ -2,18 +2,21 @@ import type { SyncChange } from "@timedata/shared";
 import {
   CategorySchema,
   decodeGoalLayoutPinKey,
+  decodeTaskRelationKey,
   GoalLayoutPinSchema,
   goalLayoutPinKey,
   GoalSchema,
   QuickNoteSchema,
   SessionSchema,
   SettingSchema,
+  TaskRelationSchema,
   TaskSchema,
+  taskRelationKey,
   TimeEntrySchema,
   TrackSchema,
   TrackStepSchema,
 } from "@timedata/shared";
-import type { Category, GoalLayoutPin, QuickNote, Setting, Task, TimeEntry } from "@timedata/shared";
+import type { Category, GoalLayoutPin, QuickNote, Setting, Task, TaskRelation, TimeEntry } from "@timedata/shared";
 import { db } from "../db/index.ts";
 import { isDeepEqual } from "../db/schemaNormalization.js";
 import { categoryDependencyChangesForEntry } from "./changes.ts";
@@ -26,7 +29,7 @@ export interface ClientDomainConfig {
   /** Optional: derive sync recordId from a record when it has no single id field. */
   keyOf?: (record: unknown) => string;
   /** Optional: convert sync recordId into the Dexie primary key for compound-key stores. */
-  keyFromRecordId?: (recordId: string) => string | [string, string, string];
+  keyFromRecordId?: (recordId: string) => string | string[];
   /** Zod schema for parsing remote data */
   schema: { safeParse: (data: unknown) => { success: true; data: unknown } | { success: false; error: { issues: Array<{ message: string }> } } };
   /** Optional: custom push logic (e.g. time_entries category dependency injection) */
@@ -191,6 +194,17 @@ export const CLIENT_SYNC_DOMAINS: Record<string, ClientDomainConfig> = {
     table: "sessions",
     storeName: "sessions",
     schema: SessionSchema,
+    backup: "bundled",
+  },
+  task_relations: {
+    table: "task_relations",
+    storeName: "taskRelations",
+    schema: TaskRelationSchema,
+    keyOf: (record) => taskRelationKey(record as TaskRelation),
+    keyFromRecordId: (recordId) => {
+      const key = decodeTaskRelationKey(recordId);
+      return [key.blockerKind, key.blockerId, key.blockedKind, key.blockedId];
+    },
     backup: "bundled",
   },
 };

@@ -120,7 +120,7 @@ describe("Dexie database", () => {
     await seedDefaultCategories();
 
     expect(await db.categories.count()).toBeGreaterThan(0);
-    expect(db.verno).toBe(17);
+    expect(db.verno).toBe(18);
     expect(db.tables.some((table) => table.name === "autoBackups")).toBe(false);
     expect(db.settings.schema.primKey.keyPath).toBe("key");
     expect(db.quickNotes.schema.primKey.keyPath).toBe("id");

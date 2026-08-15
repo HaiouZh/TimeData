@@ -1,8 +1,8 @@
 import Dexie, { type EntityTable, type Table } from "dexie";
 import type {
-  Category, Goal, GoalLayoutPin, QuickNote, Session, Setting, Task, TimeEntry, SyncLogEntry, Track, TrackStep,
+  Category, Goal, GoalLayoutPin, QuickNote, Session, Setting, Task, TaskRelation, TimeEntry, SyncLogEntry, Track, TrackStep,
 } from "@timedata/shared";
-import { createDefaultCategories } from "@timedata/shared";
+import { createDefaultCategories, taskRelationKey } from "@timedata/shared";
 import { v4 as uuid } from "uuid";
 import { safeGetItem, safeRemoveItem } from "../lib/safeStorage.js";
 import { STORAGE_KEYS } from "../lib/storageKeys.js";
@@ -29,6 +29,7 @@ export const db = new Dexie("timedata") as Dexie & {
   goals: EntityTable<Goal, "id">;
   goalLayoutPins: Table<GoalLayoutPin, [string, GoalLayoutPin["nodeKind"], string]>;
   sessions: EntityTable<Session, "id">;
+  taskRelations: Table<TaskRelation, [string, string, string, string]>;
 };
 
 db.version(1).stores({
@@ -315,11 +316,61 @@ db.version(17).stores({
   healthCharts: null,
 });
 
+// 阶段3 关系表：前置边从 goal.prerequisites 内嵌数组搬进独立 store。
+// goal.prerequisites 原样保留不删——它是回滚底牌。
+db.version(18).stores({
+  taskRelations: "[blockerKind+blockerId+blockedKind+blockedId], blockerId, blockedId, updatedAt",
+});
+
 export async function seedDefaultCategories(): Promise<void> {
   const count = await db.categories.count();
   if (count > 0) return;
 
   await db.categories.bulkAdd(createDefaultCategories());
+}
+
+/** 把存量 goal.prerequisites 搬进 taskRelations，返回新搬入的条数。
+ *  幂等：复合主键天然去重，已存在的边跳过、不重复记 syncLog。
+ *  **不删除 goal.prerequisites**——它是回滚底牌。 */
+export async function migrateGoalPrerequisitesToRelations(now: Date = new Date()): Promise<number> {
+  const timestamp = now.toISOString();
+  let migrated = 0;
+
+  await db.transaction("rw", db.goals, db.taskRelations, db.syncLog, async () => {
+    const goals = await db.goals.toArray();
+    for (const goal of goals) {
+      for (const edge of goal.prerequisites ?? []) {
+        const relation = {
+          blockerKind: edge.blocker.kind,
+          blockerId: edge.blocker.id,
+          blockedKind: edge.blocked.kind,
+          blockedId: edge.blocked.id,
+          type: "blocks" as const,
+          createdAt: goal.createdAt ?? timestamp,
+          updatedAt: timestamp,
+        };
+        const key: [string, string, string, string] = [
+          relation.blockerKind,
+          relation.blockerId,
+          relation.blockedKind,
+          relation.blockedId,
+        ];
+        if (await db.taskRelations.get(key)) continue;
+        await db.taskRelations.put(relation);
+        await db.syncLog.add({
+          id: uuid(),
+          tableName: "task_relations",
+          recordId: taskRelationKey(relation),
+          action: "create",
+          timestamp,
+          synced: 0,
+        });
+        migrated += 1;
+      }
+    }
+  });
+
+  return migrated;
 }
 
 export async function migrateLocalSettingsToDexie(): Promise<void> {
