@@ -212,6 +212,17 @@ export function initializeDatabase(): void {
       PRIMARY KEY (goal_id, node_kind, node_id)
     );
 
+    CREATE TABLE IF NOT EXISTS task_relations (
+      blocker_kind TEXT NOT NULL,
+      blocker_id TEXT NOT NULL,
+      blocked_kind TEXT NOT NULL,
+      blocked_id TEXT NOT NULL,
+      type TEXT NOT NULL DEFAULT 'blocks',
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      PRIMARY KEY (blocker_kind, blocker_id, blocked_kind, blocked_id)
+    );
+
     CREATE TABLE IF NOT EXISTS track_steps (
       id TEXT PRIMARY KEY,
       track_id TEXT NOT NULL,
@@ -309,6 +320,9 @@ export function initializeDatabase(): void {
     CREATE INDEX IF NOT EXISTS idx_goals_updated_at ON goals(updated_at);
     CREATE INDEX IF NOT EXISTS idx_goal_layout_pins_goal_id ON goal_layout_pins(goal_id);
     CREATE INDEX IF NOT EXISTS idx_goal_layout_pins_updated_at ON goal_layout_pins(updated_at);
+    CREATE INDEX IF NOT EXISTS idx_task_relations_blocked ON task_relations(blocked_kind, blocked_id);
+    CREATE INDEX IF NOT EXISTS idx_task_relations_blocker ON task_relations(blocker_kind, blocker_id);
+    CREATE INDEX IF NOT EXISTS idx_task_relations_updated_at ON task_relations(updated_at);
     CREATE INDEX IF NOT EXISTS idx_track_steps_track_id ON track_steps(track_id);
     CREATE INDEX IF NOT EXISTS idx_track_steps_track_seq ON track_steps(track_id, seq);
     CREATE INDEX IF NOT EXISTS idx_track_steps_updated_at ON track_steps(updated_at);

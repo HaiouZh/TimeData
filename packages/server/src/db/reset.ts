@@ -2,6 +2,7 @@ import {
   SYNC_DOMAINS,
   createDefaultCategories,
   encodeGoalLayoutPinKey,
+  encodeTaskRelationKey,
   type Category,
   type GoalLayoutPinNodeKind,
 } from "@timedata/shared";
@@ -35,6 +36,24 @@ function simpleDomain(tableName: string, idColumn = "id"): ResetDomainSpec {
 
 // 顺序同时用于删除与 delete seq：先删依赖方，再删被依赖方。
 const RESET_DOMAIN_SPECS: readonly ResetDomainSpec[] = [
+  {
+    tableName: "task_relations",
+    selectRecordIds: (db) => {
+      const rows = db
+        .prepare(
+          "SELECT blocker_kind, blocker_id, blocked_kind, blocked_id FROM task_relations ORDER BY blocker_kind, blocker_id, blocked_kind, blocked_id",
+        )
+        .all() as Array<{ blocker_kind: string; blocker_id: string; blocked_kind: string; blocked_id: string }>;
+      return rows.map((row) =>
+        encodeTaskRelationKey(
+          row.blocker_kind as "task" | "track",
+          row.blocker_id,
+          row.blocked_kind as "task" | "track",
+          row.blocked_id,
+        ),
+      );
+    },
+  },
   {
     tableName: "goal_layout_pins",
     selectRecordIds: (db) => {

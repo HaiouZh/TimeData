@@ -1,4 +1,4 @@
-import { encodeGoalLayoutPinKey, type GoalLayoutPinNodeKind } from "@timedata/shared";
+import { encodeGoalLayoutPinKey, encodeTaskRelationKey, type GoalLayoutPinNodeKind } from "@timedata/shared";
 import type { Database } from "better-sqlite3";
 import { markCommitHashDirty } from "../sync/state.js";
 
@@ -29,6 +29,17 @@ const BUSINESS_TABLES: BusinessTable[] = [
         String(row.goal_id),
         row.node_kind as GoalLayoutPinNodeKind,
         String(row.node_id),
+      ),
+  },
+  {
+    table: "task_relations",
+    select: "blocker_kind, blocker_id, blocked_kind, blocked_id",
+    recordIdOfRow: (row) =>
+      encodeTaskRelationKey(
+        String(row.blocker_kind) as "task" | "track",
+        String(row.blocker_id),
+        String(row.blocked_kind) as "task" | "track",
+        String(row.blocked_id),
       ),
   },
 ];

@@ -109,6 +109,17 @@ function createSchema() {
       PRIMARY KEY (goal_id, node_kind, node_id)
     );
 
+    CREATE TABLE IF NOT EXISTS task_relations (
+      blocker_kind TEXT NOT NULL,
+      blocker_id TEXT NOT NULL,
+      blocked_kind TEXT NOT NULL,
+      blocked_id TEXT NOT NULL,
+      type TEXT NOT NULL DEFAULT 'blocks',
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      PRIMARY KEY (blocker_kind, blocker_id, blocked_kind, blocked_id)
+    );
+
     CREATE TABLE sync_seq (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       table_name TEXT NOT NULL,

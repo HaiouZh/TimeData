@@ -20,6 +20,7 @@ beforeEach(() => {
     CREATE TABLE IF NOT EXISTS track_steps (id TEXT PRIMARY KEY, track_id TEXT NOT NULL, source TEXT NOT NULL, source_label TEXT, content TEXT NOT NULL, started_at TEXT NOT NULL, ended_at TEXT, refs TEXT NOT NULL DEFAULT '[]', tags TEXT NOT NULL DEFAULT '[]', seq INTEGER NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, edited_at TEXT);
     CREATE TABLE IF NOT EXISTS goals (id TEXT PRIMARY KEY, title TEXT NOT NULL, kind TEXT NOT NULL, status TEXT NOT NULL, note TEXT, members TEXT NOT NULL DEFAULT '[]', prerequisites TEXT NOT NULL DEFAULT '[]', created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
     CREATE TABLE IF NOT EXISTS goal_layout_pins (goal_id TEXT NOT NULL, node_kind TEXT NOT NULL, node_id TEXT NOT NULL, x REAL NOT NULL, y REAL NOT NULL, updated_at TEXT NOT NULL, PRIMARY KEY (goal_id, node_kind, node_id));
+    CREATE TABLE IF NOT EXISTS task_relations (blocker_kind TEXT NOT NULL, blocker_id TEXT NOT NULL, blocked_kind TEXT NOT NULL, blocked_id TEXT NOT NULL, type TEXT NOT NULL DEFAULT 'blocks', created_at TEXT NOT NULL, updated_at TEXT NOT NULL, PRIMARY KEY (blocker_kind, blocker_id, blocked_kind, blocked_id));
 
   `);
 });

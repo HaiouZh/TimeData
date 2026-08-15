@@ -107,6 +107,17 @@ beforeEach(() => {
       PRIMARY KEY (goal_id, node_kind, node_id)
     );
 
+    CREATE TABLE IF NOT EXISTS task_relations (
+      blocker_kind TEXT NOT NULL,
+      blocker_id TEXT NOT NULL,
+      blocked_kind TEXT NOT NULL,
+      blocked_id TEXT NOT NULL,
+      type TEXT NOT NULL DEFAULT 'blocks',
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      PRIMARY KEY (blocker_kind, blocker_id, blocked_kind, blocked_id)
+    );
+
     CREATE TABLE sync_logs (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       timestamp TEXT NOT NULL DEFAULT (datetime('now')),
@@ -241,6 +252,7 @@ describe("resetDatabaseConnectionToDefaults", () => {
       "tracks",
       "goals",
       "goal_layout_pins",
+      "task_relations",
     ]) {
       expect(db.prepare(`SELECT COUNT(*) as count FROM ${table}`).get()).toEqual({ count: 0 });
     }

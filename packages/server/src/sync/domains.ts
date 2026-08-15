@@ -1,6 +1,8 @@
 import {
   decodeGoalLayoutPinKey,
+  decodeTaskRelationKey,
   encodeGoalLayoutPinKey,
+  encodeTaskRelationKey,
   type Category,
   type GoalLayoutPin,
   type QuickNote,
@@ -8,6 +10,7 @@ import {
   type SyncChange,
   type SyncPushOutcome,
   type Task,
+  type TaskRelation,
   type TimeEntry,
 } from "@timedata/shared";
 import type { Database } from "better-sqlite3";
@@ -29,6 +32,11 @@ import {
   goalLayoutPinToRow,
   rowToGoalLayoutPin,
 } from "../lib/goal-layout-pin-rows.js";
+import {
+  type TaskRelationRow,
+  rowToTaskRelation,
+  taskRelationToRow,
+} from "../lib/task-relation-rows.js";
 import { type SessionRow, rowToSession, sessionToRow } from "../lib/session-rows.js";
 import { type TrackRow, type TrackStepRow, rowToTrack, rowToTrackStep, trackStepToRow, trackToRow } from "../lib/track-rows.js";
 import { recordSeqWithDb } from "./seq.js";
@@ -586,6 +594,80 @@ function readGoalLayoutPinRecord(db: Database, recordId: string): SyncChange | n
   return row ? updateChange("goal_layout_pins", recordId, rowToGoalLayoutPin(row), row.updated_at) : null;
 }
 
+function validateTaskRelationChange(_db: Database, change: SyncChange): SyncPushOutcome | null {
+  try {
+    decodeTaskRelationKey(change.recordId);
+    return null;
+  } catch (error) {
+    return changeOutcome(
+      change,
+      "rejected",
+      "invalid_shape",
+      error instanceof Error ? error.message : "invalid task relation key",
+    );
+  }
+}
+
+function applyTaskRelationChange(db: Database, change: SyncChange, serverNow: string): ApplyChangeResult {
+  const key = decodeTaskRelationKey(change.recordId);
+
+  if (change.action === "delete") {
+    db.prepare(`
+      DELETE FROM task_relations
+      WHERE blocker_kind = ? AND blocker_id = ? AND blocked_kind = ? AND blocked_id = ?
+    `).run(key.blockerKind, key.blockerId, key.blockedKind, key.blockedId);
+    db.prepare(`
+      INSERT INTO sync_tombstones (table_name, record_id, deleted_at)
+      VALUES ('task_relations', ?, ?)
+      ON CONFLICT(table_name, record_id) DO UPDATE SET deleted_at = excluded.deleted_at
+    `).run(change.recordId, serverNow);
+    return applyResult(change, "applied", "deleted task_relations record");
+  }
+
+  const data = change.data as TaskRelation;
+  const row = taskRelationToRow(data);
+  const existing = db.prepare(`
+    SELECT updated_at FROM task_relations
+    WHERE blocker_kind = ? AND blocker_id = ? AND blocked_kind = ? AND blocked_id = ?
+  `).get(data.blockerKind, data.blockerId, data.blockedKind, data.blockedId) as
+    | { updated_at: string }
+    | undefined;
+
+  db.prepare("DELETE FROM sync_tombstones WHERE table_name = 'task_relations' AND record_id = ?").run(
+    change.recordId,
+  );
+  db.prepare(`
+    INSERT INTO task_relations (blocker_kind, blocker_id, blocked_kind, blocked_id, type, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(blocker_kind, blocker_id, blocked_kind, blocked_id)
+    DO UPDATE SET type = excluded.type, updated_at = excluded.updated_at
+  `).run(
+    row.blocker_kind,
+    row.blocker_id,
+    row.blocked_kind,
+    row.blocked_id,
+    row.type,
+    row.created_at,
+    serverNow,
+  );
+
+  return applyResult(
+    change,
+    "applied",
+    existing ? "updated task_relations record" : "inserted task_relations record",
+    existing?.updated_at,
+  );
+}
+
+function readTaskRelationRecord(db: Database, recordId: string): SyncChange | null {
+  const key = decodeTaskRelationKey(recordId);
+  const row = db.prepare(`
+    SELECT * FROM task_relations
+    WHERE blocker_kind = ? AND blocker_id = ? AND blocked_kind = ? AND blocked_id = ?
+  `).get(key.blockerKind, key.blockerId, key.blockedKind, key.blockedId) as TaskRelationRow | undefined;
+  return row ? updateChange("task_relations", recordId, rowToTaskRelation(row), row.updated_at) : null;
+}
+
 export const SERVER_SYNC_DOMAINS: Record<string, ServerDomainHooks> = {
   categories: { validate: validateCategoryChange, apply: applyCategoryChange, readRecord: readCategoryRecord },
   time_entries: {
@@ -633,6 +715,20 @@ export const SERVER_SYNC_DOMAINS: Record<string, ServerDomainHooks> = {
     readRecord: readGoalLayoutPinRecord,
   },
   sessions: simpleLwwDomain<SessionRow>("sessions", sessionToRow, (row) => rowToSession(row)),
+  task_relations: {
+    identity: (data) => {
+      const relation = data as TaskRelation;
+      return encodeTaskRelationKey(
+        relation.blockerKind,
+        relation.blockerId,
+        relation.blockedKind,
+        relation.blockedId,
+      );
+    },
+    validate: validateTaskRelationChange,
+    apply: applyTaskRelationChange,
+    readRecord: readTaskRelationRecord,
+  },
 };
 
 export function getServerDomain(table: string): ServerDomainHooks {

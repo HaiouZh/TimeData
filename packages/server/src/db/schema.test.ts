@@ -607,6 +607,34 @@ describe("initializeDatabase", () => {
     const columns = db.prepare("PRAGMA table_info(tasks)").all() as Array<{ name: string }>;
     expect(columns.map((c) => c.name)).toEqual(expect.arrayContaining(["session_id"]));
   });
+
+  it("creates task_relations with a four-column composite primary key", async () => {
+    const { initializeDatabase } = await import("./schema.js");
+
+    initializeDatabase();
+
+    const columns = db.prepare("PRAGMA table_info(task_relations)").all() as Array<{
+      name: string;
+      type: string;
+      notnull: number;
+      pk: number;
+    }>;
+    expect(columns.map((column) => [column.name, column.type, column.notnull, column.pk])).toEqual([
+      ["blocker_kind", "TEXT", 1, 1],
+      ["blocker_id", "TEXT", 1, 2],
+      ["blocked_kind", "TEXT", 1, 3],
+      ["blocked_id", "TEXT", 1, 4],
+      ["type", "TEXT", 1, 0],
+      ["created_at", "TEXT", 1, 0],
+      ["updated_at", "TEXT", 1, 0],
+    ]);
+
+    const indexes = (db.prepare("PRAGMA index_list(task_relations)").all() as Array<{ name: string }>).map(
+      (row) => row.name,
+    );
+    expect(indexes).toContain("idx_task_relations_blocked");
+    expect(indexes).toContain("idx_task_relations_blocker");
+  });
 });
 
 describe("dropColumnsIfExist", () => {

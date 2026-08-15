@@ -1,5 +1,6 @@
 import {
   encodeGoalLayoutPinKey,
+  encodeTaskRelationKey,
   type GoalLayoutPin,
   type SyncChange,
 } from "@timedata/shared";
@@ -140,6 +141,94 @@ describe("goal_layout_pins sync roundtrip", () => {
     expect(db.prepare("SELECT * FROM goal_layout_pins").get()).toBeUndefined();
     expect(db.prepare("SELECT record_id FROM sync_tombstones WHERE table_name = 'goal_layout_pins'").get()).toEqual({
       record_id: recordId,
+    });
+  });
+});
+
+describe("task_relations sync roundtrip", () => {
+  beforeEach(() => {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS task_relations (
+        blocker_kind TEXT NOT NULL,
+        blocker_id TEXT NOT NULL,
+        blocked_kind TEXT NOT NULL,
+        blocked_id TEXT NOT NULL,
+        type TEXT NOT NULL DEFAULT 'blocks',
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        PRIMARY KEY (blocker_kind, blocker_id, blocked_kind, blocked_id)
+      );
+    `);
+  });
+
+  function relation(overrides: Partial<{ blockedKind: "task" | "track" }> = {}): {
+    blockerKind: "task" | "track";
+    blockerId: string;
+    blockedKind: "task" | "track";
+    blockedId: string;
+    type: "blocks";
+    createdAt: string;
+    updatedAt: string;
+  } {
+    return {
+      blockerKind: "task",
+      blockerId: "a",
+      blockedKind: "track",
+      blockedId: "b",
+      type: "blocks",
+      createdAt: NOW,
+      updatedAt: LATER,
+      ...overrides,
+    };
+  }
+
+  function change(action: "create" | "update" | "delete", data: ReturnType<typeof relation> | null): SyncChange {
+    const recordId = data
+      ? encodeTaskRelationKey(data.blockerKind, data.blockerId, data.blockedKind, data.blockedId)
+      : "task|a|track|b";
+    return {
+      tableName: "task_relations",
+      recordId,
+      action,
+      data,
+      timestamp: data?.updatedAt ?? LATER,
+    } as SyncChange;
+  }
+
+  it("applies an upsert with server-assigned updated_at", () => {
+    const recordId = "task|a|track|b";
+
+    expect(applyChange(change("create", relation())).status).toBe("applied");
+    expect(db.prepare("SELECT blocker_kind, blocker_id, blocked_kind, blocked_id, type, created_at, updated_at FROM task_relations").get()).toEqual({
+      blocker_kind: "task",
+      blocker_id: "a",
+      blocked_kind: "track",
+      blocked_id: "b",
+      type: "blocks",
+      created_at: NOW,
+      updated_at: NOW,
+    });
+  });
+
+  it("deletes the row and writes a tombstone", () => {
+    const recordId = "task|a|track|b";
+    applyChange(change("create", relation()));
+
+    expect(applyChange(change("delete", null)).status).toBe("applied");
+    expect(db.prepare("SELECT * FROM task_relations").get()).toBeUndefined();
+    expect(db.prepare("SELECT record_id FROM sync_tombstones WHERE table_name = 'task_relations'").get()).toEqual({
+      record_id: recordId,
+    });
+  });
+
+  it("reads a stored relation back by recordId", () => {
+    const recordId = "task|a|track|b";
+    applyChange(change("create", relation()));
+
+    expect(domains.SERVER_SYNC_DOMAINS.task_relations.readRecord(db, recordId)).toMatchObject({
+      tableName: "task_relations",
+      recordId,
+      data: { blockerKind: "task", blockerId: "a", blockedKind: "track", blockedId: "b", type: "blocks" },
     });
   });
 });

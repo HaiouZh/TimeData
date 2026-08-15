@@ -30,6 +30,7 @@ describe("server sync domains", () => {
       "quick_notes",
       "sessions",
       "settings",
+      "task_relations",
       "tasks",
       "time_entries",
       "track_steps",
