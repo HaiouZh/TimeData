@@ -42,6 +42,65 @@ const createTaskSchema = z
   })
   .strict();
 
+const listTasksQuerySchema = z
+  .object({
+    completedSince: UtcIsoStringSchema.optional(),
+  })
+  .strict();
+
+// 读窗上限：防止一个查询参数把全部历史读出去。去重只需要近期的账。
+const COMPLETED_SINCE_MAX_AGE_MS = 30 * 86_400_000;
+
+// 读边界：窄域 AGENT_TOKEN 此前只能写不能读，本 handler 是读权限的首次扩张，故按最小暴露
+// 设计——只给去重需要的 5 个字段、只给根任务与非重复模板、时间窗卡上限。
+agent.get("/tasks", (c) => {
+  const parsed = listTasksQuerySchema.safeParse(
+    Object.fromEntries(new URL(c.req.url).searchParams),
+  );
+  if (!parsed.success) {
+    return c.json(
+      {
+        ok: false,
+        error: { code: "INVALID_REQUEST", message: "Invalid query", details: parsed.error.issues },
+      },
+      400,
+    );
+  }
+
+  const { completedSince } = parsed.data;
+  if (
+    completedSince !== undefined &&
+    Date.parse(completedSince) < Date.now() - COMPLETED_SINCE_MAX_AGE_MS
+  ) {
+    return c.json(
+      {
+        ok: false,
+        error: { code: "INVALID_REQUEST", message: "completedSince must be within the last 30 days" },
+      },
+      400,
+    );
+  }
+
+  const rows = getDb()
+    .prepare(
+      `SELECT * FROM tasks
+       WHERE parent_id IS NULL AND recurrence IS NULL
+         AND (done = 0 OR (? IS NOT NULL AND completed_at >= ?))
+       ORDER BY created_at, id`,
+    )
+    .all(completedSince ?? null, completedSince ?? null) as TaskRow[];
+
+  const tasks = rows.map(rowToTask).map((t) => ({
+    id: t.id,
+    title: t.title,
+    done: t.done,
+    createdAt: t.createdAt,
+    completedAt: t.completedAt,
+  }));
+
+  return c.json({ ok: true, tasks });
+});
+
 // 时钟漂移容差：允许调用方的时间略快于服务端，但不接受真正的未来时间。
 const FUTURE_TOLERANCE_MS = 5 * 60_000;
 

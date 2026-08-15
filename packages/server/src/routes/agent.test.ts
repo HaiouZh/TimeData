@@ -50,6 +50,13 @@ function seedChild(overrides: {
   );
 }
 
+function seedDone(id: string, title: string, completedAt: string): void {
+  db.prepare(`
+    INSERT INTO tasks (id, parent_id, title, done, recurrence, last_done_at, start_at, sort_order, scheduled_at, completed_count, completed_at, tags, created_at, updated_at)
+    VALUES (?, NULL, ?, 1, NULL, NULL, NULL, 0, NULL, 0, ?, '[]', ?, ?)
+  `).run(id, title, completedAt, "2026-06-16T00:00:00.000Z", completedAt);
+}
+
 beforeEach(async () => {
   const setup = await setupRouteTestApp("/api/agent", "../routes/agent.js");
   app = setup.app;
@@ -589,5 +596,86 @@ describe("POST /api/agent/tasks", () => {
     expect(res.status).toBe(201);
     const { task } = await res.json();
     expect(task.id).toBe("sess_a1b2.c3-04");
+  });
+});
+
+describe("GET /api/agent/tasks", () => {
+  const DAY = 86_400_000;
+  const iso = (offsetMs: number) => new Date(Date.now() + offsetMs).toISOString();
+
+  it("默认只返回未完成的根任务", async () => {
+    seedDone("done-1", "已完成的", iso(-2 * DAY));
+
+    const res = await app.request("/api/agent/tasks");
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.tasks.map((t: { id: string }) => t.id)).toEqual(["task-1"]);
+  });
+
+  it("只返回 5 个字段", async () => {
+    const res = await app.request("/api/agent/tasks");
+    const body = await res.json();
+    expect(Object.keys(body.tasks[0]).sort()).toEqual([
+      "completedAt",
+      "createdAt",
+      "done",
+      "id",
+      "title",
+    ]);
+  });
+
+  it("completedSince 之后完成的也返回", async () => {
+    seedDone("done-recent", "昨天完成的", iso(-1 * DAY));
+
+    const res = await app.request(
+      `/api/agent/tasks?completedSince=${encodeURIComponent(iso(-2 * DAY))}`,
+    );
+    const body = await res.json();
+    expect(body.tasks.map((t: { id: string }) => t.id)).toContain("done-recent");
+  });
+
+  it("completedSince 之前完成的不返回", async () => {
+    seedDone("done-old", "上周完成的", iso(-7 * DAY));
+
+    const res = await app.request(
+      `/api/agent/tasks?completedSince=${encodeURIComponent(iso(-2 * DAY))}`,
+    );
+    const body = await res.json();
+    expect(body.tasks.map((t: { id: string }) => t.id)).not.toContain("done-old");
+  });
+
+  it("拒绝早于 30 天前的 completedSince", async () => {
+    const res = await app.request(
+      `/api/agent/tasks?completedSince=${encodeURIComponent(iso(-31 * DAY))}`,
+    );
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.error.message).toMatch(/30 days/);
+  });
+
+  it("拒绝非 UTC ISO 的 completedSince", async () => {
+    const res = await app.request("/api/agent/tasks?completedSince=2026-08-15");
+    expect(res.status).toBe(400);
+  });
+
+  it("拒绝未知查询参数", async () => {
+    const res = await app.request("/api/agent/tasks?limit=5");
+    expect(res.status).toBe(400);
+  });
+
+  it("不返回子任务", async () => {
+    seedChild({ id: "child-1", parentId: "task-1", title: "子任务" });
+
+    const res = await app.request("/api/agent/tasks");
+    const body = await res.json();
+    expect(body.tasks.map((t: { id: string }) => t.id)).not.toContain("child-1");
+  });
+
+  it("不返回重复模板", async () => {
+    seedRecurring();
+
+    const res = await app.request("/api/agent/tasks");
+    const body = await res.json();
+    expect(body.tasks.map((t: { id: string }) => t.id)).not.toContain("rec-1");
   });
 });
