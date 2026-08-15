@@ -29,7 +29,16 @@ const createTaskSchema = z
     tags: z.array(z.string().trim().min(1).max(64)).max(50).optional(),
     done: z.boolean().optional(),
     completedAt: UtcIsoStringSchema.optional(),
-    requestId: z.string().trim().min(1).max(128).optional(),
+    // requestId 兼作 task id，之后会进 `/api/agent/tasks/:id/status` 的 URL 路径段。
+    // 含 `/` 的 id 能建出记录、却再也匹配不到那条路由（404），成为完不成的僵尸任务，
+    // 故收在 URL 安全字符集内。
+    requestId: z
+      .string()
+      .trim()
+      .min(1)
+      .max(128)
+      .regex(/^[A-Za-z0-9._-]+$/, "requestId must contain only letters, digits, dot, underscore or hyphen")
+      .optional(),
   })
   .strict();
 
@@ -107,9 +116,11 @@ agent.post("/tasks", async (c) => {
     createdAt: parsed.data.createdAt,
     updatedAt: now,
   });
-  // op.at 用服务端记账时刻 now，不是回填的 completedAt：op 参与 LWW 冲突判定，
-  // 用历史时间会让这条 create 在与其他设备比对时被误判为陈旧写入。
-  // 业务上「什么时候完成的」由 data.completedAt 承载，两者刻意分离。
+  // 完成字段守卫靠 op 的**存在性**：服务端只在带 op 时才放行 done/completedAt 的覆盖（见 sync/resolver）。
+  // `op.at` 本身当前没有消费点——真正参与 LWW 比较的是 `change.timestamp` 与服务端分配的 `updated_at`。
+  // 这里仍给它记账时刻而非回填的 completedAt，是为了让三者同源：将来 op.at 若进入冲突判定，
+  // 历史时间会让这条 create 被误判为陈旧写入。业务上「什么时候完成的」由 data.completedAt 承载。
+  // 注意：该约定目前只有本注释与 ADR 0033 在守，无测试承重（改成回填值时 28 条用例全绿）。
   const op = completionOp(undefined, task, now);
   const change: SyncChange = {
     tableName: "tasks",

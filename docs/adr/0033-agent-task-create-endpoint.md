@@ -30,8 +30,11 @@ ClaudeCode 会话再没回来。要把它们收回来，就需要一条 agent �
 
 - tasks 因此有了**第四条 server 写入通道**（并列见 `evergreen/todo/invariants.md` 第 3 条）。
 - 已完成事项可带真实 `completedAt` 直接入库，todo 表本身成为当日的账。
-- `op.at` 与 `data.completedAt` 刻意分离：前者是 LWW 记账时刻，后者是业务完成时刻。
-  用历史时间做 `op.at` 会让这条 create 在跨设备比对时被误判为陈旧写入。
+- **记账时刻与业务时刻分离**：`change.timestamp`、服务端分配的 `updated_at`、`op.at` 三者取记账时刻，
+  `data.createdAt` / `data.completedAt` 才是业务时刻。参与 LWW 比较的是前两者；`op` 目前只有
+  **存在性**被消费（决定服务端放不放行完成字段守卫列），`op.at` 尚无消费点，取记账时刻是为与前两者同源
+  ——将来它若进入冲突判定，历史时间会让这条 create 被误判为陈旧写入。
+  该约定当前**只有代码注释与本节在守，无测试承重**：把 `op.at` 改成回填值时 28 条用例全绿。
 - 完成态字段组对齐客户端非重复路径：`lastDoneAt` 恒 `null`、`completedCount` 恒 `0`、
   `skipped` 恒 `false`。`completedCount` 全仓只有置 0 路径，写非零是脏数据。
 - 未做：CLI 封装、批量端点。有需要再单独评估。

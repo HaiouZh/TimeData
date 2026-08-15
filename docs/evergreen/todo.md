@@ -116,8 +116,9 @@ agent / CLI (task-done/task-tag)
 
 `POST /api/agent/tasks`（`routes/agent.ts`）：受 `scopedAuthMiddleware` 保护，`requestId` 作幂等键兼 task id，走 `applyChange()` + `sync_seq` + `notifySyncChange()`，与 §1.2 同一条记账链路。形制照 [quick-notes](quick-notes.md) 的 agent 投递端点。
 
-- **只建 root task**：请求体不含 `parentId`，接口形状上排除一层父子约束被绕过。
-- **调用方拥有语义时间**：`createdAt` / `completedAt` 可回填历史；`updatedAt` 与 `op.at` 由服务端分配。`op.at` 刻意用记账时刻而非回填的 `completedAt`——它参与 LWW 判定，用历史时间会让写入被误判为陈旧。
+- **只建 root task，且不建重复任务**：请求体不含 `parentId` 与 `recurrence`，`.strict()` 下传任一即 400。接口形状上排除一层父子约束被绕过；重复模板仍只能由客户端建。
+- **调用方拥有语义时间**：`createdAt` / `completedAt` 可回填历史；`updatedAt`、`change.timestamp`、`op.at` 三者由服务端取记账时刻。参与 LWW 比较的是前两者，`op` 只有**存在性**被消费（决定放不放行完成字段守卫列）。
+- **`scheduledAt` 收完整 UTC ISO 时刻**，与 [§1.3](#todo-s1-3) 的 `POST /api/tasks/:id/schedule` 收 `YYYY-MM-DD` 再转本地午夜的形状不同；读取侧按本地日历日解释，跨时区回填会落到相邻日。
 - **回填方向不对称**：向历史不设限，向未来卡 5 分钟容差；`completedAt < createdAt` 返回 400。`done=true` 必须带 `completedAt`，`done=false` 不得带。
 - 完成态字段组对齐客户端非重复路径：`lastDoneAt` 恒 `null`、`completedCount` 恒 `0`、`skipped` 恒 `false`。
 - 依据见 [ADR 0033](../adr/0033-agent-task-create-endpoint.md)。

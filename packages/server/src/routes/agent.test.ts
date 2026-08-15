@@ -562,4 +562,32 @@ describe("POST /api/agent/tasks", () => {
 
     expect(res.status).toBe(201);
   });
+
+  // requestId 兼作 task id 并进 `/tasks/:id/status` 的路径段：含 `/` 的 id 建得出记录、
+  // 却再也匹配不到那条路由，成为完不成的僵尸任务。终审 boundary lens 实测过 201 + 后续 404。
+  it("rejects a requestId carrying URL path characters", async () => {
+    const res = await createTask({
+      title: "斜杠 id",
+      createdAt: "2026-08-14T12:00:00.000Z",
+      requestId: "req/with/slash",
+    });
+
+    expect(res.status).toBe(400);
+    expect(await res.json()).toMatchObject({ ok: false, error: { code: "INVALID_REQUEST" } });
+
+    const count = db.prepare("SELECT COUNT(*) AS n FROM tasks WHERE title = ?").get("斜杠 id") as { n: number };
+    expect(count.n).toBe(0);
+  });
+
+  it("accepts a requestId of letters, digits, dot, underscore and hyphen", async () => {
+    const res = await createTask({
+      title: "常规 id",
+      createdAt: "2026-08-14T12:30:00.000Z",
+      requestId: "sess_a1b2.c3-04",
+    });
+
+    expect(res.status).toBe(201);
+    const { task } = await res.json();
+    expect(task.id).toBe("sess_a1b2.c3-04");
+  });
 });
