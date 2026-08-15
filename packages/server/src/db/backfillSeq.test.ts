@@ -1,5 +1,5 @@
 import Database from "better-sqlite3";
-import { encodeGoalLayoutPinKey } from "@timedata/shared";
+import { encodeGoalLayoutPinKey, encodeTaskRelationKey } from "@timedata/shared";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { backfillMissingSeq } from "./backfillSeq.js";
 
@@ -58,6 +58,18 @@ describe("backfillMissingSeq", () => {
     expect(seqCount("goals", "goal-1")).toBe(1);
     expect(seqCount("goal_layout_pins", encodeGoalLayoutPinKey("goal|1", "task", "task/1"))).toBe(1);
     expect(db.prepare("SELECT value FROM sync_state WHERE key = 'dirty'").get()).toMatchObject({ value: "1" });
+  });
+
+  it("computes the composite recordId for task_relations rows", () => {
+    db.prepare(`
+      INSERT INTO task_relations (blocker_kind, blocker_id, blocked_kind, blocked_id, type, created_at, updated_at)
+      VALUES ('task', 'a', 'track', 'b', 'blocks', 't', 't')
+    `).run();
+
+    const inserted = backfillMissingSeq(db);
+
+    expect(inserted).toBe(1);
+    expect(seqCount("task_relations", encodeTaskRelationKey("task", "a", "track", "b"))).toBe(1);
   });
 
   it("leaves rows that already have a seq untouched and is idempotent", () => {

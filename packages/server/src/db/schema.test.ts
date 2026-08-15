@@ -634,6 +634,7 @@ describe("initializeDatabase", () => {
     );
     expect(indexes).toContain("idx_task_relations_blocked");
     expect(indexes).toContain("idx_task_relations_blocker");
+    expect(indexes).toContain("idx_task_relations_updated_at");
   });
 });
 

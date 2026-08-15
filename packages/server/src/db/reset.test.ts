@@ -1,4 +1,4 @@
-import { createDefaultCategories, encodeGoalLayoutPinKey } from "@timedata/shared";
+import { createDefaultCategories, encodeGoalLayoutPinKey, encodeTaskRelationKey } from "@timedata/shared";
 import Database from "better-sqlite3";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { computeAndPersistCommitHash, getCommitHash } from "../sync/state.js";
@@ -286,6 +286,32 @@ describe("resetDatabaseConnectionToDefaults", () => {
     expect(
       db.prepare("SELECT record_id FROM sync_tombstones WHERE table_name = 'categories' AND record_id = 'cat-sleep'").get(),
     ).toBeUndefined();
+  });
+
+  it("emits a delete seq and tombstone for pre-existing task_relations rows when resetting", () => {
+    const now = "2026-05-06T00:00:00.000Z";
+    db.prepare(`
+      INSERT INTO task_relations (blocker_kind, blocker_id, blocked_kind, blocked_id, type, created_at, updated_at)
+      VALUES ('task', 'a', 'track', 'b', 'blocks', ?, ?)
+    `).run(now, now);
+    const highCursor = Number((db.prepare("SELECT MAX(id) AS id FROM sync_seq").get() as { id: number }).id);
+
+    resetDatabaseConnectionToDefaults(db);
+
+    const relationRecordId = encodeTaskRelationKey("task", "a", "track", "b");
+    const changesAfterCursor = db
+      .prepare("SELECT table_name, record_id, action FROM sync_seq WHERE id > ? ORDER BY id")
+      .all(highCursor) as Array<{ table_name: string; record_id: string; action: string }>;
+    expect(changesAfterCursor).toContainEqual({
+      table_name: "task_relations",
+      record_id: relationRecordId,
+      action: "delete",
+    });
+    expect(
+      db
+        .prepare("SELECT record_id FROM sync_tombstones WHERE table_name = 'task_relations' AND record_id = ?")
+        .get(relationRecordId),
+    ).toEqual({ record_id: relationRecordId });
   });
 
   it("refreshes sync_state after reset", () => {

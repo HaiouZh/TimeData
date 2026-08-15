@@ -4,6 +4,7 @@ import {
   type GoalLayoutPin,
   type SyncChange,
 } from "@timedata/shared";
+import type { ValidateContext } from "./domains.js";
 import Database from "better-sqlite3";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -229,6 +230,70 @@ describe("task_relations sync roundtrip", () => {
       tableName: "task_relations",
       recordId,
       data: { blockerKind: "task", blockerId: "a", blockedKind: "track", blockedId: "b", type: "blocks" },
+    });
+  });
+
+  it("clears the tombstone when a deleted relation is upserted again", () => {
+    const recordId = "task|a|track|b";
+    applyChange(change("create", relation()));
+    applyChange(change("delete", null));
+    expect(db.prepare("SELECT record_id FROM sync_tombstones WHERE table_name = 'task_relations'").get()).toEqual({
+      record_id: recordId,
+    });
+
+    expect(applyChange(change("create", relation())).status).toBe("applied");
+
+    expect(db.prepare("SELECT * FROM sync_tombstones WHERE table_name = 'task_relations'").get()).toBeUndefined();
+    expect(db.prepare("SELECT blocker_kind, blocker_id, blocked_kind, blocked_id FROM task_relations").get()).toEqual({
+      blocker_kind: "task",
+      blocker_id: "a",
+      blocked_kind: "track",
+      blocked_id: "b",
+    });
+  });
+
+  it("refreshes updated_at when the same edge is upserted again", () => {
+    applyChange(change("create", relation()));
+
+    vi.setSystemTime(new Date(LATER));
+    expect(applyChange(change("update", relation())).status).toBe("applied");
+
+    expect(db.prepare("SELECT updated_at FROM task_relations").get()).toEqual({ updated_at: LATER });
+  });
+
+  it("keeps the first created_at when the same edge is upserted again", () => {
+    applyChange(change("create", relation()));
+
+    const reupsert = { ...relation(), createdAt: "2025-01-01T00:00:00.000Z" };
+    expect(applyChange(change("update", reupsert)).status).toBe("applied");
+
+    expect(db.prepare("SELECT created_at FROM task_relations").get()).toEqual({ created_at: NOW });
+  });
+
+  it("rejects recordIds that do not decode to a valid task relation key", () => {
+    const validate = domains.SERVER_SYNC_DOMAINS.task_relations.validate!;
+    const ctx: ValidateContext = { batchCategories: new Map(), now: NOW };
+
+    expect(validate(db, change("create", { ...relation(), blockedKind: "task" }), ctx)).toBeNull();
+
+    const wrongSegments = validate(db, { ...change("delete", null), recordId: "task|a|track" } as SyncChange, ctx);
+    expect(wrongSegments?.status).toBe("rejected");
+    expect(wrongSegments?.reasonCode).toBe("invalid_shape");
+
+    const badKind = validate(db, { ...change("delete", null), recordId: "note|a|task|b" } as SyncChange, ctx);
+    expect(badKind?.status).toBe("rejected");
+    expect(badKind?.reasonCode).toBe("invalid_shape");
+  });
+
+  it("matches all four recordId parts when reading back a relation", () => {
+    applyChange(change("create", { ...relation({ blockedKind: "task" }), blockedId: "b" }));
+    applyChange(change("create", { ...relation({ blockedKind: "task" }), blockedId: "c" }));
+
+    const recordId = encodeTaskRelationKey("task", "a", "task", "c");
+    expect(domains.SERVER_SYNC_DOMAINS.task_relations.readRecord(db, recordId)).toMatchObject({
+      tableName: "task_relations",
+      recordId,
+      data: { blockerKind: "task", blockerId: "a", blockedKind: "task", blockedId: "c", type: "blocks" },
     });
   });
 });
