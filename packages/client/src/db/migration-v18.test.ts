@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { db, resetDb } from "../test/dbReset.js";
 import {
   GOAL_PREREQUISITES_SNAPSHOT_KEY,
@@ -319,29 +319,37 @@ describe("Dexie v19：迁移清空、快照与恢复", () => {
     expect(JSON.parse(snapshot?.value ?? "null")).toEqual({ "g-1": [null, EDGE] });
   });
 
-  it("恢复：跑迁移后跑恢复，裸行 prerequisites 回到原样", async () => {
+  it("恢复：跑迁移后跑恢复，快照里的边重建进关系表，restored 等于边数", async () => {
     await db.goals.add({ ...GOAL_BASE, id: "g-1", prerequisites: [EDGE] });
     await migrateGoalPrerequisitesToRelations();
+    await db.taskRelations.clear();
 
     const result = await restoreGoalPrerequisitesFromSnapshot();
 
     expect(result).toEqual({ restored: 1, failed: 0 });
-    const goal = await db.goals.get("g-1");
-    expect(goal?.prerequisites).toEqual([EDGE]);
+    const rows = await db.taskRelations.toArray();
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({
+      blockerKind: "task",
+      blockerId: "t-1",
+      blockedKind: "task",
+      blockedId: "t-2",
+      type: "blocks",
+    });
   });
 
-  it("恢复的容错：快照里已被删除的 goal 计入 failed，另一个照样恢复", async () => {
+  it("恢复不看 goal 行是否存在：快照里的 goal 已被删除，边照样重建", async () => {
     const g2Edge = { blocker: { kind: "track" as const, id: "tk-1" }, blocked: { kind: "track" as const, id: "tk-2" } };
     await db.goals.add({ ...GOAL_BASE, id: "g-1", prerequisites: [EDGE] });
     await db.goals.add({ ...GOAL_BASE, id: "g-2", prerequisites: [g2Edge] });
     await migrateGoalPrerequisitesToRelations();
     await db.goals.delete("g-2");
+    await db.taskRelations.clear();
 
     const result = await restoreGoalPrerequisitesFromSnapshot();
 
-    expect(result).toEqual({ restored: 1, failed: 1 });
-    const goal1 = await db.goals.get("g-1");
-    expect(goal1?.prerequisites).toEqual([EDGE]);
+    expect(result).toEqual({ restored: 2, failed: 0 });
+    expect(await db.taskRelations.count()).toBe(2);
   });
 
   it("没有快照时直接跑恢复，返回 0/0 不抛异常", async () => {
@@ -383,5 +391,185 @@ describe("Dexie v19：迁移清空、快照与恢复", () => {
 
     const snapshot = await db.migrationSnapshots.get(GOAL_PREREQUISITES_SNAPSHOT_KEY);
     expect(JSON.parse(snapshot?.value ?? "null")).toEqual({ "g-1": [EDGE] });
+  });
+
+  it("4a 重建：清空关系表模拟数据丢失后，恢复把边重建回来且逐字一致", async () => {
+    const edges = [
+      { blocker: { kind: "task" as const, id: "t-1" }, blocked: { kind: "track" as const, id: "tk-9" } },
+      { blocker: { kind: "track" as const, id: "tk-2" }, blocked: { kind: "task" as const, id: "t-3" } },
+    ];
+    await db.goals.add({ ...GOAL_BASE, id: "g-1", prerequisites: edges });
+    await migrateGoalPrerequisitesToRelations();
+
+    await db.taskRelations.clear();
+
+    const restoreNow = new Date("2026-08-05T00:00:00.000Z");
+    const result = await restoreGoalPrerequisitesFromSnapshot(restoreNow);
+
+    expect(result).toEqual({ restored: 2, failed: 0 });
+    const rows = (await db.taskRelations.toArray()).map((row) => ({
+      blockerKind: row.blockerKind,
+      blockerId: row.blockerId,
+      blockedKind: row.blockedKind,
+      blockedId: row.blockedId,
+      type: row.type,
+    }));
+    expect(rows).toEqual(
+      expect.arrayContaining([
+        { blockerKind: "task", blockerId: "t-1", blockedKind: "track", blockedId: "tk-9", type: "blocks" },
+        { blockerKind: "track", blockerId: "tk-2", blockedKind: "task", blockedId: "t-3", type: "blocks" },
+      ]),
+    );
+    expect(rows).toHaveLength(2);
+    for (const row of await db.taskRelations.toArray()) {
+      expect(row.createdAt).toBe("2026-08-05T00:00:00.000Z");
+      expect(row.updatedAt).toBe("2026-08-05T00:00:00.000Z");
+    }
+  });
+
+  it("4b 不碰旧字段：恢复之后裸行 prerequisites 仍是空数组", async () => {
+    await db.goals.add({ ...GOAL_BASE, id: "g-1", prerequisites: [EDGE] });
+    await migrateGoalPrerequisitesToRelations();
+    await db.taskRelations.clear();
+
+    const result = await restoreGoalPrerequisitesFromSnapshot();
+
+    expect(result).toEqual({ restored: 1, failed: 0 });
+    const goal = await db.goals.get("g-1");
+    expect(goal?.prerequisites).toEqual([]);
+  });
+
+  it("4c 坏边被挡：null 边计入 failed，好边照常重建", async () => {
+    await db.goals.add({
+      ...GOAL_BASE,
+      id: "g-1",
+      prerequisites: [null, EDGE] as never,
+    });
+    await migrateGoalPrerequisitesToRelations();
+    await db.taskRelations.clear();
+
+    const result = await restoreGoalPrerequisitesFromSnapshot();
+
+    expect(result).toEqual({ restored: 1, failed: 1 });
+    const rows = await db.taskRelations.toArray();
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ blockerId: "t-1", blockedId: "t-2" });
+  });
+
+  it("4d 幂等：连跑两次恢复，行数与 syncLog 都不变，第二次 restored 为 0", async () => {
+    await db.goals.add({ ...GOAL_BASE, id: "g-1", prerequisites: [EDGE] });
+    await migrateGoalPrerequisitesToRelations();
+    await db.taskRelations.clear();
+    await db.syncLog.where("tableName").equals("task_relations").delete();
+
+    const first = await restoreGoalPrerequisitesFromSnapshot();
+    const rowsAfterFirst = await db.taskRelations.count();
+    const logsAfterFirst = await db.syncLog.where("tableName").equals("task_relations").count();
+
+    const second = await restoreGoalPrerequisitesFromSnapshot();
+
+    expect(first).toEqual({ restored: 1, failed: 0 });
+    expect(second).toEqual({ restored: 0, failed: 0 });
+    expect(await db.taskRelations.count()).toBe(rowsAfterFirst);
+    expect(await db.syncLog.where("tableName").equals("task_relations").count()).toBe(logsAfterFirst);
+  });
+
+  it("4e 恢复后重启不被撤销：再跑一次迁移，关系表边还在、prerequisites 仍是空", async () => {
+    await db.goals.add({ ...GOAL_BASE, id: "g-1", prerequisites: [EDGE] });
+    await migrateGoalPrerequisitesToRelations();
+    await db.taskRelations.clear();
+    await restoreGoalPrerequisitesFromSnapshot();
+
+    await migrateGoalPrerequisitesToRelations();
+
+    expect(await db.taskRelations.count()).toBe(1);
+    const goal = await db.goals.get("g-1");
+    expect(goal?.prerequisites).toEqual([]);
+  });
+
+  it("4f 坏快照另存：非法 JSON 原样留档到 corrupt key，正常 key 用本次 delta 建新行", async () => {
+    const bad = "not-json{";
+    await db.goals.add({ ...GOAL_BASE, id: "g-1", prerequisites: [EDGE] });
+    await db.migrationSnapshots.put({
+      key: GOAL_PREREQUISITES_SNAPSHOT_KEY,
+      value: bad,
+      updatedAt: "2026-08-01T00:00:00.000Z",
+    });
+    const now = new Date("2026-08-04T00:00:00.000Z");
+
+    await migrateGoalPrerequisitesToRelations(now);
+
+    const rows = await db.migrationSnapshots.toArray();
+    const corrupt = rows.find((row) => row.key.startsWith(`${GOAL_PREREQUISITES_SNAPSHOT_KEY}.corrupt.`));
+    expect(corrupt?.value).toBe(bad);
+    const normal = await db.migrationSnapshots.get(GOAL_PREREQUISITES_SNAPSHOT_KEY);
+    expect(JSON.parse(normal?.value ?? "null")).toEqual({ "g-1": [EDGE] });
+  });
+
+  it("快照解析出来不是对象（JSON null）时，迁移同样把原值另存到 corrupt key", async () => {
+    await db.goals.add({ ...GOAL_BASE, id: "g-1", prerequisites: [EDGE] });
+    await db.migrationSnapshots.put({
+      key: GOAL_PREREQUISITES_SNAPSHOT_KEY,
+      value: "null",
+      updatedAt: "2026-08-01T00:00:00.000Z",
+    });
+
+    await migrateGoalPrerequisitesToRelations();
+
+    const rows = await db.migrationSnapshots.toArray();
+    const corrupt = rows.find((row) => row.key.startsWith(`${GOAL_PREREQUISITES_SNAPSHOT_KEY}.corrupt.`));
+    expect(corrupt?.value).toBe("null");
+    const normal = await db.migrationSnapshots.get(GOAL_PREREQUISITES_SNAPSHOT_KEY);
+    expect(JSON.parse(normal?.value ?? "null")).toEqual({ "g-1": [EDGE] });
+  });
+
+  it("4g 恢复记了 syncLog：新落的每条边都有一条 create 记录", async () => {
+    await db.goals.add({ ...GOAL_BASE, id: "g-1", prerequisites: [EDGE] });
+    await migrateGoalPrerequisitesToRelations();
+    await db.taskRelations.clear();
+    await db.syncLog.where("tableName").equals("task_relations").delete();
+
+    await restoreGoalPrerequisitesFromSnapshot();
+
+    const logs = await db.syncLog.where("tableName").equals("task_relations").toArray();
+    expect(logs).toHaveLength(1);
+    expect(logs[0]).toMatchObject({
+      action: "create",
+      tableName: "task_relations",
+      recordId: "task|t-1|task|t-2",
+    });
+  });
+
+  it("快照里某个 goal 的值为 null 时跳过该组，其余照常重建", async () => {
+    await db.goals.add({ ...GOAL_BASE, id: "g-1", prerequisites: [EDGE] });
+    await migrateGoalPrerequisitesToRelations();
+    await db.taskRelations.clear();
+    await db.migrationSnapshots.put({
+      key: GOAL_PREREQUISITES_SNAPSHOT_KEY,
+      value: JSON.stringify({ "g-1": null, "g-2": [EDGE] }),
+      updatedAt: "2026-08-01T00:00:00.000Z",
+    });
+
+    const result = await restoreGoalPrerequisitesFromSnapshot();
+
+    expect(result).toEqual({ restored: 1, failed: 0 });
+    expect(await db.taskRelations.count()).toBe(1);
+  });
+
+  it("恢复容错：单条边落库失败不拖垮其余边，计入 failed", async () => {
+    await db.goals.add({ ...GOAL_BASE, id: "g-1", prerequisites: [EDGE] });
+    await db.goals.add({ ...GOAL_BASE, id: "g-2", prerequisites: [EDGE] });
+    await migrateGoalPrerequisitesToRelations();
+    await db.taskRelations.clear();
+    await db.syncLog.where("tableName").equals("task_relations").delete();
+    const putSpy = vi.spyOn(db.taskRelations, "put").mockRejectedValueOnce(new Error("写库失败"));
+    try {
+      const result = await restoreGoalPrerequisitesFromSnapshot();
+
+      expect(result).toEqual({ restored: 1, failed: 1 });
+      expect(await db.taskRelations.count()).toBe(1);
+    } finally {
+      putSpy.mockRestore();
+    }
   });
 });

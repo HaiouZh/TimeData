@@ -339,8 +339,8 @@ export default function SettingsDataPage() {
   async function handleRestorePrerequisitesFromSnapshot() {
     if (
       !(await confirm({
-        title: "确认从快照恢复前置依赖",
-        body: "把启动迁移时从目标搬进关系表的前置依赖，从本机快照写回目标。用于回滚迁移或补救同步异常。",
+        title: "确认从快照重建前置依赖",
+        body: "把启动迁移时保存在本机快照里的原始前置依赖记录，重建进前置依赖关系表。已存在的边会跳过，不会重复写入。",
         danger: true,
       }))
     )
@@ -350,7 +350,7 @@ export default function SettingsDataPage() {
     setDataStatus("");
     try {
       const result = await restoreGoalPrerequisitesFromSnapshot();
-      setDataStatus(`已从快照恢复前置依赖：成功 ${result.restored} 条，失败 ${result.failed} 条。`);
+      setDataStatus(`已从快照重建前置依赖：新写入 ${result.restored} 条边，失败 ${result.failed} 条。`);
     } catch (e: unknown) {
       setDataStatus(`前置依赖恢复失败：${e instanceof Error ? e.message : "未知错误"}`);
     } finally {
@@ -634,10 +634,10 @@ export default function SettingsDataPage() {
                   disabled={dataBusy}
                   className={warnButtonClassName}
                 >
-                  从快照恢复前置依赖
+                  从快照重建前置依赖
                 </button>
                 <div className="td-text-caption text-ink-3">
-                  把启动迁移时从目标搬走的前置依赖从本机快照写回目标，用于回滚迁移。
+                  用启动迁移时保存在本机快照里的原始记录重建前置依赖关系表，用于补救关系表数据丢失。
                 </div>
               </div>
             )}

@@ -418,13 +418,22 @@ export async function migrateGoalPrerequisitesToRelations(now: Date = new Date()
     const existing = await db.migrationSnapshots.get(GOAL_PREREQUISITES_SNAPSHOT_KEY);
     let merged: Record<string, GoalPrerequisite[]> = {};
     if (existing) {
+      let parsed: unknown = null;
       try {
-        const parsed: unknown = JSON.parse(existing.value);
-        if (typeof parsed === "object" && parsed !== null && !Array.isArray(parsed)) {
-          merged = parsed as Record<string, GoalPrerequisite[]>;
-        }
+        parsed = JSON.parse(existing.value);
       } catch {
-        merged = {};
+        parsed = null;
+      }
+      if (typeof parsed === "object" && parsed !== null && !Array.isArray(parsed)) {
+        merged = parsed as Record<string, GoalPrerequisite[]>;
+      } else {
+        // 坏快照不许静默丢底牌：解析失败（非法 JSON 或不是对象）时，把原始 value 原样另存到
+        // corrupt key 作留档，再用本次 delta 建新行——否则历史每一轮攒下的底牌会整体消失。
+        await db.migrationSnapshots.put({
+          key: `${GOAL_PREREQUISITES_SNAPSHOT_KEY}.corrupt.${timestamp}`,
+          value: existing.value,
+          updatedAt: timestamp,
+        });
       }
     }
     await db.migrationSnapshots.put({
@@ -437,9 +446,10 @@ export async function migrateGoalPrerequisitesToRelations(now: Date = new Date()
   return migrated;
 }
 
-/** 把迁移快照里的 goal.prerequisites 写回目标，返回成功/失败条数。
- *  每个 goal 一个独立事务：单条写不回去（如原数据过不了 GoalSchema 的 superRefine）不拖垮其余的，
- *  goal 已删除同样计入 failed。不删快照，可重复跑。 */
+/** 用迁移快照里的原样记录重建 taskRelations，返回实际新落边数/失败边数。
+ *  读取侧只读关系表（见 lib/goalPrerequisiteHydration.ts），旧字段 goal.prerequisites 是死水，
+ *  写回它既不上界面、也活不过下次启动迁移，还可能把用户删过的边复活——所以重建目标就是关系表本身。
+ *  每条边一个独立事务：单条写不进去（形状不合、落库异常）不拖垮其余的。不删快照，可重复跑。 */
 export async function restoreGoalPrerequisitesFromSnapshot(
   now?: Date,
 ): Promise<{ restored: number; failed: number }> {
@@ -460,24 +470,50 @@ export async function restoreGoalPrerequisitesFromSnapshot(
   const timestamp = (now ?? new Date()).toISOString();
   let restored = 0;
   let failed = 0;
-  for (const [goalId, prerequisites] of Object.entries(snapshot)) {
-    try {
-      await db.transaction("rw", db.goals, db.syncLog, async () => {
-        const goal = await db.goals.get(goalId);
-        if (!goal) throw new Error("快照里的目标已不存在");
-        await db.goals.put({ ...goal, prerequisites, updatedAt: timestamp });
-        await db.syncLog.add({
-          id: uuid(),
-          tableName: "goals",
-          recordId: goalId,
-          action: "update",
-          timestamp,
-          synced: 0,
+  for (const prerequisites of Object.values(snapshot)) {
+    for (const edge of prerequisites ?? []) {
+      const raw = {
+        blockerKind: edge?.blocker?.kind,
+        blockerId: edge?.blocker?.id,
+        blockedKind: edge?.blocked?.kind,
+        blockedId: edge?.blocked?.id,
+        type: "blocks" as const,
+        createdAt: timestamp,
+        updatedAt: timestamp,
+      };
+      const parsed = TaskRelationSchema.safeParse(raw);
+      if (!parsed.success) {
+        failed += 1;
+        continue;
+      }
+      const relation = parsed.data;
+      try {
+        let alreadyExists = false;
+        await db.transaction("rw", db.taskRelations, db.syncLog, async () => {
+          const key: [string, string, string, string] = [
+            relation.blockerKind,
+            relation.blockerId,
+            relation.blockedKind,
+            relation.blockedId,
+          ];
+          if (await db.taskRelations.get(key)) {
+            alreadyExists = true;
+            return;
+          }
+          await db.taskRelations.put(relation);
+          await db.syncLog.add({
+            id: uuid(),
+            tableName: "task_relations",
+            recordId: taskRelationKey(relation),
+            action: "create",
+            timestamp,
+            synced: 0,
+          });
         });
-      });
-      restored += 1;
-    } catch {
-      failed += 1;
+        if (!alreadyExists) restored += 1;
+      } catch {
+        failed += 1;
+      }
     }
   }
   return { restored, failed };

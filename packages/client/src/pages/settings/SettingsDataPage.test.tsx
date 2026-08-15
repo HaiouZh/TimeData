@@ -6,8 +6,11 @@ import { MemoryRouter } from "react-router";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { db, resetDb } from "../../test/dbReset.js";
 import { renderDom, unmount } from "../../test/domHarness.js";
-import { GOAL_PREREQUISITES_SNAPSHOT_KEY } from "../../db/index.ts";
+import { GOAL_PREREQUISITES_SNAPSHOT_KEY, restoreGoalPrerequisitesFromSnapshot } from "../../db/index.ts";
 import SettingsDataPage from "./SettingsDataPage.js";
+
+// spy:true 让 restoreGoalPrerequisitesFromSnapshot 可被 4h 用例闸门控制，其余导出保持真实行为（call-through）。
+vi.mock("../../db/index.ts", { spy: true });
 
 const syncContextMock = vi.hoisted(() => ({
   value: {
@@ -210,7 +213,7 @@ describe("SettingsDataPage 前置依赖快照恢复按钮", () => {
 
   function restoreButtonOf(host: HTMLElement): HTMLButtonElement | undefined {
     return [...host.querySelectorAll("button")].find((button) =>
-      button.textContent?.includes("从快照恢复前置依赖"),
+      button.textContent?.includes("从快照重建前置依赖"),
     );
   }
 
@@ -253,17 +256,65 @@ describe("SettingsDataPage 前置依赖快照恢复按钮", () => {
     const dialogTitle = [...document.body.querySelectorAll("button")]
       .find((button) => button.textContent?.trim() === "确认");
     expect(dialogTitle).toBeDefined();
-    expect(document.body.textContent).toContain("确认从快照恢复前置依赖");
+    expect(document.body.textContent).toContain("确认从快照重建前置依赖");
 
     await act(async () => {
       dialogTitle?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
     await settle();
 
-    expect(host.textContent).toContain("成功 1 条，失败 0 条");
-    const goal = await db.goals.get("goal-1");
-    expect(goal?.prerequisites).toEqual([RESTORE_EDGE]);
+    expect(host.textContent).toContain("新写入 1 条边，失败 0 条");
+    const rows = await db.taskRelations.toArray();
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ blockerKind: "task", blockerId: "t-1", blockedKind: "task", blockedId: "t-2" });
 
     await unmount(root);
+  });
+
+  it("4h 恢复进行中按钮 disabled，结束后恢复可用", async () => {
+    let releaseRestore!: (value: { restored: number; failed: number }) => void;
+    const gate = new Promise<{ restored: number; failed: number }>((resolve) => {
+      releaseRestore = resolve;
+    });
+    const restoreSpy = vi.mocked(restoreGoalPrerequisitesFromSnapshot);
+    restoreSpy.mockImplementation(() => gate);
+    try {
+      await db.migrationSnapshots.put({
+        key: GOAL_PREREQUISITES_SNAPSHOT_KEY,
+        value: JSON.stringify({ "goal-1": [RESTORE_EDGE] }),
+        updatedAt: "2026-08-01T00:00:00.000Z",
+      });
+      const { host, root } = await renderDom(createElement(MemoryRouter, null, createElement(SettingsDataPage)));
+      await settle();
+
+      const restoreButton = restoreButtonOf(host);
+      expect(restoreButton).toBeDefined();
+      expect(restoreButton?.disabled).toBe(false);
+
+      await act(async () => {
+        restoreButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      });
+      const dialogTitle = [...document.body.querySelectorAll("button")]
+        .find((button) => button.textContent?.trim() === "确认");
+      expect(dialogTitle).toBeDefined();
+      await act(async () => {
+        dialogTitle?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      });
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(300);
+      });
+      expect(restoreButton?.disabled).toBe(true);
+
+      await act(async () => {
+        releaseRestore({ restored: 2, failed: 1 });
+        await vi.advanceTimersByTimeAsync(300);
+      });
+      expect(restoreButton?.disabled).toBe(false);
+      expect(host.textContent).toContain("新写入 2 条边，失败 1 条");
+
+      await unmount(root);
+    } finally {
+      restoreSpy.mockRestore();
+    }
   });
 });
