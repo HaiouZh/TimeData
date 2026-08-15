@@ -1284,6 +1284,16 @@ describe("TodoPage", () => {
       createdAt: old,
       updatedAt: old,
     });
+    // 生产态镜像：读取侧已改从 taskRelations 取数（hydrateGoalPrerequisites），旧字段造边必须同步进新表。
+    await db.taskRelations.put({
+      blockerKind: "task",
+      blockerId: t1.id,
+      blockedKind: "task",
+      blockedId: t2.id,
+      type: "blocks",
+      createdAt: old,
+      updatedAt: old,
+    });
     await db.goals.add({
       id: "gB",
       title: "新项目",
@@ -1357,10 +1367,13 @@ describe("TodoPage", () => {
     // 用户去 X 里数出来比 N 少，一次数不对就再也不信这个提示，往后一路无脑点「仍要移动」。
     //
     // 布置同上一条（今天区初次渲染为空 → 两张组卡先挂载 → 键盘拖拽落点稳定是排第一的 gB）。
-    // 多出来的 gC 与 gA 争 t1/t2 的归属：projectMemberIndex 按 updatedAt 新者胜、并列取 id 小者，
-    // 两组 updatedAt 都是 old → gA 全胜，gC 一个成员都投影不出来、**不产出组卡**，
+    // 多出来的 gC 只持 t1，与 gA 争 t1 的归属：projectMemberIndex 按 updatedAt 新者胜、并列取 id 小者，
+    // 两组 updatedAt 都是 old → gA 胜，gC 一个成员都投影不出来、**不产出组卡**，
     // 于是 droppable 的挂载顺序与上一条一字不差。而 prerequisiteLossOnAssign 读的是裸行、不看投影，
     // 照样把 gC 数进去——这正是"多源组"在真实数据里长的样子。
+    // 它的边 t2→t1 是悬空边（blocker t2 不在 gC 成员里，跨设备并发 / force-push 的产物）：
+    // 关系表是全局表，t2→t1 的 blocked 端 t1 同时属于 gA，两边都会 hydrate 到——
+    // gA 得 2 条（t1→t2 + t2→t1）、gC 得 1 条，总数 3、边最多的组是 gA 而不是 gC。
     const old = "2026-01-01T00:00:00.000Z";
     const newer = "2026-05-01T00:00:00.000Z";
     const t1 = await addTask({ title: "打地基", toInbox: true });
@@ -1379,8 +1392,11 @@ describe("TodoPage", () => {
       kind: "project",
       status: "active",
       members: [...pair],
-      // 1 条引用 t1
-      prerequisites: [{ blocker: { kind: "task", id: t1.id }, blocked: { kind: "task", id: t2.id } }],
+      // 2 条引用 t1（blocker 侧与 blocked 侧各一）——总数 3、边最多的组是 gA 而不是 gC
+      prerequisites: [
+        { blocker: { kind: "task", id: t1.id }, blocked: { kind: "task", id: t2.id } },
+        { blocker: { kind: "task", id: t2.id }, blocked: { kind: "task", id: t1.id } },
+      ],
       createdAt: old,
       updatedAt: old,
     });
@@ -1389,15 +1405,33 @@ describe("TodoPage", () => {
       title: "另一个老项目",
       kind: "project",
       status: "active",
-      members: [...pair],
-      // 2 条引用 t1（blocker 侧与 blocked 侧各一）——总数 3、边最多的组是 gC 而不是 gA
-      prerequisites: [
-        { blocker: { kind: "task", id: t1.id }, blocked: { kind: "task", id: t2.id } },
-        { blocker: { kind: "task", id: t2.id }, blocked: { kind: "task", id: t1.id } },
-      ],
+      members: [{ kind: "task", id: t1.id }],
+      // 1 条引用 t1（悬空边，blocker t2 不在成员里）
+      prerequisites: [{ blocker: { kind: "task", id: t2.id }, blocked: { kind: "task", id: t1.id } }],
       createdAt: old,
       updatedAt: old,
     });
+    // 生产态镜像：迁移把 gA 的 t1→t2、gC 的 t2→t1 各落一行（t1→t2 两条旧字段行去重成一行）。
+    await db.taskRelations.bulkAdd([
+      {
+        blockerKind: "task",
+        blockerId: t1.id,
+        blockedKind: "task",
+        blockedId: t2.id,
+        type: "blocks",
+        createdAt: old,
+        updatedAt: old,
+      },
+      {
+        blockerKind: "task",
+        blockerId: t2.id,
+        blockedKind: "task",
+        blockedId: t1.id,
+        type: "blocks",
+        createdAt: old,
+        updatedAt: old,
+      },
+    ]);
     await db.goals.add({
       id: "gB",
       title: "新项目",

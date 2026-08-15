@@ -1,6 +1,7 @@
 import { GoalSchema, TaskSchema, TrackSchema, type Goal, type GoalMemberRef, type GoalPrerequisite, type Task, type Track } from "@timedata/shared";
 import { v4 as uuid } from "uuid";
 import { db } from "../db/index.js";
+import { hydrateGoalPrerequisites } from "./goalPrerequisiteHydration.js";
 import {
   deleteGoalLayoutPinsForGoalInCurrentTransaction,
   deleteGoalMemberPinInCurrentTransaction,
@@ -138,7 +139,8 @@ export async function getGoal(id: string): Promise<Goal | undefined> {
   if (!row) return undefined;
   const parsed = GoalSchema.safeParse(row);
   if (!parsed.success) return undefined;
-  return parsed.data;
+  const [hydrated] = await hydrateGoalPrerequisites([parsed.data]);
+  return hydrated;
 }
 
 export async function listGoals(status?: Goal["status"]): Promise<Goal[]> {
@@ -152,7 +154,7 @@ export async function listGoals(status?: Goal["status"]): Promise<Goal[]> {
     }
     goals.push(parsed.data);
   }
-  return goals.sort(byGoalOrder);
+  return hydrateGoalPrerequisites(goals.sort(byGoalOrder));
 }
 
 export async function addGoalMember(
@@ -339,7 +341,7 @@ export async function prerequisiteLossOnAssign(
   nextGoalId: string,
 ): Promise<{ count: number; groupCount: number; goalTitle: string } | null> {
   const ref: GoalMemberRef = { kind: "task", id: taskId };
-  const rows = await db.goals.toArray();
+  const rows = await hydrateGoalPrerequisites(await db.goals.toArray());
   let total = 0;
   let groupCount = 0;
   let widest: { count: number; title: string } | null = null;
@@ -484,7 +486,7 @@ export async function prerequisiteLossOnAssignMany(
   nextGoalId: string | null,
 ): Promise<{ count: number; groupCount: number; goalTitle: string } | null> {
   const refs: GoalMemberRef[] = taskIds.map((id) => ({ kind: "task", id }));
-  const rows = await db.goals.toArray();
+  const rows = await hydrateGoalPrerequisites(await db.goals.toArray());
   let total = 0;
   let groupCount = 0;
   let widest: { count: number; title: string } | null = null;

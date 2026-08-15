@@ -61,6 +61,25 @@ async function seedMembers(): Promise<void> {
   });
 }
 
+/** 生产态镜像：迁移之后旧字段与新表同时持边。既有用例在旧字段造数，
+ *  读取侧已改从新表取数（hydrateGoalPrerequisites），旧字段造边的用例必须同步往新表造。 */
+async function seedRelation(
+  blocker: string,
+  blocked: string,
+  blockerKind: "task" | "track" = "task",
+  blockedKind: "task" | "track" = "task",
+): Promise<void> {
+  await db.taskRelations.put({
+    blockerKind,
+    blockerId: blocker,
+    blockedKind,
+    blockedId: blocked,
+    type: "blocks",
+    createdAt: now,
+    updatedAt: now,
+  });
+}
+
 describe("goals data helpers", () => {
   it("creates, lists, reads, and updates goals with sync logs", async () => {
     const goal = await addGoal({ title: " 发布 v2 ", kind: "project", now: date(now) });
@@ -115,6 +134,35 @@ describe("goals data helpers", () => {
     );
   });
 
+  describe("goals 读取接 hydrateGoalPrerequisites（接线闸）", () => {
+    // 接线闸：把 getGoal / listGoals 里的 hydrate 删掉，下面两条立刻红。
+    it("getGoal：旧字段为空、边在新表里，读出来填回 prerequisites", async () => {
+      await seedMembers();
+      const goal = await addGoal({ title: "发布 v2", kind: "project", now: date(now) });
+      await addGoalMember(goal.id, { kind: "task", id: "task-1" }, { now: date(now) });
+      await addGoalMember(goal.id, { kind: "track", id: "track-1" }, { now: date(now) });
+      await seedRelation("task-1", "track-1", "task", "track");
+
+      const read = await getGoal(goal.id);
+      expect(read?.prerequisites).toEqual([
+        { blocker: { kind: "task", id: "task-1" }, blocked: { kind: "track", id: "track-1" } },
+      ]);
+    });
+
+    it("listGoals：旧字段为空、边在新表里，读出来填回 prerequisites", async () => {
+      await seedMembers();
+      const goal = await addGoal({ title: "发布 v2", kind: "project", now: date(now) });
+      await addGoalMember(goal.id, { kind: "task", id: "task-1" }, { now: date(now) });
+      await addGoalMember(goal.id, { kind: "track", id: "track-1" }, { now: date(now) });
+      await seedRelation("task-1", "track-1", "task", "track");
+
+      const goals = await listGoals();
+      expect(goals[0]?.prerequisites).toEqual([
+        { blocker: { kind: "task", id: "task-1" }, blocked: { kind: "track", id: "track-1" } },
+      ]);
+    });
+  });
+
   it("updates prerequisites and rejects invalid goal edits through shared schema", async () => {
     const goal = await addGoal({ title: "发布 v2", kind: "project", now: date(now) });
     await seedMembers();
@@ -125,6 +173,7 @@ describe("goals data helpers", () => {
       [{ blocker: { kind: "task", id: "task-1" }, blocked: { kind: "track", id: "track-1" } }],
       { now: date("2026-06-22T02:00:00.000Z") },
     );
+    await seedRelation("task-1", "track-1", "task", "track");
     await expect(getGoal(goal.id)).resolves.toMatchObject({
       prerequisites: [{ blocker: { kind: "task", id: "task-1" }, blocked: { kind: "track", id: "track-1" } }],
     });
@@ -721,6 +770,8 @@ describe("prerequisiteLossOnAssign", () => {
     await seedTask("t2");
     await seedTask("t3");
     await seedProject("gA", ["t1", "t2", "t3"], { prerequisites: [edge("t1", "t2"), edge("t3", "t1")] });
+    await seedRelation("t1", "t2");
+    await seedRelation("t3", "t1");
     await seedProject("gB");
 
     expect(await prerequisiteLossOnAssign("t1", "gB")).toEqual({ count: 2, groupCount: 1, goalTitle: "项目 gA" });
@@ -766,11 +817,19 @@ describe("prerequisiteLossOnAssign", () => {
     // `count` 是全部命中组之和（3），而 `goalTitle` 指的那一组只有 2 条——两个字段口径不同，
     // 所以必须同时报 `groupCount`，调用方才能知道「这两个数不能凑进同一句话」。
     // 少了 groupCount，弹窗只会说「在「gMany」里有 3 条」，用户去 gMany 里数三遍只有 2 条。
+    //
+    // 布置与旧字段时代不同：关系表是全局表，一条边会 hydrate 进**所有**含其 blocked 成员的目标。
+    // 旧布置「gFew 存 t1→t2、gMany 存 t1→t2 与 t3→t1」会让 t3→t1 因 blocked 端 t1 ∈ gFew 而
+    // 双份入账（总数 4 而非 3）。换成成员互不重叠的布置，保住本断言的口径不变。
     await seedTask("t1");
-    await seedTask("t2");
-    await seedTask("t3");
-    await seedProject("gFew", ["t1", "t2"], { prerequisites: [edge("t1", "t2")] });
-    await seedProject("gMany", ["t1", "t2", "t3"], { prerequisites: [edge("t1", "t2"), edge("t3", "t1")] });
+    await seedTask("fx");
+    await seedTask("my1");
+    await seedTask("my2");
+    await seedProject("gFew", ["t1", "fx"], { prerequisites: [edge("t1", "fx")] });
+    await seedProject("gMany", ["t1", "my1", "my2"], { prerequisites: [edge("t1", "my1"), edge("t1", "my2")] });
+    await seedRelation("t1", "fx");
+    await seedRelation("t1", "my1");
+    await seedRelation("t1", "my2");
     await seedProject("gB");
 
     expect(await prerequisiteLossOnAssign("t1", "gB")).toEqual({ count: 3, groupCount: 2, goalTitle: "项目 gMany" });
@@ -782,6 +841,7 @@ describe("prerequisiteLossOnAssign", () => {
     await seedTask("t1");
     await seedTask("t2");
     await seedProject("gA", [], { prerequisites: [edge("t1", "t2")] });
+    await seedRelation("t1", "t2");
     const rawA = await db.goals.get("gA");
     if (!rawA) throw new Error("gA 不存在");
     await db.goals.put({
@@ -793,6 +853,18 @@ describe("prerequisiteLossOnAssign", () => {
       ],
     });
     await seedProject("gB");
+
+    expect(await prerequisiteLossOnAssign("t1", "gB")).toEqual({ count: 1, groupCount: 1, goalTitle: "项目 gA" });
+  });
+
+  it("旧字段已清空、边只在新表里：照样数得出边（旧字段清空后的世界）", async () => {
+    // 迁移清空 goal.prerequisites 之后的世界：旧字段是空的，边只存在于 taskRelations。
+    // 接线闸——把 prerequisiteLossOnAssign 里的 hydrate 删掉，本条立刻红。
+    await seedTask("t1");
+    await seedTask("t2");
+    await seedProject("gA", ["t1", "t2"]);
+    await seedProject("gB");
+    await seedRelation("t1", "t2");
 
     expect(await prerequisiteLossOnAssign("t1", "gB")).toEqual({ count: 1, groupCount: 1, goalTitle: "项目 gA" });
   });
@@ -916,6 +988,7 @@ describe("批量归属写入", () => {
     await updateGoalPrerequisites(old.id, [
       { blocker: { kind: "task", id: "t1" }, blocked: { kind: "task", id: "t2" } },
     ]);
+    await seedRelation("t1", "t2");
     await updateGoal(old.id, { status: "archived", now: date(now) });
     const target = await addGoal({ title: "目标组", kind: "project", now: date(now) });
 
@@ -1065,6 +1138,7 @@ describe("prerequisiteLossOnAssignMany", () => {
     await updateGoalPrerequisites(source.id, [
       { blocker: { kind: "task", id: "t1" }, blocked: { kind: "task", id: "t2" } },
     ]);
+    await seedRelation("t1", "t2");
 
     // 单条版逐条问会数出 2（t1 一次、t2 一次），但真正被删的边只有 1 条。
     // 说多了用户去核对会发现对不上，一次数不对就再也不信这个提示。
@@ -1082,12 +1156,14 @@ describe("prerequisiteLossOnAssignMany", () => {
     await updateGoalPrerequisites(a.id, [
       { blocker: { kind: "task", id: "t1" }, blocked: { kind: "task", id: "other" } },
     ]);
+    await seedRelation("t1", "other");
     const b = await addGoal({ title: "组B", kind: "project", now: date(now) });
     await addGoalMember(b.id, { kind: "task", id: "t2" }, { now: date(now) });
     await addGoalMember(b.id, { kind: "task", id: "other" }, { now: date(now) });
     await updateGoalPrerequisites(b.id, [
       { blocker: { kind: "task", id: "other" }, blocked: { kind: "task", id: "t2" } },
     ]);
+    await seedRelation("other", "t2");
 
     const loss = await prerequisiteLossOnAssignMany(["t1", "t2"], null);
     expect(loss?.count).toBe(2);
@@ -1137,6 +1213,20 @@ describe("prerequisiteLossOnAssignMany", () => {
     ]);
 
     expect(await prerequisiteLossOnAssignMany(["t1", "t2"], null)).toBeNull();
+  });
+
+  it("旧字段已清空、边只在新表里：照样数得出边（旧字段清空后的世界）", async () => {
+    // 迁移清空 goal.prerequisites 之后的世界：旧字段是空的，边只存在于 taskRelations。
+    // 接线闸——把 prerequisiteLossOnAssignMany 里的 hydrate 删掉，本条立刻红。
+    await seedBareTask("t1");
+    await seedBareTask("t2");
+    const source = await addGoal({ title: "源组", kind: "project", now: date(now) });
+    await addGoalMember(source.id, { kind: "task", id: "t1" }, { now: date(now) });
+    await addGoalMember(source.id, { kind: "task", id: "t2" }, { now: date(now) });
+    await seedRelation("t1", "t2");
+
+    const loss = await prerequisiteLossOnAssignMany(["t1"], null);
+    expect(loss).toEqual({ count: 1, groupCount: 1, goalTitle: "源组" });
   });
 });
 
