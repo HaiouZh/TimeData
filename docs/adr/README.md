@@ -41,11 +41,12 @@ status: living
 | [0029](0029-desktop-shell-embeds-frontend.md) | Windows 桌面壳内嵌前端产物，不加载线上站点 | 2026-08-03 | 三条路线（加载线上/内嵌前端/内嵌服务端）功能等价，区别只在前端从服务器拉还是从磁盘读；内嵌服务端撞账本封闭契约属产品重选，加载线上会让 `AppUpdateProvider` 的 focus→hardRefresh 在热键唤起瞬间清缓存重载；取内嵌前端并吃不注册 SW 的 `mode=mobile` 产物，三壳同构 | 不改 [0011](0011-server-api-as-write-boundary.md) / [0012](0012-sync-ledger-and-domain-registry.md) 的边界 |
 | [0031](0031-delete-health-data-layer.md) | 删除健康数据层，6 张表与 6 个同步域全清 | 2026-08-14 | 复核 [0024](0024-retire-health-subsystem.md) 保留数据层的两条理由：客户端从不产生健康域变更（无生产者即不触发整批 409），备份导入按当前登记簿取键、多余键静默忽略——两条都不成立；删净三端与库表，物理表手工 DROP 一次、代码不留常驻 DDL，删前 dump 5511 条存档 | 取代 [0024](0024-retire-health-subsystem.md) 的数据层保留部分 |
 | [0032](0032-desktop-auto-update-via-github-release.md) | 桌面自动更新走 tauri-plugin-updater，更新源托管在 GitHub 固定 tag | 2026-08-14 | 手动装新版会撞 NSIS「删除应用数据」复选框、一次手滑清空本机全部记录；走 updater 则 `/UPDATE` 与 `passive` 两道独立的锁让它结构上不可能发生。托管走 GitHub 固定 tag `desktop-latest`（实测比自建快 12 倍，且 `releases/latest/` 被 Android 包占用）；静默下载 + 设置页手点安装，逻辑全在 Rust 侧 | 补充 [0029](0029-desktop-shell-embeds-frontend.md) |
+| [0033](0033-agent-task-create-endpoint.md) | agent 可经受控端点新建任务 | 2026-08-15 | agent 原本只能改已有任务、建不了新任务，而待办的捕捉入口已经跑进 ClaudeCode 会话里。新开 `POST /api/agent/tasks` 建 root task（请求体不含 `parentId`），`requestId` 幂等，调用方拥有语义时间（`createdAt` / `completedAt` 可回填历史，向未来卡 5 分钟容差），`updatedAt` 与 `op.at` 仍由服务端分配 | 延续 [0011](0011-server-api-as-write-boundary.md) |
 
 ## 按主题速查
 
 - **同步内核**：0012（账本+登记簿）→ 0006（墓碑）、0016（免回声+分页）、0017（staleGuard）、0018（完成 op）、0019（破坏性操作）、0020（push 幂等）、0021（bump 带数据）
-- **写入边界与鉴权**：0001 → 0011 → 0013、0005、0025（陌生来源收敛）
+- **写入边界与鉴权**：0001 → 0011 → 0013、0005、0025（陌生来源收敛）、0033（agent 建任务）
 - **备份**：0002、0003、0007、0015
 - **数据建模**：0004（UTC）、0008（Dexie 版本链）、0010（QuickNote 域）、0014（tags vs 字段）
 - **日记编辑器**：0022（列表识别口径）、0023（跨断点重挂）

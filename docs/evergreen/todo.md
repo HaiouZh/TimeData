@@ -38,7 +38,7 @@ contracts:
   - packages/shared/src/taskDates.ts
   - packages/shared/src/syncDomains.ts
   - packages/server/src/db/schema.ts
-last-reviewed: 2026-08-14
+last-reviewed: 2026-08-15
 ---
 
 # 待办任务
@@ -76,7 +76,7 @@ last-reviewed: 2026-08-14
 
 所有本地写入（含 `persistTaskOrder` 批量重排）都在同一个 Dexie transaction 内同时写 `tasks` 与 `syncLog`；同步日志失败时业务写入回滚。可选 `completionOp` 由 `completionOp(prev, next, at)` 按 `done` / `completedAt` / `skipped` / `lastDoneAt` / `completedCount` 的 diff 推导：`putTask` 读 prev 行后自动带上，**另有约十处绕开 `putTask` 的事务直写点各自手传**（物化、跳过、重锚、批量迁移等，都在 `lib/tasks.ts` 内）——推导逻辑只有一份，入口不止一个。完成语义写入会随 syncLog 上行并带 `op`（四型及其**判定优先级** `complete > reopen > skip > amend`——`amend` 是兜底，见 [sync · tasks / tracks 语义 op](sync/push-pull.md#sync-tasks-tracks-op)）；改标题、改排序、改标签、改权重等非完成语义写入不附 `op`。服务端收到无 `op` 的 tasks upsert 时保留现存完成字段，只更新非守卫列，避免旧快照把另一设备的勾选翻回；**守卫只作用在 `ON CONFLICT DO UPDATE` 那一支**，行不存在时走 INSERT 全列写入——那时没有现存字段需要保护。`updated_at` 由服务器记账时分配，设备时钟漂移不影响同步正确性。客户端校验只为体验，服务端用登记簿 schema 重新解析并按 LWW + 完成字段守卫写入。
 
-### 1.2 agent / CLI 回写任务状态（封闭动作集合）
+### 1.2 agent / CLI 回写任务状态
 
 ```text
 agent / CLI (task-done/task-tag)
@@ -100,13 +100,27 @@ agent / CLI (task-done/task-tag)
 
 `AGENT_TOKEN` 只在 `/api/agent/*` 生效，泄露影响面限于任务完成/备注/tags，不授予 sync、force-push、admin、export、reset。CLI 的 `task-*` 是该受控 API 的简化封装。
 
+本节的动作集合只作用于**已有**任务；新建 root task 是另一条通道，见 §1.4。
+
 <a id="todo-s1-3"></a>
 
 ### 1.3 只读查询 + 排期写端点（第三条写入通道）
 
 - `GET /api/tasks?kind=pool|recurring&done=0|1`（`routes/tasks.ts`）：严格 querySchema，SQL 层只取 `parent_id IS NULL` 的 root tasks，`ORDER BY sort_order, created_at, id`，`rowToTask` 映射后按 kind/done 过滤；受 `AUTH_TOKEN` 保护。
 - `POST /api/tasks/:id/schedule { scheduledDate: "YYYY-MM-DD" | null }`（`routes/tasks.ts`）：CLI `task-schedule`/`task-unschedule` 调用，受 `AUTH_TOKEN` 保护；重复模板 409 `TASK_RECURRING_USE_RULE`，occurrence（重复规则的这一发）409 `TASK_OCCURRENCE_NOT_SCHEDULABLE`——两个不同 code，让调用方区分「模板」与「这一发」。
-  - **红线**：这条端点仍直接 `UPDATE tasks SET scheduled_at, updated_at`，不走 `applyChange`/LWW 域，因此绕过 LWW 的 schema 校验/冲突路径；但业务 UPDATE 与 `recordSeqWithDb` 已在同一个 SQLite transaction 内，记账失败会整体回滚，提交后再广播 SSE bump。它是 tasks 的第三条 server 写入通道（受控、AUTH_TOKEN、server 权威写），三条通道机制各不相同（并列见 [todo/invariants](todo/invariants.md) 第 3 条）。
+  - **红线**：这条端点仍直接 `UPDATE tasks SET scheduled_at, updated_at`，不走 `applyChange`/LWW 域，因此绕过 LWW 的 schema 校验/冲突路径；但业务 UPDATE 与 `recordSeqWithDb` 已在同一个 SQLite transaction 内，记账失败会整体回滚，提交后再广播 SSE bump。它是 tasks 的第三条 server 写入通道（受控、AUTH_TOKEN、server 权威写），四条通道机制各不相同（并列见 [todo/invariants](todo/invariants.md) 第 3 条）。
+
+<a id="todo-s1-4"></a>
+
+### 1.4 agent 建任务（第四条写入通道）
+
+`POST /api/agent/tasks`（`routes/agent.ts`）：受 `scopedAuthMiddleware` 保护，`requestId` 作幂等键兼 task id，走 `applyChange()` + `sync_seq` + `notifySyncChange()`，与 §1.2 同一条记账链路。形制照 [quick-notes](quick-notes.md) 的 agent 投递端点。
+
+- **只建 root task**：请求体不含 `parentId`，接口形状上排除一层父子约束被绕过。
+- **调用方拥有语义时间**：`createdAt` / `completedAt` 可回填历史；`updatedAt` 与 `op.at` 由服务端分配。`op.at` 刻意用记账时刻而非回填的 `completedAt`——它参与 LWW 判定，用历史时间会让写入被误判为陈旧。
+- **回填方向不对称**：向历史不设限，向未来卡 5 分钟容差；`completedAt < createdAt` 返回 400。`done=true` 必须带 `completedAt`，`done=false` 不得带。
+- 完成态字段组对齐客户端非重复路径：`lastDoneAt` 恒 `null`、`completedCount` 恒 `0`、`skipped` 恒 `false`。
+- 依据见 [ADR 0033](../adr/0033-agent-task-create-endpoint.md)。
 
 <a id="todo-s2"></a>
 
