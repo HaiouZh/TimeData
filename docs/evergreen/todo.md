@@ -123,6 +123,8 @@ agent / CLI (task-done/task-tag)
 - 完成态字段组对齐客户端非重复路径：`lastDoneAt` 恒 `null`、`completedCount` 恒 `0`、`skipped` 恒 `false`。
 - 依据见 [ADR 0033](../adr/0033-agent-task-create-endpoint.md)。
 
+同组另有一个只读端点 `GET /api/agent/tasks`，供写入方在建任务前比对既有条目、避免重复建；它是 `/api/agent/*` 下唯一的读端点。返回**全部未完成的根任务**，传 `completedSince`（严格 UTC ISO、不得早于 30 天前，否则 400）时追加该时刻之后完成的根任务。响应每条**只有 5 个字段**：`id` / `title` / `done` / `createdAt` / `completedAt`，不含 `tags` / `weight` / `sortOrder` / `scheduledAt`；不含子任务与重复模板。读边界的收窄理由见 ADR 0033「读边界」节。
+
 <a id="todo-s2"></a>
 
 ## 2. Schema / 契约（字段级）

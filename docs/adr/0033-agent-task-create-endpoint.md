@@ -26,6 +26,24 @@ ClaudeCode 会话再没回来。要把它们收回来，就需要一条 agent �
 3. **回填方向不对称**：向历史不设限（日终跑写的就是更早的时刻），向未来卡 5 分钟容差
    （防时钟漂移把未来时间写进账）。`completedAt < createdAt` 返回 400。
 
+## 读边界（2026-08-16 补）
+
+同一决策的另一面：日终提取要在补录前比对用户已有的待办，因此窄域 `AGENT_TOKEN` 获得了
+第一份读权限 —— `GET /api/agent/tasks`。此前 `/api/agent/*` 全部是写端点。
+
+不另开 ADR，因为它与本 ADR 是同一个问题的两面：agent 通道能碰 tasks 的哪些部分。
+
+三条收窄，每条对应一种被滥用的可能：
+
+1. **只返回 5 个字段**（`id` / `title` / `done` / `createdAt` / `completedAt`），不是完整 `Task`。
+   去重只需要标题与时间，`tags` / `weight` / `sortOrder` 等一概不给。
+2. **只返回根任务与非重复模板**。子任务与 recurrence 模板不参与去重，返回它们只是扩大暴露面。
+3. **`completedSince` 卡 30 天上限**，超出返回 400。防止一个查询参数把全部历史读出去。
+
+**不复用 `GET /api/tasks?kind=pool&done=0`** 的理由：它挂在 `authMiddleware` 下（只认全权限
+`AUTH_TOKEN`）且返回完整 Task 全字段。让调用方配全权限 token 会让 `scopedAuthMiddleware`
+失去存在意义 —— 那道中间件的全部理由就是「agent 只拿它需要的那点权限」。
+
 ## 后果
 
 - tasks 因此有了**第四条 server 写入通道**（并列见 `evergreen/todo/invariants.md` 第 3 条）。
