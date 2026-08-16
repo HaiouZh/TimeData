@@ -130,6 +130,8 @@ const EMPTY: TodoBuckets = {
   projects: [],
   projectTints: new Map<string, string>(),
   goalLinkedIds: new Set<string>(),
+  waiting: [],
+  waitingBlockerTitles: {},
 };
 const TODO_COMPOSER_CONTENT_GAP_PX = 24;
 /**
@@ -1244,7 +1246,22 @@ export function TodoPage() {
   );
 
   // 空区整块不渲染——写法与下方 completedBlock 同形（`length > 0 &&`）。
-  const waitingBlock = waitingTrackRows.length > 0 && <WaitingSection rows={waitingTrackRows} />;
+  const waitingBlock =
+    (buckets.waiting.length > 0 || waitingTrackRows.length > 0) && (
+      <WaitingSection
+        rows={waitingTrackRows}
+        tasks={buckets.waiting}
+        blockerTitles={buckets.waitingBlockerTitles}
+        onToggle={rowHandlers.onToggle}
+        onEdit={rowHandlers.onEdit}
+        onDelete={rowHandlers.onDelete}
+        onToToday={rowHandlers.onToToday}
+        onToInbox={rowHandlers.onToInbox}
+        onToHand={rowHandlers.onToHand}
+        onCopyTitle={rowHandlers.onCopyTitle}
+        goalLinkedIds={goalLinkedIds}
+      />
+    );
 
   const completedFiltered = f(buckets.completed);
   // 已完成区只挂轨道徽章、不挂项目 chip（项目 chip 按 project-zone 契约只出现在手头/今天/已排期）：

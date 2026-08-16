@@ -23,7 +23,11 @@ import {
   projectMemberIndex,
   type TodoProjectGroup,
 } from "./tasks/goalMembership.js";
-import { removeTaskRelationsForInCurrentTransaction } from "./taskRelations.js";
+import {
+  buildBlockedByIndex,
+  listTaskRelations,
+  removeTaskRelationsForInCurrentTransaction,
+} from "./taskRelations.js";
 import { localDateOf, normalizeScheduledDate, placementForTask } from "./tasks/placement.js";
 import { sortProjectMembers } from "./tasks/projectZone.js";
 import { currentDueDateString } from "./tasks/recurrence.js";
@@ -826,6 +830,10 @@ export interface TodoBuckets {
    * 若由 projects 派生，只属于 theme 目标的任务会失去绿竖条。
    */
   goalLinkedIds: ReadonlySet<string>;
+  /** 在等：被未完成前置挡住的任务。已在手头或已完成的**不进**这里——正在做的活不该显示「在等」。 */
+  waiting: Task[];
+  /** taskId → 挡着它的那些东西的标题（用于界面显示「等 XX」）。只含 waiting 桶里的任务。 */
+  waitingBlockerTitles: Record<string, string[]>;
 }
 
 function isOverdue(t: Task, now: Date): boolean {
@@ -849,6 +857,23 @@ function localYmd(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
+/**
+ * blockedBy 索引的 `${kind}:${id}` 键 → 界面显示的标题。悬空 ref（任务/轨道已删）退回占位，
+ * 不因查不到就丢掉整条边——否则「在等」区会显示一条不说明原因的行。
+ */
+function blockerDisplayTitle(
+  key: string,
+  tasksById: Map<string, Task>,
+  trackTitles: Map<string, string>,
+): string {
+  const sep = key.indexOf(":");
+  const kind = key.slice(0, sep);
+  const id = key.slice(sep + 1);
+  if (kind === "task") return tasksById.get(id)?.title ?? "（已删除）";
+  if (kind === "track") return trackTitles.get(id) ?? "（已删除）";
+  return "（已删除）";
+}
+
 export async function listTasks(now: Date = new Date()): Promise<TodoBuckets> {
   const handSession = await getActiveSession();
   const handSessionId = handSession?.id ?? null;
@@ -857,6 +882,9 @@ export async function listTasks(now: Date = new Date()): Promise<TodoBuckets> {
   // 读裸行不做 GoalSchema 解析：superRefine 会因单个成员重复 reject 整行，让整组归属静默失效。
   // 这一读同时把 goals 表纳入 useLiveQuery 的依赖追踪，TodoPage 不必再单开一条 goals 查询。
   const goalRows = await db.goals.toArray();
+  // 关系边（谁挡着谁）同层读入：新增/删除边要即时重算 waiting 桶，
+  // 经 listTaskRelations 的 db.taskRelations 访问纳入 liveQuery 依赖追踪。
+  const relations = await listTaskRelations();
   const projectIndex = projectMemberIndex(goalRows);
   const projectCandidates: Task[] = [];
   const all: Task[] = [];
@@ -868,6 +896,21 @@ export async function listTasks(now: Date = new Date()): Promise<TodoBuckets> {
     }
     all.push(parsed.data);
   }
+  // 前置已完成的判定「一勾自动解锁」落在 buildBlockedByIndex 里（已完成的 blocker 不进索引），
+  // 这里只负责喂 completedKeys。轨道已完成 = status !== "active"；tracks 表本函数此前不读，
+  // 这一读让轨道完成/删除即时反映到 waiting 桶的解锁与标题。悬空 ref 的标题回退见 blockerDisplayTitle。
+  const tasksById = new Map(all.map((t) => [t.id, t] as const));
+  const completedKeys = new Set<string>();
+  for (const t of all) {
+    if (t.done) completedKeys.add(`task:${t.id}`);
+  }
+  const trackRows = await db.tracks.toArray();
+  const trackTitles = new Map<string, string>();
+  for (const tr of trackRows) {
+    trackTitles.set(tr.id, tr.title);
+    if (tr.status !== "active") completedKeys.add(`track:${tr.id}`);
+  }
+  const blockedBy = buildBlockedByIndex(relations, completedKeys);
   const buckets: TodoBuckets = {
     today: [],
     inbox: [],
@@ -887,6 +930,8 @@ export async function listTasks(now: Date = new Date()): Promise<TodoBuckets> {
         .map((row) => row.id),
     ),
     goalLinkedIds: goalLinkedTaskIds(goalRows),
+    waiting: [],
+    waitingBlockerTitles: {},
   };
   // 规则的耗尽判定与到期日排序统一走 occurrence 账本（§9.1 读口径），不再读模板死游标。
   const occurrencesByRule = new Map<string, Task[]>();
@@ -934,7 +979,17 @@ export async function listTasks(now: Date = new Date()): Promise<TodoBuckets> {
       continue;
     }
     const p = placementForTask(t, now);
-    if (p.pool === "today") buckets.today.push(t);
+    if (p.pool === "completed") buckets.completed.push(t);
+    // 在等：被未完成前置挡住。插在「已完成」之后、原 placement 分支之前——排了今天/已排期/无排期的
+    // 被挡任务一律进 waiting，不再进 today/inbox/scheduled，用户不会在「今天」看到做不了的活。
+    // 与判定层 bucketForTask 的优先级刻意不同（判定层「排了今天」优先于「被挡」）：判定层回答
+    // 「这条活是什么状态」，分区回答「它该出现在哪个区」，两层口径不同。见 RESULT DECISIONS。
+    else if (blockedBy.has(`task:${t.id}`)) {
+      buckets.waiting.push(t);
+      buckets.waitingBlockerTitles[t.id] = (blockedBy.get(`task:${t.id}`) ?? []).map((key) =>
+        blockerDisplayTitle(key, tasksById, trackTitles),
+      );
+    } else if (p.pool === "today") buckets.today.push(t);
     // 归属轴排他：已归 active project 的根任务不进收件箱，收件箱回归「真·未归类托盘」。
     else if (p.pool === "inbox") {
       if (!ownedByProject && !isChild) buckets.inbox.push(t);

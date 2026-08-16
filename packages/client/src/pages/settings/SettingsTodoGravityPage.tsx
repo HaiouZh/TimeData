@@ -28,6 +28,8 @@ const EMPTY: TodoBuckets = {
   projects: [],
   projectTints: new Map<string, string>(),
   goalLinkedIds: new Set<string>(),
+  waiting: [],
+  waitingBlockerTitles: {},
 };
 
 export default function SettingsTodoGravityPage() {

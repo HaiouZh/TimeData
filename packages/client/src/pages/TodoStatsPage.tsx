@@ -23,6 +23,8 @@ const EMPTY_BUCKETS: TodoBuckets = {
   projects: [],
   projectTints: new Map(),
   goalLinkedIds: new Set(),
+  waiting: [],
+  waitingBlockerTitles: {},
 };
 
 export default function TodoStatsPage() {

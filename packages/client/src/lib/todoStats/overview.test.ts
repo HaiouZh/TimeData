@@ -43,6 +43,8 @@ function emptyBuckets(overrides: Partial<TodoBuckets> = {}): TodoBuckets {
     handSession: null,
     projects: [],
     goalLinkedIds: new Set(),
+    waiting: [],
+    waitingBlockerTitles: {},
     ...overrides,
   };
 }

@@ -1991,3 +1991,76 @@ describe("子任务分区口径（阶段3）", () => {
     expect(buckets.scheduled.map((t) => t.id)).not.toContain(child.id);
   });
 });
+
+describe("在等桶：被未完成前置挡住的任务（界面分流）", () => {
+  const NOW = new Date("2026-07-10T10:00:00.000Z");
+
+  it("被未完成前置挡住的任务进 waiting 桶，且不在 today/inbox/scheduled 里", async () => {
+    const blocker = await addTask({ title: "挡路的前置", toInbox: true });
+    const blocked = await addTask({ title: "被挡的活", toInbox: true });
+    await addTaskRelation({ blocker: { kind: "task", id: blocker.id }, blocked: { kind: "task", id: blocked.id } });
+
+    const buckets = await listTasks(NOW);
+    expect(buckets.waiting.map((t) => t.id)).toContain(blocked.id);
+    expect(buckets.waiting.map((t) => t.id)).not.toContain(blocker.id);
+    expect(buckets.today.map((t) => t.id)).not.toContain(blocked.id);
+    expect(buckets.inbox.map((t) => t.id)).not.toContain(blocked.id);
+    expect(buckets.scheduled.map((t) => t.id)).not.toContain(blocked.id);
+  });
+
+  it("前置完成后自动解锁：被挡任务回到它本来该在的区", async () => {
+    const blocker = await addTask({ title: "挡路的前置", toInbox: true });
+    const blocked = await addTask({ title: "被挡的活", toInbox: true });
+    await addTaskRelation({ blocker: { kind: "task", id: blocker.id }, blocked: { kind: "task", id: blocked.id } });
+    expect((await listTasks(NOW)).waiting.map((t) => t.id)).toContain(blocked.id);
+
+    await toggleTaskDone(blocker.id, { now: NOW });
+
+    const buckets = await listTasks(NOW);
+    expect(buckets.waiting.map((t) => t.id)).not.toContain(blocked.id);
+    expect(buckets.inbox.map((t) => t.id)).toContain(blocked.id);
+  });
+
+  it("被挡但已在手头的任务留在 atHand，不进 waiting", async () => {
+    const blocker = await addTask({ title: "挡路的前置", toInbox: true });
+    const blocked = await addTask({ title: "被挡的活", toInbox: true });
+    await addTaskRelation({ blocker: { kind: "task", id: blocker.id }, blocked: { kind: "task", id: blocked.id } });
+    await grabTaskToHand(blocked.id);
+
+    const buckets = await listTasks(NOW);
+    expect(buckets.atHand.map((t) => t.id)).toContain(blocked.id);
+    expect(buckets.waiting.map((t) => t.id)).not.toContain(blocked.id);
+  });
+
+  it("被挡但已完成的任务留在 completed，不进 waiting", async () => {
+    const blocker = await addTask({ title: "挡路的前置", toInbox: true });
+    const blocked = await addTask({ title: "被挡的活", toInbox: true });
+    await addTaskRelation({ blocker: { kind: "task", id: blocker.id }, blocked: { kind: "task", id: blocked.id } });
+    await toggleTaskDone(blocked.id, { now: NOW });
+
+    const buckets = await listTasks(NOW);
+    expect(buckets.completed.map((t) => t.id)).toContain(blocked.id);
+    expect(buckets.waiting.map((t) => t.id)).not.toContain(blocked.id);
+  });
+
+  it("被挡的项目成员仍出现在项目区（归属轴与状态轴正交）", async () => {
+    const member = await addTask({ title: "刷墙", toInbox: true });
+    const blocker = await addTask({ title: "挡路的前置", toInbox: true });
+    await addTaskRelation({ blocker: { kind: "task", id: blocker.id }, blocked: { kind: "task", id: member.id } });
+    const goal = await addGoal({ title: "装修", kind: "project" });
+    await addGoalMember(goal.id, { kind: "task", id: member.id });
+
+    const buckets = await listTasks(NOW);
+    expect(buckets.waiting.map((t) => t.id)).toContain(member.id);
+    expect(buckets.projects[0]?.tasks.map((t) => t.id)).toEqual([member.id]);
+  });
+
+  it("waitingBlockerTitles 给出 blocker 的标题", async () => {
+    const blocker = await addTask({ title: "挡路的前置", toInbox: true });
+    const blocked = await addTask({ title: "被挡的活", toInbox: true });
+    await addTaskRelation({ blocker: { kind: "task", id: blocker.id }, blocked: { kind: "task", id: blocked.id } });
+
+    const buckets = await listTasks(NOW);
+    expect(buckets.waitingBlockerTitles[blocked.id]).toEqual(["挡路的前置"]);
+  });
+});
