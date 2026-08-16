@@ -370,6 +370,16 @@ function ProjectGroupCard({
                 下一步 {group.tasks[0].title}
               </span>
             )}
+            {/* 被挡计数对 group.tasks 求交（summarizeProjectGroup），筛选裁剪后自动跟着变小，
+                故不像「下一步」徽章那样加 filterActive 门——两枚徽章的口径不打架。 */}
+            {summary.blockedCount > 0 && (
+              <span
+                data-testid="project-blocked-badge"
+                className="shrink-0 rounded-pill bg-warn/10 px-2 py-0.5 td-text-caption font-normal text-warn"
+              >
+                {summary.blockedCount} 条被挡
+              </span>
+            )}
             {showCapWarning && <span className="shrink-0 td-text-caption font-normal text-warn">接近上限</span>}
           </button>
         )}

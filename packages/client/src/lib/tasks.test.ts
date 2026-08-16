@@ -2063,4 +2063,18 @@ describe("在等桶：被未完成前置挡住的任务（界面分流）", () =
     const buckets = await listTasks(NOW);
     expect(buckets.waitingBlockerTitles[blocked.id]).toEqual(["挡路的前置"]);
   });
+
+  it("被挡的项目成员带进组级 blockedMemberIds（徽章数据源）", async () => {
+    const member = await addTask({ title: "刷墙", toInbox: true });
+    const free = await addTask({ title: "自由成员", toInbox: true });
+    const blocker = await addTask({ title: "挡路的前置", toInbox: true });
+    await addTaskRelation({ blocker: { kind: "task", id: blocker.id }, blocked: { kind: "task", id: member.id } });
+    const goal = await addGoal({ title: "装修", kind: "project" });
+    await addGoalMember(goal.id, { kind: "task", id: member.id });
+    await addGoalMember(goal.id, { kind: "task", id: free.id });
+
+    const buckets = await listTasks(NOW);
+    expect(buckets.projects[0]?.blockedMemberIds.has(member.id)).toBe(true);
+    expect(buckets.projects[0]?.blockedMemberIds.has(free.id)).toBe(false);
+  });
 });

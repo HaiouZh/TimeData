@@ -45,6 +45,7 @@ function group(overrides: Partial<TodoProjectGroup> & Pick<TodoProjectGroup, "go
     recentDoneCount: 0,
     memberCount: 0,
     pendingChildByMember: new Map(),
+    blockedMemberIds: new Set(),
     ...overrides,
   };
 }
@@ -920,6 +921,56 @@ describe("ProjectNameChip", () => {
     );
     expect(host.querySelector("[data-project-dot]")).toBeNull();
     expect(host.textContent).toContain("装修");
+    await unmount(root);
+  });
+});
+
+describe("被挡徽章", () => {
+  it("有被挡成员时标题行显示「N 条被挡」", async () => {
+    const { host, root } = await renderDom(
+      sectionElement({
+        groups: [
+          group({
+            goalId: "g1",
+            goalTitle: "装修",
+            tasks: [task({ id: "t1" }), task({ id: "t2" }), task({ id: "t3" })],
+            blockedMemberIds: new Set(["t1", "t2"]),
+          }),
+        ],
+      }),
+    );
+    const badge = host.querySelector('[data-testid="project-blocked-badge"]');
+    expect(badge).not.toBeNull();
+    expect(badge?.textContent).toContain("2 条被挡");
+    await unmount(root);
+  });
+
+  it("零被挡时不显示被挡徽章", async () => {
+    const { host, root } = await renderDom(
+      sectionElement({
+        groups: [group({ goalId: "g1", tasks: [task({ id: "t1" })] })],
+      }),
+    );
+    expect(host.querySelector('[data-testid="project-blocked-badge"]')).toBeNull();
+    expect(host.textContent).not.toContain("被挡");
+    await unmount(root);
+  });
+
+  it("被挡徽章与「下一步」徽章并存", async () => {
+    const { host, root } = await renderDom(
+      sectionElement({
+        groups: [
+          group({
+            goalId: "g1",
+            goalTitle: "装修",
+            tasks: [task({ id: "t1", title: "刷墙" }), task({ id: "t2", title: "接线" })],
+            blockedMemberIds: new Set(["t2"]),
+          }),
+        ],
+      }),
+    );
+    expect(host.querySelector('[data-testid="project-next-badge"]')?.textContent).toContain("下一步 刷墙");
+    expect(host.querySelector('[data-testid="project-blocked-badge"]')?.textContent).toContain("1 条被挡");
     await unmount(root);
   });
 });

@@ -37,7 +37,7 @@ function task(patch: Partial<Task> & Pick<Task, "id">): Task {
 }
 
 function group(patch: Partial<TodoProjectGroup> & Pick<TodoProjectGroup, "goalId">): TodoProjectGroup {
-  return { goalTitle: `目标 ${patch.goalId}`, tasks: [], doneCount: 0, recentDoneCount: 0, memberCount: 0, pendingChildByMember: new Map(), ...patch };
+  return { goalTitle: `目标 ${patch.goalId}`, tasks: [], doneCount: 0, recentDoneCount: 0, memberCount: 0, pendingChildByMember: new Map(), blockedMemberIds: new Set(), ...patch };
 }
 
 describe("projectMemberState", () => {
@@ -116,13 +116,13 @@ describe("projectMemberRowActions", () => {
 describe("summarizeProjectGroup", () => {
   it("计数直传，allDone 只在未完成为 0 且有已完成成员时成立", () => {
     expect(summarizeProjectGroup(group({ goalId: "g1", tasks: [task({ id: "a" })], doneCount: 1, recentDoneCount: 1 })))
-      .toEqual({ remaining: 1, doneCount: 1, recentDoneCount: 1, allDone: false });
+      .toEqual({ remaining: 1, doneCount: 1, recentDoneCount: 1, blockedCount: 0, allDone: false });
     expect(summarizeProjectGroup(group({ goalId: "g1", doneCount: 1, recentDoneCount: 0 })))
-      .toEqual({ remaining: 0, doneCount: 1, recentDoneCount: 0, allDone: true });
+      .toEqual({ remaining: 0, doneCount: 1, recentDoneCount: 0, blockedCount: 0, allDone: true });
   });
 
   it("空组不判 allDone（数据层已保证不会出现，此处是防御）", () => {
-    expect(summarizeProjectGroup(group({ goalId: "g1" }))).toEqual({ remaining: 0, doneCount: 0, recentDoneCount: 0, allDone: false });
+    expect(summarizeProjectGroup(group({ goalId: "g1" }))).toEqual({ remaining: 0, doneCount: 0, recentDoneCount: 0, blockedCount: 0, allDone: false });
   });
 
   it("remaining 计入未完成成员名下的子任务（按成员分桶求和）", () => {
@@ -134,6 +134,7 @@ describe("summarizeProjectGroup", () => {
       recentDoneCount: 0,
       memberCount: 1,
       pendingChildByMember: new Map([["m1", 2]]),
+      blockedMemberIds: new Set(),
     });
     expect(summary.remaining).toBe(3);
     expect(summary.allDone).toBe(false);
@@ -148,6 +149,7 @@ describe("summarizeProjectGroup", () => {
       recentDoneCount: 1,
       memberCount: 3,
       pendingChildByMember: new Map(),
+      blockedMemberIds: new Set(),
     });
     expect(summary.allDone).toBe(true);
   });
@@ -165,11 +167,31 @@ describe("summarizeProjectGroup", () => {
         ["A", 2],
         ["B", 1],
       ]),
+      blockedMemberIds: new Set(),
     };
     expect(summarizeProjectGroup(full).remaining).toBe(5);
     // 模拟筛选把 tasks 裁成只剩 A：remaining 必须跟着裁，不许把看不见的 B 名下子任务算进去。
     const filtered = { ...full, tasks: [task({ id: "A" })] };
     expect(summarizeProjectGroup(filtered).remaining).toBe(3);
+  });
+
+  it("筛选裁剪成员后，blockedCount 只数可见成员", () => {
+    // blockedMemberIds 是构造时的全集（A、B 都被挡），页面筛选只裁 tasks。
+    // 求交是这个字段存成集合而不是标量的**全部理由**：标量在这里必然读出 2，
+    // 徽章就会说「2 条被挡」而展开组只能数出 1 条。
+    const full = {
+      goalId: "g1",
+      goalTitle: "P1",
+      tasks: [task({ id: "A" }), task({ id: "B" })],
+      doneCount: 0,
+      recentDoneCount: 0,
+      memberCount: 2,
+      pendingChildByMember: new Map(),
+      blockedMemberIds: new Set(["A", "B"]),
+    };
+    expect(summarizeProjectGroup(full).blockedCount).toBe(2);
+    const filtered = { ...full, tasks: [task({ id: "A" })] };
+    expect(summarizeProjectGroup(filtered).blockedCount).toBe(1);
   });
 });
 

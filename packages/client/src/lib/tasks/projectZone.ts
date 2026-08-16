@@ -73,18 +73,27 @@ export interface ProjectGroupSummary {
   /** 近 RECENT_DONE_WINDOW_DAYS 天完成数（成员与子任务都算） */
   recentDoneCount: number;
   allDone: boolean;
+  /** 被未完成前置挡住的可见成员数。对 group.tasks 求交：筛选裁剪自动跟着裁。 */
+  blockedCount: number;
 }
 
 export function summarizeProjectGroup(group: TodoProjectGroup): ProjectGroupSummary {
   // 「还剩」= 看得见的未完成成员 + 它们名下未完成的子任务。按 group.tasks 求和而不是读一个
   // 加总好的标量：筛选激活时 tasks 已被裁剪，求和跟着裁，标题数字与展开后能数出来的条数一致。
   let pendingChildren = 0;
-  for (const task of group.tasks) pendingChildren += group.pendingChildByMember.get(task.id) ?? 0;
+  let blockedCount = 0;
+  for (const task of group.tasks) {
+    pendingChildren += group.pendingChildByMember.get(task.id) ?? 0;
+    // 「被挡」徽章同理按 group.tasks 求交：blockedMemberIds 是构造时的全集，
+    // 筛选裁掉的行不在 tasks 里，计数跟着裁，徽章不会把看不见的成员算进去。
+    if (group.blockedMemberIds.has(task.id)) blockedCount += 1;
+  }
   const remaining = group.tasks.length + pendingChildren;
   return {
     remaining,
     doneCount: group.doneCount,
     recentDoneCount: group.recentDoneCount,
+    blockedCount,
     // 无未完成成员 ⇒ pendingChildByMember 恒空，故此判据与旧行为等价。
     allDone: remaining === 0 && group.doneCount > 0,
   };

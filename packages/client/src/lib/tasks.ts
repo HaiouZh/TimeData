@@ -1020,6 +1020,9 @@ export async function listTasks(now: Date = new Date()): Promise<TodoBuckets> {
     (group) => ({
       ...group,
       tasks: sortProjectMembers(group.tasks, { handSessionId, now }),
+      // 被未完成前置挡住的成员 id。与 waiting 桶同源（同一份 blockedBy / completedKeys）：
+      // 前置已完成即不再算挡。组内成员恒为 task（projectMemberIndex 只收 task 成员），track: 键不会命中。
+      blockedMemberIds: new Set(group.tasks.filter((t) => blockedBy.has(`task:${t.id}`)).map((t) => t.id)),
     }),
   );
   // 子任务被投影层的 parentId 早退整个丢掉，不在任何桶里；这里直接按 atHand 的根任务反查。

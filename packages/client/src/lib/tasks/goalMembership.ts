@@ -39,6 +39,14 @@ export interface TodoProjectGroup {
    * 口径与手头区 `atHandPendingTotal` 同源；已完成成员不进本表（它们在组内不渲染）。
    */
   pendingChildByMember: ReadonlyMap<string, number>;
+  /**
+   * 被未完成前置挡住的成员 id 集合。**刻意不是加总好的标量**——理由同 pendingChildByMember：
+   * 筛选激活时页面会裁剪 tasks，标量结构上不可能跟着裁，徽章数字就会把看不见的成员算进去。
+   *
+   * 由 listTasks 在分组后按 blockedBy 索引填进（见 tasks.ts 的 projects .map()）；本文件只给空集占位。
+   * 口径与「在等」区同源（同一份 completedKeys，前置已完成即不再算挡）。
+   */
+  blockedMemberIds: ReadonlySet<string>;
 }
 
 /** 标题行「近 N 天 +M」的窗口长度。 */
@@ -132,6 +140,8 @@ export function buildTodoProjectGroups(
           recentDoneCount: 0,
           pendingChildByMember,
           memberCount: goalById.get(membership.goalId)?.members?.length ?? 0,
+          // 占位空集：真实值由 listTasks 在分组后按 blockedBy 索引填（本函数收不到关系数据）。
+          blockedMemberIds: new Set(),
         },
         latest: "",
         pendingChildByMember,
