@@ -1,5 +1,5 @@
 import { Plus, X } from "@phosphor-icons/react";
-import type { Task, TaskRelation, Track } from "@timedata/shared";
+import type { TaskRelation } from "@timedata/shared";
 import { useLiveQuery } from "dexie-react-hooks";
 import { useState } from "react";
 import { Icon } from "../../components/Icon.js";
