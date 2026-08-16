@@ -37,6 +37,7 @@
     "check:test": "node scripts/check-test-hygiene.mjs",
     "check:diary": "node scripts/check-diary-date.mjs",
     "check:settings": "node scripts/check-settings-catalog.mjs",
+    "check:prereq": "node scripts/check-legacy-prerequisites.mjs",
     "check:desktop": "pnpm --filter @timedata/desktop test && cargo test --manifest-path packages/desktop/src-tauri/Cargo.toml && cargo clippy --manifest-path packages/desktop/src-tauri/Cargo.toml -- -D warnings",
     "check:roadmap": "python scripts/docs_snap.py && python scripts/check_roadmap.py docs_local"
   },

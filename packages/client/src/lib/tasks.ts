@@ -23,6 +23,7 @@ import {
   projectMemberIndex,
   type TodoProjectGroup,
 } from "./tasks/goalMembership.js";
+import { removeTaskRelationsForInCurrentTransaction } from "./taskRelations.js";
 import { localDateOf, normalizeScheduledDate, placementForTask } from "./tasks/placement.js";
 import { sortProjectMembers } from "./tasks/projectZone.js";
 import { currentDueDateString } from "./tasks/recurrence.js";
@@ -79,6 +80,9 @@ async function deleteTaskAndChildrenInCurrentTransaction(
   const children = await db.tasks.where("parentId").equals(taskId).toArray();
   const childReason: TaskDeleteReason = reason === "user" ? "cascade" : reason;
   const ids = [taskId, ...children.map((child) => child.id)];
+  for (const id of ids) {
+    await removeTaskRelationsForInCurrentTransaction({ kind: "task", id });
+  }
   await db.tasks.bulkDelete(ids);
   await recordSyncLog("tasks", taskId, "delete", undefined, undefined, reason);
   for (const child of children) {
@@ -344,7 +348,7 @@ export async function updateTask(id: string, patch: UpdateTaskPatch): Promise<Ta
 
   if (!resetRecurrenceProgress) return putTask(next);
   // 重锚：删该 rule 当前活跃 pending occurrence（同事务）+ put 模板
-  await db.transaction("rw", db.tasks, db.syncLog, async () => {
+  await db.transaction("rw", db.tasks, db.taskRelations, db.syncLog, async () => {
     await deleteActiveOccurrencesInCurrentTransaction(id);
     await db.tasks.put(next);
     await recordSyncLog("tasks", next.id, "update", next.updatedAt, completionOp(existing, next, next.updatedAt));
@@ -459,7 +463,7 @@ export async function applyRecurrenceChoice(
   });
 
   // none/scheduled：rule 不再吐 occurrence，同事务清掉其名下活跃 pending
-  await db.transaction("rw", db.tasks, db.syncLog, async () => {
+  await db.transaction("rw", db.tasks, db.taskRelations, db.syncLog, async () => {
     await deleteActiveOccurrencesInCurrentTransaction(id);
     await db.tasks.put(next);
     await recordSyncLog("tasks", next.id, "update", next.updatedAt, completionOp(existing, next, next.updatedAt));
@@ -536,7 +540,7 @@ export async function toggleTaskDone(id: string, options: { now?: Date } = {}): 
     const reopened = TaskSchema.parse({ ...base, done: false, completedAt: null, updatedAt });
     if (base.ruleId === null) return putTask(reopened);
     // 撤勾 occurrence：删同 rule 后来物化的 active 发（它是这发完成的推进产物），避免双 active。
-    await db.transaction("rw", db.tasks, db.syncLog, async () => {
+    await db.transaction("rw", db.tasks, db.taskRelations, db.syncLog, async () => {
       const others = (await db.tasks.where("ruleId").equals(base.ruleId as string).toArray()).filter(
         (o) => o.id !== base.id && !o.done && !o.skipped,
       );
@@ -721,14 +725,15 @@ export async function moveTaskToParent(taskId: string, newParentId: string, now:
 }
 
 export async function deleteTask(id: string): Promise<void> {
-  await db.transaction("rw", db.tasks, db.syncLog, async () => {
+  await db.transaction("rw", db.tasks, db.taskRelations, db.syncLog, async () => {
+    await removeTaskRelationsForInCurrentTransaction({ kind: "task", id });
     await db.tasks.delete(id);
     await recordSyncLog("tasks", id, "delete", undefined, undefined, "user");
   });
 }
 
 export async function deleteTaskCascade(taskId: string): Promise<void> {
-  await db.transaction("rw", db.tasks, db.syncLog, async () => {
+  await db.transaction("rw", db.tasks, db.taskRelations, db.syncLog, async () => {
     const task = await db.tasks.get(taskId);
 
     // 删规则：连清其名下活跃 pending occurrence（done/skipped 历史发留作账本事实）。
@@ -746,6 +751,7 @@ export async function deleteTaskCascade(taskId: string): Promise<void> {
         for (const occ of actives) {
           const mirrorId = occurrenceChildId(occ.id, taskId);
           if ((await db.tasks.get(mirrorId)) !== undefined) {
+            await removeTaskRelationsForInCurrentTransaction({ kind: "task", id: mirrorId });
             await db.tasks.delete(mirrorId);
             await recordSyncLog("tasks", mirrorId, "delete", undefined, undefined, "mirror");
           }

@@ -5,6 +5,7 @@ import { addGoal, addGoalMember } from "./goals.js";
 import { endActiveSession, grabTaskToHand } from "./sessions.js";
 import { occurrenceChildId } from "./tasks/occurrenceChildId.js";
 import { localDateOf } from "./tasks/placement.js";
+import { addTaskRelation } from "./taskRelations.js";
 import {
   addTask,
   applyRecurrenceChoice,
@@ -1835,5 +1836,54 @@ describe("atHandPendingTotal", () => {
 
     // R1（1）+ r1Child（1）= 2；r2/r2Child 都不在手头，不应计入。
     expect((await listTasks()).atHandPendingTotal).toBe(2);
+  });
+});
+
+describe("删除任务连带清关系边", () => {
+  it("deleteTask 删掉任务作为 blocker 的边", async () => {
+    const blocker = await addTask({ title: "挡路" });
+    const blocked = await addTask({ title: "被挡" });
+    await addTaskRelation({ blocker: { kind: "task", id: blocker.id }, blocked: { kind: "task", id: blocked.id } });
+
+    await deleteTask(blocker.id);
+
+    expect(await db.taskRelations.count()).toBe(0);
+  });
+
+  it("deleteTask 删掉任务作为 blocked 的边", async () => {
+    const blocker = await addTask({ title: "挡路" });
+    const blocked = await addTask({ title: "被挡" });
+    await addTaskRelation({ blocker: { kind: "task", id: blocker.id }, blocked: { kind: "task", id: blocked.id } });
+
+    await deleteTask(blocked.id);
+
+    expect(await db.taskRelations.count()).toBe(0);
+  });
+
+  it("删除无关任务不影响别人的边", async () => {
+    const a = await addTask({ title: "A" });
+    const b = await addTask({ title: "B" });
+    const c = await addTask({ title: "C" });
+    const d = await addTask({ title: "D" });
+    await addTaskRelation({ blocker: { kind: "task", id: a.id }, blocked: { kind: "task", id: b.id } });
+    await addTaskRelation({ blocker: { kind: "task", id: c.id }, blocked: { kind: "task", id: d.id } });
+
+    await deleteTask(c.id);
+
+    expect(await db.taskRelations.count()).toBe(1);
+    const remaining = await db.taskRelations.toArray();
+    expect(remaining[0]).toMatchObject({ blockerId: a.id, blockedId: b.id });
+  });
+
+  it("deleteTaskCascade 删父任务时子任务参与的边也被清除", async () => {
+    const parent = await addTask({ title: "父" });
+    const child = await createChildTask(parent.id, "子");
+    const other = await addTask({ title: "别的任务" });
+    await addTaskRelation({ blocker: { kind: "task", id: parent.id }, blocked: { kind: "task", id: other.id } });
+    await addTaskRelation({ blocker: { kind: "task", id: child.id }, blocked: { kind: "task", id: other.id } });
+
+    await deleteTaskCascade(parent.id);
+
+    expect(await db.taskRelations.count()).toBe(0);
   });
 });

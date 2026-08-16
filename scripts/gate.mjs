@@ -94,6 +94,7 @@ export const GATE_STEPS = [
   { name: "check:test", command: "pnpm", args: ["check:test"] },
   { name: "check:diary", command: "pnpm", args: ["check:diary"] },
   { name: "check:settings", command: "pnpm", args: ["check:settings"] },
+  { name: "check:prereq", command: "pnpm", args: ["check:prereq"] },
   { name: "typecheck", command: "pnpm", args: ["typecheck"] },
   { name: "test", command: "pnpm", args: ["test"] },
   // jsdom 快桶（unit-clean-jsdom, isolate:false）打乱顺序复验：固定顺序下成员间新增的交叉污染

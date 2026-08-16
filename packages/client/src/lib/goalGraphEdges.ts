@@ -88,36 +88,3 @@ export function validatePrerequisiteEdge(
 
   return { ok: true };
 }
-
-export function addPrerequisiteEdge<T extends GoalLike>(
-  goalLike: T,
-  blocker: PrerequisiteEndpoint,
-  blocked: PrerequisiteEndpoint,
-): T {
-  const validation = validatePrerequisiteEdge(goalLike, blocker, blocked);
-  if (!validation.ok) throw new Error(validation.error);
-
-  return {
-    ...goalLike,
-    prerequisites: [
-      ...goalLike.prerequisites,
-      {
-        blocker: { kind: blocker.kind, id: blocker.id },
-        blocked: { kind: blocked.kind, id: blocked.id },
-      },
-    ],
-  };
-}
-
-export function removePrerequisiteEdge<T extends GoalLike>(
-  goalLike: T,
-  blocker: PrerequisiteEndpoint,
-  blocked: PrerequisiteEndpoint,
-): T {
-  return {
-    ...goalLike,
-    prerequisites: goalLike.prerequisites.filter(
-      (edge) => !(sameEndpoint(edge.blocker, blocker) && sameEndpoint(edge.blocked, blocked)),
-    ),
-  };
-}

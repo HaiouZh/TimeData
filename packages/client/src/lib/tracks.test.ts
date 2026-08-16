@@ -1,6 +1,7 @@
 import type { SyncLogEntry, TrackStep } from "@timedata/shared";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { db } from "../test/dbReset.js";
+import { addTaskRelation } from "./taskRelations.js";
 import {
   addTrack,
   addTrackStep,
@@ -807,5 +808,34 @@ describe("planUserStep (pure)", () => {
       timestamp: T0,
     });
     expect(closed).toMatchObject([{ id: "open", endedAt: T1, updatedAt: T0 }]);
+  });
+});
+
+describe("删除轨道连带清关系边", () => {
+  beforeEach(async () => {
+    await db.taskRelations.clear();
+  });
+
+  it("deleteTrack 删掉轨道参与的边（blocker 与 blocked 两侧）", async () => {
+    const track = await addTrack({ title: "被删的轨道" });
+    await addTaskRelation({ blocker: { kind: "track", id: track.id }, blocked: { kind: "task", id: "t-1" } });
+    await addTaskRelation({ blocker: { kind: "task", id: "t-2" }, blocked: { kind: "track", id: track.id } });
+
+    await deleteTrack(track.id);
+
+    expect(await db.taskRelations.count()).toBe(0);
+  });
+
+  it("删除无关轨道不影响别人的边", async () => {
+    const keep = await addTrack({ title: "保留的轨道" });
+    const doomed = await addTrack({ title: "要删的轨道" });
+    await addTaskRelation({ blocker: { kind: "track", id: keep.id }, blocked: { kind: "task", id: "t-1" } });
+    await addTaskRelation({ blocker: { kind: "track", id: doomed.id }, blocked: { kind: "task", id: "t-2" } });
+
+    await deleteTrack(doomed.id);
+
+    expect(await db.taskRelations.count()).toBe(1);
+    const remaining = await db.taskRelations.toArray();
+    expect(remaining[0]).toMatchObject({ blockerId: keep.id, blockedId: "t-1" });
   });
 });

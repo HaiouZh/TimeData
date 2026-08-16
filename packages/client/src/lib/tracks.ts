@@ -11,6 +11,7 @@ import {
 import { v4 as uuid } from "uuid";
 import { db } from "../db/index.js";
 import { recordSyncLog } from "../sync/engine.js";
+import { removeTaskRelationsForInCurrentTransaction } from "./taskRelations.js";
 
 export interface AddTrackInput {
   title: string;
@@ -421,12 +422,13 @@ export async function listAllTrackSteps(): Promise<TrackStep[]> {
 }
 
 export async function deleteTrack(id: string): Promise<void> {
-  await db.transaction("rw", db.tracks, db.trackSteps, db.syncLog, async () => {
+  await db.transaction("rw", db.tracks, db.trackSteps, db.taskRelations, db.syncLog, async () => {
     const steps = (await db.trackSteps.where("trackId").equals(id).toArray()).sort(compareTrackStepsBySemanticTime);
     await db.trackSteps.bulkDelete(steps.map((step) => step.id));
     for (const step of steps) {
       await recordSyncLog("track_steps", step.id, "delete");
     }
+    await removeTaskRelationsForInCurrentTransaction({ kind: "track", id });
     await db.tracks.delete(id);
     await recordSyncLog("tracks", id, "delete");
   });

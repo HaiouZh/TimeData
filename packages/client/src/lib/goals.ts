@@ -100,7 +100,10 @@ export async function updateGoal(id: string, patch: UpdateGoalPatch): Promise<Go
   let candidate: Goal = {
     ...existing,
     members: existing.members ?? [],
-    prerequisites: existing.prerequisites ?? [],
+    // 显式写空：数据库里 goal.prerequisites 已被迁移清空（恒为空数组），内存里的值是
+    // hydrateGoalPrerequisites 填的派生边。显式写空让写入的值与调用方传进来的对象无关，
+    // 堵死「hydrate 过的 goal 被回写时把关系表派生值倒灌回旧字段」这条路径。
+    prerequisites: [],
     updatedAt: nowIso(patch.now),
   };
   if (patch.title !== undefined) candidate.title = trimRequired(patch.title, "目标标题不能为空");
@@ -164,14 +167,14 @@ export async function addGoalMember(
 
     const members = goal.members ?? [];
     if (members.some((member) => sameGoalMember(member, ref))) {
-      nextGoal = GoalSchema.parse({ ...goal, members, prerequisites: goal.prerequisites ?? [] });
+      nextGoal = GoalSchema.parse({ ...goal, members, prerequisites: [] });
       return;
     }
 
     const next = GoalSchema.parse({
       ...goal,
       members: [...members, ref],
-      prerequisites: goal.prerequisites ?? [],
+      prerequisites: [],
       updatedAt: timestamp,
     });
     await db.goals.put(next);
@@ -199,7 +202,7 @@ export async function removeGoalMemberInCurrentTransaction(
 ): Promise<Goal> {
   const members = goal.members ?? [];
   if (!members.some((member) => sameGoalMember(member, ref))) {
-    return GoalSchema.parse({ ...goal, members, prerequisites: goal.prerequisites ?? [] });
+    return GoalSchema.parse({ ...goal, members, prerequisites: [] });
   }
 
   const nextMembers = members.filter((member) => !sameGoalMember(member, ref));
@@ -526,7 +529,7 @@ export async function addTaskForGoal(goalId: string, input: AddTaskForGoalInput)
     const nextGoal = GoalSchema.parse({
       ...goal,
       members: [...(goal.members ?? []), { kind: "task", id: task.id }],
-      prerequisites: goal.prerequisites ?? [],
+      prerequisites: [],
       updatedAt: task.updatedAt,
     });
 

@@ -59,6 +59,9 @@ jobs:
       - name: Settings catalog registry guard
         run: pnpm check:settings
 
+      - name: Legacy prerequisites guard
+        run: pnpm check:prereq
+
       - name: Typecheck
         run: pnpm -r typecheck
 
