@@ -23,7 +23,7 @@ covers:
 contracts:
   - packages/client/src/index.css
   - packages/client/src/lib/navigation/navRegistry.ts
-last-reviewed: 2026-08-14
+last-reviewed: 2026-08-16
 ---
 
 # 设计语言

@@ -9,7 +9,7 @@ contracts:
   - packages/client/src/lib/haptics.ts
   - packages/client/src/pages/stats/chartColors.ts
   - packages/client/src/lib/navigation/navRegistry.ts
-last-reviewed: 2026-08-14
+last-reviewed: 2026-08-16
 ---
 
 # 设计语言 · 关键不变量与红线
@@ -51,7 +51,7 @@ last-reviewed: 2026-08-14
 
     **为什么不能直接信 `Keyboard.resize: none`**：该配置**只有 iOS 读**——Android 端 `KeyboardPlugin.java` 只读 `resizeOnFullScreen`，`setResizeMode` 是 `unimplemented()`；而 iOS 侧 `none` 也只拦住插件自己 resize，拦不住 WebKit 因聚焦输入框而挪视口。即"壳不会自己让位"这个前提两个平台都没人保证，直接加键盘高会双倍避让（安卓表现为输入条飞到屏幕顶上，iOS 表现为钻进顶栏底下看不见）。配置本身仍保留并由 `check-android-config.mjs` 棘轮住（对 iOS 有效），但它不再是避让正确性的依据，见 [ios](../ios.md#ios-s3-3)。**Android 侧现走壳层让位**：manifest `adjustResize` + `MainActivity` 消费 `ime()` inset（两条同被 `check-android-config.mjs` 棘轮住，机制见 [android](../android.md#android-s2)），键盘弹起时 webview 整体变矮、本条实测口径自动归零，JS 不再叠加——双倍避让从根上拆除，实测口径退居防漂移兜底。
 
-    **文档流表单与弹层的避让底座（`KeyboardAvoidanceBridge`，挂在 `AppShell`）**：没有 fixed 输入条那套 JS 合成的页面不接 `composeBottomInset`，走全局 CSS 变量——Bridge 把 `useKeyboardHeight()` 写成 `--keyboard-inset`（纯遮挡量）与 `--keyboard-scroll-padding`（遮挡量 + 96px 保存按钮预留），键盘收起时移除变量；并在键盘 0→正 的那一跳把聚焦的文档流输入元素 `scrollIntoView({block:"nearest"})`（iOS resize:none 下 WebKit 在「body 不滚、内层 main 滚」的结构里不会替我们滚）。消费点：`.app-main`（两条渲染路径的滚动容器）拿 `--keyboard-scroll-padding` 当 `scroll-padding-bottom`，聚焦滚动落点自动让开键盘（EntryPage 一类）；`.keyboard-inset-pad`（日记页编辑器容器、任务详情 overlay）与 `.sheet-overlay` 拿 `--keyboard-inset` 让底，`.sheet-panel` / `.task-detail-sheet(-expanded)` 的限高同步扣掉遮挡量（overlay 抬底后不扣会冲出屏幕顶）。变量语义与 hook 一致（「还挡着多少」）：安卓壳已让位 / 桌面浏览器下不落地，整套底座自动歇业、零双算。
+    **文档流表单与弹层的避让底座（`KeyboardAvoidanceBridge`，挂在 `AppShell`）**：没有 fixed 输入条那套 JS 合成的页面不接 `composeBottomInset`，走全局 CSS 变量 + JS 显式差值滚动--Bridge 把 `useKeyboardHeight()` 写成 `--keyboard-inset`（纯遮挡量）与 `--keyboard-scroll-padding`（遮挡量 + 96px 保存按钮预留），键盘收起时移除变量。聚焦滚动**不委托引擎**：`scrollIntoView({block:"nearest"})` 在 iOS resize:none 下对已在布局视口内的框判「可见」直接 no-op（备注框被键盘整个盖住），CSS scroll-padding 又会在安卓壳让位的窗口期把过期键盘量喂给 Blink 原生聚焦滚动、叠成双倍让位（真机「滑太高」）--由 JS 按 `getBoundingClientRect().bottom + 96 - 键盘上沿` 算差值，只补不足不回滚（重复触发幂等），触发两路：遮挡量每变一次（iOS 主路径，含键盘动画中间值 / 拼音候选条加高的正->正补足）+ 键盘在场边沿与在场期间的 window/visualViewport resize（Android 主路径：壳让位后遮挡量恒 0、高度永不变化，只有事件知道该动了）。两个易踩坑：短表单整页放得下时滚动容器无溢出、`scrollTop` 被 clamp 在 0，滚动空间靠 `.keyboard-scroll-pad`（EntryForm 根容器一类）拿 `--keyboard-scroll-padding` 当 padding-bottom 制造；差值底线实时读 `visualViewport`（iOS 报不出遮挡时回落 `innerHeight - 插件高度`，Android/web 恒信 vv--壳缩 WebView 瞬间 resize 事件先于 React 提交，回落 state 会多滚一个键盘高）。fixed 输入条（速记/待办 composer）内的焦点跳过，避让走各页自己的 bottom 合成。其余消费点：`.keyboard-inset-pad`（日记页编辑器容器、任务详情 overlay）与 `.sheet-overlay` 拿 `--keyboard-inset` 让底，`.sheet-panel` / `.task-detail-sheet(-expanded)` 的限高同步扣掉遮挡量（overlay 抬底后不扣会冲出屏幕顶）。变量语义与 hook 一致（「还挡着多少」）：安卓壳已让位 / 桌面浏览器下不落地，整套底座自动歇业、零双算。
 
     同一底座还管**键盘落下时释放输入焦点**：`useKeyboardVisible()` 由真转假的那一跳，`document.activeElement` 仍是 `input / textarea / [contenteditable]` 时 `blur()` 它。iOS 上按输入法自带的收起键只收键盘、不摘网页焦点，输入框仍是 `activeElement`、WKWebView 的内容视图仍是 first responder——此后触摸屏上任何元素，WebKit 都把键盘重新弹起（真机表现为「点什么都先弹一次输入法」）。切 tab 时这一弹紧接着被保留层的 `inert` 打断（规范要求 blur 掉 inert 子树内的焦点元素），键盘随即又落下，叠上目标页 `React.lazy` 的 chunk 加载延迟，表现为「输入法唤起收起走一遍才换页」。判据是**那一跳**而非「不在场即 blur」：桌面浏览器该信号恒假，后者会在 Bridge 挂载时把光标从用户正敲的输入框里踢出去（该边沿守卫的真闸是「挂载时不碰已聚焦输入框」那条用例——写成「挂载后聚焦再重渲染」时依赖没变、effect 不重跑，守卫拆了也不红）。焦点停在按钮上时不动它，免得白丢键盘用户的焦点环。
 
