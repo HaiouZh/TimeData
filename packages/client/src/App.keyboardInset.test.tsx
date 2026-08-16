@@ -9,8 +9,10 @@ import { BottomNavProvider } from "./contexts/BottomNavContext.js";
 import { renderDom, unmount } from "./test/domHarness.js";
 
 const keyboardHeightMock = vi.hoisted(() => vi.fn(() => 0));
+const keyboardVisibleMock = vi.hoisted(() => vi.fn(() => false));
 vi.mock("./hooks/useKeyboardHeight.ts", () => ({
   useKeyboardHeight: keyboardHeightMock,
+  useKeyboardVisible: keyboardVisibleMock,
 }));
 vi.mock("./components/AppUpdatePrompt.tsx", () => ({ default: () => null }));
 vi.mock("./components/AndroidBackButtonHandler.tsx", () => ({ default: () => null }));
@@ -23,6 +25,8 @@ beforeEach(() => {
   document.body.innerHTML = "";
   keyboardHeightMock.mockReset();
   keyboardHeightMock.mockReturnValue(0);
+  keyboardVisibleMock.mockReset();
+  keyboardVisibleMock.mockReturnValue(false);
   Object.defineProperty(window, "matchMedia", {
     configurable: true,
     value: vi.fn(() => ({

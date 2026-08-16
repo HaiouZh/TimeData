@@ -3,11 +3,13 @@ import { act, createElement } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { renderDom, type Root, unmount } from "../test/domHarness.js";
 
-// 只钉 Bridge 自身的接线（CSS 变量写入 + 聚焦跟随滚动），键盘高的算法已由
-// useKeyboardHeight.test.tsx 钉过，这里 mock 之。
+// 只钉 Bridge 自身的接线（CSS 变量写入 + 聚焦跟随滚动 + 键盘落下时释放焦点），键盘高与在场
+// 信号的算法已由 useKeyboardHeight.test.tsx 钉过，这里 mock 之。
 const keyboardHeightMock = vi.hoisted(() => vi.fn(() => 0));
+const keyboardVisibleMock = vi.hoisted(() => vi.fn(() => false));
 vi.mock("../hooks/useKeyboardHeight.ts", () => ({
   useKeyboardHeight: keyboardHeightMock,
+  useKeyboardVisible: keyboardVisibleMock,
 }));
 
 import { KeyboardAvoidanceBridge } from "./KeyboardAvoidanceBridge.js";
@@ -24,6 +26,8 @@ function rootVar(name: string): string {
 beforeEach(() => {
   keyboardHeightMock.mockReset();
   keyboardHeightMock.mockReturnValue(0);
+  keyboardVisibleMock.mockReset();
+  keyboardVisibleMock.mockReturnValue(false);
 });
 
 afterEach(() => {
@@ -112,6 +116,68 @@ describe("KeyboardAvoidanceBridge — 键盘弹起瞬间的聚焦跟随滚动", 
     keyboardHeightMock.mockReturnValue(300);
     await rerenderBridge(root);
 
+    await unmount(root);
+  });
+});
+
+// iOS 真机：用输入法自带的收起键收键盘只收键盘、**不摘网页焦点**，输入框仍是 DOM 焦点、
+// WKWebView 的内容视图仍是 first responder——之后碰屏幕上任何东西，WebKit 都会把键盘重新
+// 弹回来（用户实测「点什么都会先弹一次」）。切 tab 那一下最刺眼：键盘弹起后导航把上一层打成
+// inert，规范要求 blur 掉层内焦点元素，键盘立刻又落下，叠上懒加载 chunk 的延迟，观感就是
+// 「先弹一次、落一次、才切换」。故键盘落下的那一跳必须由网页层主动收掉焦点。
+describe("KeyboardAvoidanceBridge — 键盘落下时释放输入焦点", () => {
+  it("键盘从在场变不在场时，把仍持焦点的输入框 blur 掉", async () => {
+    keyboardVisibleMock.mockReturnValue(true);
+    const input = document.createElement("input");
+    document.body.appendChild(input);
+    input.focus();
+
+    const { root } = await renderDom(createElement(KeyboardAvoidanceBridge));
+    // 键盘还在场时不许动焦点：用户正在打字。
+    expect(document.activeElement).toBe(input);
+
+    keyboardVisibleMock.mockReturnValue(false);
+    await rerenderBridge(root);
+
+    expect(document.activeElement).not.toBe(input);
+
+    input.remove();
+    await unmount(root);
+  });
+
+  // 真闸：本例必须钉「挂载那一跑」。写成「挂载后才聚焦、再重渲染」是假闸——keyboardVisible
+  // false→false 时 effect 依赖没变、React 压根不重跑，守卫拆了也不会红。桌面浏览器该值恒 false，
+  // 唯一会跑到收焦点分支的时机就是挂载：此时用户可能正敲着字，绝不能把光标踢出去。
+  it("键盘从未在场（桌面浏览器）时不碰焦点——只认「在场→不在场」那一跳", async () => {
+    keyboardVisibleMock.mockReturnValue(false);
+    const input = document.createElement("input");
+    document.body.appendChild(input);
+    input.focus();
+
+    const { root } = await renderDom(createElement(KeyboardAvoidanceBridge));
+    expect(document.activeElement).toBe(input);
+
+    await rerenderBridge(root);
+    expect(document.activeElement).toBe(input);
+
+    input.remove();
+    await unmount(root);
+  });
+
+  it("键盘落下时焦点在按钮上（非可输入元素）则不动它", async () => {
+    keyboardVisibleMock.mockReturnValue(true);
+    const button = document.createElement("button");
+    document.body.appendChild(button);
+    button.focus();
+
+    const { root } = await renderDom(createElement(KeyboardAvoidanceBridge));
+
+    keyboardVisibleMock.mockReturnValue(false);
+    await rerenderBridge(root);
+
+    expect(document.activeElement).toBe(button);
+
+    button.remove();
     await unmount(root);
   });
 });

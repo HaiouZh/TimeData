@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import { useKeyboardHeight } from "../hooks/useKeyboardHeight.ts";
+import { useKeyboardHeight, useKeyboardVisible } from "../hooks/useKeyboardHeight.ts";
 
 // scroll-padding 里给聚焦框**下方**留的余量：聚焦备注类输入框时，把它滚到键盘上方还不够，
 // 用户还要看得见紧随其后的「保存」按钮行（EntryForm 的按钮 py-3 + gap-3 + pb-4 约 76px）。
@@ -16,12 +16,15 @@ const SCROLL_EXTRA_PX = 96;
  * - 键盘 0→正 的那一跳把聚焦的文档流输入元素 scrollIntoView 进「键盘上方」可视区：
  *   iOS resize:none 下 WebKit 不会替我们滚（body 不滚、内层 main 滚的结构里它常年失灵）。
  *   fixed 输入条（速记/待办 composer）里的焦点无害：fixed 不在滚动流里，浏览器视其已可见、no-op。
+ * - 键盘「在场→不在场」的那一跳把仍持焦点的输入元素 blur 掉（见下方 effect 的注释）。
  *
  * 安卓（壳层 adjustResize + ime inset 让位后）与桌面浏览器上键盘高恒 0：变量不落地、滚动不触发，
  * 本组件整体自动歇业——不产生任何双算。
  */
 export function KeyboardAvoidanceBridge() {
   const keyboardHeight = useKeyboardHeight();
+  // 收焦点用「在不在场」而非遮挡量：安卓壳让位后遮挡量恒 0，用它判不出键盘落没落。
+  const keyboardVisible = useKeyboardVisible();
 
   useEffect(() => {
     const rootStyle = document.documentElement.style;
@@ -53,6 +56,28 @@ export function KeyboardAvoidanceBridge() {
       active.scrollIntoView({ block: "nearest" });
     }
   }, [keyboardHeight]);
+
+  // 键盘落下的那一跳收掉焦点。iOS 上用**输入法自带的收起键**收键盘只收键盘、不摘网页焦点：
+  // 输入框仍是 document.activeElement，WKWebView 的内容视图仍是 first responder——此后碰屏上
+  // 任何东西（任务行、顶栏、tab）WebKit 都会把键盘重新弹回来（真机实测「点什么都会先弹一次」）。
+  // 切 tab 那一下最刺眼：键盘弹起 → 导航把上一层打成 inert（KeptRouteStack，iOS 专用）→ 规范要求
+  // blur 掉层内焦点元素 → 键盘立刻又落下 → 目标页 React.lazy 的 chunk 加载完才换屏，观感是
+  // 「先把输入法唤起收起走一遍，才切换」。收起时主动 blur 即掐掉这条链的源头。
+  //
+  // 只认「在场→不在场」那一跳，不写成「不在场就 blur」：桌面浏览器 keyboardVisible 恒 false，
+  // 后者会在 Bridge **挂载那一跑**把光标从用户正敲着的输入框里踢出去（恒 false 时依赖不变、
+  // effect 不重跑，故只有挂载那次会走到；钉这条的是「挂载时不碰已聚焦输入框」那个用例）。
+  // 只收可输入元素：焦点停在按钮上时 blur 掉会白丢键盘用户的焦点环。
+  const prevVisibleRef = useRef(false);
+  useEffect(() => {
+    const prev = prevVisibleRef.current;
+    prevVisibleRef.current = keyboardVisible;
+    if (keyboardVisible || !prev) return;
+    const active = document.activeElement;
+    if (!(active instanceof HTMLElement)) return;
+    if (!active.matches("input, textarea, [contenteditable]")) return;
+    active.blur();
+  }, [keyboardVisible]);
 
   return null;
 }
