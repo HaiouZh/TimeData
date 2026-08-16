@@ -45,7 +45,7 @@ last-reviewed: 2026-08-15
 
 > 待办域的**主题文档**：`tasks` 表（轻量任务池 + 重复待办），跨端同步，不引用分类/时间记录/速记，不参与时长统计。
 > 本文讲：Task 字段契约（含 `parentId` 一层父子）、四分区落点、三条写入通道、tags、子任务=独立可拖 Task、agent/CLI 回写；不变量、坑与红线归纵切子文档 [todo/invariants](todo/invariants.md)。
-> 重复规则引擎见子文档 [todo/recurrence](todo/recurrence.md)；想法重力（水位线/翻牌/水下找回）见子文档 [todo/gravity](todo/gravity.md)；手头软会话（抓/移/散/续 + atHand 排他投影）见子文档 [todo/at-hand](todo/at-hand.md)。项目区与归属轴已升格为邻居主题 [project-zone](project-zone.md)。不变量与坑见纵切子文档 [todo/invariants](todo/invariants.md)；代码入口地图见 [todo/modules](todo/modules.md)。
+> 前置关系（「A 挡着 B」，含子任务的前置）见子文档 [todo/task-relations](todo/task-relations.md)；重复规则引擎见子文档 [todo/recurrence](todo/recurrence.md)；想法重力（水位线/翻牌/水下找回）见子文档 [todo/gravity](todo/gravity.md)；手头软会话（抓/移/散/续 + atHand 排他投影）见子文档 [todo/at-hand](todo/at-hand.md)。项目区与归属轴已升格为邻居主题 [project-zone](project-zone.md)。不变量与坑见纵切子文档 [todo/invariants](todo/invariants.md)；代码入口地图见 [todo/modules](todo/modules.md)。
 > 不讲：同步账本机制（见 [sync](sync.md)）、备份（见 [backup](backup.md)）、CLI 命令清单（见 [cli](cli.md)）。
 
 ## 承上启下
@@ -221,3 +221,4 @@ agent / CLI (task-done/task-tag)
 | [todo/gravity](todo/gravity.md) | 想法重力：水位线浮沉、翻牌复查、已过目记忆、水下找回尾部、设置页 |
 | [todo/at-hand](todo/at-hand.md) | 手头软会话：`Session` schema、sessions 域登记、抓/移/散/续生命周期、atHand 排他投影、自愈规则，以及与待办其他区域统一的标题 / 行面板 UI 骨架 |
 | [todo/progress-axis](todo/progress-axis.md) | 推进轴投影：五桶语义、Task / Track / Goal 判桶、推进单元去重、进度三口径、与三轴的正交关系 |
+| [todo/task-relations](todo/task-relations.md) | 前置关系表：「A 挡着 B」的 schema 与复合主键、无环/无自引用不变量、三条消费链、清边时机、独立同步域 |

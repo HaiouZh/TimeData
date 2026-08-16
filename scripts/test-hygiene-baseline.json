@@ -157,6 +157,7 @@
   "dirty-in-clean-bucket:pages/todo/TaskList.test.tsx",
   "dirty-in-clean-bucket:pages/todo/TaskRow.test.tsx",
   "dirty-in-clean-bucket:pages/todo/TaskTrackChip.test.tsx",
+  "dirty-in-clean-bucket:pages/todo/TaskWaitingRow.test.tsx",
   "dirty-in-clean-bucket:pages/todo/TodoComposer.test.tsx",
   "dirty-in-clean-bucket:pages/todo/TodoDragDock.test.tsx",
   "dirty-in-clean-bucket:pages/todo/TodoListSections.test.tsx",

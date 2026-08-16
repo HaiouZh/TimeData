@@ -5,7 +5,7 @@ covers:
   - packages/client/src/lib/progressAxis.ts
 contracts:
   - packages/client/src/lib/progressAxis.ts
-last-reviewed: 2026-08-14
+last-reviewed: 2026-08-16
 ---
 
 # 待办 · 推进轴
@@ -41,9 +41,11 @@ last-reviewed: 2026-08-14
 
 ### 3.1 Task（`bucketForTask`）
 
-先排除三类，返回 `null` 表示不成行：子任务（`parentId !== null`）、重复模板本体（`recurrence !== null`）、已跳过的发（`ruleId !== null && skipped`）。
+先排除两类，返回 `null` 表示不成行：重复模板本体（`recurrence !== null`）、已跳过的发（`ruleId !== null && skipped`）。
 
-**排除必须跑在 `placementForTask` 之前**：`{ pool: "recurring" }` 只在 `task.recurrence` 非空时产生（`tasks/placement.ts:62`），而那类已被第二条排除挡掉，所以判定链里**不可达**、也就没有对应分支。谁把排除挪到 `placementForTask` 之后，`recurring` 会落到序 7 `todo`，重复模板本体就会漏进面板。
+**子任务曾经也在排除之列，阶段3 起不再排除**——子任务能有自己的前置、能升格轨道、能排日期，把它挡在推进轴外就看不见「这条子任务在等谁」。
+
+**排除必须跑在 `placementForTask` 之前**：`{ pool: "recurring" }` 只在 `task.recurrence` 非空时产生（`tasks/placement.ts:62`），而那类已被第一条排除挡掉，所以判定链里**不可达**、也就没有对应分支。谁把排除挪到 `placementForTask` 之后，`recurring` 会落到最末的 `todo`，重复模板本体就会漏进面板。
 
 其余按**优先级链**取第一个命中的：
 
@@ -52,17 +54,22 @@ last-reviewed: 2026-08-14
 | 1 | `settled` | `placement.pool === "completed"` |
 | 2 | `doing` | `sessionId === 活跃场 id` |
 | 3 | `doing` | `placement.pool === "today"` |
-| 4a | `waiting` | `placement.pool === "inbox" && scheduledAt !== null` |
-| 4b | `waiting` | `isTaskSunken(...)` |
-| 5 | `queued` | `placement.pool === "upcoming"` |
-| 6 | `queued` | 是某 active project 的成员 |
-| 7 | `todo` | 其余 |
+| 4 | `waiting` | **结构式**：`ctx.blockedBy` 里有未完成的前置 |
+| 5a | `waiting` | **时间式**：`placement.pool === "inbox" && scheduledAt !== null` |
+| 5b | `waiting` | **时间式**：`isTaskSunken(...)` |
+| 6 | `queued` | `placement.pool === "upcoming"` |
+| 7 | `queued` | 是某 active project 的成员 |
+| 8 | `todo` | 其余 |
 
 **判定一律走 `placementForTask` 的结果，不自行比较日期**——时区与 `localDayIndex` 口径只有一份。
 
-**4a 与 4b 结构互斥**：一次性任务排期过期时 `placementForTask` 返回 `{ pool: "inbox" }`（`tasks/placement.ts:78`「非重复待办过期不堆在今天，回归收件箱」），无排期任务也返回 `inbox`，**两者靠 `scheduledAt` 是否为 null 区分**；而 `isTaskSunken` 自身就排除了 `scheduledAt !== null`（`tasks/gravity.ts:36`），够不着 4a 那类。逾期 occurrence（`ruleId !== null`）走 `placement.ts:71` 落 `today`，因此归序 3 `doing`——重复规则的这一发逾期了仍是今天要补的事。
+**序 4 排在时间式之前**：「说得出在等什么」比「沉太久了」更具体，两者同时成立时前者的信息量更大。数据来自 `ctx.blockedBy`（调用方用 `buildBlockedByIndex` 算好塞进来，见 [task-relations](task-relations.md) §4），**这个字段可选**——不传就退化成阶段3 之前的行为，不会因为某个调用方没接就崩。
 
-**`waiting` 跟随重力设置**：4b 读 `/settings/todo-gravity` 的水位线天数、顶一下加成、新建保护期。重力关闭时 4b 恒不命中，4a 仍生效。同一个「多久算旧」只有一份设置。
+**5a 与 5b 结构互斥**：一次性任务排期过期时 `placementForTask` 返回 `{ pool: "inbox" }`（`tasks/placement.ts:78`「非重复待办过期不堆在今天，回归收件箱」），无排期任务也返回 `inbox`，**两者靠 `scheduledAt` 是否为 null 区分**；而 `isTaskSunken` 自身就排除了 `scheduledAt !== null`（`tasks/gravity.ts:36`），够不着 5a 那类。逾期 occurrence（`ruleId !== null`）走 `placement.ts:71` 落 `today`，因此归序 3 `doing`——重复规则的这一发逾期了仍是今天要补的事。
+
+**时间式 `waiting` 跟随重力设置**：5b 读 `/settings/todo-gravity` 的水位线天数、顶一下加成、新建保护期。重力关闭时 5b 恒不命中，5a 与序 4 仍生效。同一个「多久算旧」只有一份设置。
+
+**待办页分区的优先级与本表刻意不同**：`listTasks` 把「被挡」排在「排了今天」**之前**，被挡的任务不进「今天」区。两层回答的问题不同——判桶回答「这条活是什么状态」，分区回答「它该出现在哪个区」，而用户不该在「今天」看到做不了的活。改动任一层的顺序前先读这一条。
 
 ### 3.2 Track（`bucketForTrack`）
 
@@ -93,7 +100,7 @@ last-reviewed: 2026-08-14
 
 **两种成员都参与 roll-up**：`GoalMemberRef.kind` 是 `"task" | "track"`（`entitySchemas.ts:86-89`），task 成员按 §3.1 判、track 成员按 §3.2 判。只算 task 成员会让「成员全是轨道」的项目整个从面板消失。
 
-**Goal 的 `waiting` 是结构式的，Task / Track 的 `waiting` 是时间式的**——两套机制，别当成一个。项目有「下一步存在性」可算（队列里还有没有能动的），单条任务没有。
+**三种 `waiting` 的来源各不相同，别当成一个**：Goal 的是结构式（队列里还有没有能动的）；Track 的是时间式（空闲超阈值）；Task 的**两种都有**——阶段3 起有了前置关系表，「在等某条具体的活」是结构式的（序 4），「沉太久」仍是时间式的（5a/5b）。阶段3 之前这里写的是「单条任务没有结构可算」，那时确实没有。
 
 `bucketForProject` 的入参只有桶数组、看不见成员种类：调用方各自判好桶再喂进来。
 

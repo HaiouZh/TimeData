@@ -79,8 +79,11 @@ export function bucketForTrack(track: Track, steps: readonly TrackStep[], now: D
 
 /**
  * 项目组按成员桶 roll-up。waiting 是**结构式**判定（照 GTD Tracks 的 stalled?：
- * 队列里还有没有能动的），与 Task/Track 的时间式 waiting 是两套机制——
- * 项目有「下一步存在性」可算，单条任务没有。
+ * 队列里还有没有能动的），与 Track 的时间式 waiting 是两套机制。
+ *
+ * Task 两种都有：阶段3 起被前置挡住是结构式（bucketForTask 序 4），沉太久仍是
+ * 时间式。此处的项目级判定不看边、只 roll-up 成员桶——成员是被前置挡的还是沉太久的，
+ * 对「这个项目还推得动吗」是同一个答案。
  *
  * 入参只有桶、看不见成员种类，这是刻意的：GoalMemberRef.kind 有 task 与 track 两种，
  * 调用方各自判好桶再喂进来，本函数不需要为第二种成员改一个字。

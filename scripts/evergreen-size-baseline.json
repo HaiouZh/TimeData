@@ -155,6 +155,9 @@
   "docs/evergreen/todo/recurrence.md": {
     "covers": 7
   },
+  "docs/evergreen/todo/task-relations.md": {
+    "covers": 2
+  },
   "docs/evergreen/tracks.md": {
     "covers": 17
   }
