@@ -1,4 +1,4 @@
-import { db } from "../db/index.ts";
+import { db, migrateGoalPrerequisitesToRelations } from "../db/index.ts";
 import { ApiError, apiFetch } from "../lib/api.ts";
 import { STORAGE_KEYS } from "../lib/storageKeys.ts";
 import { callWithTotp, TotpCancelledError } from "../lib/totpChallenge.ts";
@@ -763,6 +763,14 @@ async function applyPullChangesBatch(
       }
     }
   });
+  // 混版本过渡期：老客户端推来的 goal 仍带非空 prerequisites（GoalSchema 保留该字段，
+  // parseRemoteRecord 原样落库）。迁移本来只在启动时跑，于是「pull 落库 → 下次启动」之间
+  // 存在一个窗口：用户在窗口内编辑该 goal，写入路径会把旧字段写空，那条边永久丢失并推空
+  // 覆盖服务端。这里当场搬一次把窗口关掉，顺带让老设备写来的边立刻可见而不是等到下次启动。
+  // 迁移是幂等的（复合主键去重、旧字段为空即跳过），重复跑无副作用。
+  if (changes.some((change) => change.tableName === "goals")) {
+    await migrateGoalPrerequisitesToRelations();
+  }
   return { applied: batchApplied, conflicts: batchConflicts };
 }
 

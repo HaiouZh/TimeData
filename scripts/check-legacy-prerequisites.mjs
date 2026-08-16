@@ -25,20 +25,40 @@ const isTsSource = (rel) => /\.tsx?$/.test(rel);
 
 /**
  * 单行规则判定：一行里出现 `prerequisites` 作为对象字面量的键时——
- * 注释行（`//` 开头）→ 放行（说明性文字，不是写值）；
- * 值是字面量空数组（允许尾随逗号与闭合分隔符）→ 放行；
+ * 注释（`//` 行首、`/*` 或 `*` 行首、上一行开着的块注释内）→ 放行（说明性文字，不是写值）；
+ * 值是字面量空数组（允许尾随逗号、`as const` 断言、行尾注释与闭合分隔符）→ 放行；
  * 该行以 `;` 结尾且无对象字面量闭合 → 放行（TypeScript 类型/接口字段声明）；
  * 其余一切（`prerequisites: goal.prerequisites ?? []`、`prerequisites: someVar` 等）→ 违规。
+ *
+ * @param {boolean} inBlockComment 上一行以未闭合的块注释结尾（collectFindings 逐行维护）
  */
-export function violatesRule(line) {
-  if (/^\s*\/\//.test(line)) return false;
+export function violatesRule(line, inBlockComment = false) {
+  if (inBlockComment) return false;
+  if (/^\s*\/(\/|\*)/.test(line)) return false; // `//` 或 `/*` 行首
+  if (/^\s*\*/.test(line)) return false; // JSDoc/块注释续行
   const m = /prerequisites\s*:/.exec(line);
   if (!m) return false;
   const rest = line.slice(m.index + m[0].length);
-  if (/^\s*\[\]\s*[,}\];)]*\s*$/.test(rest)) return false; // 字面量空数组
+  // 字面量空数组，可带 `as const` 断言、尾随逗号/闭合符与行尾注释
+  if (/^\s*\[\]\s*(as\s+const\s*)?[\s,}\];)]*(\/\/[^\n]*)?\s*$/.test(rest)) return false;
   // 以 `;` 结尾的类型/接口字段声明；rest 里含 `{`/`}` 说明是内联对象语句（如 `{ prerequisites: x };`），照判违规
   if (/;+\s*$/.test(rest) && !/[{}]/.test(rest)) return false;
   return true;
+}
+
+/** 逐行维护块注释状态：返回该行结束时是否仍处于未闭合的块注释内。 */
+function endsInBlockComment(line, inBlock) {
+  let i = 0;
+  if (inBlock) {
+    const close = line.indexOf("*/");
+    if (close === -1) return true;
+    i = close + 2;
+  }
+  const open = line.indexOf("/*", i);
+  if (open === -1) return false;
+  const lineComment = line.indexOf("//", i);
+  if (lineComment !== -1 && lineComment < open) return false; // `//` 先到 → 其余全是行注释
+  return line.indexOf("*/", open + 2) === -1;
 }
 
 function walk(dir, onFile) {
@@ -61,14 +81,16 @@ export function collectFindings({ dirs = SCAN_DIRS, root = ROOT, allowlist = ALL
       if (!isTsSource(rel) || isTest(rel)) return;
       if (allowlist.includes(rel)) return;
       const content = readFileSync(full, "utf8");
+      let inBlockComment = false;
       content.split("\n").forEach((line, i) => {
-        if (violatesRule(line)) {
+        if (violatesRule(line, inBlockComment)) {
           findings.push({
             file: rel,
             line: i + 1,
             message: "往数据库旧字段 goal.prerequisites 写值（显式写空 `prerequisites: []` 才被允许）",
           });
         }
+        inBlockComment = endsInBlockComment(line, inBlockComment);
       });
     });
   }

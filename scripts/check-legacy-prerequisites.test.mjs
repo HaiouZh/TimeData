@@ -30,6 +30,38 @@ test("violatesRule：非对象键形态（读取/注释）不受影响", () => {
   assert.equal(violatesRule("  // prerequisites: x"), false);
 });
 
+test("violatesRule：显式空数组可带 as const 断言", () => {
+  assert.equal(violatesRule("    prerequisites: [] as const"), false);
+  assert.equal(violatesRule("prerequisites: [] as const,"), false);
+  assert.equal(violatesRule("  prerequisites: [] as const, }"), false);
+});
+
+test("violatesRule：显式空数组可带行尾注释", () => {
+  assert.equal(violatesRule("prerequisites: [], // 该字段已迁移到 taskRelations"), false);
+  assert.equal(violatesRule("  prerequisites: [] as const, // 保持显式写空"), false);
+});
+
+test("violatesRule：块注释/JSDoc 行里的 prerequisites 放行", () => {
+  assert.equal(violatesRule("/* prerequisites: xxx 已迁移到关系表 */"), false);
+  assert.equal(violatesRule(" * prerequisites: 旧字段只读，写库走 taskRelations"), false);
+  assert.equal(violatesRule("*/"), false);
+});
+
+test("violatesRule：放宽后表达式值仍判违规", () => {
+  assert.equal(violatesRule("    prerequisites: someVar * 2"), true);
+  assert.equal(violatesRule("prerequisites: x ?? [], // 带注释的表达式照判违规"), true);
+  assert.equal(violatesRule("  prerequisites: [1, 2]"), true);
+});
+
+test("collectFindings：多行块注释里的 prerequisites 不算写入，块后的真违规仍报", () => {
+  const { root, dir } = makeFixture({
+    "lib/goals.ts": "/*\nprerequisites: someVar\n*/\nconst g = { prerequisites: someVar };\n",
+  });
+  const findings = collectFindings({ dirs: [dir], root, allowlist: [] });
+  assert.deepEqual(findings.map((f) => f.line), [4]);
+  fs.rmSync(root, { recursive: true, force: true });
+});
+
 /** 造一棵最小扫描树：root/src/<相对路径>，内容按 files 给。 */
 function makeFixture(files) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "timedata-prereq-"));

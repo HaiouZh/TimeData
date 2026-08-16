@@ -4041,3 +4041,122 @@ describe("compactSyncLogs", () => {
     });
   });
 });
+
+describe("applyPullChangesBatch 迁移前置边", () => {
+  const goalWithPrerequisites = {
+    id: "goal-legacy-1",
+    title: "老客户端推来的目标",
+    kind: "project",
+    status: "active",
+    members: [
+      { kind: "task", id: "blocker-task" },
+      { kind: "task", id: "blocked-task" },
+    ],
+    prerequisites: [
+      { blocker: { kind: "task", id: "blocker-task" }, blocked: { kind: "task", id: "blocked-task" } },
+    ],
+    createdAt: "2026-06-01T00:00:00.000Z",
+    updatedAt: "2026-06-01T04:02:00.000Z",
+  };
+
+  beforeEach(async () => {
+    await db.goals.clear();
+    await db.taskRelations.clear();
+    await db.migrationSnapshots.clear();
+    await db.syncLog.clear();
+  });
+
+  it("pull 到带非空 prerequisites 的 goal 后，边已搬进 taskRelations 且旧字段被清空", async () => {
+    apiFetchMock.mockResolvedValue({
+      serverTime: "2026-06-01T04:03:00.000Z",
+      latestSeq: 1,
+      changes: [
+        {
+          tableName: "goals",
+          recordId: "goal-legacy-1",
+          action: "update",
+          data: goalWithPrerequisites,
+          timestamp: "2026-06-01T04:02:00.000Z",
+        },
+      ],
+    });
+
+    await expect(syncPullSinceSeq()).resolves.toMatchObject({ applied: 1, conflicts: [] });
+
+    await expect(
+      db.taskRelations.get(["task", "blocker-task", "task", "blocked-task"]),
+    ).resolves.toMatchObject({
+      blockerKind: "task",
+      blockerId: "blocker-task",
+      blockedKind: "task",
+      blockedId: "blocked-task",
+      type: "blocks",
+    });
+    await expect(db.goals.get("goal-legacy-1")).resolves.toMatchObject({
+      id: "goal-legacy-1",
+      prerequisites: [],
+    });
+  });
+
+  it("批次不含 goals 时不触发迁移，窗口中的旧字段原样保留", async () => {
+    await db.goals.put(goalWithPrerequisites);
+
+    apiFetchMock.mockResolvedValue({
+      serverTime: "2026-06-01T04:03:00.000Z",
+      latestSeq: 1,
+      changes: [
+        {
+          tableName: "tasks",
+          recordId: "task-1",
+          action: "update",
+          data: {
+            id: "task-1",
+            title: "跑步",
+            done: false,
+            recurrence: { freq: "weekly", interval: 1, byWeekday: [1], basis: "due" },
+            lastDoneAt: null,
+            startAt: "2026-06-01T00:00:00.000Z",
+            scheduledAt: null,
+            sortOrder: 0,
+            createdAt: "2026-06-01T00:00:00.000Z",
+            updatedAt: "2026-06-01T04:02:00.000Z",
+          },
+          timestamp: "2026-06-01T04:02:00.000Z",
+        },
+      ],
+    });
+
+    await expect(syncPullSinceSeq()).resolves.toMatchObject({ applied: 1, conflicts: [] });
+
+    await expect(db.goals.get("goal-legacy-1")).resolves.toMatchObject({
+      id: "goal-legacy-1",
+      prerequisites: goalWithPrerequisites.prerequisites,
+    });
+    await expect(db.taskRelations.count()).resolves.toBe(0);
+  });
+
+  it("pull 到旧字段本就为空的 goal 时，不产生多余关系行与多余 syncLog", async () => {
+    apiFetchMock.mockResolvedValue({
+      serverTime: "2026-06-01T04:03:00.000Z",
+      latestSeq: 1,
+      changes: [
+        {
+          tableName: "goals",
+          recordId: "goal-fresh-1",
+          action: "update",
+          data: { ...goalWithPrerequisites, id: "goal-fresh-1", prerequisites: [] },
+          timestamp: "2026-06-01T04:02:00.000Z",
+        },
+      ],
+    });
+
+    await expect(syncPullSinceSeq()).resolves.toMatchObject({ applied: 1, conflicts: [] });
+
+    await expect(db.goals.get("goal-fresh-1")).resolves.toMatchObject({
+      id: "goal-fresh-1",
+      prerequisites: [],
+    });
+    await expect(db.taskRelations.count()).resolves.toBe(0);
+    await expect(db.syncLog.count()).resolves.toBe(0);
+  });
+});

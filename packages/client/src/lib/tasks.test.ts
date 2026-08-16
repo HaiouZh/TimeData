@@ -1887,3 +1887,43 @@ describe("删除任务连带清关系边", () => {
     expect(await db.taskRelations.count()).toBe(0);
   });
 });
+
+describe("删模板子任务时镜像子任务的关系边被清除", () => {
+  const day1 = new Date("2026-07-03T08:00:00.000Z");
+
+  it("删模板子任务：active 发里镜像子任务参与的关系边也被清除", async () => {
+    const rule = await addTask({ title: "晨间例行", recurrence: { freq: "daily", interval: 1, basis: "due" }, now: day1 });
+    const c1 = await createChildTask(rule.id, "补铁", day1);
+    await runMaterialization(day1);
+    const occA = (await db.tasks.where("ruleId").equals(rule.id).toArray()).find((o) => !o.done && !o.skipped)!;
+    const mirrorId = occurrenceChildId(occA.id, c1.id);
+    const other = await addTask({ title: "别的任务" });
+    await addTaskRelation({ blocker: { kind: "task", id: mirrorId }, blocked: { kind: "task", id: other.id } });
+
+    await deleteTaskCascade(c1.id);
+
+    await expect(db.tasks.get(mirrorId)).resolves.toBeUndefined();
+    expect(await db.taskRelations.count()).toBe(0);
+  });
+});
+
+describe("删除 occurrence 时其关系边被清除", () => {
+  const day1 = new Date("2026-07-03T08:00:00.000Z");
+  const day2 = new Date("2026-07-04T08:00:00.000Z");
+
+  it("撤勾 done 发删掉后来物化的 active 发时，该发参与的关系边也被清除", async () => {
+    const rule = await addTask({ title: "晨间例行", recurrence: { freq: "daily", interval: 1, basis: "due" }, now: day1 });
+    await runMaterialization(day1);
+    const occA = (await db.tasks.where("ruleId").equals(rule.id).toArray()).find((o) => !o.done && !o.skipped)!;
+    await toggleTaskDone(occA.id, { now: day1 });
+    await runMaterialization(day2);
+    const occB = (await db.tasks.where("ruleId").equals(rule.id).toArray()).find((o) => !o.done && !o.skipped)!;
+    const other = await addTask({ title: "别的任务" });
+    await addTaskRelation({ blocker: { kind: "task", id: occB.id }, blocked: { kind: "task", id: other.id } });
+
+    await toggleTaskDone(occA.id, { now: day2 });
+
+    await expect(db.tasks.get(occB.id)).resolves.toBeUndefined();
+    expect(await db.taskRelations.count()).toBe(0);
+  });
+});
