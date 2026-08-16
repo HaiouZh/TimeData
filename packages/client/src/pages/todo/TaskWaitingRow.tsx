@@ -7,6 +7,7 @@ import { db } from "../../db/index.js";
 import {
   addTaskRelation,
   listRelationsBlocking,
+  listTaskRelations,
   removeTaskRelation,
   type TaskRelationEnd,
 } from "../../lib/taskRelations.js";
@@ -22,6 +23,12 @@ function relationEnd(relation: TaskRelation): TaskRelationEnd {
 /**
  * 成环时报「哪一条造成的环」：沿 blocker→blocked 方向从本任务走到候选目标，
  * 路径上紧挨本任务的那一方就是「已经在等这条了」的既有关系当事人（直接场景下它正是候选本身）。
+ *
+ * **`relations` 必须是全量边，不能喂 `listRelationsBlocking` 的结果**——那个函数只返回
+ * 「blocked 端 = 本任务」的**入**边，而这里的遍历要走的是「本任务挡着谁」的**出**边，方向正好相反。
+ * 喂入边时 `next` 里根本没有 `taskKey` 这个 key（自反边被 schema 拒），BFS 一步都走不出去，
+ * 函数恒返回「（已删除）」——终审三条镜头独立抓到过这个形态，测试当时是假绿（断言里那个标题
+ * 由仍开着的候选按钮满足，从没断言过错误文案本身）。
  */
 function cycleBlameTitle(
   taskKey: string,
@@ -66,26 +73,41 @@ export function TaskWaitingRow({ taskId }: TaskWaitingRowProps) {
 
   const data = useLiveQuery(
     async () => {
-      const [relations, tasks, tracks] = await Promise.all([
+      // allRelations 供成环归因用（要出边，见 cycleBlameTitle 的注释）；relations 只是它按
+      // 「blocked 端 = 本任务」筛出的入边，供本行列表用。两者口径不同，别合并成一个。
+      const [relations, allRelations, tasks, tracks] = await Promise.all([
         listRelationsBlocking({ kind: "task", id: taskId }),
+        listTaskRelations(),
         db.tasks.toArray(),
         db.tracks.toArray(),
       ]);
-      return { relations, tasks, tracks };
+      return { relations, allRelations, tasks, tracks };
     },
     [taskId],
   );
   const relations = data?.relations ?? [];
+  const allRelations = data?.allRelations ?? [];
   const tasks = data?.tasks ?? [];
   const tracks = data?.tracks ?? [];
 
   const titleByKey = new Map<string, string>();
-  for (const task of tasks) titleByKey.set(`task:${task.id}`, task.title);
-  for (const track of tracks) titleByKey.set(`track:${track.id}`, track.title);
+  const completedKeys = new Set<string>();
+  for (const task of tasks) {
+    titleByKey.set(`task:${task.id}`, task.title);
+    if (task.done) completedKeys.add(`task:${task.id}`);
+  }
+  for (const track of tracks) {
+    titleByKey.set(`track:${track.id}`, track.title);
+    if (track.status !== "active") completedKeys.add(`track:${track.id}`);
+  }
 
+  // 已完成的前置不再挡着——判据与 listTasks 的 completedKeys 同源（buildBlockedByIndex 直接跳过它们）。
+  // 这里不把边过滤掉而是标出来：边还在，用户得看得见才删得掉；但不标的话，待办页已经把这条活解锁了、
+  // 详情面板却仍写着「在等 XX」，同一条任务在两个地方显示相反的状态。
   const blockers = relations.map((relation) => {
     const end = relationEnd(relation);
-    return { key: endKey(end), end, title: titleByKey.get(endKey(end)) ?? "（已删除）" };
+    const key = endKey(end);
+    return { key, end, title: titleByKey.get(key) ?? "（已删除）", satisfied: completedKeys.has(key) };
   });
   const existingBlockerKeys = new Set(blockers.map((blocker) => blocker.key));
   const taskCandidates = tasks
@@ -99,7 +121,7 @@ export function TaskWaitingRow({ taskId }: TaskWaitingRowProps) {
     const reason = err instanceof Error ? err.message : "";
     if (reason === "RELATION_SELF_REFERENCE") return "不能连接自己";
     if (reason === "RELATION_WOULD_CREATE_CYCLE") {
-      const blame = cycleBlameTitle(`task:${taskId}`, endKey(attempted), relations, titleByKey);
+      const blame = cycleBlameTitle(`task:${taskId}`, endKey(attempted), allRelations, titleByKey);
       return `这样会绕成圈：${blame} 已经在等这条了`;
     }
     return "添加前置失败，请重试";
@@ -143,7 +165,11 @@ export function TaskWaitingRow({ taskId }: TaskWaitingRowProps) {
         </button>
       </div>
 
-      {error && <p className="td-text-caption text-danger">{error}</p>}
+      {error && (
+        <p data-testid="task-waiting-error" className="td-text-caption text-danger">
+          {error}
+        </p>
+      )}
 
       {blockers.length > 0 && (
         <ul className="space-y-1">
@@ -153,7 +179,12 @@ export function TaskWaitingRow({ taskId }: TaskWaitingRowProps) {
               data-testid="task-waiting-blocker"
               className="flex min-h-8 items-center gap-2 rounded-row border border-border-hairline bg-surface-elevated px-2"
             >
-              <span className="min-w-0 flex-1 truncate td-text-body text-ink">{blocker.title}</span>
+              <span
+                className={`min-w-0 flex-1 truncate td-text-body ${blocker.satisfied ? "text-ink-3 line-through" : "text-ink"}`}
+              >
+                {blocker.title}
+              </span>
+              {blocker.satisfied && <span className="shrink-0 td-text-caption text-ink-3">已完成</span>}
               <button
                 type="button"
                 aria-label={`移除前置 ${blocker.title}`}

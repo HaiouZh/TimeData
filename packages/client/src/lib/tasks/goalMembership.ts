@@ -226,8 +226,14 @@ export function isProjectMemberCountNearCap(memberCount: number): boolean {
  * 算 500 闸）建立在「目标确实是个 active project」之上，顺序反了就是拿一个 theme 的成员数组去算。
  * 它与 `full` 虽同属目标侧却一头一尾，就是这个原因——`full` 只有在目标合法时才有意义。
  *
- * **`"subtask"` 成员保留不删**：阶段3 已去掉产生它的拒绝分支，但 `TodoPage.tsx` 仍硬编码调用
- * `projectAssignBlockMessage("subtask", …)` 作拖拽拒绝文案，死代码留待后续阶段统一清理。
+ * **`"subtask"` 成员仍然活着，别当死代码删**（这句在阶段3 一度被写成「已成死代码」，是错的）：
+ * 阶段3 解的是**库层**那道锁——`assignTaskToProject` 不再按 `parentId` 拒绝，详情面板的「归项目」
+ * 能把子任务归进任意项目。但**拖拽这条路没解**：`todoDnd.ts` 对子任务只放行「拖回父所在的那个组」
+ * （升根回组），拖去别的组仍返回 null，`todoDockDrop.ts` 与 `TodoPage.tsx` 照常弹本文案。三处分支
+ * 全部可达，删了会让拖拽从「有提示的拒绝」变成「拖了没反应」。
+ *
+ * 两条路口径不一致是**已知状态**：库层放行、拖拽层只认「回父所在的组」。要统一得改 DnD 判定层，
+ * 那超出阶段3 的范围（那几个文件在本阶段的零 diff 名单上）。已登记 backlog。
  */
 export type ProjectAssignBlock = "subtask" | "recurring" | "full" | "inactive";
 

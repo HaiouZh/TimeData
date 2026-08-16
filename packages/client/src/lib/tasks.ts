@@ -1025,7 +1025,10 @@ export async function listTasks(now: Date = new Date()): Promise<TodoBuckets> {
       blockedMemberIds: new Set(group.tasks.filter((t) => blockedBy.has(`task:${t.id}`)).map((t) => t.id)),
     }),
   );
-  // 子任务被投影层的 parentId 早退整个丢掉，不在任何桶里；这里直接按 atHand 的根任务反查。
+  // 手头区的「还有 N 条子任务」按 atHand 的根任务反查 children，不从桶里数。
+  // （阶段3 之前的理由是「子任务被 parentId 早退整个丢掉、不在任何桶里」，那句已不成立：
+  //  子任务现在进 today/scheduled/waiting/atHand。反查仍然是对的——桶里的子任务是按各自
+  //  落点散开的，数不出「这个根任务名下还剩几条」。）
   const pendingRoots = atHand.filter((t) => !t.done);
   const pendingRootIds = new Set(pendingRoots.map((t) => t.id));
   const pendingChildCount = all.filter(

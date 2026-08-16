@@ -492,7 +492,11 @@ export function TaskDetailSheet({ id, onClose, onTagsChange, onTimeChanged }: Ta
 
             {!isChild && task && <InlineChildren parentId={task.id} mode="draggable" />}
 
-            {task && <TaskWaitingRow taskId={task.id} />}
+            {/* key 不是装饰：深链换 taskId 时本抽屉不卸载（TodoPage 原地 setDetailId），
+                而 TaskWaitingRow 自己的 pickerOpen / error 没有随 id 重置的 effect——不给 key
+                的话，上一条任务的成环报错会原样出现在下一条的面板上，用户没做任何操作却看到
+                一句指向别处的错误。本抽屉自己的易失 state 走的是 useEffect([task?.id]) 那条路。 */}
+            {task && <TaskWaitingRow key={task.id} taskId={task.id} />}
 
             {onTagsChange && task && (
               <div data-testid="tag-editor" className="space-y-2">

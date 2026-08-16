@@ -42,6 +42,7 @@ status: living
 | [0031](0031-delete-health-data-layer.md) | 删除健康数据层，6 张表与 6 个同步域全清 | 2026-08-14 | 复核 [0024](0024-retire-health-subsystem.md) 保留数据层的两条理由：客户端从不产生健康域变更（无生产者即不触发整批 409），备份导入按当前登记簿取键、多余键静默忽略——两条都不成立；删净三端与库表，物理表手工 DROP 一次、代码不留常驻 DDL，删前 dump 5511 条存档 | 取代 [0024](0024-retire-health-subsystem.md) 的数据层保留部分 |
 | [0032](0032-desktop-auto-update-via-github-release.md) | 桌面自动更新走 tauri-plugin-updater，更新源托管在 GitHub 固定 tag | 2026-08-14 | 手动装新版会撞 NSIS「删除应用数据」复选框、一次手滑清空本机全部记录；走 updater 则 `/UPDATE` 与 `passive` 两道独立的锁让它结构上不可能发生。托管走 GitHub 固定 tag `desktop-latest`（实测比自建快 12 倍，且 `releases/latest/` 被 Android 包占用）；静默下载 + 设置页手点安装，逻辑全在 Rust 侧 | 补充 [0029](0029-desktop-shell-embeds-frontend.md) |
 | [0033](0033-agent-task-create-endpoint.md) | agent 可经受控端点新建任务 | 2026-08-15 | agent 原本只能改已有任务、建不了新任务，而待办的捕捉入口已经跑进 ClaudeCode 会话里。新开 `POST /api/agent/tasks` 建 root task（请求体不含 `parentId`），`requestId` 幂等，调用方拥有语义时间（`createdAt` / `completedAt` 可回填历史，向未来卡 5 分钟容差），`updatedAt` 与 `op.at` 仍由服务端分配 | 延续 [0011](0011-server-api-as-write-boundary.md) |
+| [0034](0034-task-relations-as-own-table.md) | 前置关系独立成表，父子仍留在 `Task.parentId` | 2026-08-16 | 前置挂在 `Goal.prerequisites` 这类实体字段上时，一条边的增删是整行写，LWW 下两台设备各连一条会互相覆盖、先连的静默消失。独立成表后每条边是自己的同步单元。父子不跟着搬：恒一层、承载排序与级联删除，搬进通用关系表要把这三样摊平成额外校验；子任务松绑改为逐条解除守卫达成，`parentId` 结构未动 | 修正 metaspec 拍板③措辞 |
 
 ## 按主题速查
 

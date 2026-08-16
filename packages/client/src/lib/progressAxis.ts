@@ -37,7 +37,8 @@ export interface TaskBucketContext {
 }
 
 /**
- * 任务落哪个推进桶；返回 null 表示不进面板（子任务 / 重复模板本体 / 已消解的发）。
+ * 任务落哪个推进桶；返回 null 表示不进面板（重复模板本体 / 已消解的发）。
+ * **子任务阶段3 起照常判桶**——它能有自己的前置、能升格轨道、能排日期，挡在面板外就看不见「它在等谁」。
  * 判定一律基于 placementForTask 的结果，不自行比较日期——时区口径只有一份。
  */
 export function bucketForTask(task: Task, ctx: TaskBucketContext): ProgressBucket | null {

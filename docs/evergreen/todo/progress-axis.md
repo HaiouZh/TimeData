@@ -63,9 +63,11 @@ last-reviewed: 2026-08-16
 
 **判定一律走 `placementForTask` 的结果，不自行比较日期**——时区与 `localDayIndex` 口径只有一份。
 
-**序 4 排在时间式之前**：「说得出在等什么」比「沉太久了」更具体，两者同时成立时前者的信息量更大。数据来自 `ctx.blockedBy`（调用方用 `buildBlockedByIndex` 算好塞进来，见 [task-relations](task-relations.md) §4），**这个字段可选**——不传就退化成阶段3 之前的行为，不会因为某个调用方没接就崩。
+**序 4 排在时间式之前**：「说得出在等什么」比「沉太久了」更具体，两者同时成立时前者的信息量更大。数据来自 `ctx.blockedBy`（调用方用 `buildBlockedByIndex` 算好塞进来，见 [task-relations](task-relations.md) §4），**这个字段可选**——不传就退化成没有结构式 waiting 的行为，不会因为某个调用方没接就崩。
 
-**5a 与 5b 结构互斥**：一次性任务排期过期时 `placementForTask` 返回 `{ pool: "inbox" }`（`tasks/placement.ts:78`「非重复待办过期不堆在今天，回归收件箱」），无排期任务也返回 `inbox`，**两者靠 `scheduledAt` 是否为 null 区分**；而 `isTaskSunken` 自身就排除了 `scheduledAt !== null`（`tasks/gravity.ts:36`），够不着 5a 那类。逾期 occurrence（`ruleId !== null`）走 `placement.ts:71` 落 `today`，因此归序 3 `doing`——重复规则的这一发逾期了仍是今天要补的事。
+**但 `buildProgressItems` 这条路上塞不进来**：`ProgressAxisInput` 没有对应字段，它构造 `ctx` 时 `blockedBy` 恒缺省，所以经它产出的推进单元只有时间式 `waiting`。目前无碍——`buildProgressItems` 没有 UI 消费方；将来接面板时要先给 `ProgressAxisInput` 补字段，否则结构式 `waiting` 会静默缺席。
+
+**5a 与 5b 结构互斥**：一次性任务排期过期时 `placementForTask` 返回 `{ pool: "inbox" }`（`tasks/placement.ts:78`「非重复待办过期不堆在今天，回归收件箱」），无排期任务也返回 `inbox`，**两者靠 `scheduledAt` 是否为 null 区分**；而 `isTaskSunken` 自身就排除了 `scheduledAt !== null`（`tasks/gravity.ts:36`），够不着 5a 那类。逾期 occurrence（`ruleId !== null`）走 `placement.ts:72` 落 `today`，因此归序 3 `doing`——重复规则的这一发逾期了仍是今天要补的事。
 
 **时间式 `waiting` 跟随重力设置**：5b 读 `/settings/todo-gravity` 的水位线天数、顶一下加成、新建保护期。重力关闭时 5b 恒不命中，5a 与序 4 仍生效。同一个「多久算旧」只有一份设置。
 
