@@ -898,11 +898,21 @@ export async function listTasks(now: Date = new Date()): Promise<TodoBuckets> {
   }
   const ruleDueKey = new Map<string, string>();
   for (const t of all) {
-    if ((t.parentId ?? null) !== null) continue;
+    const isChild = (t.parentId ?? null) !== null;
+    // 阶段3：子任务不再整行跳过。它可以带排期进 today/scheduled、被抓进手头，
+    // 但**无排期时不进 inbox**——收件箱是「真·未归类托盘」，子任务已有归属（属于某个父任务），
+    // 与下方「已归 active project 的根任务不进收件箱」同构。
+    // 发次镜像子任务不独立进桶。**当前实现下这是纯防御、没有活路径也没有测试守卫**：
+    // 两条物化路径（materializeOccurrenceChildren、toggleTaskDone 的镜像分支）都写
+    // ruleId=null，产品里造不出 parentId 与 ruleId 同时非空的行；删掉这行测试全绿。
+    // 保留是因为那是当前实现的巧合而非不变量——哪天某条路径改成给镜像子步写 ruleId，
+    // 没有这行它们就会各自独立涌进分桶。**试过给它补守卫用例，造出的行走不到这个分支、
+    // 补出来是假闸，已按「假闸比没有闸更坏」删掉并记 backlog。**
+    if (isChild && t.ruleId !== null) continue;
     if (t.ruleId !== null && t.skipped) continue; // skipped occurrence 不进活跃桶
     // 项目区归集必须早于下面手头的 `continue`：被抓到手头的成员仍要出现在项目区
     // （焦点轴与归属轴正交，缺了正在干的那几条就是残废视图）。
-    // 上面的 parentId 早退已保证只收根任务；重复模板与 occurrence 本期不参与归属。
+    // 已归项目的子任务随放宽早退纳入归集候选；重复模板与 occurrence 本期不参与归属。
     //
     // 这个布尔量同时是归集判据与**排他判据**，两者必须同源：若排他单独用 projectIndex.has(t.id)，
     // 一条被写进 members 的 occurrence 会既进不了项目区（被本行的守卫挡住）、又被踢出 inbox，
@@ -927,7 +937,7 @@ export async function listTasks(now: Date = new Date()): Promise<TodoBuckets> {
     if (p.pool === "today") buckets.today.push(t);
     // 归属轴排他：已归 active project 的根任务不进收件箱，收件箱回归「真·未归类托盘」。
     else if (p.pool === "inbox") {
-      if (!ownedByProject) buckets.inbox.push(t);
+      if (!ownedByProject && !isChild) buckets.inbox.push(t);
     } else if (p.pool === "upcoming") buckets.scheduled.push(t);
     else if (p.pool === "recurring") buckets.scheduled.push(t);
     else buckets.completed.push(t); // pool === "completed"：所有已完成 + 耗尽重复

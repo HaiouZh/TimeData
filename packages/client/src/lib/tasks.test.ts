@@ -824,7 +824,10 @@ describe("listTasks", () => {
     expect(buckets.scheduled.some((t) => t.title === "重复")).toBe(true);
   });
 
-  it("带休眠 recurrence 的 child 不进入任何 listTasks bucket", async () => {
+  // 阶段3 放宽子任务早退后本条改口径：这是一条 **UI 造不出的脏数据**（子任务带 recurrence，
+  // 只能像下面这样绕过 API 直接写库），原先它整行消失。现在它按自身状态走重复模板分支进
+  // scheduled 管理区——脏数据可见好过静默消失。守的核心不变：**它不占 today 与 inbox**。
+  it("带休眠 recurrence 的 child 进 scheduled 管理区，不占 today / inbox", async () => {
     const now = new Date("2026-06-19T08:00:00.000Z");
     const root = await addTask({ title: "父任务", now });
     const child = await createChildTask(root.id, "休眠重复子项", now);
@@ -834,16 +837,13 @@ describe("listTasks", () => {
     } satisfies Partial<Task>);
 
     const buckets = await listTasks(now);
-    const bucketIds = [
-      ...buckets.today,
-      ...buckets.inbox,
-      ...buckets.scheduled,
-      ...buckets.recurring,
-      ...buckets.completed,
-    ].map((task) => task.id);
 
-    expect(bucketIds).not.toContain(child.id);
+    expect(buckets.scheduled.map((task) => task.id)).toContain(child.id);
+    expect(buckets.today.map((task) => task.id)).not.toContain(child.id);
+    expect(buckets.inbox.map((task) => task.id)).not.toContain(child.id);
+    expect(buckets.completed.map((task) => task.id)).not.toContain(child.id);
   });
+
 
   it("今天完成 + 隔日完成都进 completed，按 completedAt 倒序", async () => {
     const older = await addTask({ title: "老", toInbox: true });
@@ -1705,13 +1705,13 @@ describe("listTasks projects 桶", () => {
     expect([...buckets.goalLinkedIds].sort()).toEqual([a.id, b.id].sort());
   });
 
-  it("子任务不进 projects 桶（即便被写进了 members）", async () => {
+  it("子任务进 projects 桶（即便被写进了 members）", async () => {
     const root = await addTask({ title: "根任务", toInbox: true });
     const child = await createChildTask(root.id, "子步骤");
     await seedGoal({ id: "g1", members: [{ kind: "task", id: child.id }] });
 
     const buckets = await listTasks(new Date("2026-07-10T10:00:00.000Z"));
-    expect(buckets.projects).toEqual([]);
+    expect(buckets.projects.flatMap((g) => g.tasks).map((t) => t.id)).toContain(child.id);
   });
 
   it("组计数含子任务：收纳不造假进度", async () => {
@@ -1925,5 +1925,69 @@ describe("删除 occurrence 时其关系边被清除", () => {
 
     await expect(db.tasks.get(occB.id)).resolves.toBeUndefined();
     expect(await db.taskRelations.count()).toBe(0);
+  });
+});
+
+describe("子任务分区口径（阶段3）", () => {
+  const NOW = new Date("2026-07-08T10:00:00.000Z");
+
+  it("有排期的子任务进 today", async () => {
+    const parent = await addTask({ title: "装修" });
+    const child = await createChildTask(parent.id, "找工人");
+    await scheduleTask(child.id, "2026-07-08", { now: NOW });
+
+    const buckets = await listTasks(NOW);
+    expect(buckets.today.map((t) => t.id)).toContain(child.id);
+  });
+
+  it("排在将来的子任务进 scheduled", async () => {
+    const parent = await addTask({ title: "装修" });
+    const child = await createChildTask(parent.id, "找工人");
+    await scheduleTask(child.id, "2026-07-11", { now: NOW });
+
+    const buckets = await listTasks(NOW);
+    expect(buckets.scheduled.map((t) => t.id)).toContain(child.id);
+  });
+
+  it("被抓进手头的子任务进 atHand", async () => {
+    const parent = await addTask({ title: "装修" });
+    const child = await createChildTask(parent.id, "找工人");
+    await grabTaskToHand(child.id);
+
+    const buckets = await listTasks(NOW);
+    expect(buckets.atHand.map((t) => t.id)).toContain(child.id);
+  });
+
+  it("没排期的子任务不进 inbox", async () => {
+    const parent = await addTask({ title: "装修" });
+    const child = await createChildTask(parent.id, "找工人");
+
+    const buckets = await listTasks(NOW);
+    expect(buckets.inbox.map((t) => t.id)).not.toContain(child.id);
+  });
+
+  it("已完成的子任务不进 today，走 completed", async () => {
+    const parent = await addTask({ title: "装修" });
+    const child = await createChildTask(parent.id, "找工人");
+    await scheduleTask(child.id, "2026-07-08", { now: NOW });
+    await toggleTaskDone(child.id, { now: NOW });
+
+    const buckets = await listTasks(NOW);
+    expect(buckets.today.map((t) => t.id)).not.toContain(child.id);
+    expect(buckets.completed.map((t) => t.id)).toContain(child.id);
+  });
+
+  it("重复模板的子任务仍不独立进桶", async () => {
+    const rule = await addTask({
+      title: "每周三倒垃圾",
+      recurrence: { freq: "weekly", interval: 1, byWeekday: [3], basis: "due" },
+      startAt: localDateOf(new Date(2026, 6, 8)),
+    });
+    const child = await createChildTask(rule.id, "换垃圾袋");
+
+    const buckets = await listTasks(NOW);
+    expect(buckets.today.map((t) => t.id)).not.toContain(child.id);
+    expect(buckets.inbox.map((t) => t.id)).not.toContain(child.id);
+    expect(buckets.scheduled.map((t) => t.id)).not.toContain(child.id);
   });
 });
