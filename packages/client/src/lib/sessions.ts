@@ -48,13 +48,12 @@ async function putTaskSessionId(taskId: string, sessionId: string | null, ts: st
   return next;
 }
 
-/** 抓活到手头：无活跃场自动零仪式开场；仅 root 且非重复规则、非 skipped 的任务可抓。 */
+/** 抓活到手头：无活跃场自动零仪式开场；非重复规则、非 skipped 的任务可抓。阶段3 起子任务同样可抓。 */
 export async function grabTaskToHand(taskId: string, options: { now?: Date } = {}): Promise<Task> {
   const ts = nowIso(options.now);
   return db.transaction("rw", db.sessions, db.tasks, db.syncLog, async () => {
     const existing = await db.tasks.get(taskId);
     if (!existing) throw new Error("任务不存在");
-    if ((existing.parentId ?? null) !== null) throw new Error("子任务不能单独抓到手头");
     if (existing.recurrence !== null) throw new Error("重复规则不能抓到手头");
     if (existing.skipped) throw new Error("已跳过的任务不能抓到手头");
 

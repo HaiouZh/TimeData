@@ -208,13 +208,16 @@ export function isProjectMemberCountNearCap(memberCount: number): boolean {
 /**
  * 归入项目被拒的原因；null = 可以入组。
  *
- * 前三支是**任务侧**的，由 `projectAssignBlock` 判；`inactive` 是**目标侧**的
+ * `recurring` 是**任务侧**的，由 `projectAssignBlock` 判；`inactive` 是**目标侧**的
  * （目标组已归档或已改成 theme），只能由写入入口在拿到 goal 行后自己判，故不在那个函数里。
  *
  * **`inactive` 先于下面那条「更根本的原因优先」规则**，别按那条把它挪到准入之后：它说的不是
  * 「这东西装不进这个组」，而是「这个落点根本不是合法落点」，后面的准入判定（含拿 members 长度
  * 算 500 闸）建立在「目标确实是个 active project」之上，顺序反了就是拿一个 theme 的成员数组去算。
  * 它与 `full` 虽同属目标侧却一头一尾，就是这个原因——`full` 只有在目标合法时才有意义。
+ *
+ * **`"subtask"` 成员保留不删**：阶段3 已去掉产生它的拒绝分支，但 `TodoPage.tsx` 仍硬编码调用
+ * `projectAssignBlockMessage("subtask", …)` 作拖拽拒绝文案，死代码留待后续阶段统一清理。
  */
 export type ProjectAssignBlock = "subtask" | "recurring" | "full" | "inactive";
 
@@ -231,28 +234,27 @@ export function exceedsGoalMemberCap(memberCount: number, addCount: number): boo
 /**
  * 任务侧准入（design §成员准入 的前两条），**不含 500 上限**。
  *
- * - 子任务：与「子任务不能单独抓到手头」同构。
- * - 重复模板与 occurrence 合成 `recurring` 一支：对用户是同一件事，文案一字不差。
+ * 阶段3 起子任务可归项目，只余重复模板与 occurrence 合成 `recurring` 一支：
+ * 对用户是同一件事，文案一字不差。
  *
  * 三个字段都要 `?? null`：喂进来的是 `db.tasks.get` 的**裸行**（不过 `TaskSchema.parse`），
- * 老行缺字段读出来是 `undefined`。少一个防护，缺那个字段的行就被永久判成 subtask / recurring，
+ * 老行缺字段读出来是 `undefined`。少一个防护，缺那个字段的行就被永久判成 recurring，
  * 用户怎么拖都归不了组，且没有任何提示能指向真因。
  */
 export function taskAssignBlock(
   task: Pick<Task, "parentId" | "recurrence" | "ruleId">,
-): Extract<ProjectAssignBlock, "subtask" | "recurring"> | null {
-  if ((task.parentId ?? null) !== null) return "subtask";
+): Extract<ProjectAssignBlock, "recurring"> | null {
   if ((task.recurrence ?? null) !== null || (task.ruleId ?? null) !== null) return "recurring";
   return null;
 }
 
 /**
- * 成员准入：任务侧三条件 + 500 上限。
+ * 成员准入：任务侧条件 + 500 上限。
  *
  * - `memberCount` 传 `goal.members` 的**数组长度**（含 track 成员与悬空 ref），不是可解析的 task 数——
  *   500 是 schema 对整个数组的硬闸，撞上后 parse 失败会让整个 goal 从 UI 与同步里消失，不是报错。
  *
- * 准入三条件优先于满员：满员只是「这个组装不下」，而子任务/重复待办是「这东西本身不参与归属」，
+ * 准入优先于满员：满员只是「这个组装不下」，而重复待办是「这东西本身不参与归属」，
  * 换个组也一样，先说更根本的那个原因。
  */
 export function projectAssignBlock(

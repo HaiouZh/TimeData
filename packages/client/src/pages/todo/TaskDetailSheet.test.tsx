@@ -749,12 +749,12 @@ describe("TaskDetailSheet 升为轨道", () => {
     await unmount(root);
   });
 
-  it("子任务不显示升格入口", async () => {
+  it("子任务显示升格入口（阶段3 解锁）", async () => {
     const parent = await addTask({ title: "爹" });
     const child = await createChildTask(parent.id, "娃");
     const { host, root } = await renderSheetInRouter(child.id);
     await settle();
-    expect(host.querySelector('button[aria-label="升为轨道"]')).toBeNull();
+    expect(host.querySelector('button[aria-label="升为轨道"]')).not.toBeNull();
     await unmount(root);
   });
 
@@ -880,7 +880,7 @@ describe("TaskDetailSheet 删除", () => {
 });
 
 describe("TaskDetailSheet 抓到手头", () => {
-  it("普通任务详情渲染「抓到手头」按钮；child 任务不渲染", async () => {
+  it("普通任务与 child 任务详情都渲染「抓到手头」按钮（阶段3 解锁）", async () => {
     const t = await addTask({ title: "写周报" });
     const { host, root } = await renderSheet(t.id);
     expect(host.querySelector('button[aria-label="抓到手头"]')).not.toBeNull();
@@ -889,7 +889,8 @@ describe("TaskDetailSheet 抓到手头", () => {
     const parent = await addTask({ title: "父任务" });
     const child = await createChildTask(parent.id, "子任务");
     const { host: childHost, root: childRoot } = await renderSheet(child.id);
-    expect(childHost.querySelector('button[aria-label="抓到手头"]')).toBeNull();
+    await settle();
+    expect(childHost.querySelector('button[aria-label="抓到手头"]')).not.toBeNull();
     expect(childHost.querySelector('button[aria-label="移出手头"]')).toBeNull();
     await unmount(childRoot);
   });
@@ -1064,6 +1065,92 @@ describe("TaskDetailSheet 删除二次确认（ConfirmSheet）", () => {
     expect(await db.tasks.get(parent.id)).toBeUndefined();
     expect(await db.tasks.where("parentId").equals(parent.id).count()).toBe(0);
     expect(onClose).toHaveBeenCalled();
+    await unmount(root);
+  });
+});
+
+describe("子任务解锁（阶段3）", () => {
+  it("子任务详情不再显示「作为子任务」死标签", async () => {
+    const parent = await addTask({ title: "装修" });
+    const child = await createChildTask(parent.id, "找工人");
+    const { host, root } = await renderSheet(child.id);
+    await settle();
+    expect(host.textContent).not.toContain("作为子任务");
+    await unmount(root);
+  });
+
+  it("子任务详情显示「抓到手头」按钮", async () => {
+    const parent = await addTask({ title: "装修" });
+    const child = await createChildTask(parent.id, "找工人");
+    const { host, root } = await renderSheet(child.id);
+    await settle();
+    expect(host.querySelector('button[aria-label="抓到手头"]')).not.toBeNull();
+    await unmount(root);
+  });
+
+  it("子任务详情显示「升为轨道」入口", async () => {
+    const parent = await addTask({ title: "装修" });
+    const child = await createChildTask(parent.id, "找工人");
+    const { host, root } = await renderSheetInRouter(child.id);
+    await settle();
+    expect(host.querySelector('button[aria-label="升为轨道"]')).not.toBeNull();
+    await unmount(root);
+  });
+
+  it("已完成的子任务仍不显示「升为轨道」入口", async () => {
+    const parent = await addTask({ title: "装修" });
+    const child = await createChildTask(parent.id, "找工人");
+    await toggleTaskDone(child.id);
+    const { host, root } = await renderSheetInRouter(child.id);
+    await settle();
+    expect(host.querySelector('button[aria-label="升为轨道"]')).toBeNull();
+    await unmount(root);
+  });
+
+  it("子任务详情显示标签编辑器", async () => {
+    const parent = await addTask({ title: "装修" });
+    const child = await createChildTask(parent.id, "找工人");
+    const { host, root } = await renderSheet(child.id, { onTagsChange: vi.fn() });
+    await settle();
+    expect(host.querySelector('[data-testid="tag-editor"]')).not.toBeNull();
+    await unmount(root);
+  });
+
+  it("子任务详情仍然不显示内联子任务区（第六把锁未开）", async () => {
+    const parent = await addTask({ title: "装修" });
+    const child = await createChildTask(parent.id, "找工人");
+    const { host, root } = await renderSheet(child.id);
+    await settle();
+    expect(host.querySelector('button[aria-label="添加子任务"]')).toBeNull();
+    await unmount(root);
+  });
+
+  it("子任务详情点「抓到手头」→ 落库 sessionId（写路径放行）", async () => {
+    const parent = await addTask({ title: "装修" });
+    const child = await createChildTask(parent.id, "找工人");
+    const { host, root } = await renderSheet(child.id);
+    await settle();
+    await click(host.querySelector('button[aria-label="抓到手头"]'));
+    await settle();
+    expect((await db.tasks.get(child.id))?.sessionId ?? null).not.toBeNull();
+    await unmount(root);
+  });
+
+  it("子任务详情显示日期入口", async () => {
+    const parent = await addTask({ title: "装修" });
+    const child = await createChildTask(parent.id, "找工人");
+    const { host, root } = await renderSheet(child.id);
+    await settle();
+    expect(host.querySelector('button[aria-label="编辑日期"]')).not.toBeNull();
+    await unmount(root);
+  });
+
+  it("子任务详情不显示重复规则入口（只给日期，不给重复）", async () => {
+    const parent = await addTask({ title: "装修" });
+    const child = await createChildTask(parent.id, "找工人");
+    const { host, root } = await renderSheet(child.id);
+    await settle();
+    expect(host.querySelector('button[aria-label="编辑重复与时间"]')).toBeNull();
     await unmount(root);
   });
 });

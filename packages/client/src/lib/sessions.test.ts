@@ -81,12 +81,16 @@ describe("grabTaskToHand", () => {
     expect(first.sessionId).toBe(sessions[0].id);
   });
 
-  it("抓取校验：child / 重复模板 / skipped occurrence 均 reject", async () => {
+  // 阶段3 起子任务可抓（五把锁之一）；重复模板与已跳过两条硬拒保留——
+  // 它们拒的理由与 parentId 无关（规则不是可执行的活、跳过的发次已作废）。
+  it("抓取校验：子任务可抓；重复模板 / skipped occurrence 仍 reject", async () => {
     await db.tasks.add(makeTask({ id: "child1", parentId: "root1" }));
     await db.tasks.add(makeTask({ id: "rule1", recurrence: { freq: "daily", interval: 1, basis: "due" } }));
     await db.tasks.add(makeTask({ id: "occ-skipped", ruleId: "rule1", skipped: true }));
 
-    await expect(grabTaskToHand("child1")).rejects.toThrow();
+    const grabbed = await grabTaskToHand("child1");
+    expect(grabbed.sessionId).not.toBeNull();
+
     await expect(grabTaskToHand("rule1")).rejects.toThrow();
     await expect(grabTaskToHand("occ-skipped")).rejects.toThrow();
   });

@@ -218,8 +218,8 @@ describe("projectAssignBlock", () => {
     expect(projectAssignBlock(ok, GOAL_MEMBERS_MAX - 1)).toBeNull();
   });
 
-  it("子任务 → subtask", () => {
-    expect(projectAssignBlock({ ...ok, parentId: "p1" }, 0)).toBe("subtask");
+  it("子任务 → 通过（阶段3 解锁）", () => {
+    expect(projectAssignBlock({ ...ok, parentId: "p1" }, 0)).toBeNull();
   });
 
   // 本条与《occurrence → recurring（与模板同文案，不分两支）》**各锁一半**：
@@ -241,8 +241,8 @@ describe("projectAssignBlock", () => {
     expect(projectAssignBlock(ok, GOAL_MEMBERS_MAX)).toBe("full");
   });
 
-  it("准入不合格优先于满员：满员的组收到子任务，报的是 subtask 不是 full", () => {
-    expect(projectAssignBlock({ ...ok, parentId: "p1" }, GOAL_MEMBERS_MAX)).toBe("subtask");
+  it("满员的组收到子任务 → full（subtask 档消失后 full 浮上来）", () => {
+    expect(projectAssignBlock({ ...ok, parentId: "p1" }, GOAL_MEMBERS_MAX)).toBe("full");
   });
 
   it("准入不合格优先于满员：满员的组收到重复待办，报的是 recurring 不是 full", () => {
@@ -254,8 +254,8 @@ describe("projectAssignBlock", () => {
     );
   });
 
-  it("既是子任务又是重复待办时报 subtask：子任务是更根本的那个原因", () => {
-    expect(projectAssignBlock({ ...ok, parentId: "p1", ruleId: "r1" }, 0)).toBe("subtask");
+  it("既是子任务又是重复待办时报 recurring：重复仍是更根本的那个原因", () => {
+    expect(projectAssignBlock({ ...ok, parentId: "p1", ruleId: "r1" }, 0)).toBe("recurring");
   });
 
   it("裸行缺 parentId 字段（undefined）不当成子任务", () => {
@@ -299,9 +299,9 @@ describe("projectAssignBlockMessage", () => {
 describe("taskAssignBlock / exceedsGoalMemberCap", () => {
   const ok = { parentId: null, recurrence: null, ruleId: null };
 
-  it("任务侧三支：子任务、重复模板、occurrence", () => {
+  it("任务侧两支：子任务通过、重复模板与 occurrence 拒绝", () => {
     expect(taskAssignBlock(ok)).toBeNull();
-    expect(taskAssignBlock({ ...ok, parentId: "p1" })).toBe("subtask");
+    expect(taskAssignBlock({ ...ok, parentId: "p1" })).toBeNull();
     expect(taskAssignBlock({ ...ok, recurrence: { freq: "daily", interval: 1, basis: "due" } })).toBe("recurring");
     expect(taskAssignBlock({ ...ok, ruleId: "r1" })).toBe("recurring");
   });
@@ -409,5 +409,13 @@ describe("buildTodoProjectGroups 计数含子任务", () => {
       new Map([["m1", [task({ id: "c1", parentId: "m1" })]]]),
     );
     expect(groups[0]?.memberCount).toBe(2);
+  });
+});
+
+describe("子任务可归项目（阶段3）", () => {
+  it("子任务不再返回 subtask 拒绝码", () => {
+    const ok = { parentId: null, recurrence: null, ruleId: null };
+    expect(projectAssignBlock({ ...ok, parentId: "p1" }, 0)).toBeNull();
+    expect(taskAssignBlock({ ...ok, parentId: "p1" })).toBeNull();
   });
 });

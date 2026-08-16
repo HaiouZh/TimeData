@@ -19,6 +19,7 @@ import {
   applyRecurrenceChoice,
   deleteTaskCascade,
   markOccurrenceSkipped,
+  scheduleTask,
   updateTask,
 } from "../../lib/tasks.js";
 import { findActiveTrackForTask } from "../../lib/taskTrackIndex.js";
@@ -27,8 +28,9 @@ import {
   promoteTaskToTrack,
   toggleTaskDoneWithTrackConclude,
 } from "../../lib/taskTrackPromote.js";
-import { getDateString } from "../../lib/time.js";
+import { formatYearAwareMonthDay, getDateString } from "../../lib/time.js";
 import { listTracks } from "../../lib/tracks.js";
+import { MonthCalendar } from "../../components/ui/MonthCalendar.js";
 import { CustomRecurrencePage } from "./CustomRecurrencePage.js";
 import { InlineChildren } from "./InlineChildren.js";
 import { RecurrencePresetSheet } from "./RecurrencePresetSheet.js";
@@ -76,6 +78,8 @@ export function TaskDetailSheet({ id, onClose, onTagsChange, onTimeChanged }: Ta
   const [overlay, setOverlay] = useState<"none" | "preset" | "custom" | "delete">("none");
   const [tagDraft, setTagDraft] = useState("");
   const [tags, setTags] = useState<string[]>([]);
+  // 子任务日期入口的日历展开态：只给日期不给重复（design §5.1），独立于 overlay 的重复编辑面板。
+  const [childDateOpen, setChildDateOpen] = useState(false);
   const touchStartY = useRef<number | null>(null);
   const hadTask = useRef(false);
   const lastSeenRemoteTags = useRef<string[] | null>(null);
@@ -88,6 +92,7 @@ export function TaskDetailSheet({ id, onClose, onTagsChange, onTimeChanged }: Ta
     setTitle(task.title);
     setError(null);
     setOverlay("none");
+    setChildDateOpen(false);
     setTags(task.tags ?? []);
     setTagDraft("");
     lastSeenRemoteTags.current = task.tags ?? [];
@@ -168,7 +173,7 @@ export function TaskDetailSheet({ id, onClose, onTagsChange, onTimeChanged }: Ta
   }
 
   const inHand = activeSession !== null && task?.sessionId === activeSession.id;
-  const canGrab = task ? (task.parentId ?? null) === null && task.recurrence === null && !task.done : false;
+  const canGrab = task ? task.recurrence === null && !task.done : false;
 
   // 已挂 active 轨道 → 入口变「查看轨道」；升格成功后 liveQuery 自动刷新到该态。
   const linkedTrack = useLiveQuery(
@@ -176,14 +181,11 @@ export function TaskDetailSheet({ id, onClose, onTagsChange, onTimeChanged }: Ta
     [id],
     null,
   );
-  // 可见性与 canGrab 同式：排除子任务、重复任务、已完成任务（design §四的升格边界）。
+  // 可见性：排除重复任务、已完成任务（design §四的升格边界）；阶段3 起子任务同样可升格。
   // ruleId 非空 = occurrence，它自身的 recurrence 恒为 null（带 recurrence 的是模板），
   // 故「重复任务不给升格」必须单独判 ruleId——只看 recurrence 的话 pending occurrence 三项全过、照样露入口。
   const canPromoteToTrack = task
-    ? (task.parentId ?? null) === null &&
-      task.recurrence === null &&
-      (task.ruleId ?? null) === null &&
-      !task.done
+    ? task.recurrence === null && (task.ruleId ?? null) === null && !task.done
     : false;
   // 升格是「先查后建」跨一次异步 DB 读的 check-then-act：无守卫时双击会各读到「未挂轨道」、各建一条。
   // ref 而非 state 才守得住——同一拍内派发的两次 click 共享同一份渲染闭包，state 还没回填。
@@ -413,9 +415,32 @@ export function TaskDetailSheet({ id, onClose, onTagsChange, onTimeChanged }: Ta
               <div className="min-w-0 flex-1 space-y-1">
                 <div className="flex flex-wrap items-center gap-2">
                   {isChild ? (
-                    <span className="inline-flex min-h-8 items-center rounded-ctl bg-surface-hover px-2 py-0.5 td-text-caption text-ink-3">
-                      作为子任务
-                    </span>
+                    // 子任务只设一次性日期、不进重复编辑面板（design §5.1）。
+                    <>
+                      <button
+                        type="button"
+                        aria-label="编辑日期"
+                        onClick={() => setChildDateOpen((open) => !open)}
+                        className="inline-flex min-h-8 items-center rounded-ctl bg-surface-hover px-2 py-0.5 td-text-caption text-ink-2 hover:bg-surface-elevated"
+                      >
+                        {task?.scheduledAt
+                          ? formatYearAwareMonthDay(getDateString(new Date(task.scheduledAt)))
+                          : "设定日期"}
+                      </button>
+                      {childDateOpen && task && (
+                        <MonthCalendar
+                          value={task.scheduledAt ? getDateString(new Date(task.scheduledAt)) : null}
+                          ariaLabel="子任务日期"
+                          onChange={(date) => {
+                            setChildDateOpen(false);
+                            void run(async () => {
+                              const next = await scheduleTask(task.id, date);
+                              onTimeChanged?.(next);
+                            });
+                          }}
+                        />
+                      )}
+                    </>
                   ) : recurrenceTarget ? (
                     <button
                       type="button"
@@ -466,7 +491,7 @@ export function TaskDetailSheet({ id, onClose, onTagsChange, onTimeChanged }: Ta
 
             {!isChild && task && <InlineChildren parentId={task.id} mode="draggable" />}
 
-            {!isChild && onTagsChange && task && (
+            {onTagsChange && task && (
               <div data-testid="tag-editor" className="space-y-2">
                 <div className="flex flex-wrap items-center gap-1.5">
                   {tags.map((tag) => (

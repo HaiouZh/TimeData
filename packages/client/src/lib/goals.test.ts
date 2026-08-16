@@ -633,14 +633,22 @@ describe("assignTaskToProject", () => {
     ).toBe(true);
   });
 
-  it("子任务被拒且两侧都没写：抛 ProjectAssignError(block=subtask)", async () => {
+  it("子任务可归入（阶段3 解锁）：两侧都写", async () => {
     await seedTask("p1");
     await seedTask("t1", { parentId: "p1" });
     await seedProject("gB");
 
-    await expect(assignTaskToProject("gB", "t1")).rejects.toBeInstanceOf(ProjectAssignError);
+    await assignTaskToProject("gB", "t1");
     const b = await db.goals.get("gB");
-    expect(b?.members).toEqual([]);
+    expect(b?.members).toEqual([{ kind: "task", id: "t1" }]);
+  });
+
+  it("子任务且带重复规则：仍拒（recurring 是更根本的原因）", async () => {
+    await seedTask("p1");
+    await seedTask("t1", { parentId: "p1", recurrence: { freq: "daily", interval: 1, basis: "due" } });
+    await seedProject("gB");
+
+    await expect(assignTaskToProject("gB", "t1")).rejects.toMatchObject({ block: "recurring" });
   });
 
   it("重复模板被拒：block=recurring", async () => {
@@ -699,14 +707,16 @@ describe("assignTaskToProject", () => {
     expect(await db.goalLayoutPins.get(["gB", "task", "t1"])).toMatchObject({ x: 120, y: 240 });
   });
 
-  it("已在组内但已变成子任务：仍要拒绝，例外只对 full 开口", async () => {
-    // 闸是 `!(block === "full" && already)`。退化成 `!already` 的话，已在组内、但已被拽成子任务的
-    // 成员再次拖入本组时会静默放行——拒绝 toast 消失，用户得不到任何反馈。
+  it("已在组内但已变成子任务：阶段3 起直接放行（幂等，不重复写成员、不丢钉点）", async () => {
+    // subtask 准入档已随阶段3 解锁移除；此路径现在是幂等重入——成员不重复写、布局钉点不丢。
     await seedTask("p1");
     await seedTask("t1", { parentId: "p1" });
     await seedProject("gB", ["t1"]);
 
-    await expect(assignTaskToProject("gB", "t1")).rejects.toMatchObject({ block: "subtask" });
+    await assignTaskToProject("gB", "t1");
+
+    const b = await db.goals.get("gB");
+    expect(b?.members).toHaveLength(1);
   });
 
   it("满员的组里已有这条任务时仍幂等放行，不误报 full（重入不会让数组变长）", async () => {
@@ -1072,12 +1082,26 @@ describe("批量归属写入", () => {
     expect(next.members).toHaveLength(500);
   });
 
-  it("批量归入：任一条是子任务 → 整批拒绝，一条都不写", async () => {
+  it("批量归入：含子任务的批整批成功（阶段3 解锁）", async () => {
     const target = await addGoal({ title: "装修", kind: "project", now: date(now) });
     await seedBareTask("t1");
     await seedBareTask("kid", { parentId: "t1" });
 
-    await expect(assignTasksToProject(target.id, ["t1", "kid"])).rejects.toThrow(ProjectAssignError);
+    const next = await assignTasksToProject(target.id, ["t1", "kid"]);
+    expect(next.members).toEqual(
+      expect.arrayContaining([
+        { kind: "task", id: "t1" },
+        { kind: "task", id: "kid" },
+      ]),
+    );
+    expect((await getGoal(target.id))?.members).toHaveLength(2);
+  });
+
+  it("批量归入：含重复模板的批仍整批拒，一条都不写", async () => {
+    const target = await addGoal({ title: "装修", kind: "project", now: date(now) });
+    await seedBareTask("t1");
+    await seedBareTask("rec", { recurrence: { freq: "daily", interval: 1, basis: "due" } });
+    await expect(assignTasksToProject(target.id, ["t1", "rec"])).rejects.toThrow(ProjectAssignError);
     expect((await getGoal(target.id))?.members).toEqual([]);
     expect((await db.tasks.get("t1"))?.updatedAt).toBe(now);
   });

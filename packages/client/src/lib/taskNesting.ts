@@ -46,7 +46,7 @@ export async function nestTaskUnderParent(
  * 串行两步而非单事务：中途失败是「升了根、落回它自身字段决定的分区（通常是收件箱；
  * 若子任务带休眠 recurrence，升根后规则复活，会落重复管理区而非收件箱——降级不清能力字段，
  * 见母文 todo.md §2.2）」，可见可重试，不是收纳那种幽灵态。
- * grabTaskToHand 的既有硬拒（子任务/重复规则/已跳过）一条不改——进它时任务已经是根任务。
+ * grabTaskToHand 阶段3 起已放开子任务硬拒（重复规则/已跳过仍拒）——进它时任务已经是根任务，本来就触不到。
  */
 export async function promoteTaskToHand(
   taskId: string,
@@ -67,7 +67,8 @@ export async function promoteTaskToHand(
  *   看得见、能重拖，不是收纳那种投影层查不到的幽灵态。合成一个事务要把 `assignTaskToProject`
  *   的先摘后加拆开重写，收益不抵风险。
  *
- * `assignTaskToProject` 的 `subtask` 准入闸不会被这条路径触发——进它时任务已经是根任务。
+ * `assignTaskToProject` 阶段3 起不再有 `subtask` 准入闸（子任务可直接归入）；
+ * 这条路径进它时任务也已经是根任务，两条都不影响这里的语义。
  * 但 `recurring` 那支会：降级不清能力字段，子任务可能带休眠 `recurrence`，升根后规则复活。
  * 那种情形下它升根成功、入组被拒，落的是重复管理区而不是收件箱，调用方的失败文案要分开说。
  *

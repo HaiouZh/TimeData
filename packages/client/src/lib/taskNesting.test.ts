@@ -111,7 +111,7 @@ describe("promoteTaskToProject", () => {
     expect(members.some((m) => m.id === child.id)).toBe(true);
   });
 
-  it("子任务的 subtask 准入闸不会被触发（进 assign 时它已经是根任务）", async () => {
+  it("子任务升根后入组成功（阶段3 起不再有 subtask 准入闸）", async () => {
     const p1 = await addGoal({ title: "P1", kind: "project" });
     const parent = await addTask({ title: "爹" });
     const child = await createChildTask(parent.id, "子步骤");
@@ -143,5 +143,20 @@ describe("promoteTaskToProject", () => {
     });
 
     await expect(promoteTaskToProject(child.id, p1.id, 0)).rejects.toMatchObject({ block: "full" });
+  });
+});
+
+describe("收纳仍清项目归属（阶段3 拍板不变）", () => {
+  it("把已归项目的任务收纳成子任务后，它不再占项目名单", async () => {
+    const parent = await addTask({ title: "爹" });
+    const child = await addTask({ title: "项目成员" });
+    const g = await addGoal({ title: "P1", kind: "project" });
+    await addGoalMember(g.id, { kind: "task", id: child.id });
+
+    await nestTaskUnderParent(child.id, parent.id);
+
+    const members = (await db.goals.get(g.id))?.members ?? [];
+    expect(members.some((m) => m.id === child.id)).toBe(false);
+    expect((await db.tasks.get(child.id))?.parentId).toBe(parent.id);
   });
 });
