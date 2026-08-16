@@ -34,6 +34,7 @@ import { MonthCalendar } from "../../components/ui/MonthCalendar.js";
 import { CustomRecurrencePage } from "./CustomRecurrencePage.js";
 import { InlineChildren } from "./InlineChildren.js";
 import { RecurrencePresetSheet } from "./RecurrencePresetSheet.js";
+import { TaskWaitingRow } from "./TaskWaitingRow.js";
 import { useTaskChildren } from "./useTaskChildren.js";
 
 interface TaskDetailSheetProps {
@@ -490,6 +491,8 @@ export function TaskDetailSheet({ id, onClose, onTagsChange, onTimeChanged }: Ta
             </div>
 
             {!isChild && task && <InlineChildren parentId={task.id} mode="draggable" />}
+
+            {task && <TaskWaitingRow taskId={task.id} />}
 
             {onTagsChange && task && (
               <div data-testid="tag-editor" className="space-y-2">
