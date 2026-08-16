@@ -12,7 +12,7 @@ covers:
   - packages/client/src/lib/backNavigation.ts
   - packages/mobile/README.md
   - packages/mobile/capacitor.config.ts
-last-reviewed: 2026-08-06
+last-reviewed: 2026-08-16
 ---
 
 # 本地开发指南
@@ -168,7 +168,7 @@ GitHub Actions 的 `mobile-release` workflow 在 android job 里用仓库 Secret
 
 移动端构建会使用 `packages/client` 的 mobile Vite 模式：
 
-- `base` 使用 `./`，保证 Android WebView 能加载相对路径资源。
+- `base` 恒为 `/`，**mobile 模式不改成相对**。三个壳都从各自的根提供这份产物（Capacitor iOS `capacitor://localhost`、Android `https://localhost`、Tauri `tauri://localhost`），绝对路径在任何路由深度下都指向 `dist` 根。改成 `./` 的后果：路由是多段路径（底栏「统计」就是 `/stats/time`），**原地重载**时 `./assets/x.js` 会解析成 `/stats/assets/x.js`，而 Capacitor iOS 的 `Router.route(for:)` 只对**无扩展名**的路径回退 index.html、带扩展名的直接按字面找文件——JS 与 CSS 双双 404、React 从不挂载，`index.css` 又没给 `body` 背景色，屏幕就是一张纯白页。冷启动不暴露（壳总是从 `/` 起），只有原地重载才现形（`SchedulerWatchdog` 的死锁自救、`ErrorBoundary` 的「刷新」按钮），故现场表现是「iOS 长时间后台回来变纯白」，见 [ios](ios.md) §6。闸在 `packages/client/vite.config.test.ts`（按真实壳 URL 解析真实 base，改回相对即红）。
 - PWA service worker 和 PWA manifest 在 mobile 模式禁用，避免 WebView 缓存和更新提示干扰；Web/PWA 构建会由 `vite-plugin-pwa` 生成 `manifest.webmanifest`，图标来自 `packages/client/public/icons/`，Android 启动图标位于 `packages/mobile/android/app/src/main/res/mipmap-*/`；这两处和 favicon 都由 `pnpm icons:generate` 从根目录 `icon.png` 生成，换图只需替换根目录源图后重跑该命令。
 - Web/PWA 构建会额外注入 `__TIMEDATA_BUILD_ID__`（优先读 `TIMEDATA_BUILD_ID` 环境变量，否则使用构建时毫秒时间戳）并输出不进 precache 的 `version.json`；客户端 `AppUpdateProvider` 在页面加载、从后台切回可见和窗口重新聚焦时用网络 buildId 比对决定是否硬刷新（注销已有 service worker、清空 Cache Storage 并 reload，绕开 iOS standalone PWA 偶发不刷新缓存的问题），设置页也提供「刷新到最新前端」手动兜底。mobile 模式不输出这条 PWA 更新链路所需的 service worker 行为，APK 更新仍走 Android release 流程。
 - `packages/mobile/capacitor.config.ts` 固定 `androidScheme: "https"`、`cleartext: false`、`allowMixedContent: false`，正式同步应使用 HTTPS；Android 原生环境的服务器配置会拒绝保存 `http://` API 地址，自托管开发也应先配 HTTPS 反向代理或隧道后填写 `https://` 地址。`pnpm --filter @timedata/mobile test` 会静态检查生产 Manifest 不允许明文流量，并检查 `packages/client` 与 `packages/mobile` 的 Capacitor 依赖都保持 v7。

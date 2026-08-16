@@ -67,7 +67,11 @@ export default defineConfig(({ mode }) => {
   }
 
   return {
-    base: isMobile ? "./" : "/",
+    // 恒绝对：三个壳（Capacitor iOS / Android、Tauri）都从各自的根提供这份产物，而路由是
+    // 多段路径（底栏「统计」= /stats/time）。相对 base 下，原地重载时 ./assets/x.js 会解析成
+    // /stats/assets/x.js —— Capacitor iOS 的 Router 只对无扩展名路径回退 index.html，带
+    // 扩展名的直接按字面找文件 → JS/CSS 双双 404 → 纯白屏。现场与判据见 docs/evergreen/ios.md §6。
+    base: "/",
     define: {
       __TIMEDATA_ANDROID_VERSION_CODE__: JSON.stringify(readAndroidVersionCode()),
       __TIMEDATA_BUILD_ID__: JSON.stringify(buildId),
