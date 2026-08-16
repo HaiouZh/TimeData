@@ -142,7 +142,9 @@ export default function EntryForm({
   }
 
   return (
-    <div className="space-y-3">
+    // keyboard-scroll-pad：键盘弹起时 padding-bottom = 遮挡量 + 按钮预留（index.css），给滚动容器
+    // 制造可滚的量--短表单整页放得下时原本无溢出，Bridge 的显式差值滚动没有它会被 clamp 在 0。
+    <div className="space-y-3 keyboard-scroll-pad">
       <TimeRangeWheelPicker
         start={start}
         end={end}

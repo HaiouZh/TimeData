@@ -84,6 +84,23 @@ describe("EntryForm", () => {
     await unmount(root);
   });
 
+  // 键盘避让的滚动空间挂点：短表单整页放得下时滚动容器无溢出，Bridge 的显式差值滚动会被 clamp 在 0
+  //（备注框被键盘盖住）。根容器挂 keyboard-scroll-pad（index.css 消费 --keyboard-scroll-padding）才滚得动。
+  it("根容器带 keyboard-scroll-pad 类（键盘滚动空间的挂点，见 index.css）", async () => {
+    const { host, root } = await renderDom(
+      createElement(EntryForm, {
+        startTime: "2026-05-20T09:00:00",
+        endTime: "2026-05-20T22:00:00",
+        onSave: vi.fn(),
+        onCancel: () => {},
+      }),
+    );
+
+    const rootContainer = host.firstElementChild;
+    expect(rootContainer?.className).toContain("keyboard-scroll-pad");
+    await unmount(root);
+  });
+
   it("splitEndDateTime 把 T00:00 映射为前一天 24:00，其余原样切分", () => {
     expect(splitEndDateTime("2026-05-16T00:00:00")).toEqual({
       date: "2026-05-15",
