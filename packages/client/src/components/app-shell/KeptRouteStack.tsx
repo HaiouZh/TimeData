@@ -128,7 +128,7 @@ export function KeptRouteStack({ isWideScreen, onMainScroll }: KeptRouteStackPro
                 显式告诉子树，让这类钩子自己闭嘴（见 keptLayerActive.ts 与 useUnsavedChangesGuard）。 */}
             <KeptLayerActiveContext.Provider value={active}>
               <main
-                className="app-main min-h-0 flex-1 overflow-y-auto overscroll-y-none"
+                className="min-h-0 flex-1 overflow-y-auto overscroll-y-none"
                 onScroll={active && !isWideScreen ? onMainScroll : undefined}
               >
                 <Suspense fallback={null}>

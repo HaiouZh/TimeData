@@ -146,12 +146,12 @@ html[data-platform="android"] {
   .sheet-overlay, .sheet-panel { animation: none; }
 }
 
-/* App 两条渲染路径（普通 main / iOS KeptRouteStack 的每层 main）共用的滚动容器类。
-   scroll-padding-bottom：聚焦滚动（KeyboardAvoidanceBridge 的 scrollIntoView 与浏览器
-   自带的聚焦跟随）的落点在键盘上方再留一段（保存按钮预留）。变量只在键盘真挡着时由
-   Bridge 写入；键盘收起 / 安卓壳层已让位 / 桌面浏览器下不落地，默认 0px 恒无副作用。
-   只影响滚动落点、不改布局，与页内既有的内容 padding 避让不叠加。 */
-.app-main { scroll-padding-bottom: var(--keyboard-scroll-padding, 0px); }
+/* 文档流表单容器（EntryForm 根节点一类）：键盘弹起时 padding-bottom = 遮挡量 + 96px 按钮预留，
+   给滚动容器制造真实可滚的量--短表单整页放得下时原本无溢出，Bridge 的显式差值滚动会被 clamp 在 0
+   （备注框仍被键盘盖住）。变量只在键盘真挡着时由 Bridge 写入；键盘收起 / 安卓壳层已让位（高度恒 0）/
+   桌面浏览器下不落地，默认 0px 恒无副作用。只挂在表单容器上，不加在滚动容器全局--
+   速记 / 待办的列表各自算过内容 padding，全局加会叠成双倍留白。 */
+.keyboard-scroll-pad { padding-bottom: var(--keyboard-scroll-padding, 0px); }
 
 /* 固定填高、内部滚动的编辑器容器（日记页）：滚动落点那套帮不了它——键盘盖住容器下半截时
    光标行照样看不见。padding-bottom 让出键盘遮挡量后 flex-1 的 textarea 变矮，浏览器原生

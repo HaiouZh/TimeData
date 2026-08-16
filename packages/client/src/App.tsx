@@ -58,7 +58,7 @@ export function AppShell() {
         <KeptRouteStack isWideScreen={isWideScreen} onMainScroll={onMainScroll} />
       ) : (
         <div className="flex min-w-0 flex-1 flex-col">
-          <main className="app-main min-h-0 flex-1 overflow-y-auto overscroll-y-none" onScroll={isWideScreen ? undefined : onMainScroll}>
+          <main className="min-h-0 flex-1 overflow-y-auto overscroll-y-none" onScroll={isWideScreen ? undefined : onMainScroll}>
             <Suspense fallback={null}>
               <AppRoutes />
             </Suspense>

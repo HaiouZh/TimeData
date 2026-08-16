@@ -61,20 +61,4 @@ describe("AppShell 键盘桥接线", () => {
 
     await unmount(root);
   });
-
-  it("滚动容器 main 带 app-main 类（scroll-padding 规则的挂点，见 index.css）", async () => {
-    const { host, root } = await renderDom(
-      createElement(
-        MemoryRouter,
-        { initialEntries: ["/"] },
-        createElement(BottomNavProvider, null, createElement(AppShell)),
-      ),
-    );
-
-    const main = host.querySelector("main");
-    expect(main).not.toBeNull();
-    expect(main?.classList.contains("app-main")).toBe(true);
-
-    await unmount(root);
-  });
 });

@@ -20,7 +20,7 @@ function readInnerHeight(): number {
  * 实测「布局视口底部被遮住多少」——正是 `position: fixed; bottom: 0` 的元素要额外抬起的量。
  * 壳无论用哪种方式让位（缩 webview / 整体上移视口 / 什么都不做），这个差值都如实反映剩余遮挡。
  */
-function readViewportBottomGap(): number {
+export function readViewportBottomGap(): number {
   if (typeof window === "undefined") return 0;
   const viewport = window.visualViewport;
   const innerHeight = readInnerHeight();

@@ -3,14 +3,18 @@ import { act, createElement } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { renderDom, type Root, unmount } from "../test/domHarness.js";
 
-// 只钉 Bridge 自身的接线（CSS 变量写入 + 聚焦跟随滚动 + 键盘落下时释放焦点），键盘高与在场
+// 只钉 Bridge 自身的接线（CSS 变量写入 + 显式差值滚动 + 键盘落下时释放焦点），键盘高与在场
 // 信号的算法已由 useKeyboardHeight.test.tsx 钉过，这里 mock 之。
 const keyboardHeightMock = vi.hoisted(() => vi.fn(() => 0));
 const keyboardVisibleMock = vi.hoisted(() => vi.fn(() => false));
+const gapMock = vi.hoisted(() => vi.fn(() => 0));
 vi.mock("../hooks/useKeyboardHeight.ts", () => ({
   useKeyboardHeight: keyboardHeightMock,
   useKeyboardVisible: keyboardVisibleMock,
+  readViewportBottomGap: gapMock,
 }));
+const platformMock = vi.hoisted(() => vi.fn(() => "web"));
+vi.mock("@capacitor/core", () => ({ Capacitor: { getPlatform: platformMock } }));
 
 import { KeyboardAvoidanceBridge } from "./KeyboardAvoidanceBridge.js";
 
@@ -28,6 +32,10 @@ beforeEach(() => {
   keyboardHeightMock.mockReturnValue(0);
   keyboardVisibleMock.mockReset();
   keyboardVisibleMock.mockReturnValue(false);
+  gapMock.mockReset();
+  gapMock.mockReturnValue(0);
+  platformMock.mockReset();
+  platformMock.mockReturnValue("web");
 });
 
 afterEach(() => {
@@ -66,55 +74,147 @@ describe("KeyboardAvoidanceBridge — 键盘遮挡量桥进全局 CSS 变量", (
   });
 });
 
-describe("KeyboardAvoidanceBridge — 键盘弹起瞬间的聚焦跟随滚动", () => {
-  it("键盘 0→正 且焦点在 textarea 上时，把聚焦元素 scrollIntoView 到键盘上方", async () => {
-    keyboardHeightMock.mockReturnValue(0);
-    const textarea = document.createElement("textarea");
-    document.body.appendChild(textarea);
-    const scrollSpy = vi.fn();
-    (textarea as unknown as { scrollIntoView: typeof scrollSpy }).scrollIntoView = scrollSpy;
-    textarea.focus();
+/** 视口几何 fixture：jsdom 无布局，rect / 溢出量 / 视口高全手工装。 */
+function mountInputFixture(opts: { rectBottom: number; fixedAncestor?: boolean; noOverflow?: boolean }) {
+  const host = document.createElement("div");
+  if (opts.fixedAncestor) host.style.position = "fixed";
+  const scroller = document.createElement("div");
+  scroller.style.overflowY = "auto";
+  Object.defineProperty(scroller, "clientHeight", { configurable: true, value: 600 });
+  Object.defineProperty(scroller, "scrollHeight", { configurable: true, value: opts.noOverflow ? 600 : 1000 });
+  const input = document.createElement("textarea");
+  vi.spyOn(input, "getBoundingClientRect").mockReturnValue({
+    bottom: opts.rectBottom,
+    top: opts.rectBottom - 60,
+    left: 0,
+    right: 100,
+    width: 100,
+    height: 60,
+    x: 0,
+    y: opts.rectBottom - 60,
+    toJSON: () => ({}),
+  } as DOMRect);
+  scroller.appendChild(input);
+  host.appendChild(scroller);
+  document.body.appendChild(host);
+  input.focus();
+  return { scroller, input, host };
+}
 
+/** 显式接管视口高度与 visualViewport；不传 vv 则显式置 undefined，钉死「无 vv」分支（jsdom 行为不定）。 */
+function setViewport(innerHeight: number, vv?: { offsetTop: number; height: number }) {
+  Object.defineProperty(window, "innerHeight", { configurable: true, value: innerHeight });
+  Object.defineProperty(window, "visualViewport", {
+    configurable: true,
+    value: vv
+      ? { offsetTop: vv.offsetTop, height: vv.height, addEventListener: vi.fn(), removeEventListener: vi.fn() }
+      : undefined,
+  });
+}
+
+function restoreViewport() {
+  Object.defineProperty(window, "innerHeight", { configurable: true, value: 768 });
+  Object.defineProperty(window, "visualViewport", { configurable: true, value: undefined });
+}
+
+// 落点不委托引擎（scrollIntoView 的 nearest 在 iOS resize:none 下判「已可见」直接 no-op，
+// CSS scroll-padding 又在安卓壳让位的窗口期把过期键盘量喂给 Blink 原生聚焦滚动 = 双倍让位），
+// 由 JS 按 rect.bottom + 96 - 键盘上沿 算差值，只补不足不回滚。这里钉几何与两条触发路径。
+describe("KeyboardAvoidanceBridge - 显式差值滚动", () => {
+  afterEach(() => {
+    document.body.innerHTML = "";
+    restoreViewport();
+  });
+
+  it("无 vv（iOS resize:none 失明）：按插件高度算底线，滚出差值（550+96-(800-300)=146）", async () => {
+    setViewport(800);
+    const f = mountInputFixture({ rectBottom: 550 });
+    keyboardHeightMock.mockReturnValue(0);
     const { root } = await renderDom(createElement(KeyboardAvoidanceBridge));
-    expect(scrollSpy).not.toHaveBeenCalled();
 
     keyboardHeightMock.mockReturnValue(300);
     await rerenderBridge(root);
+    expect(f.scroller.scrollTop).toBe(146);
 
-    expect(scrollSpy).toHaveBeenCalledWith(expect.objectContaining({ block: "nearest" }));
-
-    textarea.remove();
     await unmount(root);
   });
 
-  it("键盘高度在正值间微调（300→302，visualViewport 抖动）不重复滚动", async () => {
+  it("高度正->正（120->300，键盘动画中间值 / 拼音候选条加高）持续补足，已到位不回滚", async () => {
+    setViewport(800);
+    const f = mountInputFixture({ rectBottom: 550 });
     keyboardHeightMock.mockReturnValue(0);
-    const textarea = document.createElement("textarea");
-    document.body.appendChild(textarea);
-    const scrollSpy = vi.fn();
-    (textarea as unknown as { scrollIntoView: typeof scrollSpy }).scrollIntoView = scrollSpy;
-    textarea.focus();
-
     const { root } = await renderDom(createElement(KeyboardAvoidanceBridge));
 
+    keyboardHeightMock.mockReturnValue(120); // 底线 680，deficit -34：不滚
+    await rerenderBridge(root);
+    expect(f.scroller.scrollTop).toBe(0);
+
+    keyboardHeightMock.mockReturnValue(300); // 底线 500，deficit 146：补足
+    await rerenderBridge(root);
+    expect(f.scroller.scrollTop).toBe(146);
+
+    await unmount(root);
+  });
+
+  it("Android 壳缩竞态：resize 先到、height state 仍 300（stale），底线按实时 vv=700 算，不多滚一个 K", async () => {
+    setViewport(700, { offsetTop: 0, height: 700 }); // 壳已缩完，vv 与 innerHeight 同步为真值
+    const f = mountInputFixture({ rectBottom: 550 });
+    keyboardVisibleMock.mockReturnValue(true);
+    keyboardHeightMock.mockReturnValue(300); // stale 值：正确实现走 vv 分支、忽略它
+    const { root } = await renderDom(createElement(KeyboardAvoidanceBridge));
+
+    window.dispatchEvent(new Event("resize"));
+    // 错误实现（回落 state）会把底线算成 700-300=400、多滚 550+96-400=246
+    expect(f.scroller.scrollTop).toBe(0);
+
+    await unmount(root);
+  });
+
+  it("iOS vv 报得出遮挡：底线用 vv 底（520），不用插件高度回落（800-260=540）", async () => {
+    platformMock.mockReturnValue("ios");
+    gapMock.mockReturnValue(280); // > 0：vv 分支生效
+    setViewport(800, { offsetTop: 0, height: 520 });
+    const f = mountInputFixture({ rectBottom: 550 });
+    keyboardHeightMock.mockReturnValue(0);
+    const { root } = await renderDom(createElement(KeyboardAvoidanceBridge));
+
+    keyboardHeightMock.mockReturnValue(260);
+    await rerenderBridge(root);
+    expect(f.scroller.scrollTop).toBe(126); // 550+96-520；若错走回落分支则是 106
+
+    await unmount(root);
+  });
+
+  it("焦点在 fixed 输入条（速记/待办 composer）内：不滚文档流", async () => {
+    setViewport(800);
+    const f = mountInputFixture({ rectBottom: 550, fixedAncestor: true });
     keyboardHeightMock.mockReturnValue(300);
-    await rerenderBridge(root);
-    keyboardHeightMock.mockReturnValue(302);
-    await rerenderBridge(root);
+    const { root } = await renderDom(createElement(KeyboardAvoidanceBridge));
 
-    expect(scrollSpy).toHaveBeenCalledTimes(1);
+    expect(f.scroller.scrollTop).toBe(0);
 
-    textarea.remove();
+    await unmount(root);
+  });
+
+  it("滚动容器无溢出（短表单且无 padding 制造空间）：找不到 scroller，不滚不炸", async () => {
+    setViewport(800);
+    const f = mountInputFixture({ rectBottom: 550, noOverflow: true });
+    keyboardHeightMock.mockReturnValue(300);
+    const { root } = await renderDom(createElement(KeyboardAvoidanceBridge));
+
+    expect(f.scroller.scrollTop).toBe(0);
+
     await unmount(root);
   });
 
   it("焦点不在可输入元素上（如 body）时不滚动", async () => {
-    keyboardHeightMock.mockReturnValue(0);
+    setViewport(800);
+    const f = mountInputFixture({ rectBottom: 550 });
+    f.input.blur();
+    keyboardHeightMock.mockReturnValue(300);
     const { root } = await renderDom(createElement(KeyboardAvoidanceBridge));
 
-    // 无聚焦输入框时弹键盘（如安卓外接场景）：不做任何滚动动作，也不抛错。
-    keyboardHeightMock.mockReturnValue(300);
-    await rerenderBridge(root);
+    expect(f.scroller.scrollTop).toBe(0);
 
     await unmount(root);
   });

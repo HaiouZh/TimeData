@@ -53,10 +53,17 @@ describe("index.css design tokens", () => {
     expect(css).toContain("300ms cubic-bezier(0.2, 0, 0, 1)");
   });
 
-  it("app-main 滚动容器带键盘 scroll-padding（聚焦滚动落点让开键盘 + 保存按钮预留）", () => {
-    // iOS resize:none 下文档流表单（EntryPage 等）的聚焦滚动全靠它把落点抬到键盘上方；
+  it("keyboard-scroll-pad 给文档流表单制造键盘滚动空间（键盘高 + 按钮预留的 padding）", () => {
+    // 短表单整页放得下时滚动容器无溢出，显式差值滚动的 scrollTop 会被 clamp 在 0（备注框仍被键盘
+    // 盖住）--EntryForm 根容器挂本类，键盘弹起时 padding-bottom = 遮挡量 + 96px 造出可滚的量。
     // 变量由 KeyboardAvoidanceBridge 写入（键盘收起 / 安卓壳已让位时不落地，默认 0px 恒无副作用）。
-    expect(css).toMatch(/\.app-main\s*\{[^}]*scroll-padding-bottom:\s*var\(--keyboard-scroll-padding,\s*0px\)/);
+    expect(css).toMatch(/\.keyboard-scroll-pad\s*\{[^}]*padding-bottom:\s*var\(--keyboard-scroll-padding,\s*0px\)/);
+  });
+
+  it("全仓不再有 scroll-padding 消费（引擎聚焦滚动不再吃到过期键盘量）", () => {
+    // 安卓壳让位与插件事件有竞态：变量未清的窗口期里 Blink 原生聚焦滚动会把过期的 K+96 当目标，
+    // 在已缩矮的视口上再让一次 = 双倍避让（真机「滑太高」）。落点计算已全部收进 JS 显式差值。
+    expect(css).not.toMatch(/scroll-padding-bottom/);
   });
 
   it("keyboard-inset-pad 让固定填高容器给键盘让出底部（日记编辑器一类）", () => {
