@@ -10,6 +10,7 @@ import {
   type ProgressAxisInput,
   type TaskBucketContext,
 } from "./progressAxis.js";
+import { buildBlockedByIndex } from "./taskRelations.js";
 
 const NOW = new Date("2026-08-07T12:00:00.000Z");
 const DAY = 86_400_000;
@@ -50,8 +51,8 @@ function ctx(patch: Partial<TaskBucketContext> = {}): TaskBucketContext {
 }
 
 describe("bucketForTask 排除", () => {
-  it("子任务不成行", () => {
-    expect(bucketForTask(makeTask({ parentId: "p1" }), ctx())).toBeNull();
+  it("子任务有桶（解锁后按自身状态进桶，无排期无手头 → 兜底 todo）", () => {
+    expect(bucketForTask(makeTask({ parentId: "p1" }), ctx())).toBe("todo");
   });
 
   it("重复模板本体不成行", () => {
@@ -408,5 +409,57 @@ describe("正交性：本层不改变既有投影的输出", () => {
 
     // 深比较连数组顺序一起验：就地 sort 也会被这条抓到。
     expect(JSON.parse(JSON.stringify({ tasks, tracks, steps, goals }))).toEqual(snapshot);
+  });
+});
+
+describe("结构式 waiting（阶段3）", () => {
+  it("被未完成前置挡住的任务落 waiting 桶", () => {
+    const blockedBy = new Map([["task:t1", ["task:blocker"]]]);
+    expect(bucketForTask(makeTask(), ctx({ blockedBy }))).toBe("waiting");
+  });
+
+  it("前置全部完成后不再 waiting（buildBlockedByIndex 已剔除已完成 blocker）", () => {
+    const blockedBy = new Map<string, string[]>(); // 已完成的 blocker 不进索引
+    expect(bucketForTask(makeTask(), ctx({ blockedBy }))).not.toBe("waiting");
+  });
+
+  it("环内两条互相挡：都落 waiting，且函数正常返回不死循环", () => {
+    const blockedBy = new Map([
+      ["task:a", ["task:b"]],
+      ["task:b", ["task:a"]],
+    ]);
+    expect(bucketForTask(makeTask({ id: "a" }), ctx({ blockedBy }))).toBe("waiting");
+    expect(bucketForTask(makeTask({ id: "b" }), ctx({ blockedBy }))).toBe("waiting");
+  });
+
+  it("没有 blockedBy 字段时行为与阶段2 一致", () => {
+    expect(bucketForTask(makeTask(), ctx())).toBe(bucketForTask(makeTask(), ctx({ blockedBy: new Map() })));
+  });
+});
+
+describe("buildBlockedByIndex", () => {
+  const relation = (blockerId: string, blockedId: string) => ({
+    blockerKind: "task" as const,
+    blockerId,
+    blockedKind: "task" as const,
+    blockedId,
+    type: "blocks" as const,
+    createdAt: "2026-08-01T00:00:00.000Z",
+    updatedAt: "2026-08-01T00:00:00.000Z",
+  });
+
+  it("未完成的 blocker 进索引", () => {
+    const index = buildBlockedByIndex([relation("a", "b")], new Set());
+    expect(index.get("task:b")).toEqual(["task:a"]);
+  });
+
+  it("已完成的 blocker 不进索引——这就是「前置一勾自动解锁」", () => {
+    const index = buildBlockedByIndex([relation("a", "b")], new Set(["task:a"]));
+    expect(index.get("task:b")).toBeUndefined();
+  });
+
+  it("多个 blocker 全部收进同一条目", () => {
+    const index = buildBlockedByIndex([relation("a", "c"), relation("b", "c")], new Set());
+    expect(index.get("task:c")?.sort()).toEqual(["task:a", "task:b"]);
   });
 });

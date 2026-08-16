@@ -31,6 +31,9 @@ export interface TaskBucketContext {
   projectMemberIds: ReadonlySet<string>;
   gravitySettings: TodoGravitySettings;
   now: Date;
+  /** 「${kind}:${id} → 未完成的 blocker 的 ${kind}:${id} 列表」。由调用方用
+   *  buildBlockedByIndex 算好塞进来；缺省或空表示没有被挡。 */
+  blockedBy?: Map<string, string[]>;
 }
 
 /**
@@ -38,7 +41,6 @@ export interface TaskBucketContext {
  * 判定一律基于 placementForTask 的结果，不自行比较日期——时区口径只有一份。
  */
 export function bucketForTask(task: Task, ctx: TaskBucketContext): ProgressBucket | null {
-  if (task.parentId !== null) return null;
   if (task.recurrence !== null) return null;
   if (task.ruleId !== null && task.skipped) return null;
 
@@ -46,6 +48,10 @@ export function bucketForTask(task: Task, ctx: TaskBucketContext): ProgressBucke
   if (placement.pool === "completed") return "settled";
   if (ctx.handSessionId !== null && task.sessionId === ctx.handSessionId) return "doing";
   if (placement.pool === "today") return "doing";
+  // 结构式 waiting（阶段3）：被未完成前置挡住 → 在等。放在时间式之前——
+  // 「说得出等什么」比「沉太久」更具体，两者同时成立时前者的信息量更大。
+  const blockers = ctx.blockedBy?.get(`task:${task.id}`) ?? [];
+  if (blockers.length > 0) return "waiting";
   // 4a：排期已过被 placement 退回收件箱。无排期任务同样落 inbox，靠 scheduledAt 区分。
   if (placement.pool === "inbox" && task.scheduledAt !== null) return "waiting";
   // 4b：isTaskSunken 自身排除 scheduledAt 非空者，故与 4a 结构互斥。

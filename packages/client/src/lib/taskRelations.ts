@@ -74,6 +74,22 @@ export function wouldCreateCycle(
   return false;
 }
 
+/** 把关系边折成「谁被谁挡着」的索引，只收未完成的 blocker。
+ *  `completedKeys` 由调用方给出（已完成的任务/轨道的 `kind:id` 集合）。 */
+export function buildBlockedByIndex(
+  relations: TaskRelation[],
+  completedKeys: Set<string>,
+): Map<string, string[]> {
+  const index = new Map<string, string[]>();
+  for (const relation of relations) {
+    const blockerKey = `${relation.blockerKind}:${relation.blockerId}`;
+    if (completedKeys.has(blockerKey)) continue; // 前置已完成 → 不再挡，自动解锁
+    const blockedKey = `${relation.blockedKind}:${relation.blockedId}`;
+    index.set(blockedKey, [...(index.get(blockedKey) ?? []), blockerKey]);
+  }
+  return index;
+}
+
 export async function addTaskRelation(input: TaskRelationInput): Promise<TaskRelation> {
   if (endKey(input.blocker) === endKey(input.blocked)) {
     throw new Error("RELATION_SELF_REFERENCE");
