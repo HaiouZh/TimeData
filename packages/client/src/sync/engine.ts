@@ -1,5 +1,6 @@
 import { db, migrateGoalPrerequisitesToRelations } from "../db/index.ts";
 import { ApiError, apiFetch } from "../lib/api.ts";
+import { sendWithPending } from "../lib/recovery/pendingReports.ts";
 import { STORAGE_KEYS } from "../lib/storageKeys.ts";
 import { callWithTotp, TotpCancelledError } from "../lib/totpChallenge.ts";
 import { safeGetItem, safeSetItem, safeRemoveItem } from "../lib/safeStorage.js";
@@ -984,9 +985,13 @@ export async function syncForcePushToServer(confirmToken: string, confirmationPh
 async function reportToServer(logs: Array<{ action: string; detail?: string; record_count?: number }>): Promise<void> {
   try {
     const device = getDeviceName();
-    await apiFetch("/api/admin/sync-logs", {
-      method: "POST",
-      body: JSON.stringify(logs.map((l) => ({ ...l, device }))),
+    // 冷启动埋点搭车，不额外开请求——跨太平洋一个 RTT 就是几百毫秒，观测不配为此多花一个。
+    // 「发成功才清」的顺序由 sendWithPending 保证并被其单测锁住，别在这里就地展开。
+    await sendWithPending(logs, async (all) => {
+      await apiFetch("/api/admin/sync-logs", {
+        method: "POST",
+        body: JSON.stringify(all.map((l) => ({ ...l, device }))),
+      });
     });
   } catch {
     // best-effort, don't break sync if logging fails

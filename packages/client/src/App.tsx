@@ -1,4 +1,4 @@
-import { Suspense } from "react";
+import { Suspense, useEffect } from "react";
 import { createBrowserRouter, useLocation } from "react-router";
 import { RouterProvider } from "react-router/dom";
 import { Capacitor } from "@capacitor/core";
@@ -15,6 +15,7 @@ import { KeyboardAvoidanceBridge } from "./components/KeyboardAvoidanceBridge.ts
 import { SchedulerWatchdog } from "./components/SchedulerWatchdog.tsx";
 import { TotpPromptDialog } from "./components/TotpPromptDialog.tsx";
 import { isDesktopShell } from "./lib/desktop/shell.ts";
+import { markFirstPaint } from "./lib/recovery/probe.ts";
 import { BottomNavProvider } from "./contexts/BottomNavContext.tsx";
 import { SyncProvider } from "./contexts/SyncContext.tsx";
 import { TrackAttentionProvider } from "./contexts/TrackAttentionContext.tsx";
@@ -46,6 +47,11 @@ export function AppShell() {
   useFavicon(location.pathname);
   // 非 iOS 路径的滚动容器只有一个，恒为活跃层，pathname 就是全局当前 location。
   const { ref: mainScrollRef, onScroll: onScrollRestore } = useScrollRestore(true, location.pathname);
+
+  // 首帧落地即记冷启动分段。放在 AppShell 而不是 main.tsx：这里跑到就说明 React 真的提交了一帧。
+  useEffect(() => {
+    markFirstPaint();
+  }, []);
 
   return (
     <div className="td-safe-top td-safe-x flex h-dvh bg-page text-ink">

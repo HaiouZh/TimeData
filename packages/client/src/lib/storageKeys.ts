@@ -27,6 +27,8 @@ export const STORAGE_KEYS = {
   syncPhaseTimings: "timedata_sync_phase_timings",
   scrollPositions: "timedata_scroll_positions",
   reloadTombstone: "timedata_reload_tombstone",
+  pendingReports: "timedata_pending_reports",
+  lastColdStart: "timedata_last_cold_start",
   diaryReviewYearRange: "timedata_diary_review_year_range",
   diaryReviewLayoutB: "timedata_diary_review_layout_b",
   diaryReviewMode: "timedata_diary_review_mode",
