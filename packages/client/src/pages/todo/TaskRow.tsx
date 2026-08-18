@@ -79,6 +79,14 @@ export interface TaskRowProps {
   onToggleSelect?: (t: Task) => void;
   /** 透传给内部的子任务列表，见 `InlineChildren.dndIdPrefix`。 */
   dndIdPrefix?: string;
+  /**
+   * 这一行是「被挡着的」那一段的第一条：画一条上边框当分界。
+   *
+   * **分界刻意不是一个插在行之间的 DOM 节点**：组内行注册了 sortable，
+   * `verticalListSortingStrategy` 按 DOM 顺序算位置，夹节点会扰乱拖拽计算；
+   * 而行被第三方 `SwipeableListItem` 包着、DOM 兄弟结构由库决定，CSS 兄弟选择器同样不能用。
+   */
+  blockedBoundary?: boolean;
 }
 
 const FRESH_OCCURRENCE_MS = 4000;
@@ -130,6 +138,7 @@ export function TaskRow({
   selectionMode,
   selected,
   onToggleSelect,
+  blockedBoundary,
   dndIdPrefix,
 }: TaskRowProps) {
   const [expanded, setExpanded] = useState(false);
@@ -260,12 +269,13 @@ export function TaskRow({
       data-in-goal={inGoal ? "true" : undefined}
       data-indent-target={indentTargetActive ? "true" : undefined}
       data-fresh-occurrence={freshOccurrence ? "true" : undefined}
+      data-blocked-boundary={blockedBoundary ? "true" : undefined}
       onPointerDownCapture={captureExpandedAtPress}
       className={`group w-full rounded-row bg-surface transition hover:bg-surface-hover ${
-        indentTargetActive ? "bg-surface-hover ring-1 ring-accent" : ""
-      } ${selectionMode && selected ? "bg-surface-hover ring-1 ring-accent" : ""} ${
-        freshOccurrence ? "todo-occurrence-fresh" : ""
-      }`}
+        blockedBoundary ? "mt-1.5 border-t border-border-hairline pt-1.5" : ""
+      } ${indentTargetActive ? "bg-surface-hover ring-1 ring-accent" : ""} ${
+        selectionMode && selected ? "bg-surface-hover ring-1 ring-accent" : ""
+      } ${freshOccurrence ? "todo-occurrence-fresh" : ""}`}
     >
       {/* biome-ignore lint/a11y/useAriaPropsSupportedByRole: role 是动态的，规则只按 link 那一支判；
           aria-checked 与 role="checkbox" 由同一个 selectionMode 三元同时开合，非多选态下是 undefined。 */}

@@ -1416,3 +1416,25 @@ describe("TaskRow 多选态", () => {
     await unmount(root);
   });
 });
+
+describe("TaskRow blockedBoundary", () => {
+  it("blockedBoundary 为真时行带 data-blocked-boundary，用于画分界上边框", async () => {
+    const t = await addTask({ title: "刷墙" });
+    const fresh = (await db.tasks.get(t.id))!;
+    const { host, root } = await render(
+      createElement(TaskRow, { task: fresh, pool: "inbox", ...handlers, blockedBoundary: true }),
+    );
+    await settle();
+    expect(host.querySelector('[data-blocked-boundary="true"]')).not.toBeNull();
+    await unmount(root);
+  });
+
+  it("不传 blockedBoundary 时不带该属性——没有被挡成员的组不该凭空多一条线", async () => {
+    const t = await addTask({ title: "刷墙" });
+    const fresh = (await db.tasks.get(t.id))!;
+    const { host, root } = await render(createElement(TaskRow, { task: fresh, pool: "inbox", ...handlers }));
+    await settle();
+    expect(host.querySelector("[data-blocked-boundary]")).toBeNull();
+    await unmount(root);
+  });
+});

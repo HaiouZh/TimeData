@@ -106,15 +106,33 @@ const MEMBER_SORT_RANK: Record<ProjectMemberState["kind"], number> = {
   scheduled: 3,
 };
 
-/** 项目组内按「在手头 → 今天 → 躺着 → 已排期」排序，段内保持传入顺序。 */
+/**
+ * 项目组内按「被挡的沉底 → 在手头 → 今天 → 躺着 → 已排期」排序，段内保持传入顺序。
+ *
+ * **沉底放在这里而不是组件里**：这是组内顺序的唯一真相，两个生产调用方（`listTasks` 与
+ * `TodoProjectSection` 的 `displayProjectTasks`）都要拿到，只改一处会被另一处洗掉。
+ * 它同时是「下一步」徽章的正确性来源——徽章读 `group.tasks[0]`，源头沉了底，徽章代码不必改。
+ */
 export function sortProjectMembers(
   tasks: readonly Task[],
-  options: { handSessionId: string | null; now: Date; recentTaskIds?: readonly string[] },
+  options: {
+    handSessionId: string | null;
+    now: Date;
+    recentTaskIds?: readonly string[];
+    /** 被未完成前置挡住的成员 id。缺省为空集时全部同档，与本参数存在之前逐字等价。 */
+    blockedIds?: ReadonlySet<string>;
+  },
 ): Task[] {
   const recentRank = new Map((options.recentTaskIds ?? []).map((id, index) => [id, index]));
+  const blockedIds = options.blockedIds;
   return tasks
     .map((task, index) => ({ task, index, state: projectMemberState(task, options) }))
     .sort((a, b) => {
+      // 被挡的一律沉底，且排在 MEMBER_SORT_RANK 之前判——「线以上全是能动的」这条承诺
+      // 优先于「在手头的排最前」。被挡且在手头的成员因此也沉底（它仍正常显示在手头区）。
+      const byBlocked =
+        Number(blockedIds?.has(a.task.id) ?? false) - Number(blockedIds?.has(b.task.id) ?? false);
+      if (byBlocked !== 0) return byBlocked;
       const byRank = MEMBER_SORT_RANK[a.state.kind] - MEMBER_SORT_RANK[b.state.kind];
       if (byRank !== 0) return byRank;
       if (a.state.kind === "scheduled" && b.state.kind === "scheduled") {

@@ -7,6 +7,7 @@ import { MemoryRouter } from "react-router";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { TodoProjectGroup } from "../../lib/tasks/goalMembership.js";
 import { GOAL_MEMBERS_MAX } from "../../lib/tasks/goalMembership.js";
+import { sortProjectMembers } from "../../lib/tasks/projectZone.js";
 import { click, renderDom, unmount } from "../../test/domHarness.js";
 import { TaskRow } from "./TaskRow.js";
 import { ProjectNameChip, TodoProjectSection } from "./TodoProjectSection.js";
@@ -971,6 +972,96 @@ describe("被挡徽章", () => {
     );
     expect(host.querySelector('[data-testid="project-next-badge"]')?.textContent).toContain("下一步 刷墙");
     expect(host.querySelector('[data-testid="project-blocked-badge"]')?.textContent).toContain("1 条被挡");
+    await unmount(root);
+  });
+});
+
+describe("展开态：能动的 / 被挡着的", () => {
+  // 组内顺序的真相在 sortProjectMembers，所以这里**必须真的调它**排一遍再传进组件——
+  // 夹具里手工把被挡的写在后面的话，把沉底删掉这条用例也不会红，就是个假闸。
+  function sortedGroup(tasks: Task[], blockedByMember: ReadonlyMap<string, string[]>) {
+    return group({
+      goalId: "g1",
+      goalTitle: "装修",
+      tasks: sortProjectMembers(tasks, { handSessionId: null, now: NOW, blockedIds: new Set(blockedByMember.keys()) }),
+      blockedByMember,
+    });
+  }
+
+  it("「下一步」徽章不指向被挡成员——沉底之后 group.tasks[0] 必然能动", async () => {
+    const { host, root } = await renderDom(
+      sectionElement({
+        groups: [
+          sortedGroup(
+            [task({ id: "blocked", title: "刷墙" }), task({ id: "free", title: "买漆" })],
+            new Map([["blocked", ["等水电"]]]),
+          ),
+        ],
+      }),
+    );
+    const badge = host.querySelector('[data-testid="project-next-badge"]');
+    expect(badge?.textContent).toContain("买漆");
+    expect(badge?.textContent).not.toContain("刷墙");
+    await unmount(root);
+  });
+
+  it("被挡成员带「等 XX」胶囊，能动的成员不带", async () => {
+    const { host, root } = await renderDom(
+      sectionElement({
+        groups: [
+          sortedGroup(
+            [task({ id: "free", title: "买漆" }), task({ id: "blocked", title: "刷墙" })],
+            new Map([["blocked", ["等水电"]]]),
+          ),
+        ],
+      }),
+    );
+    await click(host.querySelector('[data-testid="project-group-toggle"]'));
+    const chips = [...host.querySelectorAll('[data-testid="project-blocker-chip"]')];
+    expect(chips).toHaveLength(1);
+    expect(chips[0]?.textContent).toContain("等水电");
+    await unmount(root);
+  });
+
+  it("首个被挡成员画分界线；一条都没被挡时整组不画线", async () => {
+    const withBlocked = await renderDom(
+      sectionElement({
+        groups: [
+          sortedGroup(
+            [task({ id: "free", title: "买漆" }), task({ id: "blocked", title: "刷墙" })],
+            new Map([["blocked", ["等水电"]]]),
+          ),
+        ],
+      }),
+    );
+    await click(withBlocked.host.querySelector('[data-testid="project-group-toggle"]'));
+    expect(withBlocked.host.querySelectorAll('[data-blocked-boundary="true"]')).toHaveLength(1);
+    await unmount(withBlocked.root);
+
+    const clean = await renderDom(
+      sectionElement({ groups: [sortedGroup([task({ id: "free", title: "买漆" })], new Map())] }),
+    );
+    await click(clean.host.querySelector('[data-testid="project-group-toggle"]'));
+    expect(clean.host.querySelector("[data-blocked-boundary]")).toBeNull();
+    await unmount(clean.root);
+  });
+
+  it("全部成员都被挡时不画线——没有「线以上」可分", async () => {
+    const { host, root } = await renderDom(
+      sectionElement({
+        groups: [
+          sortedGroup(
+            [task({ id: "b1", title: "刷墙" }), task({ id: "b2", title: "贴砖" })],
+            new Map([
+              ["b1", ["等水电"]],
+              ["b2", ["等水电"]],
+            ]),
+          ),
+        ],
+      }),
+    );
+    await click(host.querySelector('[data-testid="project-group-toggle"]'));
+    expect(host.querySelector("[data-blocked-boundary]")).toBeNull();
     await unmount(root);
   });
 });

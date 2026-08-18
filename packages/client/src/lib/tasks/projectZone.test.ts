@@ -296,6 +296,30 @@ describe("sortProjectMembers", () => {
     );
     expect(sorted.map((t) => t.id)).toEqual(["newer", "new", "old", "future"]);
   });
+
+  it("被挡成员一律沉底，段内保持原有相对顺序", () => {
+    const sorted = sortProjectMembers(
+      [task({ id: "a" }), task({ id: "b" }), task({ id: "c" }), task({ id: "d" })],
+      { handSessionId: null, now: NOW, blockedIds: new Set(["a", "c"]) },
+    );
+    expect(sorted.map((t) => t.id)).toEqual(["b", "d", "a", "c"]);
+  });
+
+  it("沉底优先级高于「在手头」：被挡就不是能动的，不管它在不在手头", () => {
+    const sorted = sortProjectMembers(
+      [task({ id: "handBlocked", sessionId: "s1" }), task({ id: "idle" })],
+      { handSessionId: "s1", now: NOW, blockedIds: new Set(["handBlocked"]) },
+    );
+    expect(sorted.map((t) => t.id)).toEqual(["idle", "handBlocked"]);
+  });
+
+  it("blockedIds 缺省时与改动前逐字等价（既有排序用例的护栏）", () => {
+    const input = [task({ id: "idle" }), task({ id: "hand", sessionId: "s1" })];
+    const withOption = sortProjectMembers(input, { handSessionId: "s1", now: NOW, blockedIds: new Set() });
+    const withoutOption = sortProjectMembers(input, { handSessionId: "s1", now: NOW });
+    expect(withOption.map((t) => t.id)).toEqual(withoutOption.map((t) => t.id));
+    expect(withoutOption.map((t) => t.id)).toEqual(["hand", "idle"]);
+  });
 });
 
 describe("goalBarTaskIds", () => {

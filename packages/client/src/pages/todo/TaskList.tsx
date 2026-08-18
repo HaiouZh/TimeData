@@ -52,6 +52,8 @@ export interface TaskListProps {
   extraAction?: (task: Task) => ReactNode;
   /** meta 胶囊带插槽（项目区状态点 / 项目名 chip）；返回 null 即该行不加。 */
   metaChip?: (task: Task) => ReactNode;
+  /** 「被挡着的」那一段的第一条成员 id；该行画分界上边框。无被挡成员时传 null 或不传。 */
+  blockedBoundaryId?: string | null;
   /** 只读场景强制覆盖按 pool 推断的 children mode。 */
   childrenModeOverride?: InlineChildrenMode;
   /** 页面级多选态：行点击变勾选，拖拽与滑动一并禁用。 */
@@ -90,6 +92,7 @@ export function TaskList(props: TaskListProps) {
         revealChildren={props.revealChildren}
         inGoal={props.goalLinkedIds?.has(task.id) ?? false}
         metaChip={props.metaChip?.(task)}
+        blockedBoundary={props.blockedBoundaryId != null && props.blockedBoundaryId === task.id}
         selectionMode={props.selectionMode}
         selected={props.selectedIds?.has(task.id) ?? false}
         onToggleSelect={props.onToggleSelect}

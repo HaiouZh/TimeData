@@ -1050,7 +1050,11 @@ export async function listTasks(now: Date = new Date()): Promise<TodoBuckets> {
     blockedTitlesByTaskId,
   ).map((group) => ({
     ...group,
-    tasks: sortProjectMembers(group.tasks, { handSessionId, now }),
+    tasks: sortProjectMembers(group.tasks, {
+      handSessionId,
+      now,
+      blockedIds: new Set(group.blockedByMember.keys()),
+    }),
   }));
   // 手头区的「还有 N 条子任务」按 atHand 的根任务反查 children，不从桶里数。
   // （阶段3 之前的理由是「子任务被 parentId 早退整个丢掉、不在任何桶里」，那句已不成立：

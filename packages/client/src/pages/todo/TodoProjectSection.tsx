@@ -106,7 +106,16 @@ function displayProjectTasks(
   handSessionId: string | null,
   now: Date,
 ): Task[] {
-  return recentTaskIds.length === 0 ? group.tasks : sortProjectMembers(group.tasks, { handSessionId, now, recentTaskIds });
+  // group.tasks 进来时已由 listTasks 排好（含沉底）。这里只在「组内有最近新建任务」时重排，
+  // 而重排必须把 blockedIds 一起带上——不带的话这一次排序会把上游的沉底洗掉。
+  return recentTaskIds.length === 0
+    ? group.tasks
+    : sortProjectMembers(group.tasks, {
+        handSessionId,
+        now,
+        recentTaskIds,
+        blockedIds: new Set(group.blockedByMember.keys()),
+      });
 }
 
 /**
@@ -115,8 +124,8 @@ function displayProjectTasks(
  * 独立成组件是因为 `useDroppable` 是 hook，不能在 `groups.map` 的回调里调。
  *
  * **落点覆盖整块而非只有标题行**：展开后标题行只有一行高、下面是一整片任务列表，只认标题行会让
- * 展开态几乎瞄不准。组内不做用户自定义重排、组内行也不注册 sortable（`TaskList` 未传
- * `sortable`/`containerId` → `canSort=false` → 不渲染拖柄），因此整块当落点没有落点竞争。
+ * 展开态几乎瞄不准。组内行虽然注册了 sortable（`TaskList` 传了 `sortable`/`containerId`，
+ * 组内父子收纳的前提），但那是行级拖柄，整块落点与它不竞争。
  */
 function ProjectGroupCard({
   group,
@@ -586,6 +595,11 @@ export function TodoProjectSection({
       <div className="space-y-1">
         {groups.map((group) => {
           const visibleTasks = displayProjectTasks(group, recentTaskIds.get(group.goalId) ?? [], handSessionId, now);
+          // 被挡成员已由 sortProjectMembers 沉底且连续，首个被挡成员即分界。
+          // 全部能动 → find 返回 undefined；全部被挡 → 首条就是第 0 条、没有「线以上」可分，两种都不画线。
+          const firstBlocked = visibleTasks.find((t) => group.blockedByMember.has(t.id));
+          const blockedBoundaryId =
+            firstBlocked !== undefined && firstBlocked.id !== visibleTasks[0]?.id ? firstBlocked.id : null;
           const rowActions = new Map(
             visibleTasks.map((task) => [task.id, projectMemberRowActions(task, { handSessionId, now })]),
           );
@@ -630,13 +644,22 @@ export function TodoProjectSection({
                   revealChildren={revealChildren}
                   // 从 "static" 改开：子任务要能往左拖升根回组
                   childrenModeOverride="draggable"
+                  blockedBoundaryId={blockedBoundaryId}
                   metaChip={(task) => {
                     // 皆缺必须返回 null：空 fragment 也是非 null 节点，会把 TaskRow 的 hasMeta 闸顶开、凭空画出空 meta 带。
+                    const blockerTitles = group.blockedByMember.get(task.id);
+                    const blockerChip =
+                      blockerTitles !== undefined && blockerTitles.length > 0 ? (
+                        <span data-testid="project-blocker-chip" className={`${META_CHIP_CLASS} text-ink-2`}>
+                          等 {blockerTitles.join("、")}
+                        </span>
+                      ) : null;
                     const stateChip = memberStateChip(task, handSessionId, now);
                     const trackChip = trackChipFor?.(task) ?? null;
-                    if (stateChip === null && trackChip === null) return null;
+                    if (blockerChip === null && stateChip === null && trackChip === null) return null;
                     return (
                       <>
+                        {blockerChip}
                         {stateChip}
                         {trackChip}
                       </>
