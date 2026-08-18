@@ -48,12 +48,22 @@ export function TrackRow({ row, expanded, onToggleExpand, now }: TrackRowProps) 
     if (drafting) draftRef.current?.focus();
   }, [drafting]);
 
+  /**
+   * 收起草稿。**必须连 `submittingRef` 一起复位**：在途期间按 Esc / 折叠行之后，那个标志会一直
+   * 留在 true，重开再回车会被在途闸静默吞掉（写入若永不返回则此后每次提交都被吞）。
+   * 复位不会造成重复落库——用户已经收起过一次，再提交的是一次全新的、内容不同的动作。
+   */
+  function closeDraft(): void {
+    submittingRef.current = false;
+    setDraftError(null);
+    setDrafting(false);
+  }
+
   // 展开态被收起时草稿一并丢弃，避免下次展开还挂着上一次的半截输入。
   useEffect(() => {
-    if (!expanded) {
-      setDrafting(false);
-      setDraftError(null);
-    }
+    if (!expanded) closeDraft();
+    // closeDraft 只读 ref 与 setState，恒等价，不进依赖数组。
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [expanded]);
 
   function handleRowClick(event: ReactMouseEvent<HTMLDivElement>): void {
@@ -88,7 +98,10 @@ export function TrackRow({ row, expanded, onToggleExpand, now }: TrackRowProps) 
       // 只记即时步：开口步表达「我正在做这个」，待办页已经有「手头」在说这件事，两套说法重叠；
       // 且开口步会自动闭掉上一条开口步，那个副作用在行内看不见。开口步留在轨道页的 StepComposer。
       await appendUserStep({ trackId: row.track.id, content, mode: "instant", tags: [] });
-      if (draftRef.current) draftRef.current.value = "";
+      // **只清掉自己提交的那份**：回车后草稿保持打开，用户会在 await 在途期间接着打字，
+      // 无条件清空会把这几个字一并抹掉——那正是本函数要杜绝的「字被吃掉」，只是换到了成功路径上。
+      const field = draftRef.current;
+      if (field !== null && field.value.trim() === content) field.value = "";
       setDraftError(null);
       // 非空回车保持草稿继续录入（同 InlineChildren）；失焦提交完就收起。
       if (source === "blur") setDrafting(false);
@@ -114,8 +127,7 @@ export function TrackRow({ row, expanded, onToggleExpand, now }: TrackRowProps) 
     }
     if (event.key === "Escape") {
       event.preventDefault();
-      setDraftError(null);
-      setDrafting(false);
+      closeDraft();
     }
   }
 

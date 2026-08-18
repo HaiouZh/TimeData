@@ -254,6 +254,73 @@ describe("TrackRow 记一步", () => {
     await unmount(root);
   });
 
+  // 回车后草稿保持打开，用户会在 await 在途期间接着打字。成功回调若无条件清空，
+  // 会把这几个字一并抹掉——就是本功能要杜绝的「字被吃掉」换到成功路径上（scoped 复审抓的）。
+  it("在途期间接着打的字不被成功回调抹掉", async () => {
+    let release: (() => void) | null = null;
+    vi.mocked(appendUserStep).mockImplementationOnce(
+      () => new Promise((resolve) => (release = () => resolve({ closed: [], created: null } as never))),
+    );
+    const { host, root } = await renderRow({ expanded: true });
+    const open = host.querySelector('[aria-label="记一步"]') as HTMLElement;
+    await act(async () => open.dispatchEvent(new MouseEvent("click", { bubbles: true })));
+    const input = host.querySelector('textarea[aria-label="新步骤内容"]') as HTMLTextAreaElement;
+    await act(async () => {
+      input.value = "第一步";
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    await act(async () => {
+      input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+    });
+    // 写入还没返回，用户已经在敲下一步。
+    await act(async () => {
+      input.value = "还在打的第二步";
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    await act(async () => {
+      release?.();
+    });
+    expect((host.querySelector('textarea[aria-label="新步骤内容"]') as HTMLTextAreaElement).value).toBe(
+      "还在打的第二步",
+    );
+    await unmount(root);
+  });
+
+  // 在途期间 Esc 收起后，submittingRef 若不复位，重开再回车会被在途闸静默吞掉（scoped 复审抓的）。
+  it("在途期间 Esc 收起后，重开还能再提交", async () => {
+    let release: (() => void) | null = null;
+    vi.mocked(appendUserStep).mockImplementationOnce(
+      () => new Promise((resolve) => (release = () => resolve({ closed: [], created: null } as never))),
+    );
+    const { host, root } = await renderRow({ expanded: true });
+    const openDraft = async () => {
+      const btn = host.querySelector('[aria-label="记一步"]') as HTMLElement;
+      await act(async () => btn.dispatchEvent(new MouseEvent("click", { bubbles: true })));
+      return host.querySelector('textarea[aria-label="新步骤内容"]') as HTMLTextAreaElement;
+    };
+    const first = await openDraft();
+    await act(async () => {
+      first.value = "在途的一步";
+      first.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    await act(async () => first.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true })));
+    expect(appendUserStep).toHaveBeenCalledTimes(1);
+    await act(async () => first.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })));
+    expect(host.querySelector('[data-testid="track-step-draft-row"]')).toBeNull();
+
+    const second = await openDraft();
+    await act(async () => {
+      second.value = "重开之后这一步";
+      second.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    await act(async () => second.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true })));
+    expect(appendUserStep).toHaveBeenCalledTimes(2);
+    await act(async () => {
+      release?.();
+    });
+    await unmount(root);
+  });
+
   // 从 <a href> 改成 role="link" 的 div 之后浏览器不再给默认焦点样式，index.css 也无兜底。
   it("行带 focus-visible 焦点环——键盘用户看得见自己停在哪一行", async () => {
     const { host, root } = await renderRow();

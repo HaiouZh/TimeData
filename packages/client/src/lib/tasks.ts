@@ -832,7 +832,8 @@ export interface TodoBuckets {
   goalLinkedIds: ReadonlySet<string>;
   /** 在等：被未完成前置挡住的任务。已在手头或已完成的**不进**这里——正在做的活不该显示「在等」。 */
   waiting: Task[];
-  /** taskId → 挡着它的那些东西的标题（用于界面显示「等 XX」）；悬空边仅保留占位，不参与分流。 */
+  /** taskId → 挡着它的那些东西的标题（用于界面显示「等 XX」）。**只含活着的前置**：悬空边整条被
+   *  `buildBlockedByIndex` 按 `liveKeys` 筛掉，既不参与分流也不再留占位。 */
   waitingBlockerTitles: Record<string, string[]>;
 }
 
