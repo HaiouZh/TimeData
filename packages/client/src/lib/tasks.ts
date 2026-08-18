@@ -858,8 +858,12 @@ function localYmd(d: Date): string {
 }
 
 /**
- * blockedBy 索引的 `${kind}:${id}` 键 → 界面显示的标题。悬空 ref（任务/轨道已删）退回占位，
- * 不因查不到就丢掉整条边——否则「在等」区会显示一条不说明原因的行。
+ * blockedBy 索引的 `${kind}:${id}` 键 → 界面显示的标题。
+ *
+ * **「（已删除）」这一支现在是防御性的、正常走不到**：`buildBlockedByIndex` 已按 `liveKeys`
+ * 把悬空边整条筛掉（见 evergreen todo/task-relations §3 不变量 3），所以进得了 blockedBy 的
+ * 键必定在 `tasksById` / `trackTitles` 里查得到。留着是防 `liveKeys` 与这两张表失同步——
+ * 那时宁可显示占位，也别让「在等」区出现一条不说明原因的行。
  */
 function blockerDisplayTitle(
   key: string,
@@ -950,16 +954,6 @@ export async function listTasks(now: Date = new Date()): Promise<TodoBuckets> {
     waiting: [],
     waitingBlockerTitles: {},
   };
-  for (const relation of relations) {
-    const blockerKey = `${relation.blockerKind}:${relation.blockerId}`;
-    if (liveKeys.has(blockerKey)) continue;
-    if (relation.blockedKind !== "task") continue;
-    const titles = buckets.waitingBlockerTitles[relation.blockedId] ?? [];
-    buckets.waitingBlockerTitles[relation.blockedId] = [
-      ...titles,
-      blockerDisplayTitle(blockerKey, tasksById, trackTitles),
-    ];
-  }
   // 规则的耗尽判定与到期日排序统一走 occurrence 账本（§9.1 读口径），不再读模板死游标。
   const occurrencesByRule = new Map<string, Task[]>();
   for (const t of all) {

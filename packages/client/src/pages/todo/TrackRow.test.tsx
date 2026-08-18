@@ -192,6 +192,76 @@ describe("TrackRow 记一步", () => {
     await unmount(root);
   });
 
+  // 与轨道页 StepComposer 的 TK-01 契约同款：写失败不许把用户刚打的字吃掉。
+  it("写入失败时保留原文并 inline 报错，草稿行不收起", async () => {
+    vi.mocked(appendUserStep).mockRejectedValueOnce(new Error("轨道不存在"));
+    const { host, root } = await renderRow({ expanded: true });
+    const open = host.querySelector('[aria-label="记一步"]') as HTMLElement;
+    await act(async () => open.dispatchEvent(new MouseEvent("click", { bubbles: true })));
+    const input = host.querySelector('textarea[aria-label="新步骤内容"]') as HTMLTextAreaElement;
+    await act(async () => {
+      input.value = "写不进去的一步";
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    await act(async () => {
+      input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+    });
+    expect(host.querySelector('[data-testid="track-step-draft-error"]')?.textContent).toContain("轨道不存在");
+    expect((host.querySelector('textarea[aria-label="新步骤内容"]') as HTMLTextAreaElement).value).toBe("写不进去的一步");
+    expect(host.querySelector('[data-testid="track-step-draft-row"]')).not.toBeNull();
+    await unmount(root);
+  });
+
+  // 以前靠「先同步清空 value」顺带挡住重复提交；改成写成功才清空之后，这道闸必须显式存在。
+  it("在途窗口内连打两次回车只落库一次", async () => {
+    let release: (() => void) | null = null;
+    vi.mocked(appendUserStep).mockImplementationOnce(
+      () => new Promise((resolve) => (release = () => resolve({ closed: [], created: null } as never))),
+    );
+    const { host, root } = await renderRow({ expanded: true });
+    const open = host.querySelector('[aria-label="记一步"]') as HTMLElement;
+    await act(async () => open.dispatchEvent(new MouseEvent("click", { bubbles: true })));
+    const input = host.querySelector('textarea[aria-label="新步骤内容"]') as HTMLTextAreaElement;
+    await act(async () => {
+      input.value = "连打两次";
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    await act(async () => {
+      input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+      input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+    });
+    expect(appendUserStep).toHaveBeenCalledTimes(1);
+    await act(async () => {
+      release?.();
+    });
+    await unmount(root);
+  });
+
+  // 输入法组词途中按回车不许提交半截拼音（isComposing 在部分 Android 输入法上不置位，故另认 keyCode 229）。
+  it("IME 组词中的回车不提交", async () => {
+    const { host, root } = await renderRow({ expanded: true });
+    const open = host.querySelector('[aria-label="记一步"]') as HTMLElement;
+    await act(async () => open.dispatchEvent(new MouseEvent("click", { bubbles: true })));
+    const input = host.querySelector('textarea[aria-label="新步骤内容"]') as HTMLTextAreaElement;
+    await act(async () => {
+      input.value = "pinyin";
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    await act(async () => {
+      input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", keyCode: 229, bubbles: true }));
+    });
+    expect(appendUserStep).not.toHaveBeenCalled();
+    await unmount(root);
+  });
+
+  // 从 <a href> 改成 role="link" 的 div 之后浏览器不再给默认焦点样式，index.css 也无兜底。
+  it("行带 focus-visible 焦点环——键盘用户看得见自己停在哪一行", async () => {
+    const { host, root } = await renderRow();
+    const el = host.querySelector('[data-testid="todo-track-row"]') as HTMLElement;
+    expect(el.className).toContain("focus-visible:ring-");
+    await unmount(root);
+  });
+
   it("未展开时没有记一步入口", async () => {
     const { host, root } = await renderRow({ expanded: false });
     expect(host.querySelector('[aria-label="记一步"]')).toBeNull();

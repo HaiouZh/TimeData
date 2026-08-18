@@ -6,6 +6,7 @@ import { endActiveSession, grabTaskToHand } from "./sessions.js";
 import { occurrenceChildId } from "./tasks/occurrenceChildId.js";
 import { localDateOf } from "./tasks/placement.js";
 import { addTaskRelation } from "./taskRelations.js";
+import { addTrack } from "./tracks.js";
 import {
   addTask,
   applyRecurrenceChoice,
@@ -2064,14 +2065,39 @@ describe("在等桶：被未完成前置挡住的任务（界面分流）", () =
     expect(buckets.waitingBlockerTitles[blocked.id]).toEqual(["挡路的前置"]);
   });
 
-  it("waitingBlockerTitles 对悬空任务前置显示已删除占位", async () => {
-    const blocker = await addTask({ title: "挡路的前置", toInbox: true });
+  // 原断言是「悬空前置显示（已删除）占位」，那是悬空边还会挡人时的口径。阶段4 之后悬空边不再挡，
+  // 纯悬空的任务根本不进 waiting 桶，那条断言守的是一条到不了界面的死路径（终审 L2 变异证实：
+  // 删掉回填代码只红它一条）。改成守新口径下**真会显示**的那一档：两个前置一活一悬空时，
+  // 「在等」区只列活着的那个——比原断言更强，因为它同时钉住「悬空的不列」与「活的照列」。
+  it("waitingBlockerTitles 只列活着的前置：悬空的那条不再出现在「等 XX」里", async () => {
+    const liveBlocker = await addTask({ title: "挡路的前置", toInbox: true });
+    const goneBlocker = await addTask({ title: "已经删掉的前置", toInbox: true });
     const blocked = await addTask({ title: "被挡的活", toInbox: true });
-    await addTaskRelation({ blocker: { kind: "task", id: blocker.id }, blocked: { kind: "task", id: blocked.id } });
-    await db.tasks.delete(blocker.id);
+    await addTaskRelation({ blocker: { kind: "task", id: liveBlocker.id }, blocked: { kind: "task", id: blocked.id } });
+    await addTaskRelation({ blocker: { kind: "task", id: goneBlocker.id }, blocked: { kind: "task", id: blocked.id } });
+    // 直接删 tasks 行、不走 deleteTaskCascade——模拟老客户端只推 tasks/delete、关系表留悬空边。
+    await db.tasks.delete(goneBlocker.id);
 
     const buckets = await listTasks(NOW);
-    expect(buckets.waitingBlockerTitles[blocked.id]).toEqual(["（已删除）"]);
+    expect(buckets.waiting.map((t) => t.id)).toContain(blocked.id);
+    expect(buckets.waitingBlockerTitles[blocked.id]).toEqual(["挡路的前置"]);
+  });
+
+  // 阶段4 的核心修复靠 listTasks 把 task 与 track **两类**端点都收进 liveKeys。判定层
+  // （buildBlockedByIndex 单测）验的是「给了 liveKeys 就筛得对」，管不到这里的接线；
+  // 终审 L2 变异证实：拿掉 liveKeys 的轨道端点那一行，282 条用例全绿。这条就是那道闸。
+  it("被已删轨道挡住的活也回到本来该在的区——liveKeys 的轨道端点接线", async () => {
+    const track = await addTrack({ title: "挡路的轨道" });
+    const blocked = await addTask({ title: "被轨道挡的活", toInbox: true });
+    await addTaskRelation({ blocker: { kind: "track", id: track.id }, blocked: { kind: "task", id: blocked.id } });
+    expect((await listTasks(NOW)).waiting.map((t) => t.id)).toContain(blocked.id);
+
+    // 直接删 tracks 行、不走级联——同上，模拟老客户端只推 tracks/delete。
+    await db.tracks.delete(track.id);
+
+    const buckets = await listTasks(NOW);
+    expect(buckets.waiting.map((t) => t.id)).not.toContain(blocked.id);
+    expect(buckets.inbox.map((t) => t.id)).toContain(blocked.id);
   });
 
   it("被挡的项目成员带进组级 blockedByMember（徽章数据源）", async () => {

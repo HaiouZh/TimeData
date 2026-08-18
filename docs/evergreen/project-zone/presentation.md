@@ -55,7 +55,7 @@ last-reviewed: 2026-08-18
 从**今天 / 收件箱**把根任务拖到项目组上 = 归入该组。落点判定表与容器域在 [todo/invariants](../todo/invariants.md) 第 5 条；这里管归属侧的契约。
 
 - **落点是整个组块**（标题行 + 展开态内容区），不是只有标题行：展开后标题行仅一行高、下面是一整片列表，只认标题行在展开态几乎瞄不准。`useDroppable` 落点共两族：本处（id `project:<goalId>`）与宽屏投递坞的药丸（id `dock:*`，见 [todo/invariants](../todo/invariants.md) 第 14 条）。
-- **组块与组内行同时是落点，靠碰撞策略分流**：组内每行另注册 sortable，dnd id 带 `project-row:<goalId>:` 前缀（见 §3.1）。指针落在卡内时谁赢由 `preferProjectCollisions` 裁决——**来源是本组则同组行优先，来源是外区则只认卡片**，故外区归入这条路径够不着组内行。组内不做用户自定义重排（组内序由 [母文档](../project-zone.md) §3 规则 6 的四段排序算出）。
+- **组块与组内行同时是落点，靠碰撞策略分流**：组内每行另注册 sortable，dnd id 带 `project-row:<goalId>:` 前缀（见 §3.1）。指针落在卡内时谁赢由 `preferProjectCollisions` 裁决——**来源是本组则同组行优先，来源是外区则只认卡片**，故外区归入这条路径够不着组内行。组内不做用户自定义重排（组内序由 [母文档](../project-zone.md) §3 规则 6 算出：能动的四段排序 → 被挡的沉底）。
 - **碰撞策略必须让项目卡优先**（`preferProjectCollisions`）。页面用 `closestCenter`，它按 droppable 矩形**中心点**算距离，而展开的项目卡是几百像素高的大块、中心离手指很远，会被隔壁收件箱某一行抢走落点——整块 droppable 在展开态近乎失灵。故指针真落在项目卡内时只认它，否则原样退回 `closestCenter`；宽屏投递坞的药丸浮在列表之上，坞命中又优先于项目卡（见 [todo/invariants](../todo/invariants.md) 第 14 条）。`fallback` 传 thunk：指针已落在卡内时 `closestCenter` 的结果注定被丢弃，没必要每帧遍历全部 droppable。**已知限制**：键盘拖拽没有指针坐标，`pointerWithin` 恒空 → 走 fallback，项目组在纯键盘下仍难命中。
 - **对缩进系统让位**：横向位移触发的缩进判定与「拖进项目」共用同一次手势，`canBecomeChild` 优先于目标容器。两道闸——`hoveredRootIdFromOver` 对 `project:` 容器恒返回 null，且 `canBecomeChild` 显式排除 project——第二道在当前调用路径上不可构造，是明写的防御闸。没有它，斜着拖进项目会被判成 `move-to-parent`（拆/接父子关系）。
 - **准入四拒，判在两处，不重合**：

@@ -1005,6 +1005,26 @@ describe("展开态：能动的 / 被挡着的", () => {
     await unmount(root);
   });
 
+  // 沉底只保证「存在能动成员时 tasks[0] 能动」。整组全被挡时它不成立——终审 L1 抓到的就是这一档，
+  // 那时徽章会推荐一件界面上明确标着「等 XX」的活。
+  it("整组全被挡时不显示「下一步」徽章——没有能动的活可推荐", async () => {
+    const { host, root } = await renderDom(
+      sectionElement({
+        groups: [
+          sortedGroup(
+            [task({ id: "b1", title: "刷墙" }), task({ id: "b2", title: "贴砖" })],
+            new Map([
+              ["b1", ["等水电"]],
+              ["b2", ["等水电"]],
+            ]),
+          ),
+        ],
+      }),
+    );
+    expect(host.querySelector('[data-testid="project-next-badge"]')).toBeNull();
+    await unmount(root);
+  });
+
   it("被挡成员带「等 XX」胶囊，能动的成员不带", async () => {
     const { host, root } = await renderDom(
       sectionElement({
@@ -1044,6 +1064,52 @@ describe("展开态：能动的 / 被挡着的", () => {
     await click(clean.host.querySelector('[data-testid="project-group-toggle"]'));
     expect(clean.host.querySelector("[data-blocked-boundary]")).toBeNull();
     await unmount(clean.root);
+  });
+
+  // 组内 `+` 新建一次后 recentTaskIds 常驻非空，此后每次渲染都走 displayProjectTasks 的**重排**路径。
+  // 那条路径必须把 blockedIds 一起传下去，否则这次排序会把 listTasks 已经做好的沉底洗掉。
+  // 终审 L2 变异证实：拿掉那个参数，TodoProjectSection + TodoPage 共 233 条用例全绿——本条就是那道闸。
+  it("组内新建之后重排仍守沉底：被挡且在手头的成员不会被洗回线以上", async () => {
+    const HAND = "sess-1";
+    const blockedAtHand = task({ id: "blocked", title: "刷墙", sessionId: HAND });
+    const free = task({ id: "free", title: "买漆" });
+    const blockedByMember = new Map([["blocked", ["等水电"]]]);
+    const { host, root } = await renderSection({
+      handSessionId: HAND,
+      onCreateTask: vi.fn(async () => task({ id: "created", title: "新建的" })),
+      groups: [
+        group({
+          goalId: "g1",
+          goalTitle: "装修",
+          // 传进来的就是 listTasks 排好的序：能动的在前、被挡的沉底（哪怕它在手头）。
+          tasks: sortProjectMembers([blockedAtHand, free], {
+            handSessionId: HAND,
+            now: NOW,
+            blockedIds: new Set(blockedByMember.keys()),
+          }),
+          blockedByMember,
+        }),
+      ],
+    });
+    await click(host.querySelector('[data-testid="project-group-toggle"]'));
+    const rowTitles = () =>
+      [...host.querySelectorAll('[data-goal-id="g1"] [aria-label^="打开 "]')].map((el) => el.getAttribute("aria-label") ?? "");
+    const titlesBefore = rowTitles();
+    expect(titlesBefore[0]).toContain("买漆");
+
+    // 走一次真实的 `+` 新建，把 recentTaskIds 灌成非空。
+    await click(host.querySelector('button[aria-label="在项目 装修中创建任务"]'));
+    const input = host.querySelector('input[aria-label="在项目 装修中新建任务"]') as HTMLInputElement;
+    await act(async () => {
+      setInputValue(input, "新建的");
+      input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true }));
+    });
+
+    const titlesAfter = rowTitles();
+    // 洗掉沉底的话，在手头的「刷墙」会跳到第一位（MEMBER_SORT_RANK 里 at-hand 最靠前）。
+    expect(titlesAfter[0]).toContain("买漆");
+    expect(titlesAfter[titlesAfter.length - 1]).toContain("刷墙");
+    await unmount(root);
   });
 
   it("全部成员都被挡时不画线——没有「线以上」可分", async () => {

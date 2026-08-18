@@ -39,6 +39,8 @@ export function TrackRow({ row, expanded, onToggleExpand, now }: TrackRowProps) 
   const recentSteps = [...row.steps].sort((a, b) => b.seq - a.seq).slice(0, INLINE_STEP_LIMIT);
 
   const [drafting, setDrafting] = useState(false);
+  const [draftError, setDraftError] = useState<string | null>(null);
+  const submittingRef = useRef(false);
   const draftRef = useRef<HTMLTextAreaElement | null>(null);
 
   // 挂载即聚焦：与 InlineChildren 的草稿行同款——紧随用户手势的程序化聚焦在 APK(WebView) 上会唤起软键盘。
@@ -48,7 +50,10 @@ export function TrackRow({ row, expanded, onToggleExpand, now }: TrackRowProps) 
 
   // 展开态被收起时草稿一并丢弃，避免下次展开还挂着上一次的半截输入。
   useEffect(() => {
-    if (!expanded) setDrafting(false);
+    if (!expanded) {
+      setDrafting(false);
+      setDraftError(null);
+    }
   }, [expanded]);
 
   function handleRowClick(event: ReactMouseEvent<HTMLDivElement>): void {
@@ -61,27 +66,55 @@ export function TrackRow({ row, expanded, onToggleExpand, now }: TrackRowProps) 
     void navigate(href);
   }
 
-  async function resolveDraft(raw: string, source: "enter" | "blur"): Promise<void> {
-    const content = raw.trim();
-    if (content) {
+  /**
+   * 与轨道页 `StepComposer` 同一条契约（TK-01）：**写入成功后才清空草稿；失败保留原文并 inline 报错。**
+   *
+   * 反过来（先同步清空、再 fire-and-forget）会让写失败时用户刚打的字无处可寻——而
+   * `appendUserStep` 确实会抛（轨道被另一端并发删除、Dexie 事务失败），且全仓没有
+   * `unhandledrejection` 兜底、React error boundary 不拦 promise，症状是「界面零反馈、字没了」。
+   *
+   * `submittingRef` 挡在途窗口的第二次提交：以前靠「先清空 value」顺带挡住，现在不清了得显式挡。
+   */
+  async function resolveDraft(source: "enter" | "blur"): Promise<void> {
+    const content = (draftRef.current?.value ?? "").trim();
+    if (!content) {
+      setDraftError(null);
+      setDrafting(false);
+      return;
+    }
+    if (submittingRef.current) return;
+    submittingRef.current = true;
+    try {
       // 只记即时步：开口步表达「我正在做这个」，待办页已经有「手头」在说这件事，两套说法重叠；
       // 且开口步会自动闭掉上一条开口步，那个副作用在行内看不见。开口步留在轨道页的 StepComposer。
       await appendUserStep({ trackId: row.track.id, content, mode: "instant", tags: [] });
+      if (draftRef.current) draftRef.current.value = "";
+      setDraftError(null);
+      // 非空回车保持草稿继续录入（同 InlineChildren）；失焦提交完就收起。
+      if (source === "blur") setDrafting(false);
+    } catch (error) {
+      setDraftError(error instanceof Error ? error.message : "写入失败，请重试");
+    } finally {
+      submittingRef.current = false;
     }
-    // 非空回车保持草稿继续录入（同 InlineChildren）；空回车或失焦则收起。
-    if (!(source === "enter" && content)) setDrafting(false);
   }
 
   function handleDraftKey(event: ReactKeyboardEvent<HTMLTextAreaElement>): void {
-    if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {
+    // IME 双闸与 TaskDetailSheet 对齐：`isComposing` 在部分 Android 输入法上不置位，`keyCode === 229`
+    // 是那一档的兜底。少一道就会在组词途中按回车提交半截拼音。
+    if (
+      event.key === "Enter" &&
+      !event.shiftKey &&
+      !event.nativeEvent.isComposing &&
+      event.nativeEvent.keyCode !== 229
+    ) {
       event.preventDefault();
-      const value = event.currentTarget.value;
-      event.currentTarget.value = "";
-      void resolveDraft(value, "enter");
+      void resolveDraft("enter");
       return;
     }
     if (event.key === "Escape") {
       event.preventDefault();
+      setDraftError(null);
       setDrafting(false);
     }
   }
@@ -101,7 +134,9 @@ export function TrackRow({ row, expanded, onToggleExpand, now }: TrackRowProps) 
           event.preventDefault();
           void navigate(href);
         }}
-        className="flex items-start gap-2.5 px-2 py-2"
+        // 焦点环要显式写：从 <a href> 改成 role="link" 的 div 之后，浏览器不再给默认焦点样式，
+        // 而 index.css 也没有 :focus-visible 兜底——不补的话键盘用户 Tab 过来看不见自己停在哪一行。
+        className="flex items-start gap-2.5 rounded-row px-2 py-2 outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent"
       >
         <span aria-hidden className="mt-1 flex shrink-0 flex-col items-center gap-0.5">
           <span className="block h-px w-3 bg-ink-3" />
@@ -136,25 +171,25 @@ export function TrackRow({ row, expanded, onToggleExpand, now }: TrackRowProps) 
             );
           })}
           {drafting ? (
-            <div
-              data-testid="track-step-draft-row"
-              className="flex items-start gap-2 rounded-row px-2 py-1 ring-2 ring-inset ring-accent"
-            >
-              <textarea
-                ref={draftRef}
-                aria-label="新步骤内容"
-                rows={1}
-                placeholder=""
-                onKeyDown={handleDraftKey}
-                onBlur={(event) => {
-                  const value = event.currentTarget.value;
-                  event.currentTarget.value = "";
-                  void resolveDraft(value, "blur");
-                }}
-                // 不写字号类：index.css 把 input/textarea/select 兜底到 16px 消除 iOS 聚焦缩放，
-                // td-text-* 三档都小于 16px 且类选择器优先级更高，写上去会把兜底顶掉。
-                className="min-h-8 min-w-0 flex-1 resize-none break-words bg-transparent text-ink outline-none"
-              />
+            <div data-testid="track-step-draft-row">
+              <div className="flex items-start gap-2 rounded-row px-2 py-1 ring-2 ring-inset ring-accent">
+                <textarea
+                  ref={draftRef}
+                  aria-label="新步骤内容"
+                  rows={2}
+                  placeholder=""
+                  onKeyDown={handleDraftKey}
+                  onBlur={() => void resolveDraft("blur")}
+                  // 不写字号类：index.css 把 input/textarea/select 兜底到 16px 消除 iOS 聚焦缩放，
+                  // td-text-* 三档都小于 16px 且类选择器优先级更高，写上去会把兜底顶掉。
+                  className="min-h-8 min-w-0 flex-1 resize-none break-words bg-transparent text-ink outline-none"
+                />
+              </div>
+              {draftError !== null && (
+                <p data-testid="track-step-draft-error" role="alert" className="px-2 pt-1 td-text-caption text-danger">
+                  {draftError}
+                </p>
+              )}
             </div>
           ) : (
             <button
