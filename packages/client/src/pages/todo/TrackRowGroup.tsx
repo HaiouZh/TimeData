@@ -8,7 +8,17 @@ import { TrackRow } from "./TrackRow.js";
  * 本组整体渲染在 `TaskList` 的 `SortableContext` 之外（由 `TaskColumn` 的 `extra` 插槽保证）：
  * `verticalListSortingStrategy` 按 DOM 顺序算位置，夹进任务行之间会扰乱计算。
  */
-export function TrackRowGroup({ rows }: { rows: TodoTrackRow[] }) {
+export function TrackRowGroup({
+  rows,
+  expandedTrackIds,
+  onToggleTrackExpand,
+  now,
+}: {
+  rows: TodoTrackRow[];
+  expandedTrackIds: ReadonlySet<string>;
+  onToggleTrackExpand: (trackId: string) => void;
+  now: Date;
+}) {
   if (rows.length === 0) return null;
   return (
     <CollapsibleSection
@@ -18,7 +28,13 @@ export function TrackRowGroup({ rows }: { rows: TodoTrackRow[] }) {
       onToggle={(open) => setTodoTrackGroupCollapsed(!open)}
     >
       {rows.map((row) => (
-        <TrackRow key={row.track.id} row={row} />
+        <TrackRow
+          key={row.track.id}
+          row={row}
+          expanded={expandedTrackIds.has(row.track.id)}
+          onToggleExpand={() => onToggleTrackExpand(row.track.id)}
+          now={now}
+        />
       ))}
     </CollapsibleSection>
   );

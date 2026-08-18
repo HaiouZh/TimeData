@@ -17,6 +17,11 @@ import { TrackRow } from "./TrackRow.js";
  */
 export interface WaitingSectionProps {
   rows: TodoTrackRow[];
+  /** 展开的轨道 id（页面持有，见 TrackRow 的注释）。 */
+  expandedTrackIds: ReadonlySet<string>;
+  onToggleTrackExpand: (trackId: string) => void;
+  /** 页面单一时钟，透传给轨道行算相对时间。 */
+  now: Date;
   /** 被挡任务行（listTasks 的 waiting 桶）。 */
   tasks?: Task[];
   /** taskId → 挡着它的那些东西的标题，只含 `tasks` 里的任务。 */
@@ -41,6 +46,9 @@ function blockerLabel(titles: readonly string[]): string {
 
 export function WaitingSection({
   rows,
+  expandedTrackIds,
+  onToggleTrackExpand,
+  now,
   tasks = [],
   blockerTitles = {},
   onToggle = noop,
@@ -89,7 +97,13 @@ export function WaitingSection({
           );
         })}
         {rows.map((row) => (
-          <TrackRow key={row.track.id} row={row} />
+          <TrackRow
+            key={row.track.id}
+            row={row}
+            expanded={expandedTrackIds.has(row.track.id)}
+            onToggleExpand={() => onToggleTrackExpand(row.track.id)}
+            now={now}
+          />
         ))}
       </div>
     </section>

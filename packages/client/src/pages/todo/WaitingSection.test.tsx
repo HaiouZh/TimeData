@@ -6,6 +6,8 @@ import type { TodoTrackRow } from "../../lib/tasks/todoTrackRows.js";
 import { renderDom, unmount } from "../../test/domHarness.js";
 import { WaitingSection } from "./WaitingSection.js";
 
+const NOW = new Date("2026-08-18T12:00:00.000Z");
+
 function makeRow(id: string, title: string): TodoTrackRow {
   const track: Track = {
     id,
@@ -22,7 +24,12 @@ describe("WaitingSection", () => {
   it("渲染区标题、条数与每条轨道行", async () => {
     const { host, root } = await renderDom(
       <MemoryRouter>
-        <WaitingSection rows={[makeRow("tr1", "速记 sticky 日期条"), makeRow("tr2", "同步重构")]} />
+        <WaitingSection
+          rows={[makeRow("tr1", "速记 sticky 日期条"), makeRow("tr2", "同步重构")]}
+          expandedTrackIds={new Set()}
+          onToggleTrackExpand={() => {}}
+          now={NOW}
+        />
       </MemoryRouter>,
     );
     const section = host.querySelector('[data-testid="todo-section-waiting"]');
@@ -37,10 +44,50 @@ describe("WaitingSection", () => {
   it("没有停滞轨道时整块不渲染", async () => {
     const { host, root } = await renderDom(
       <MemoryRouter>
-        <WaitingSection rows={[]} />
+        <WaitingSection
+          rows={[]}
+          expandedTrackIds={new Set()}
+          onToggleTrackExpand={() => {}}
+          now={NOW}
+        />
       </MemoryRouter>,
     );
     expect(host.querySelector('[data-testid="todo-section-waiting"]')).toBeNull();
+    await unmount(root);
+  });
+
+  it("透传展开态：expandedTrackIds 命中的轨道行展开出步骤流", async () => {
+    const waitingRow = makeRow("tr1", "速记 sticky 日期条");
+    const rowWithStep: TodoTrackRow = {
+      ...waitingRow,
+      stepCount: 1,
+      steps: [
+        {
+          id: "s1",
+          seq: 1,
+          trackId: "tr1",
+          source: "user",
+          content: "上一次推进",
+          startedAt: "2026-08-10T10:00:00.000Z",
+          endedAt: "2026-08-10T10:05:00.000Z",
+          refs: [],
+          tags: [],
+          createdAt: "2026-08-10T10:00:00.000Z",
+          updatedAt: "2026-08-10T10:05:00.000Z",
+        },
+      ],
+    };
+    const { host, root } = await renderDom(
+      <MemoryRouter>
+        <WaitingSection
+          rows={[rowWithStep]}
+          expandedTrackIds={new Set([rowWithStep.track.id])}
+          onToggleTrackExpand={() => {}}
+          now={NOW}
+        />
+      </MemoryRouter>,
+    );
+    expect(host.querySelector('[data-testid="todo-track-step"]')).not.toBeNull();
     await unmount(root);
   });
 });
@@ -75,7 +122,14 @@ describe("WaitingSection 任务行", () => {
     const task = makeTask("等装修队的验收");
     const { host, root } = await renderDom(
       <MemoryRouter>
-        <WaitingSection rows={[]} tasks={[task]} blockerTitles={{ [task.id]: ["装修队"] }} />
+        <WaitingSection
+          rows={[]}
+          tasks={[task]}
+          blockerTitles={{ [task.id]: ["装修队"] }}
+          expandedTrackIds={new Set()}
+          onToggleTrackExpand={() => {}}
+          now={NOW}
+        />
       </MemoryRouter>,
     );
     const section = host.querySelector('[data-testid="todo-section-waiting"]');
@@ -89,7 +143,13 @@ describe("WaitingSection 任务行", () => {
   it("任务与轨道都空时整区不渲染", async () => {
     const { host, root } = await renderDom(
       <MemoryRouter>
-        <WaitingSection rows={[]} tasks={[]} />
+        <WaitingSection
+          rows={[]}
+          tasks={[]}
+          expandedTrackIds={new Set()}
+          onToggleTrackExpand={() => {}}
+          now={NOW}
+        />
       </MemoryRouter>,
     );
     expect(host.querySelector('[data-testid="todo-section-waiting"]')).toBeNull();

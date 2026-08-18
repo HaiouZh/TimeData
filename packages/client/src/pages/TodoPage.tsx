@@ -153,6 +153,17 @@ export function TodoPage() {
     () => todoTrackRows(trackData.tracks, trackData.stepsByTrack, trackData.claimedTrackIds, gravityNow),
     [trackData, gravityNow],
   );
+  // 轨道展开态由页面持有：记一步会让停滞轨道当场从「在等」跳到「今天」，
+  // 两个区是不同父容器、行组件必然重挂，state 放行里会随之丢失（见 TrackRow 的注释）。
+  const [expandedTrackIds, setExpandedTrackIds] = useState<ReadonlySet<string>>(() => new Set<string>());
+  const toggleTrackExpand = useCallback((trackId: string) => {
+    setExpandedTrackIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(trackId)) next.delete(trackId);
+      else next.add(trackId);
+      return next;
+    });
+  }, []);
   const todayTrackRows = trackRows.filter((row) => row.zone === "today");
   const waitingTrackRows = trackRows.filter((row) => row.zone === "waiting");
   const resumable = useLiveQuery(() => listResumableSessions(), []) ?? [];
@@ -1241,7 +1252,14 @@ export function TodoPage() {
       indentTargetId={indentTargetId}
       revealChildren={revealChildren}
       {...rowHandlers}
-      extra={todayTrackRows.length > 0 ? <TrackRowGroup rows={todayTrackRows} /> : null}
+      extra={todayTrackRows.length > 0 ? (
+        <TrackRowGroup
+          rows={todayTrackRows}
+          expandedTrackIds={expandedTrackIds}
+          onToggleTrackExpand={toggleTrackExpand}
+          now={gravityNow}
+        />
+      ) : null}
     />
   );
 
@@ -1260,6 +1278,9 @@ export function TodoPage() {
         onToHand={rowHandlers.onToHand}
         onCopyTitle={rowHandlers.onCopyTitle}
         goalLinkedIds={goalLinkedIds}
+        expandedTrackIds={expandedTrackIds}
+        onToggleTrackExpand={toggleTrackExpand}
+        now={gravityNow}
       />
     );
 
