@@ -28,7 +28,7 @@ vi.mock("./lib/tasks.js", () => ({
 }));
 
 import { runSchemaNormalizationIfNeeded } from "./db/schemaNormalization.ts";
-import { runStartupTasks } from "./startup.ts";
+import { runStartupTasks, warmMaterialization } from "./startup.ts";
 
 beforeEach(() => {
   calls.length = 0;
@@ -36,9 +36,25 @@ beforeEach(() => {
 });
 
 describe("runStartupTasks", () => {
-  it("按 seed -> migrate -> relations -> normalize -> materialize 顺序执行", async () => {
+  it("按 seed -> migrate -> relations -> normalize 顺序执行", async () => {
     await runStartupTasks();
-    expect(calls).toEqual(["seed", "migrate", "relations", "normalize", "materialize"]);
+    expect(calls).toEqual(["seed", "migrate", "relations", "normalize"]);
+  });
+
+  it("物化不在启动链里——它是全表扫，已移出去单独空闲预热", async () => {
+    await runStartupTasks();
+    expect(calls).not.toContain("materialize");
+  });
+
+  it("首次运行照跑前置边搬家，闸不会把没迁过的数据挡在门外", async () => {
+    // node 环境没有 localStorage，safeGetItem 恒返回 null，等价于「从没跑过」这一档。
+    await runStartupTasks();
+    expect(calls).toContain("relations");
+  });
+
+  it("物化仍会被跑，只是换到了 warmMaterialization", async () => {
+    await warmMaterialization();
+    expect(calls).toEqual(["materialize"]);
   });
 
   it("中途抛错时吞掉异常不上抛", async () => {
