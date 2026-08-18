@@ -2087,4 +2087,28 @@ describe("在等桶：被未完成前置挡住的任务（界面分流）", () =
     expect(buckets.projects[0]?.blockedMemberIds.has(member.id)).toBe(true);
     expect(buckets.projects[0]?.blockedMemberIds.has(free.id)).toBe(false);
   });
+
+  it("blocker 被删后留下的悬空边不再挡人：被挡任务回到它本来该在的区", async () => {
+    const blocker = await addTask({ title: "挡路的前置", toInbox: true });
+    const blocked = await addTask({ title: "被挡的活", toInbox: true });
+    await addTaskRelation({ blocker: { kind: "task", id: blocker.id }, blocked: { kind: "task", id: blocked.id } });
+    expect((await listTasks(NOW)).waiting.map((t) => t.id)).toContain(blocked.id);
+
+    // 直接删 tasks 行、不走 deleteTaskCascade——模拟老客户端只推 tasks/delete、关系表留悬空边。
+    await db.tasks.delete(blocker.id);
+
+    const buckets = await listTasks(NOW);
+    expect(buckets.waiting.map((t) => t.id)).not.toContain(blocked.id);
+    expect(buckets.inbox.map((t) => t.id)).toContain(blocked.id);
+  });
+
+  it("悬空边本身不被删掉——用户还要能在详情面板里看见并删它", async () => {
+    const blocker = await addTask({ title: "挡路的前置", toInbox: true });
+    const blocked = await addTask({ title: "被挡的活", toInbox: true });
+    await addTaskRelation({ blocker: { kind: "task", id: blocker.id }, blocked: { kind: "task", id: blocked.id } });
+    await db.tasks.delete(blocker.id);
+
+    await listTasks(NOW);
+    await expect(db.taskRelations.toArray()).resolves.toHaveLength(1);
+  });
 });

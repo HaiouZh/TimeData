@@ -832,7 +832,7 @@ export interface TodoBuckets {
   goalLinkedIds: ReadonlySet<string>;
   /** 在等：被未完成前置挡住的任务。已在手头或已完成的**不进**这里——正在做的活不该显示「在等」。 */
   waiting: Task[];
-  /** taskId → 挡着它的那些东西的标题（用于界面显示「等 XX」）。只含 waiting 桶里的任务。 */
+  /** taskId → 挡着它的那些东西的标题（用于界面显示「等 XX」）；悬空边仅保留占位，不参与分流。 */
   waitingBlockerTitles: Record<string, string[]>;
 }
 
@@ -901,16 +901,21 @@ export async function listTasks(now: Date = new Date()): Promise<TodoBuckets> {
   // 这一读让轨道完成/删除即时反映到 waiting 桶的解锁与标题。悬空 ref 的标题回退见 blockerDisplayTitle。
   const tasksById = new Map(all.map((t) => [t.id, t] as const));
   const completedKeys = new Set<string>();
+  // 存活端点：悬空 blocker 不算挡（见 buildBlockedByIndex 的注释）。与 completedKeys 同一轮遍历，
+  // 不另开循环——两者的口径必须来自同一份 all/trackRows，分开取会在并发刷新时错位。
+  const liveKeys = new Set<string>();
   for (const t of all) {
+    liveKeys.add(`task:${t.id}`);
     if (t.done) completedKeys.add(`task:${t.id}`);
   }
   const trackRows = await db.tracks.toArray();
   const trackTitles = new Map<string, string>();
   for (const tr of trackRows) {
     trackTitles.set(tr.id, tr.title);
+    liveKeys.add(`track:${tr.id}`);
     if (tr.status !== "active") completedKeys.add(`track:${tr.id}`);
   }
-  const blockedBy = buildBlockedByIndex(relations, completedKeys);
+  const blockedBy = buildBlockedByIndex(relations, completedKeys, liveKeys);
   const buckets: TodoBuckets = {
     today: [],
     inbox: [],
@@ -933,6 +938,16 @@ export async function listTasks(now: Date = new Date()): Promise<TodoBuckets> {
     waiting: [],
     waitingBlockerTitles: {},
   };
+  for (const relation of relations) {
+    const blockerKey = `${relation.blockerKind}:${relation.blockerId}`;
+    if (liveKeys.has(blockerKey)) continue;
+    if (relation.blockedKind !== "task") continue;
+    const titles = buckets.waitingBlockerTitles[relation.blockedId] ?? [];
+    buckets.waitingBlockerTitles[relation.blockedId] = [
+      ...titles,
+      blockerDisplayTitle(blockerKey, tasksById, trackTitles),
+    ];
+  }
   // 规则的耗尽判定与到期日排序统一走 occurrence 账本（§9.1 读口径），不再读模板死游标。
   const occurrencesByRule = new Map<string, Task[]>();
   for (const t of all) {

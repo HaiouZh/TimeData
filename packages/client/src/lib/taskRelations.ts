@@ -74,16 +74,27 @@ export function wouldCreateCycle(
   return false;
 }
 
-/** 把关系边折成「谁被谁挡着」的索引，只收未完成的 blocker。
- *  `completedKeys` 由调用方给出（已完成的任务/轨道的 `kind:id` 集合）。 */
+/** 把关系边折成「谁被谁挡着」的索引，只收**未完成且仍然存在**的 blocker。
+ *  `completedKeys` 与 `liveKeys` 都由调用方给出（`kind:id` 集合），口径须同源。 */
 export function buildBlockedByIndex(
   relations: TaskRelation[],
   completedKeys: Set<string>,
+  /**
+   * 还活着的端点键（`task:<id>` / `track:<id>`）。**必传**：给默认全集会让「忘了传」
+   * 静默退回旧口径，而旧口径正是这次要修的东西。
+   *
+   * 悬空 blocker（指向已删任务/轨道的边）既不完成也不存在，不筛掉的话它会永远挡着——
+   * 被挡的那条活从「今天」区消失、卡在「在等」区显示「等（已删除）」，只能手动删边才解得开。
+   * 这类边来自混合版本同步：老客户端删任务只推 tasks/delete，不知道关系表存在。
+   * 边不删——详情面板照样列得出来，用户看得见、删得掉；这里只是不让它挡人。
+   */
+  liveKeys: Set<string>,
 ): Map<string, string[]> {
   const index = new Map<string, string[]>();
   for (const relation of relations) {
     const blockerKey = `${relation.blockerKind}:${relation.blockerId}`;
     if (completedKeys.has(blockerKey)) continue; // 前置已完成 → 不再挡，自动解锁
+    if (!liveKeys.has(blockerKey)) continue; // 前置已不存在（悬空边）→ 不再挡
     const blockedKey = `${relation.blockedKind}:${relation.blockedId}`;
     index.set(blockedKey, [...(index.get(blockedKey) ?? []), blockerKey]);
   }

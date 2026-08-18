@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { db } from "../db/index.js";
 import {
   addTaskRelation,
+  buildBlockedByIndex,
   listRelationsBlocking,
   listTaskRelations,
   removeTaskRelation,
@@ -351,5 +352,52 @@ describe("wouldCreateCycle 跨 kind", () => {
     };
 
     expect(wouldCreateCycle([taskToTrack, trackToTask], t("a"), t("c"))).toBe(false);
+  });
+});
+
+describe("buildBlockedByIndex", () => {
+  it("blocker 存在且未完成 → 算挡", () => {
+    const index = buildBlockedByIndex(
+      [relation("t1", "t2")],
+      new Set(),
+      new Set(["task:t1", "task:t2"]),
+    );
+    expect(index.get("task:t2")).toEqual(["task:t1"]);
+  });
+
+  it("blocker 已完成 → 不算挡（既有行为，别回归）", () => {
+    const index = buildBlockedByIndex(
+      [relation("t1", "t2")],
+      new Set(["task:t1"]),
+      new Set(["task:t1", "task:t2"]),
+    );
+    expect(index.has("task:t2")).toBe(false);
+  });
+
+  it("blocker 已不存在（悬空边）→ 不算挡", () => {
+    const index = buildBlockedByIndex(
+      [relation("gone", "t2")],
+      new Set(),
+      new Set(["task:t2"]),
+    );
+    expect(index.has("task:t2")).toBe(false);
+  });
+
+  it("一条被两个前置挡，只剩活着的那个", () => {
+    const index = buildBlockedByIndex(
+      [relation("gone", "t2"), relation("t1", "t2")],
+      new Set(),
+      new Set(["task:t1", "task:t2"]),
+    );
+    expect(index.get("task:t2")).toEqual(["task:t1"]);
+  });
+
+  it("轨道端同样按存活筛：已删轨道不算挡", () => {
+    const index = buildBlockedByIndex(
+      [{ ...relation("x", "t2"), blockerKind: "track" as const, blockerId: "trGone" }],
+      new Set(),
+      new Set(["task:t2"]),
+    );
+    expect(index.has("task:t2")).toBe(false);
   });
 });
