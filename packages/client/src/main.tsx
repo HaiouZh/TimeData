@@ -2,7 +2,7 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import App from "./App.tsx";
 import { AppUpdateProvider } from "./appUpdate.tsx";
-import { runStartupTasks } from "./startup.ts";
+import { runStartupTasks, warmMaterialization } from "./startup.ts";
 import "lxgw-wenkai-screen-webfont/lxgwwenkaigbscreen.css";
 import "@fontsource/tinos/400.css";
 import "@fontsource/tinos/400-italic.css";
@@ -10,6 +10,7 @@ import "@fontsource/tinos/700.css";
 import "./index.css";
 import { CaptureApp } from "./capture/CaptureApp.tsx";
 import { isCaptureWindow } from "./lib/desktop/shell.ts";
+import { runWhenIdle } from "./lib/recovery/idle.ts";
 import { installSchedulerPortTap } from "./lib/schedulerHostGuard.ts";
 
 // 挂在 React 首次调度之前即可（渲染在下面才发生），与 import 求值顺序无关——原因见该模块注释。
@@ -40,5 +41,9 @@ if (isCaptureWindow()) {
   );
   // 建默认分类 / 迁移本地设置 / schema 归一 / occurrence 物化——浮窗一样都不需要，
   // 两个窗口都跑还多一层并发。Dexie 本身在 db/index.ts 导入时即可用，浮窗写库不受影响。
-  void runStartupTasks();
+  // 让到首帧之后：这条链跟首屏渲染抢主线程与 IndexedDB，而它落库后各页靠 useLiveQuery 自然补渲染。
+  // iOS 回收渲染进程后会整页重载，冷启动路径上的每一笔浪费都被乘上了重载频率。
+  runWhenIdle(() => {
+    void runStartupTasks().then(warmMaterialization);
+  });
 }

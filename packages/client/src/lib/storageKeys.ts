@@ -29,6 +29,7 @@ export const STORAGE_KEYS = {
   reloadTombstone: "timedata_reload_tombstone",
   pendingReports: "timedata_pending_reports",
   lastColdStart: "timedata_last_cold_start",
+  goalPrereqMigrationVersion: "timedata_goal_prereq_migration_version",
   diaryReviewYearRange: "timedata_diary_review_year_range",
   diaryReviewLayoutB: "timedata_diary_review_layout_b",
   diaryReviewMode: "timedata_diary_review_mode",
