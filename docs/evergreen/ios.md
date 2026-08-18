@@ -92,6 +92,7 @@ IPA 未签名，不能直接安装。手机上用 SideStore（推荐，可离机
 - **`Contents.json 声明了多个不同的 filename`**：Capacitor 换了图标模板（如拆成多尺寸变体），按新结构调整 `scripts/ios-app-icon.mjs`。
 - **包能装但键盘工具条还在**：先确认 `Patch iOS project` 步骤真跑过且 App target 里有两个 Swift 文件；再确认 storyboard 的 `customClass` 已是 `MainViewController`。
 - **签名 7 天到期后打不开**：SideStore 重签即可，不需要重装、不丢数据。
+- **长时间后台回来画面冻住、几秒后整页重载**（能看到旧界面但什么都点不动，重载后仍在原页、无启动画面）：iOS 在内存压力下回收了 WKWebView 的 Web Content Process，屏幕上留的是系统快照，`CAPBridgeViewController` 检测到进程终止后重载同一 URL，代价是前端整套冷启动。**与调度器死锁的鉴别见 [ios/scheduler-resilience](ios/scheduler-resilience.md) §4.5**——死锁时 JS 还活着，现场是「弹层点得开、tab 点不动」的半瘫；「滑不动」两族都会出现，不具区分力。归因数据在 `sync_logs` 的 `cold_start` 上报里（`detail.cause` 为 `external` 即本条）。
 - **长时间后台回来一片纯白**（界面先正常出现过、几秒后才变白）：这是**原地重载 + 相对 base** 相乘的产物，不是 WebView 被系统杀了。链条是——挂起丢消息导致调度器死锁（见 [ios/scheduler-resilience](ios/scheduler-resilience.md)）→ `SchedulerWatchdog` 补拍无效后 `location.reload()` → 若当时停在多段路径路由（底栏「统计」`/stats/time`、设置子页、轨道 / 目标详情），相对 `base` 会把 `./assets/x.js` 解析到 `/stats/assets/x.js`，而 `Router.route(for:)` 只对无扩展名路径回退 index.html → JS 与 CSS 双双 404 → React 从不挂载，`index.css` 没给 `body` 背景色，于是纯白。**判据**：一段路由（`/`、`/todo`、`/tracks`）不白、多段路由才白；杀进程重开即恢复（冷启动从 `/` 起）。根治是 `base` 恒 `/`，见 [development](development.md) §Android APK 打包。
 
 ## 子文档索引

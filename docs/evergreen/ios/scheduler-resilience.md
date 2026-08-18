@@ -61,6 +61,24 @@ React 按 lane 决定更新走哪条通道，两条通道在死锁后的存活�
 - **不按平台 gate**：正常平台永远不触发，成本只是每次恢复一枚定时器；而 iOS Safari 的 PWA 里 `Capacitor.getPlatform()` 返回 `web`，按平台 gate 反而漏掉真会中招的一档。
 - 探针窗口取秒级而非更短：React 自己给 transition 的饥饿保护也在同一量级，正常情况早已自行收敛，还没落地的只可能是真停摆。重载保留当前 URL，路由自然回到原处；此刻页面本就冻着，没有能被打断的交互。
 
+## 4.5 与「渲染进程被回收」的鉴别
+
+回前台后整页重载有**两个**成因，症状高度相似而修法完全不同：
+
+| | 调度器死锁（本文） | 渲染进程被回收 |
+|---|---|---|
+| 谁重载的 | `SchedulerWatchdog` 补拍无效后自己 `location.reload()` | iOS 杀掉 WKWebView 的 Web Content Process，Capacitor 基类检测到终止后 `reload()` |
+| JS 还活着吗 | 活着（事件循环正常，只有走调度器的更新停摆） | 不在了，屏幕上是系统留的快照 |
+| 现场表现 | **半瘫**：弹层点得开、底栏 tab 点不动 | **全死**：什么都点不动 |
+| 冻多久 | 固定量级：探针窗口 + 补拍宽限 | 不固定，取决于重载与冷启动耗时 |
+| 有启动画面吗 | 没有（app 进程一直活着） | 也没有（app 进程同样活着，死的只是渲染进程） |
+
+**「滑不动」不能用来鉴别**：`EdgeSwipeBack` 在 document 上挂了 `passive: false` 的 `touchmove`，JS 主线程一旦卡住，滚动同样会被卡住——两种成因都表现为滑不动。可靠的判据是上表的「点得开弹层吗」，以及下面的埋点归因。
+
+**归因靠墓碑**（`lib/recovery/reloadAttribution.ts`）：JS 主动重载的两条路径——本文的看门狗与 `hardRefresh()` 的版本更新——都在重载前往 localStorage 写一枚墓碑；冷启动时读 `PerformanceNavigationTiming.type`，**是 `reload` 却没有新鲜墓碑，就只可能是渲染进程被回收**（那条路径 JS 全程不知情，写不了墓碑）。窗口外或来自未来的墓碑一律不认——宁可误判成外部回收，也不能把一次真实回收算到主动路径头上，那会让频率统计偏低、掩盖问题。
+
+因此**给看门狗加任何新的重载出口时，必须同时写墓碑**，否则那条出口会被统计成系统回收，把两族问题重新混成一团。
+
 ## 5. 关键不变量 / 坑 / 红线
 
 1. **补拍只认 `postMessage(null)`**（§3）——放开过滤会补到无关端口，救不活还以为救了。
@@ -68,6 +86,7 @@ React 按 lane 决定更新走哪条通道，两条通道在死锁后的存活�
 3. **看门狗的「已落地」记录不可搬进 effect**（§4）——搬了就恒红，每次回前台都重载。
 4. **别再试图在构造器层预防**（§3）：那条路在生产构建下必然赶不上 `scheduler` 的求值，而且静默失效——源码里 import 顺序看着对，产物里 React chunk 先求值。验证要看 `dist` 产物的实际调用序，不是源码顺序。
 5. **诊断同类现场先分通道**（§2）：先确认「点得开弹层但切不了页」这个组合成立，再往调度器上想；全都点不动是另一族原因。
+6. **主动重载必须留墓碑**（§4.5）——不留就会被归因成「渲染进程被回收」，两族问题重新混作一团。
 
 ## 6. 模块速查
 
@@ -75,5 +94,6 @@ React 按 lane 决定更新走哪条通道，两条通道在死锁后的存活�
 |---|---|
 | `lib/schedulerHostGuard.ts` | `MessagePort.prototype.postMessage` 挂钩记端口（`installSchedulerPortTap`）、补发一拍（`kickScheduler`） |
 | `components/SchedulerWatchdog.tsx` | 回前台发 transition 探针，超时先补拍、再不行才重载 |
+| `lib/recovery/reloadAttribution.ts` | 重载归因：主动重载留墓碑，冷启动时区分死锁自救 / 版本更新 / 渲染进程被回收 |
 
 **测试**：`lib/schedulerHostGuard.test.ts`（含「scheduler 仍以 `postMessage(null)` 排队」的前提闸）、`components/SchedulerWatchdog.test.tsx`。
