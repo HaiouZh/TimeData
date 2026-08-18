@@ -8,6 +8,33 @@
     <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16.png" />
     <link rel="shortcut icon" href="/favicon.ico" />
     <link rel="apple-touch-icon" href="/icons/icon-192.png" />
+    <!-- 底色必须内联在这里：index.css 的 body 没有 background，底色来自 React 根节点的 bg-page。
+         iOS 在内存压力下会回收 WKWebView 渲染进程并整页重载，React 挂载前的几百毫秒会是系统默认白。
+         值与 index.css 的 --color-page、capacitor.config.ts 的 ios.backgroundColor 三处同步。 -->
+    <style>
+      html,
+      body {
+        background: #0e1320;
+      }
+    </style>
+    <!-- 预连接：服务器在洛杉矶，手机多在国内移动网络，跨太平洋单程 RTT 150~250ms，回前台时连接已断。
+         趁 JS 下载解析那几百毫秒把 TCP+TLS 握手做掉，首次同步发出时连接已就绪（实测 status 阶段 1.3~3.1s，
+         其中大半是建连）。键名与 STORAGE_KEYS.apiUrl 一致；任何异常都静默跳过——预热是纯优化，
+         失败不该影响启动。 -->
+    <script>
+      try {
+        var apiUrl = localStorage.getItem("timedata_api_url");
+        if (apiUrl) {
+          var link = document.createElement("link");
+          link.rel = "preconnect";
+          link.href = new URL(apiUrl).origin;
+          link.crossOrigin = "";
+          document.head.appendChild(link);
+        }
+      } catch (e) {
+        /* 地址缺失或非法：跳过预热即可 */
+      }
+    </script>
     <title>TimeData</title>
   </head>
   <body>
