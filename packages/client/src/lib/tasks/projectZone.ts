@@ -84,9 +84,9 @@ export function summarizeProjectGroup(group: TodoProjectGroup): ProjectGroupSumm
   let blockedCount = 0;
   for (const task of group.tasks) {
     pendingChildren += group.pendingChildByMember.get(task.id) ?? 0;
-    // 「被挡」徽章同理按 group.tasks 求交：blockedMemberIds 是构造时的全集，
+    // 「被挡」徽章同理按 group.tasks 求交：blockedByMember 是构造时的全集，
     // 筛选裁掉的行不在 tasks 里，计数跟着裁，徽章不会把看不见的成员算进去。
-    if (group.blockedMemberIds.has(task.id)) blockedCount += 1;
+    if (group.blockedByMember.has(task.id)) blockedCount += 1;
   }
   const remaining = group.tasks.length + pendingChildren;
   return {

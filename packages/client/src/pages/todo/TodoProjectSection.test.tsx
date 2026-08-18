@@ -45,7 +45,7 @@ function group(overrides: Partial<TodoProjectGroup> & Pick<TodoProjectGroup, "go
     recentDoneCount: 0,
     memberCount: 0,
     pendingChildByMember: new Map(),
-    blockedMemberIds: new Set(),
+    blockedByMember: new Map(),
     ...overrides,
   };
 }
@@ -934,7 +934,7 @@ describe("被挡徽章", () => {
             goalId: "g1",
             goalTitle: "装修",
             tasks: [task({ id: "t1" }), task({ id: "t2" }), task({ id: "t3" })],
-            blockedMemberIds: new Set(["t1", "t2"]),
+            blockedByMember: new Map([["t1", ["挡路的"]], ["t2", ["挡路的"]]]),
           }),
         ],
       }),
@@ -964,7 +964,7 @@ describe("被挡徽章", () => {
             goalId: "g1",
             goalTitle: "装修",
             tasks: [task({ id: "t1", title: "刷墙" }), task({ id: "t2", title: "接线" })],
-            blockedMemberIds: new Set(["t2"]),
+            blockedByMember: new Map([["t2", ["挡路的"]]]),
           }),
         ],
       }),

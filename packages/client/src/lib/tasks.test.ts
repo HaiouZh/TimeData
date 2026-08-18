@@ -2074,7 +2074,7 @@ describe("在等桶：被未完成前置挡住的任务（界面分流）", () =
     expect(buckets.waitingBlockerTitles[blocked.id]).toEqual(["（已删除）"]);
   });
 
-  it("被挡的项目成员带进组级 blockedMemberIds（徽章数据源）", async () => {
+  it("被挡的项目成员带进组级 blockedByMember（徽章数据源）", async () => {
     const member = await addTask({ title: "刷墙", toInbox: true });
     const free = await addTask({ title: "自由成员", toInbox: true });
     const blocker = await addTask({ title: "挡路的前置", toInbox: true });
@@ -2084,8 +2084,8 @@ describe("在等桶：被未完成前置挡住的任务（界面分流）", () =
     await addGoalMember(goal.id, { kind: "task", id: free.id });
 
     const buckets = await listTasks(NOW);
-    expect(buckets.projects[0]?.blockedMemberIds.has(member.id)).toBe(true);
-    expect(buckets.projects[0]?.blockedMemberIds.has(free.id)).toBe(false);
+    expect(buckets.projects[0]?.blockedByMember.has(member.id)).toBe(true);
+    expect(buckets.projects[0]?.blockedByMember.has(free.id)).toBe(false);
   });
 
   it("blocker 被删后留下的悬空边不再挡人：被挡任务回到它本来该在的区", async () => {
@@ -2110,5 +2110,51 @@ describe("在等桶：被未完成前置挡住的任务（界面分流）", () =
 
     await listTasks(NOW);
     await expect(db.taskRelations.toArray()).resolves.toHaveLength(1);
+  });
+
+  it("被挡且在手头的成员也拿得到 blocker 标题（此前这一类只有 id、没有标题）", async () => {
+    const member = await addTask({ title: "刷墙", toInbox: true });
+    const blocker = await addTask({ title: "挡路的前置", toInbox: true });
+    await addTaskRelation({ blocker: { kind: "task", id: blocker.id }, blocked: { kind: "task", id: member.id } });
+    const goal = await addGoal({ title: "装修", kind: "project" });
+    await addGoalMember(goal.id, { kind: "task", id: member.id });
+    await grabTaskToHand(member.id);
+
+    const buckets = await listTasks(NOW);
+    expect(buckets.atHand.map((t) => t.id)).toContain(member.id);
+    expect(buckets.projects[0]?.blockedByMember.get(member.id)).toEqual(["挡路的前置"]);
+  });
+
+  it("blockedByMember 只收本组成员，别的组的被挡任务不串进来", async () => {
+    const a = await addTask({ title: "A 组成员", toInbox: true });
+    const b = await addTask({ title: "B 组成员", toInbox: true });
+    const blocker = await addTask({ title: "挡路的前置", toInbox: true });
+    await addTaskRelation({ blocker: { kind: "task", id: blocker.id }, blocked: { kind: "task", id: a.id } });
+    await addTaskRelation({ blocker: { kind: "task", id: blocker.id }, blocked: { kind: "task", id: b.id } });
+    const ga = await addGoal({ title: "项目 A", kind: "project" });
+    const gb = await addGoal({ title: "项目 B", kind: "project" });
+    await addGoalMember(ga.id, { kind: "task", id: a.id });
+    await addGoalMember(gb.id, { kind: "task", id: b.id });
+
+    const buckets = await listTasks(NOW);
+    expect(buckets.projects).toHaveLength(2);
+    for (const group of buckets.projects) {
+      expect(group.blockedByMember.size).toBe(1);
+    }
+  });
+
+  it("库里存在孙任务时项目组照常出组（本阶段不新增对「一层」的假设）", async () => {
+    const root = await addTask({ title: "根任务", toInbox: true });
+    const child = await createChildTask(root.id, "子任务");
+    // 绕过写入路径直接造一条孙任务，模拟跨设备正常同步推进来的越层数据（一层深度校验只落在
+    // force-push 那条路上，LWW apply 路径上没有——这是既有的、已登记的缝，不是本单引入的）。
+    const grand = await addTask({ title: "孙任务", toInbox: true });
+    await db.tasks.update(grand.id, { parentId: child.id });
+    const goal = await addGoal({ title: "装修", kind: "project" });
+    await addGoalMember(goal.id, { kind: "task", id: root.id });
+
+    const buckets = await listTasks(NOW);
+    expect(buckets.projects[0]?.tasks.map((t) => t.id)).toEqual([root.id]);
+    expect(buckets.projects[0]?.blockedByMember.size).toBe(0);
   });
 });

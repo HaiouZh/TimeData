@@ -37,7 +37,7 @@ function task(patch: Partial<Task> & Pick<Task, "id">): Task {
 }
 
 function group(patch: Partial<TodoProjectGroup> & Pick<TodoProjectGroup, "goalId">): TodoProjectGroup {
-  return { goalTitle: `目标 ${patch.goalId}`, tasks: [], doneCount: 0, recentDoneCount: 0, memberCount: 0, pendingChildByMember: new Map(), blockedMemberIds: new Set(), ...patch };
+  return { goalTitle: `目标 ${patch.goalId}`, tasks: [], doneCount: 0, recentDoneCount: 0, memberCount: 0, pendingChildByMember: new Map(), blockedByMember: new Map(), ...patch };
 }
 
 describe("projectMemberState", () => {
@@ -134,7 +134,7 @@ describe("summarizeProjectGroup", () => {
       recentDoneCount: 0,
       memberCount: 1,
       pendingChildByMember: new Map([["m1", 2]]),
-      blockedMemberIds: new Set(),
+      blockedByMember: new Map(),
     });
     expect(summary.remaining).toBe(3);
     expect(summary.allDone).toBe(false);
@@ -149,7 +149,7 @@ describe("summarizeProjectGroup", () => {
       recentDoneCount: 1,
       memberCount: 3,
       pendingChildByMember: new Map(),
-      blockedMemberIds: new Set(),
+      blockedByMember: new Map(),
     });
     expect(summary.allDone).toBe(true);
   });
@@ -167,7 +167,7 @@ describe("summarizeProjectGroup", () => {
         ["A", 2],
         ["B", 1],
       ]),
-      blockedMemberIds: new Set(),
+      blockedByMember: new Map(),
     };
     expect(summarizeProjectGroup(full).remaining).toBe(5);
     // 模拟筛选把 tasks 裁成只剩 A：remaining 必须跟着裁，不许把看不见的 B 名下子任务算进去。
@@ -176,7 +176,7 @@ describe("summarizeProjectGroup", () => {
   });
 
   it("筛选裁剪成员后，blockedCount 只数可见成员", () => {
-    // blockedMemberIds 是构造时的全集（A、B 都被挡），页面筛选只裁 tasks。
+    // blockedByMember 是构造时的全集（A、B 都被挡），页面筛选只裁 tasks。
     // 求交是这个字段存成集合而不是标量的**全部理由**：标量在这里必然读出 2，
     // 徽章就会说「2 条被挡」而展开组只能数出 1 条。
     const full = {
@@ -187,7 +187,7 @@ describe("summarizeProjectGroup", () => {
       recentDoneCount: 0,
       memberCount: 2,
       pendingChildByMember: new Map(),
-      blockedMemberIds: new Set(["A", "B"]),
+      blockedByMember: new Map([["A", ["挡路的"]], ["B", ["挡路的"]]]),
     };
     expect(summarizeProjectGroup(full).blockedCount).toBe(2);
     const filtered = { ...full, tasks: [task({ id: "A" })] };

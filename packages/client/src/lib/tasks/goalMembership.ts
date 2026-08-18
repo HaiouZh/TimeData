@@ -40,13 +40,13 @@ export interface TodoProjectGroup {
    */
   pendingChildByMember: ReadonlyMap<string, number>;
   /**
-   * 被未完成前置挡住的成员 id 集合。**刻意不是加总好的标量**——理由同 pendingChildByMember：
+   * 被未完成前置挡住的成员 id → 挡着它的那些东西的标题。**刻意不是加总好的标量**：
    * 筛选激活时页面会裁剪 tasks，标量结构上不可能跟着裁，徽章数字就会把看不见的成员算进去。
    *
-   * 由 listTasks 在分组后按 blockedBy 索引填进（见 tasks.ts 的 projects .map()）；本文件只给空集占位。
-   * 口径与「在等」区同源（同一份 completedKeys，前置已完成即不再算挡）。
+   * 由本 builder 按 `blockedTitlesByTaskId` 入参自填。**标题与 id 同一处产出**：分成
+   * 「builder 声明、调用方回填」两处的话，任何一个不经 listTasks 的调用方都会让徽章静默归零。
    */
-  blockedMemberIds: ReadonlySet<string>;
+  blockedByMember: ReadonlyMap<string, string[]>;
 }
 
 /** 标题行「近 N 天 +M」的窗口长度。 */
@@ -117,6 +117,12 @@ export function buildTodoProjectGroups(
    * 静默退回不含子任务的旧口径，而那正是本次要修的东西。
    */
   childrenByParent: ReadonlyMap<string, readonly Task[]>,
+  /**
+   * 任务 id → 挡着它的那些东西的标题（调用方按 `buildBlockedByIndex` 的结果解好标题）。
+   * **必传**：给默认空 Map 会让「忘了传」静默退回徽章恒零的旧口径，而那正是本次要修的东西。
+   * 本函数只筛出组内成员那部分，不关心表里还有谁。
+   */
+  blockedTitlesByTaskId: ReadonlyMap<string, string[]>,
 ): TodoProjectGroup[] {
   const goalById = new Map<string, Goal>();
   for (const goal of goals) goalById.set(goal.id, goal);
@@ -124,7 +130,10 @@ export function buildTodoProjectGroups(
   const recentSince = new Date(now.getTime() - RECENT_DONE_WINDOW_DAYS * 24 * 60 * 60 * 1000).toISOString();
   const recentUntil = now.toISOString();
 
-  const draft = new Map<string, { group: TodoProjectGroup; latest: string; pendingChildByMember: Map<string, number> }>();
+  const draft = new Map<
+    string,
+    { group: Omit<TodoProjectGroup, "blockedByMember">; latest: string; pendingChildByMember: Map<string, number> }
+  >();
   for (const task of memberTasks) {
     const membership = index.get(task.id);
     if (!membership) continue;
@@ -140,8 +149,6 @@ export function buildTodoProjectGroups(
           recentDoneCount: 0,
           pendingChildByMember,
           memberCount: goalById.get(membership.goalId)?.members?.length ?? 0,
-          // 占位空集：真实值由 listTasks 在分组后按 blockedBy 索引填（本函数收不到关系数据）。
-          blockedMemberIds: new Set(),
         },
         latest: "",
         pendingChildByMember,
@@ -177,7 +184,15 @@ export function buildTodoProjectGroups(
       const bCreated = goalById.get(b.group.goalId)?.createdAt ?? "";
       return bCreated.localeCompare(aCreated);
     })
-    .map((entry) => entry.group);
+    .map((entry) => {
+      // 组装点在这里而不是创建 entry 时：那时 group.tasks 还是空的，成员是一条条 push 进去的。
+      const blockedByMember = new Map<string, string[]>();
+      for (const task of entry.group.tasks) {
+        const titles = blockedTitlesByTaskId.get(task.id);
+        if (titles !== undefined && titles.length > 0) blockedByMember.set(task.id, titles);
+      }
+      return { ...entry.group, blockedByMember };
+    });
 }
 
 /** 该目标当前拥有的 task 成员 id；非 active 或非 project 一律空。 */

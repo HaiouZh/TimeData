@@ -916,6 +916,18 @@ export async function listTasks(now: Date = new Date()): Promise<TodoBuckets> {
     if (tr.status !== "active") completedKeys.add(`track:${tr.id}`);
   }
   const blockedBy = buildBlockedByIndex(relations, completedKeys, liveKeys);
+  // 「谁被谁挡着、挡它的叫什么」只算一份，「在等」区胶囊与项目组两个消费方共用。
+  // 提前算（而不是在下面的 waiting 分支里现算）是为了覆盖到**被挡且在手头**的成员——
+  // 那一类在更早的 atHand 分支就 continue 了，永远走不到 waiting 分支，此前它有 id 却没有标题。
+  const blockedTitlesByTaskId = new Map<string, string[]>();
+  for (const t of all) {
+    const keys = blockedBy.get(`task:${t.id}`);
+    if (keys === undefined) continue;
+    blockedTitlesByTaskId.set(
+      t.id,
+      keys.map((key) => blockerDisplayTitle(key, tasksById, trackTitles)),
+    );
+  }
   const buckets: TodoBuckets = {
     today: [],
     inbox: [],
@@ -1001,9 +1013,7 @@ export async function listTasks(now: Date = new Date()): Promise<TodoBuckets> {
     // 「这条活是什么状态」，分区回答「它该出现在哪个区」，两层口径不同。见 RESULT DECISIONS。
     else if (blockedBy.has(`task:${t.id}`)) {
       buckets.waiting.push(t);
-      buckets.waitingBlockerTitles[t.id] = (blockedBy.get(`task:${t.id}`) ?? []).map((key) =>
-        blockerDisplayTitle(key, tasksById, trackTitles),
-      );
+      buckets.waitingBlockerTitles[t.id] = blockedTitlesByTaskId.get(t.id) ?? [];
     } else if (p.pool === "today") buckets.today.push(t);
     // 归属轴排他：已归 active project 的根任务不进收件箱，收件箱回归「真·未归类托盘」。
     else if (p.pool === "inbox") {
@@ -1031,15 +1041,17 @@ export async function listTasks(now: Date = new Date()): Promise<TodoBuckets> {
     if (list) list.push(t);
     else childrenByParent.set(parentId, [t]);
   }
-  buckets.projects = buildTodoProjectGroups(goalRows, projectIndex, projectCandidates, now, childrenByParent).map(
-    (group) => ({
-      ...group,
-      tasks: sortProjectMembers(group.tasks, { handSessionId, now }),
-      // 被未完成前置挡住的成员 id。与 waiting 桶同源（同一份 blockedBy / completedKeys）：
-      // 前置已完成即不再算挡。组内成员恒为 task（projectMemberIndex 只收 task 成员），track: 键不会命中。
-      blockedMemberIds: new Set(group.tasks.filter((t) => blockedBy.has(`task:${t.id}`)).map((t) => t.id)),
-    }),
-  );
+  buckets.projects = buildTodoProjectGroups(
+    goalRows,
+    projectIndex,
+    projectCandidates,
+    now,
+    childrenByParent,
+    blockedTitlesByTaskId,
+  ).map((group) => ({
+    ...group,
+    tasks: sortProjectMembers(group.tasks, { handSessionId, now }),
+  }));
   // 手头区的「还有 N 条子任务」按 atHand 的根任务反查 children，不从桶里数。
   // （阶段3 之前的理由是「子任务被 parentId 早退整个丢掉、不在任何桶里」，那句已不成立：
   //  子任务现在进 today/scheduled/waiting/atHand。反查仍然是对的——桶里的子任务是按各自

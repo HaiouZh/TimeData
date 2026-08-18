@@ -94,7 +94,7 @@ describe("buildTodoProjectGroups", () => {
   it("已完成成员只计数不留行", () => {
     const goals = [goal({ id: "g1", title: "装修", members: [{ kind: "task", id: "t1" }, { kind: "task", id: "t2" }] })];
     const index = projectMemberIndex(goals);
-    const groups = buildTodoProjectGroups(goals, index, [task({ id: "t1" }), task({ id: "t2", done: true })], NOW, new Map());
+    const groups = buildTodoProjectGroups(goals, index, [task({ id: "t1" }), task({ id: "t2", done: true })], NOW, new Map(), new Map());
     expect(groups).toHaveLength(1);
     expect(groups[0]?.tasks.map((t) => t.id)).toEqual(["t1"]);
     expect(groups[0]?.doneCount).toBe(1);
@@ -127,7 +127,8 @@ describe("buildTodoProjectGroups", () => {
       ],
       NOW,
       new Map(),
-    );
+          new Map(),
+);
     expect(groups[0]?.doneCount).toBe(5);
     expect(groups[0]?.recentDoneCount).toBe(2);
   });
@@ -143,7 +144,7 @@ describe("buildTodoProjectGroups", () => {
         ],
       }),
     ];
-    const groups = buildTodoProjectGroups(goals, projectMemberIndex(goals), [task({ id: "t1" })], NOW, new Map());
+    const groups = buildTodoProjectGroups(goals, projectMemberIndex(goals), [task({ id: "t1" })], NOW, new Map(), new Map());
     expect(groups[0]?.tasks).toHaveLength(1);
     expect(groups[0]?.doneCount).toBe(0);
     expect(groups[0]?.memberCount).toBe(3);
@@ -151,7 +152,7 @@ describe("buildTodoProjectGroups", () => {
 
   it("零可解析成员的目标不出现（纯 track 目标 / 成员全被删）", () => {
     const goals = [goal({ id: "g1", members: [{ kind: "track", id: "tr1" }, { kind: "task", id: "gone" }] })];
-    expect(buildTodoProjectGroups(goals, projectMemberIndex(goals), [], NOW, new Map())).toEqual([]);
+    expect(buildTodoProjectGroups(goals, projectMemberIndex(goals), [], NOW, new Map(), new Map())).toEqual([]);
   });
 
   it("组间按成员 max(updatedAt) 倒序，已完成成员也参与排序键", () => {
@@ -168,8 +169,41 @@ describe("buildTodoProjectGroups", () => {
       ],
       NOW,
       new Map(),
-    );
+          new Map(),
+);
     expect(groups.map((g) => g.goalId)).toEqual(["g2", "g1"]);
+  });
+
+  it("按传入的被挡标题表自填 blockedByMember，只收组内成员", () => {
+    // goals：一个 project 目标，成员是 t1 与 t2（按本文件既有写法构造）
+    const goals = [goal({ id: "g1", title: "装修", members: [{ kind: "task", id: "t1" }, { kind: "task", id: "t2" }] })];
+    const blockedTitles = new Map([
+      ["t1", ["刷墙"]],
+      ["outsider", ["与本组无关"]],
+    ]);
+    const groups = buildTodoProjectGroups(
+      goals,
+      projectMemberIndex(goals),
+      [task({ id: "t1" }), task({ id: "t2" })],
+      NOW,
+      new Map(),
+      blockedTitles,
+    );
+    expect([...(groups[0]?.blockedByMember ?? new Map())]).toEqual([["t1", ["刷墙"]]]);
+  });
+
+  it("传空表 → blockedByMember 为空，但字段仍在（不是 undefined）", () => {
+    // goals：一个 project 目标，成员只有 t1
+    const goals = [goal({ id: "g1", members: [{ kind: "task", id: "t1" }] })];
+    const groups = buildTodoProjectGroups(
+      goals,
+      projectMemberIndex(goals),
+      [task({ id: "t1" })],
+      NOW,
+      new Map(),
+      new Map(),
+    );
+    expect(groups[0]?.blockedByMember.size).toBe(0);
   });
 });
 
@@ -351,7 +385,8 @@ describe("buildTodoProjectGroups 计数含子任务", () => {
       [task({ id: "m1" }), task({ id: "m2" })],
       NOW,
       new Map([["m1", [task({ id: "c1", parentId: "m1" }), task({ id: "c2", parentId: "m1" })]]]),
-    );
+          new Map(),
+);
     expect(groups[0]?.tasks.map((t) => t.id)).toEqual(["m1", "m2"]);
     expect(groups[0]?.pendingChildByMember.get("m1")).toBe(2);
     expect(groups[0]?.pendingChildByMember.size).toBe(1);
@@ -372,7 +407,8 @@ describe("buildTodoProjectGroups 计数含子任务", () => {
           ],
         ],
       ]),
-    );
+          new Map(),
+);
     expect(groups[0]?.doneCount).toBe(2);
     expect(groups[0]?.recentDoneCount).toBe(1);
   });
@@ -384,7 +420,8 @@ describe("buildTodoProjectGroups 计数含子任务", () => {
       [task({ id: "m1", done: true, completedAt: "2026-07-24T10:00:00.000Z" })],
       NOW,
       new Map([["m1", [task({ id: "c1", parentId: "m1" })]]]),
-    );
+          new Map(),
+);
     expect(groups[0]?.pendingChildByMember.size).toBe(0);
     expect(groups[0]?.doneCount).toBe(1);
   });
@@ -396,7 +433,8 @@ describe("buildTodoProjectGroups 计数含子任务", () => {
       [task({ id: "m1" })],
       NOW,
       new Map([["m1", [task({ id: "c1", parentId: "m1", skipped: true })]]]),
-    );
+          new Map(),
+);
     expect(groups[0]?.pendingChildByMember.size).toBe(0);
   });
 
@@ -407,7 +445,8 @@ describe("buildTodoProjectGroups 计数含子任务", () => {
       [task({ id: "m1" })],
       NOW,
       new Map([["m1", [task({ id: "c1", parentId: "m1" })]]]),
-    );
+          new Map(),
+);
     expect(groups[0]?.memberCount).toBe(2);
   });
 });
