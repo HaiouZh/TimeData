@@ -418,6 +418,11 @@ describe("结构式 waiting（阶段3）", () => {
     expect(bucketForTask(makeTask(), ctx({ blockedBy }))).toBe("waiting");
   });
 
+  it("被未完成前置挡住且排在未来时仍落 waiting 桶", () => {
+    const blockedBy = new Map([["task:t1", ["task:blocker"]]]);
+    expect(bucketForTask(makeTask({ scheduledAt: iso(-3 * DAY) }), ctx({ blockedBy }))).toBe("waiting");
+  });
+
   it("前置全部完成后不再 waiting（buildBlockedByIndex 已剔除已完成 blocker）", () => {
     const blockedBy = new Map<string, string[]>(); // 已完成的 blocker 不进索引
     expect(bucketForTask(makeTask(), ctx({ blockedBy }))).not.toBe("waiting");

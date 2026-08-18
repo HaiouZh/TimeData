@@ -2064,6 +2064,16 @@ describe("在等桶：被未完成前置挡住的任务（界面分流）", () =
     expect(buckets.waitingBlockerTitles[blocked.id]).toEqual(["挡路的前置"]);
   });
 
+  it("waitingBlockerTitles 对悬空任务前置显示已删除占位", async () => {
+    const blocker = await addTask({ title: "挡路的前置", toInbox: true });
+    const blocked = await addTask({ title: "被挡的活", toInbox: true });
+    await addTaskRelation({ blocker: { kind: "task", id: blocker.id }, blocked: { kind: "task", id: blocked.id } });
+    await db.tasks.delete(blocker.id);
+
+    const buckets = await listTasks(NOW);
+    expect(buckets.waitingBlockerTitles[blocked.id]).toEqual(["（已删除）"]);
+  });
+
   it("被挡的项目成员带进组级 blockedMemberIds（徽章数据源）", async () => {
     const member = await addTask({ title: "刷墙", toInbox: true });
     const free = await addTask({ title: "自由成员", toInbox: true });

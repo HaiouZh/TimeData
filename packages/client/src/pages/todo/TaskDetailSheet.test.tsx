@@ -719,6 +719,61 @@ describe("TaskDetailSheet 重复规则编辑目标与锚点", () => {
     expect(healed?.ruleId).toBe("rule-gone-2");
     await unmount(root);
   });
+
+  it("pending occurrence 不显示升格入口", async () => {
+    const today = getDateString(new Date());
+    const rule = await addTask({
+      title: "每日站会",
+      recurrence: { freq: "daily", interval: 1, basis: "due" },
+      startAt: normalizeScheduledDate(addDays(today, -5)),
+    });
+    const occDate = addDays(today, -1);
+    const occId = `occ:${rule.id}:${occDate}`;
+    await db.tasks.add(occurrenceRow(rule.id, occDate, { title: "每日站会" }));
+
+    const { host, root } = await renderSheetInRouter(occId);
+    await settle();
+
+    expect(host.querySelector('button[aria-label="升为轨道"]')).toBeNull();
+    await unmount(root);
+  });
+});
+
+describe("TaskDetailSheet 抓到手头", () => {
+  it("已完成任务不显示抓到手头入口", async () => {
+    const t = await addTask({ title: "完了" });
+    await toggleTaskDone(t.id);
+    const { host, root } = await renderSheet(t.id);
+    await settle();
+    expect(host.querySelector('button[aria-label="抓到手头"]')).toBeNull();
+    await unmount(root);
+  });
+});
+
+describe("TaskDetailSheet 在等行", () => {
+  it("切换任务时收起已展开的候选列表", async () => {
+    const taskA = await addTask({ title: "任务 A" });
+    const taskB = await addTask({ title: "任务 B" });
+    await addTask({ title: "备选前置" });
+    const onClose = vi.fn();
+    const render = (id: string) => createElement(SyncProvider, null, createElement(TaskDetailSheet, { id, onClose }));
+    const { host, root } = await renderDom(render(taskA.id));
+    await settle();
+
+    await click(host.querySelector('button[aria-label="添加前置"]'));
+    expect(host.querySelector('button[aria-label="添加前置 备选前置"]')).not.toBeNull();
+
+    await act(async () => root.render(render(taskB.id)));
+    for (let attempt = 0; attempt < 20; attempt++) {
+      const title = host.querySelector('textarea[aria-label="任务标题"]') as HTMLTextAreaElement | null;
+      if (title?.value === "任务 B") break;
+      await settle();
+    }
+
+    expect((host.querySelector('textarea[aria-label="任务标题"]') as HTMLTextAreaElement | null)?.value).toBe("任务 B");
+    expect(host.querySelector('button[aria-label="添加前置 备选前置"]')).toBeNull();
+    await unmount(root);
+  });
 });
 
 describe("TaskDetailSheet 升为轨道", () => {

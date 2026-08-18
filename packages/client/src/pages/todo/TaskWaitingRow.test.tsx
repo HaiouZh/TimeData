@@ -57,6 +57,20 @@ describe("TaskWaitingRow", () => {
     await unmount(root);
   });
 
+  it("选择器不列出已经是前置的任务", async () => {
+    const existing = await addTask({ title: "批腻子" });
+    const blocked = await addTask({ title: "贴砖" });
+    await addTask({ title: "装踢脚线" });
+    await addTaskRelation({ blocker: { kind: "task", id: existing.id }, blocked: { kind: "task", id: blocked.id } });
+    const { host, root } = await renderRow(blocked.id);
+
+    await click(host.querySelector('button[aria-label="添加前置"]'));
+
+    expect(host.querySelector('button[aria-label="添加前置 装踢脚线"]')).not.toBeNull();
+    expect(host.querySelector('button[aria-label="添加前置 批腻子"]')).toBeNull();
+    await unmount(root);
+  });
+
   it("点移除后关系被删除", async () => {
     const a = await addTask({ title: "批腻子" });
     const b = await addTask({ title: "贴砖" });
