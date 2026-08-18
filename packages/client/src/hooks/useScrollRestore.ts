@@ -64,19 +64,30 @@ export function useScrollRestore(active: boolean, pathname: string) {
 
     const startedAt = Date.now();
     let frame = 0;
+    let settled = false;
     // 列表数据是异步到的，恢复瞬间内容高度往往不够。每帧试一次，够了就滚、超时就放弃。
     const tryRestore = () => {
       const node = ref.current;
       if (!node) return;
       if (canRestoreScroll(target, node.scrollHeight, node.clientHeight)) {
         node.scrollTop = target;
+        settled = true;
         return;
       }
-      if (isRestoreExpired(startedAt, Date.now())) return;
+      if (isRestoreExpired(startedAt, Date.now())) {
+        settled = true;
+        return;
+      }
       frame = requestAnimationFrame(tryRestore);
     };
     frame = requestAnimationFrame(tryRestore);
-    return () => cancelAnimationFrame(frame);
+    return () => {
+      cancelAnimationFrame(frame);
+      // StrictMode 的 mount → unmount → remount 会在开发模式下白白吃掉这次机会：首次 effect
+      // 刚把开关拨上就被 cleanup 取消，remount 时反被开关挡住，恢复一次都不会发生。
+      // 没落地就把开关放回去——remount 因此能重来，而正常卸载时本次加载的恢复时机本就该结束。
+      if (!settled) restoredThisLoad = false;
+    };
   }, []);
 
   return { ref, onScroll };
