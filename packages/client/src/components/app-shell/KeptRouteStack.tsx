@@ -1,5 +1,6 @@
 import { Suspense, useState } from "react";
 import { type Location, NavigationType, useLocation, useNavigationType } from "react-router";
+import { useScrollRestore } from "../../hooks/useScrollRestore.ts";
 import { layoutHidesBottomNav } from "../../lib/navigation/navRegistry.ts";
 import { AppRoutes } from "./AppRoutes.tsx";
 import { KeptLayerActiveContext } from "./keptLayerActive.ts";
@@ -127,14 +128,12 @@ export function KeptRouteStack({ isWideScreen, onMainScroll }: KeptRouteStackPro
                 保留层的组件树还活着，它注册的 useBlocker 照样能拦住当前层的导航。故把「本层是否活跃」
                 显式告诉子树，让这类钩子自己闭嘴（见 keptLayerActive.ts 与 useUnsavedChangesGuard）。 */}
             <KeptLayerActiveContext.Provider value={active}>
-              <main
-                className="min-h-0 flex-1 overflow-y-auto overscroll-y-none"
-                onScroll={active && !isWideScreen ? onMainScroll : undefined}
-              >
-                <Suspense fallback={null}>
-                  <AppRoutes location={loc} />
-                </Suspense>
-              </main>
+              <KeptLayerMain
+                active={active}
+                isWideScreen={isWideScreen}
+                location={loc}
+                onMainScroll={onMainScroll}
+              />
               {/* 底栏在**层内**：返回手势中上一页的底栏跟着一起滑回来，才像 iOS 原生。
                 代价是它的 NavLink 高亮读真实当前 location（在 <Routes location> 之外），
                 手势期间保留层的高亮会短暂不准——已知取舍，见 design。 */}
@@ -160,5 +159,43 @@ export function KeptRouteStack({ isWideScreen, onMainScroll }: KeptRouteStackPro
         );
       })}
     </div>
+  );
+}
+
+/**
+ * 层内滚动容器。单抽一个组件只为一件事：`useScrollRestore` 是 hook，不能在 `.map()` 里调用。
+ *
+ * 保留层（active=false）不记也不恢复位置，否则它会把当前页的位置覆盖掉。
+ * 不变式 4「每层各自一个 Suspense」在这里原样保留——边界仍在层内，不是提到了栈容器上。
+ */
+function KeptLayerMain({
+  active,
+  isWideScreen,
+  location,
+  onMainScroll,
+}: {
+  active: boolean;
+  // 与 KeptRouteStackProps 一致地可选：宽屏判据由调用方决定，这里不擅自收紧。
+  isWideScreen?: boolean;
+  location: Location;
+  onMainScroll?: (event: React.UIEvent<HTMLElement>) => void;
+}) {
+  // 传本层的 pathname，不是全局当前 location——保留层渲染的是自己那一层。
+  const { ref, onScroll } = useScrollRestore(active, location.pathname);
+
+  return (
+    <main
+      ref={ref}
+      className="min-h-0 flex-1 overflow-y-auto overscroll-y-none"
+      onScroll={(event) => {
+        // 两个消费方：底栏隐藏（仅活跃层、仅窄屏，与改动前的条件逐字一致）与滚动位置记录（仅活跃层）。
+        if (active && !isWideScreen) onMainScroll?.(event);
+        if (active) onScroll();
+      }}
+    >
+      <Suspense fallback={null}>
+        <AppRoutes location={location} />
+      </Suspense>
+    </main>
   );
 }

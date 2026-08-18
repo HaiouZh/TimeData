@@ -21,6 +21,7 @@ import { TrackAttentionProvider } from "./contexts/TrackAttentionContext.tsx";
 import { useDocumentTitle } from "./hooks/useDocumentTitle.ts";
 import { useFavicon } from "./hooks/useFavicon.ts";
 import { useHideBottomNavOnScroll } from "./hooks/useHideBottomNavOnScroll.ts";
+import { useScrollRestore } from "./hooks/useScrollRestore.ts";
 import { layoutHidesBottomNav } from "./lib/navigation/navRegistry.ts";
 import { useIsWideScreen } from "./lib/useIsWideScreen.ts";
 
@@ -43,6 +44,8 @@ export function AppShell() {
 
   useDocumentTitle(location.pathname);
   useFavicon(location.pathname);
+  // 非 iOS 路径的滚动容器只有一个，恒为活跃层，pathname 就是全局当前 location。
+  const { ref: mainScrollRef, onScroll: onScrollRestore } = useScrollRestore(true, location.pathname);
 
   return (
     <div className="td-safe-top td-safe-x flex h-dvh bg-page text-ink">
@@ -58,7 +61,15 @@ export function AppShell() {
         <KeptRouteStack isWideScreen={isWideScreen} onMainScroll={onMainScroll} />
       ) : (
         <div className="flex min-w-0 flex-1 flex-col">
-          <main className="min-h-0 flex-1 overflow-y-auto overscroll-y-none" onScroll={isWideScreen ? undefined : onMainScroll}>
+          <main
+            ref={mainScrollRef}
+            className="min-h-0 flex-1 overflow-y-auto overscroll-y-none"
+            onScroll={(event) => {
+              // 底栏隐藏的触发条件与改动前逐字一致；滚动位置记录不分宽窄屏。
+              if (!isWideScreen) onMainScroll(event);
+              onScrollRestore();
+            }}
+          >
             <Suspense fallback={null}>
               <AppRoutes />
             </Suspense>
