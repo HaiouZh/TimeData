@@ -38,7 +38,7 @@ contracts:
   - packages/shared/src/taskDates.ts
   - packages/shared/src/syncDomains.ts
   - packages/server/src/db/schema.ts
-last-reviewed: 2026-08-15
+last-reviewed: 2026-08-18
 ---
 
 # 待办任务
@@ -209,6 +209,7 @@ agent / CLI (task-done/task-tag)
 
 - **非重复排期任务过期后回到收件箱**不堆进今天；重复任务过期在“今天”区以红色日期呈现（当年 `m月d日`，跨年补年份 `yyyy年m月d日`），无“逾期”前缀。
 - **轨道行进区的两条硬约束**（`todoTrackRows.ts`）：① 轨道行必须渲染在 `TaskList` 的 `SortableContext` **之外**——`verticalListSortingStrategy` 按 DOM 顺序算位置，夹进任务行之间会扰乱落位；`TaskColumn` 的 `extra` 插槽就是为此留的（渲染在 `TaskList` 之后、与之同层）。② 去重只认 `useTaskTrackIndex` 的 `claimedTrackIds`：一条 active 轨道**要么**挂在某任务行的徽章上、**要么**自己独立成行，不会两处都有也不会两处都没有。**刻意不复用** `buildProgressItems` 的 `consumedTrackIds`——那份多一道“被认领的任务本身要进面板”的条件，轨道挂在子任务上时两处判定相反。
+- **轨道行是分区行，展开态归页面持有**（2026-08-18，阶段4）：`TrackRow` 与任务行共用 `rowClickZone`——左 2/5 展开、右 3/5 跳 `/tracks/:id`（轨道没有详情抽屉，那一页就是它的「详情」）。键盘上 Enter = 跳轨道页，展开只能靠鼠标分区，与 `TaskRow` 同款界限。展开体按 `seq` 倒序显示最近 3 步、给「共 N 步 →」出口，并带一个**只记即时步**的草稿行（`appendUserStep` `mode: "instant"`）——开口步表达「我正在做这个」，与「手头」重叠，且它会自动闭掉上一条开口步、那个副作用在行内看不见，故留在轨道页的 `StepComposer`。**`expanded` 必须是 prop 不是行内 state**：记一步会让停滞轨道的 `lastActivityAt` 刷新、分桶从 `waiting` 变 `doing`，行当场从「在等」区跳到「今天」区——两个不同父容器，React 必然卸载重挂，state 放行里就连同刚展开的步骤流一起丢。故 `TodoPage` 持有 `expandedTrackIds`，`TrackRowGroup` / `WaitingSection` 只透传。
 - **`TaskColumn.extra` 在无内容时必须传 `null`**：JSX 元素对象恒为 truthy，哪怕组件内部 `return null`，`empty = tasks.length === 0 && !extra` 也会被顶掉、空态文案不再显示，渲染结果是只剩标题与计数的空白卡片。React 判不了“一个 ReactNode 会不会渲染成空”，只能在**调用点**判。回归闸见 `TodoPage.test.tsx` 的“今天区没有任务也没有轨道时…”。
 
 ## 子文档索引

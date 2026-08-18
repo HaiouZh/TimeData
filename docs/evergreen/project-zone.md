@@ -8,7 +8,7 @@ covers:
 contracts:
   - packages/client/src/lib/tasks/projectZone.ts
   - packages/client/src/lib/goals.ts
-last-reviewed: 2026-08-06
+last-reviewed: 2026-08-18
 ---
 
 # 项目区与归属轴
@@ -59,7 +59,8 @@ last-reviewed: 2026-08-06
    - 三个数口径不同，不得互相派生。`allDone` 判据是 `remaining === 0 && doneCount > 0`；无未完成成员时 `pendingChildByMember` 恒空，不参与该判据。`doneCount` / `recentDoneCount` 与筛选无关——已完成成员本来就不在 `tasks` 里，那两个数回答的是组级事实。
 4. `memberCount` 取 `goal.members?.length ?? 0` 的**原始数组长度**，含 track 成员与悬空 ref，**不含子任务**（子任务从不进名单）。它只服务 500 上限预警，不能用 `tasks.length + doneCount` 近似：后者只数可解析 task 成员，会漏掉真实容量占用；也不能掺进子任务——那是给上限闸喂假数。
 5. 组间按**全部可解析成员（含已完成）**的 `max(updatedAt)` 倒序，并列按 `goal.createdAt` 倒序 —— 已完成成员参与排序键，故「某组全部完成」不会让它掉到末尾。
-6. 组内未完成成员由 `sortProjectMembers` 排成「在手头 → 今天 → 躺着 → 已排期」。前三段内保持传入顺序（即 `listTasks` 的 `sortOrder`）；已排期段按 `scheduledAt` 升序。已排期沉底是刻意的：项目组展开是为了挑下一条能动手的，未来有主的先让位。逾期一次性任务由 `placementForTask` 回落 inbox，自然归入 idle 段，不单开逾期态。
+6. 组内未完成成员由 `sortProjectMembers` 排成「**能动的**（在手头 → 今天 → 躺着 → 已排期）→ **被挡的**」。前三段内保持传入顺序（即 `listTasks` 的 `sortOrder`）；已排期段按 `scheduledAt` 升序。已排期沉底是刻意的：项目组展开是为了挑下一条能动手的，未来有主的先让位。逾期一次性任务由 `placementForTask` 回落 inbox，自然归入 idle 段，不单开逾期态。
+   - **被挡沉底这一比较排在四段之前**（2026-08-18，阶段4）：「线以上全是能动的」这条承诺优先于「在手头的排最前」，所以被挡且在手头的成员也沉底（它仍正常显示在手头区）。判据是调用方传入的 `blockedIds`（缺省为空集时逐字退回本参数出现之前的行为）。**「下一步」徽章读 `group.tasks[0]`**，沉底之后它必然指向一条真能动的活——那条老毛病是被这条排序规则顺带消解的，不是单独修的。
 7. 项目内 `+` 新建成功后，组件本地用 `recentTaskIds` 把新建的 idle 成员临时提到 idle 段顶部；这只是反馈层覆盖，不持久化、不改 `sortOrder`。
 8. 查不到的成员 ref 直接丢弃、**不做清理**：悬空 ref 正是 goals 星图 ghost 节点的唯一数据源（见 [goals](goals.md)）。但这些 ref 仍计入 `memberCount`，因为 500 闸看的是原始数组。
 9. 零可解析 task 成员的目标不进项目区（纯 track 目标在星图里已有位置）。
@@ -104,16 +105,16 @@ last-reviewed: 2026-08-06
 
 | 入口 | 职责 |
 |---|---|
-| `lib/tasks/goalMembership.ts` | 读侧两份索引与分组投影：`goalLinkedTaskIds`（全 kind active）/ `projectMemberIndex`（active project）/ `buildTodoProjectGroups`（未完成列表、`doneCount`、`recentDoneCount`、`pendingChildByMember`、原始 `memberCount`、组间排序键、同挂多组的仲裁；第 5 参 `childrenByParent` **必传**，给默认空 Map 会让漏传静默退回不含子任务的旧口径）/ `GOAL_MEMBERS_MAX` 与 `isProjectMemberCountNearCap` |
+| `lib/tasks/goalMembership.ts` | 读侧两份索引与分组投影：`goalLinkedTaskIds`（全 kind active）/ `projectMemberIndex`（active project）/ `buildTodoProjectGroups`（未完成列表、`doneCount`、`recentDoneCount`、`pendingChildByMember`、原始 `memberCount`、组间排序键、同挂多组的仲裁；第 5 参 `childrenByParent` 与第 6 参 `blockedTitlesByTaskId` **均必传**，给默认空 Map 会让漏传静默退回旧口径——前者退回不含子任务，后者退回「组内一条都没被挡」；`blockedByMember` 由 builder 自填，不再由调用方回填）/ `GOAL_MEMBERS_MAX` 与 `isProjectMemberCountNearCap` |
 | `lib/taskNesting.ts`（归 [todo/modules](todo/modules.md) covers） | 组内两个手势的落库：`nestTaskUnderParent`（收纳，同事务清 `sessionId` + 退出全部名单）、`promoteTaskToProject`（升根回本组，串行两步不合事务；失败停在「已升根、未入组」的可见态，`ProjectAssignError.block` 为 `recurring` 时它落的是重复管理区而非收件箱） |
-| `lib/tasks/projectZone.ts` | 呈现判定纯函数（不碰 db / React，落 node 快桶）：`projectMemberState` 四态 / `sortProjectMembers` 四段排序与 recentTaskIds 覆盖 / `summarizeProjectGroup` 组三态计数 / `projectChipIndex` / `goalBarTaskIds` 竖条裁剪 |
+| `lib/tasks/projectZone.ts` | 呈现判定纯函数（不碰 db / React，落 node 快桶）：`projectMemberState` 四态 / `sortProjectMembers` 被挡沉底 + 四段排序与 recentTaskIds 覆盖 / `summarizeProjectGroup` 组三态计数 / `projectChipIndex` / `goalBarTaskIds` 竖条裁剪 |
 | `pages/todo/TodoProjectSection.tsx` | 项目区 UI：受控展开的组 header（`revealGoals` 待消费意图 → 组渲染出来才展开 + `scrollIntoView`，并经 `onRevealConsumed` 回报宿主清空）、成员行「当前在哪」胶囊与「退出项目」、内容区限高、`+` 项目内创建、`⋯` 改名 / 跳 goals、90% 上限预警；同文件另导出 `ProjectNameChip`（组外行的项目名 chip）；`trackChipFor` 插槽把宿主的轨道徽章并进成员行 meta 带（与状态胶囊组合，两者皆空时返回 `null` 以免顶开 `TaskRow` 的 meta 带出现闸） |
 | `lib/tasks.ts: listTasks()`（归 [todo](todo.md) covers） | 归集与排他的同源判据 `ownedByProject`、`buckets.projects` 出桶、`goalLinkedIds` |
 | `pages/TodoPage.tsx`（归 [todo](todo.md) covers） | 接线：项目区挂收件箱正上方（宽窄两种布局）、chip → `openProject` 回跳、成员回落 inbox 池时 `revealProjectHome`（唯一落点判据 `landsInCollapsedProjectGroup`，六条路径一律传写入后的 `Task`）、`exitProject` → `removeGoalMember`、`tagOptions` 纳入项目区成员 |
 | `lib/goals.ts`（归 [goals](goals.md) covers） | 写侧四条归属通道 + `touchTasksInCurrentTransaction`（§4.2）；`assignTaskToProject` 单事务先摘后加（§4.1）+ `ProjectAssignError`；`createTaskForProject` 组合项目内创建；`prerequisiteLossOnAssign` 只读预测（见 [project-zone/presentation](project-zone/presentation.md) §2）；批量版三件套见 [project-zone/multi-select](project-zone/multi-select.md) §3、§4 |
 | `pages/todo/todoDnd.ts`（归 [todo](todo.md) covers） | `project:<goalId>` 容器域与 `assign-to-project` 操作、`project-row:` 行 id 域（`todoProjectRowIdPrefix` / `todoProjectRowId`）、组内 `move-to-parent` 与 `promote-to-project` 两条分支及其哨兵次序、三道守卫、`preferProjectCollisions` 碰撞策略含「本组来源优先认行」一档、落点解析纯函数 `resolveTodoDropTarget` + `TodoDropLookup`（`parent:` 容器按根行反查所属池 / 组，项目成员被排他扣出 inbox 桶，那一支不能省）（见 [project-zone/presentation](project-zone/presentation.md) §2–§3） |
 
-测试：`lib/tasks/goalMembership.test.ts`（两份索引口径、分组投影、近 7 天窗口上下界、`memberCount` 原始口径、组间排序、同挂多组仲裁、悬空 ref、上限阈值）、`lib/tasks/projectZone.test.ts`（成员四态、行动作两轴不互遮、组计数、四段排序、recentTaskIds 覆盖、chip 索引、竖条裁剪）、`lib/tasks.test.ts`（`describe("listTasks projects 桶")`：归集/排他同源、手头正交、重复模板与 occurrence 挡在门外、组内排序接线）、`pages/todo/TodoProjectSection.test.tsx`（组展开折叠、标题文案、状态胶囊、成员行动作按真实状态渲染、退出项目、已完成零渲染、限高结构、`+` 创建输入、`⋯` 菜单、改名、上限预警、`revealGoals` 消费与「组还没渲染出来就留着、出现后补上」、chip）、`pages/TodoPage.test.tsx`（页面级：排他后成员离开收件箱、项目内创建成功/满员拒绝、菜单改名和跳转、零 project 不渲染、chip 回跳、回收件箱后展开归属组、红线 3 竖条不同屏，以及落点判据的三条反向用例——手头区取消勾选 / 抽屉清时间但已完成 / 抽屉选未来某天都**不**展开，外加「抽屉→页面」这根线本身）、`lib/goals.test.ts`（`createTaskForProject` 的同事务成功/满员/失效目标/裸行解析失败回滚，`describe("归属变更同事务刷新成员任务 updatedAt")` 与 `describe("assignTaskToProject")`：单一归属先摘后加、theme/归档组不被摘、目标组失效被拒、准入四拒、幂等重入不动钉点、事务原子性）。
+测试：`lib/tasks/goalMembership.test.ts`（两份索引口径、分组投影、近 7 天窗口上下界、`memberCount` 原始口径、组间排序、同挂多组仲裁、悬空 ref、上限阈值）、`lib/tasks/projectZone.test.ts`（成员四态、行动作两轴不互遮、组计数、四段排序、被挡沉底与「沉底优先于在手头」、`blockedIds` 缺省时逐字等价、recentTaskIds 覆盖、chip 索引、竖条裁剪）、`lib/tasks.test.ts`（`describe("listTasks projects 桶")`：归集/排他同源、手头正交、重复模板与 occurrence 挡在门外、组内排序接线）、`pages/todo/TodoProjectSection.test.tsx`（组展开折叠、标题文案、状态胶囊、成员行动作按真实状态渲染、退出项目、已完成零渲染、限高结构、`+` 创建输入、`⋯` 菜单、改名、上限预警、`revealGoals` 消费与「组还没渲染出来就留着、出现后补上」、chip）、`pages/TodoPage.test.tsx`（页面级：排他后成员离开收件箱、项目内创建成功/满员拒绝、菜单改名和跳转、零 project 不渲染、chip 回跳、回收件箱后展开归属组、红线 3 竖条不同屏，以及落点判据的三条反向用例——手头区取消勾选 / 抽屉清时间但已完成 / 抽屉选未来某天都**不**展开，外加「抽屉→页面」这根线本身）、`lib/goals.test.ts`（`createTaskForProject` 的同事务成功/满员/失效目标/裸行解析失败回滚，`describe("归属变更同事务刷新成员任务 updatedAt")` 与 `describe("assignTaskToProject")`：单一归属先摘后加、theme/归档组不被摘、目标组失效被拒、准入四拒、幂等重入不动钉点、事务原子性）。
 
 多选建组 / 批量归入的用例三层分布见 [project-zone/multi-select](project-zone/multi-select.md) §5。
 

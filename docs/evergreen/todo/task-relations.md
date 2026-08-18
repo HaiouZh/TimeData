@@ -8,7 +8,7 @@ contracts:
   - packages/shared/src/entitySchemas.ts:TaskRelationSchema
   - packages/shared/src/taskRelations.ts
   - packages/client/src/lib/taskRelations.ts
-last-reviewed: 2026-08-16
+last-reviewed: 2026-08-18
 ---
 
 # 待办 · 前置关系表
@@ -38,8 +38,8 @@ last-reviewed: 2026-08-16
 
 1. **无自引用**：schema 层 `superRefine` 拒绝两端相同的记录，写入层 `addTaskRelation` 另抛 `RELATION_SELF_REFERENCE`。两道都在是因为 schema 挡的是「存进去的数据」，写入层挡的是「用户点了自己」——后者要给人话提示。
 2. **无环**：`addTaskRelation` 在事务内跑 `wouldCreateCycle`（从 blocked 端出发沿 blocker→blocked 方向 DFS，走得回 blocker 就是环），命中抛 `RELATION_WOULD_CREATE_CYCLE`。**环检测只在本地写入路径上**——从远端同步下来的边不检测，见 §7。
-3. **前置完成即自动解锁**：没有「已满足」标记位。`buildBlockedByIndex` 构建索引时直接跳过已完成的 blocker，所以勾掉前置的那一刻，被挡的那条就不再被挡。**不存已解锁状态**是刻意的：存了就要维护，而它可以从两端的完成态算出来。
-4. **端点悬空不阻塞读取**：blocker 指向的任务被删而边还在时，界面显示「（已删除）」占位，不丢边也不崩。正常路径下删除会连带清边（§5），悬空只出现在混合版本同步的窗口里。
+3. **前置完成或消失即自动解锁**：没有「已满足」标记位。`buildBlockedByIndex` 构建索引时跳过两类 blocker——**已完成的**（勾掉前置的那一刻被挡的那条就不再被挡）与**已不存在的**（指向已删任务/轨道的悬空边）。后者由调用方传入的 `liveKeys` 判定，**该参数必传**：给默认全集会让「忘了传」静默退回「悬空边永远挡着」的旧行为，而那会让被挡的活从「今天」区消失、卡在「在等」区显示「等（已删除）」，只能手动删边才解得开。**不存已解锁状态**是刻意的：存了就要维护，而它可以从两端的存活与完成态算出来。
+4. **端点悬空不阻塞读取**：blocker 指向的任务被删而边还在时，界面显示「（已删除）」占位，不丢边也不崩（**也不再挡着被挡的一方**，见不变量 3）。正常路径下删除会连带清边（§5），悬空只出现在混合版本同步的窗口里。
 
 ## 4. 谁在读
 
@@ -48,7 +48,7 @@ last-reviewed: 2026-08-16
 | 消费方 | 入口 | 拿到什么 |
 |---|---|---|
 | 待办页分区 | `listTasks` → `buildBlockedByIndex` | 被挡的任务分流进「在等」区，附 blocker 标题 |
-| 项目组徽章 | `listTasks` → `TodoProjectGroup.blockedMemberIds` | 组内被挡成员数（消费端对可见成员求交，见 [project-zone](../project-zone.md)） |
+| 项目组徽章与展开态 | `listTasks` → `TodoProjectGroup.blockedByMember` | 组内被挡成员 id → 挡着它的标题；徽章对可见成员求交计数，展开态据它沉底、画分界、标「等 XX」（见 [project-zone](../project-zone.md)） |
 | 目标详情页 | `hydrateGoalPrerequisites` | 把边填回 `goal.prerequisites`，`splitGoalMembers` 等既有判定零改动 |
 
 **`hydrateGoalPrerequisites` 是兼容层不是数据源**：`goal.prerequisites` 这个字段在库里已被迁移清空，读取侧每次把关系表的边填回内存中的 goal 对象，让阶段2 就写好的目标页判定逻辑不必改。**写入侧一律不碰这个字段**——有一道机器闸 `scripts/check-legacy-prerequisites.mjs` 盯着，任何往 `prerequisites:` 写非空字面量的代码都会让 `pnpm check:prereq` 红。
@@ -76,5 +76,7 @@ last-reviewed: 2026-08-16
 **混合版本同步会留下悬空边。** 一台还没升级的旧客户端删掉一条任务时，它只会推送 `tasks/delete`——它不知道关系表存在，不会推对应的 `task_relations/delete`。新客户端拉到这个删除后，指向该任务的边仍留在表里，显示为「（已删除）」。
 
 不修的理由是修法都比病重：在 pull 侧对每个任务删除反查关系表，等于给每次同步加一轮全表扫描；而症状是一行占位文字，用户手动删掉那条边即可。**全部设备升级后此缺口自动关闭**。备份导入路径有同形的窗口。
+
+**悬空边不再阻塞被挡的一方**（2026-08-18，阶段4）：判定层按存活端点筛掉它们，被挡的任务回到本该在的区。边本身不删——详情面板照样列得出来（显示为「（已删除）」），用户看得见、删得掉。根治点仍在同步 apply 的删除路径，不在读取侧。
 
 **环检测不覆盖同步下来的边。** 两台设备离线时各连一条边，合起来成环——本地都合法，同步后表里就有环了。当前后果有限：`buildBlockedByIndex` 不递归、只看直接前置，成环的两条会互相挡住（都进「在等」区），用户删掉任一条即解。真正需要拓扑序的功能（自动排下一步）出现之前不必修。

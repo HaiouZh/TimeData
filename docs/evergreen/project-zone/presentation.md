@@ -5,7 +5,7 @@ covers:
 contracts:
   - packages/client/src/lib/tasks/projectZone.ts
   - packages/client/src/pages/todo/todoDnd.ts
-last-reviewed: 2026-08-13
+last-reviewed: 2026-08-18
 ---
 
 # 项目区与归属轴 · 呈现与手势
@@ -35,6 +35,8 @@ last-reviewed: 2026-08-13
 - **上限预警**：`memberCount >= Math.ceil(GOAL_MEMBERS_MAX * 0.9)` 且组未全完成时显示轻量「接近上限」提示。阈值从上限推导，不写死 450；预警不改变写入行为，真正撞线仍由 `ProjectAssignError("full")` 拒绝。
 - **展开态记忆**：组件内 `Map<goalId, boolean>` 覆盖表，不持久化。无筛选时默认全折叠，展开由用户点击或 `revealGoals`（落点反馈 / chip 回跳）驱动；筛选激活时匹配组强制展开，但不改写覆盖表，清除筛选后恢复用户偏好。
 - **成员状态点**：`projectMemberState` 判四态——`at-hand`（焦点轴优先于时间轴）/ `today` / `scheduled` / `idle`。`idle` 是默认多数态，渲染层不画胶囊：没有胶囊本身就是答案。**没有「逾期」态**：`placementForTask` 只对重复模板与 occurrence 给 `overdue`，一次性任务过期会被退回 `inbox`，而项目区的归集守卫恰好把前两类挡在门外——项目区成员拿不到 overdue。
+- **能动的 / 被挡着的两列名单**（2026-08-18，阶段4）：被未完成前置挡住的成员由 `sortProjectMembers` 沉到组底（[母文档](../project-zone.md) §3 第 6 条），并在**首个被挡成员**的行上画一条上边框当分界。分界**不是一个 DOM 节点**：组内行注册了 sortable，而 `verticalListSortingStrategy` 按 DOM 顺序算位置，插一个分隔节点会让落位整体错一格；也不能用 CSS 兄弟选择器——行被第三方 `SwipeableListItem` 包着，兄弟关系在包装层而不在行上。故 `TodoProjectSection` 算出 `blockedBoundaryId` 经 `TaskList` 传到 `TaskRow.blockedBoundary`，由**行自己**画那条线（`data-blocked-boundary`）。**全部能动或全部被挡都不画线**：后者没有「线以上」可分，画出来就是一条悬在组顶的假分界。
+- **被挡成员的「等 XX」胶囊**：`metaChip` 第三枚，文案取 `group.blockedByMember` 里的 blocker 标题全列（`等 A、B`）。**三枚皆缺时 `metaChip` 必须返回 `null`**——空 fragment 也是非 null 节点，会顶开 `TaskRow` 的 `hasMeta` 闸、凭空画出一条空 meta 带。
 - **成员行动作按两根轴各自渲染**：组内列表按 `pool="inbox"` 铺（组内不排序也不换池），但行右端的换池箭头与「抓到手头」各走自己的轴——`projectMemberRowActions` 同时给出 `atHand`（焦点轴）与 `pool`（时间轴：在今天 → `today` 显示「回收件箱」，其余含排到未来 → `inbox` 显示「排进今天」），经 `TaskList` 的 `rowPool` / `atHandIds` 落到行上，悬停按钮与滑动菜单共用这同一份判定。**项目区是唯一会撞上这件事的区域**：别处 `listTasks` 早把在手头 / 在今天的行截去各自的区，只有这里按 [母文档](../project-zone.md) §1「一条被抓到手头、或排到今天的成员仍留在项目区」原样留着，跟着列表级 `pool` 走就会给它们挂上空动作（已在手头的还显示「抓到手头」、已排今天的还显示「排进今天」）。与 `projectMemberState` 的四态互斥刻意不同：那个答的是「当前在哪」（焦点轴压过时间轴）、只用来画胶囊，拿它开关按钮会把「在手头且已排今天」判成没排今天、箭头指反。时间轴刻意不给 `upcoming`——`TaskRow` 拿到它会再画一枚排期日胶囊，与状态胶囊重复。
 - **项目名 chip**：只出现在**手头 / 今天 / 已排期（含水下尾）**。它与绿竖条**不得同屏**——chip 说得出是哪个项目（携带该项目的身份色）、点得开，竖条只说「有去处」（全场同一个绿），同屏出现时后者是前者的冗余——`goalBarTaskIds` 把有 chip 的行从竖条集合里裁掉，竖条退回只表达 theme 归属。chip 需 `relative z-20` 才能压过行左 2/5 的 `z-10` 拖拽 activator。裁剪后的 `goalLinkedIds` 同时也喂给了翻牌区 / 水下收件箱 / 收件箱这三个**不渲染 chip** 的分区，看着像多裁了，其实零语义损失：「chip 集合 ∩ 收件箱 = ∅」是**构造性**成立的——`projectChipIndex` 的输入是 `buckets.projects`，而它与 inbox 排他共用同一个 `ownedByProject`（[母文档](../project-zone.md) §3 第 2 条），进得了 chip 索引的就一定进不了 inbox——这行不是笔误。chip 与组卡片标题行各画一个同色圆点，色取自 `TodoBuckets.projectTints`（集合内避撞分配，见 [design-language](../design-language.md#design-language-s1)），构成「点↔点」的同一项目认同；两处都不自行取色——避撞只有拿着全部 active project 才算得出，组件手上只有显示出来的组；组卡片不另加左侧色条——同一张卡片上两个颜色信号与本条的「chip / 竖条不得同屏」是同一条裁剪规则。
 - **退出项目**：行内动作调 `removeGoalMember`，任务浮在水上回落收件箱。组内最后一条成员退出后 **Goal 保留不自动归档**（归档是 goals 页的显式动作）。**另有一条不经表层 API 的退出路径**：把任务收纳为子任务（`lib/taskNesting.ts: nestTaskUnderParent`）会遍历所有 goal，静默清空该任务在其中的成员资格——子任务不持有任何归属指针（见 [todo](../todo.md#todo-s2-2)）。
