@@ -5,6 +5,7 @@ import {
   SYNC_FALLBACK_INTERVAL_MS,
   SYNC_RETRY_BASE_MS,
   SYNC_RETRY_MAX_MS,
+  SYNC_RESUME_DEBOUNCE_MS,
   SYNC_SCHEDULE_DEBOUNCE_MS,
   SYNC_SCHEDULE_MAX_WAIT_MS,
   type SyncExecutorMeta,
@@ -501,6 +502,42 @@ describe("createSyncScheduler", () => {
     await vi.advanceTimersByTimeAsync(SYNC_SCHEDULE_DEBOUNCE_MS);
     expect(newExecutor).toHaveBeenCalledTimes(1);
     expect(oldExecutor).not.toHaveBeenCalled();
+    scheduler.dispose();
+  });
+
+  it("resume 走短防抖，50ms 就发", async () => {
+    const calls: SyncExecutorMeta[] = [];
+    const scheduler = createSyncScheduler({ getUnsyncedCount: async () => 0 });
+    scheduler.setExecutor(async (meta) => {
+      calls.push(meta);
+      return true;
+    });
+    await vi.advanceTimersByTimeAsync(0); // 消化 setExecutor 的 startup 检查（count=0 不 kick）
+
+    scheduler.requestSync("resume");
+    await vi.advanceTimersByTimeAsync(SYNC_RESUME_DEBOUNCE_MS - 1);
+    expect(calls).toHaveLength(0);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(calls).toHaveLength(1);
+    expect(calls[0].reason).toBe("resume");
+    scheduler.dispose();
+  });
+
+  it("写入类维持 300ms 长防抖，不被顺手改快", async () => {
+    const calls: SyncExecutorMeta[] = [];
+    const scheduler = createSyncScheduler({ getUnsyncedCount: async () => 0 });
+    scheduler.setExecutor(async (meta) => {
+      calls.push(meta);
+      return true;
+    });
+    await vi.advanceTimersByTimeAsync(0);
+
+    scheduler.notifyWrite();
+    await vi.advanceTimersByTimeAsync(SYNC_RESUME_DEBOUNCE_MS);
+    expect(calls).toHaveLength(0); // 50ms 时还不该发
+    await vi.advanceTimersByTimeAsync(SYNC_SCHEDULE_DEBOUNCE_MS - SYNC_RESUME_DEBOUNCE_MS);
+    expect(calls).toHaveLength(1);
+    expect(calls[0].reason).toBe("write");
     scheduler.dispose();
   });
 });

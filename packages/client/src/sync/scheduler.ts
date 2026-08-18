@@ -5,6 +5,14 @@
 // 无 executor（bootstrap 期）只记脏标记，注册时兑现。
 
 export const SYNC_SCHEDULE_DEBOUNCE_MS = 300;
+/**
+ * 回前台 / 冷启动的防抖。它只用来合并同一拍里的多路恢复事件
+ *（visibilitychange / focus / pageshow / Capacitor appStateChange），不用来等更多写入。
+ *
+ * **刻意不取 0**：取 0 会让第二路事件在首轮运行中被 fire() 拦截、记成 rerun，本轮结束后再补跑
+ * 一整轮同步——跨太平洋链路上那是白白多花一个来回。50ms 足够合并同一拍，又省下 250ms。
+ */
+export const SYNC_RESUME_DEBOUNCE_MS = 50;
 export const SYNC_SCHEDULE_MAX_WAIT_MS = 2_000;
 export const SYNC_FALLBACK_INTERVAL_MS = 60_000;
 export const SYNC_RETRY_BASE_MS = 1_000;
@@ -114,7 +122,9 @@ export function createSyncScheduler(deps: SyncSchedulerDeps = {}): SyncScheduler
     if (reason !== "resume" && retryNeeded && retryNotBefore !== null && now() < retryNotBefore) return;
     clearRetryTimer();
     if (debounceTimer) clearTimeout(debounceTimer);
-    debounceTimer = setTimeout(fire, SYNC_SCHEDULE_DEBOUNCE_MS);
+    // 恢复类触发要快（用户正盯着看），写入类维持长防抖（等更多写入攒批）。
+    const debounceMs = reason === "resume" || reason === "startup" ? SYNC_RESUME_DEBOUNCE_MS : SYNC_SCHEDULE_DEBOUNCE_MS;
+    debounceTimer = setTimeout(fire, debounceMs);
     if (!maxWaitTimer) {
       maxWaitTimer = setTimeout(fire, SYNC_SCHEDULE_MAX_WAIT_MS);
     }
