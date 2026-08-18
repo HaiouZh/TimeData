@@ -26,6 +26,7 @@ export const STORAGE_KEYS = {
   captureComposerDraft: "timedata_capture_composer_draft",
   syncPhaseTimings: "timedata_sync_phase_timings",
   scrollPositions: "timedata_scroll_positions",
+  reloadTombstone: "timedata_reload_tombstone",
   diaryReviewYearRange: "timedata_diary_review_year_range",
   diaryReviewLayoutB: "timedata_diary_review_layout_b",
   diaryReviewMode: "timedata_diary_review_mode",
