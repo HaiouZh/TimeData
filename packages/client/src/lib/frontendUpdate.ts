@@ -1,3 +1,5 @@
+import { markReload } from "./recovery/reloadAttribution.js";
+
 export const CURRENT_BUILD_ID: string =
   typeof __TIMEDATA_BUILD_ID__ === "string" ? __TIMEDATA_BUILD_ID__ : "dev";
 
@@ -40,6 +42,8 @@ export async function hardRefresh({ serviceWorker, cacheStorage, reload }: HardR
   } catch {
     // 清理失败时仍然 reload，保留这条手动自救路径的确定性。
   } finally {
+    // 与看门狗同理：主动重载必须留痕，否则会被算成一次渲染进程回收。
+    markReload("update", Date.now());
     reload();
   }
 }

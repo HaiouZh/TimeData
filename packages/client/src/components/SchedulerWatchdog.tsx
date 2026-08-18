@@ -1,5 +1,6 @@
 import { startTransition, useEffect, useRef, useState } from "react";
 import { useAppResumeRefresh } from "../hooks/useAppResumeRefresh.ts";
+import { markReload } from "../lib/recovery/reloadAttribution.ts";
 import { kickScheduler } from "../lib/schedulerHostGuard.ts";
 
 /**
@@ -19,6 +20,9 @@ export const SCHEDULER_KICK_GRACE_MS = 1000;
 
 /** 页面本就冻着，没有能被打断的交互；reload 保留当前 URL，路由自然回到原处。 */
 function reloadPage(): void {
+  // 先留墓碑再重载：新页面靠「是 reload 却没有墓碑」识别 iOS 回收渲染进程那条路径，
+  // 这里不留，本次自救就会被误统计成一次系统回收。
+  markReload("watchdog", Date.now());
   window.location.reload();
 }
 
