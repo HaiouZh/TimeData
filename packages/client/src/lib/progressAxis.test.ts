@@ -454,17 +454,22 @@ describe("buildBlockedByIndex", () => {
   });
 
   it("未完成的 blocker 进索引", () => {
-    const index = buildBlockedByIndex([relation("a", "b")], new Set());
+    const index = buildBlockedByIndex([relation("a", "b")], new Set(), new Set(["task:a", "task:b"]));
     expect(index.get("task:b")).toEqual(["task:a"]);
   });
 
   it("已完成的 blocker 不进索引——这就是「前置一勾自动解锁」", () => {
-    const index = buildBlockedByIndex([relation("a", "b")], new Set(["task:a"]));
+    // liveKeys 里留着 task:a：让它被排除的理由只能是「已完成」，不是「已不存在」。
+    const index = buildBlockedByIndex([relation("a", "b")], new Set(["task:a"]), new Set(["task:a", "task:b"]));
     expect(index.get("task:b")).toBeUndefined();
   });
 
   it("多个 blocker 全部收进同一条目", () => {
-    const index = buildBlockedByIndex([relation("a", "c"), relation("b", "c")], new Set());
+    const index = buildBlockedByIndex(
+      [relation("a", "c"), relation("b", "c")],
+      new Set(),
+      new Set(["task:a", "task:b", "task:c"]),
+    );
     expect(index.get("task:c")?.sort()).toEqual(["task:a", "task:b"]);
   });
 });
