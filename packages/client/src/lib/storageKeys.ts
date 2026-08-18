@@ -25,6 +25,7 @@ export const STORAGE_KEYS = {
   quickNoteComposerDraft: "timedata_quicknote_composer_draft",
   captureComposerDraft: "timedata_capture_composer_draft",
   syncPhaseTimings: "timedata_sync_phase_timings",
+  scrollPositions: "timedata_scroll_positions",
   diaryReviewYearRange: "timedata_diary_review_year_range",
   diaryReviewLayoutB: "timedata_diary_review_layout_b",
   diaryReviewMode: "timedata_diary_review_mode",
