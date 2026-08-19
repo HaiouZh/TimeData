@@ -8,12 +8,14 @@ contracts:
   - packages/desktop/src-tauri/src/commands.rs
   - packages/client/src/lib/desktop/desktopPunch.ts
   - packages/client/src/lib/desktop/navigateAction.ts
+  - packages/client/src/lib/desktop/api.ts
+  - packages/client/src/pages/settings/SettingsDesktopPage.tsx
 last-reviewed: 2026-08-13
 ---
 
 # Windows 桌面壳 · 全局热键与打点
 
-> [desktop](../desktop.md) 的**热键子文档**：桌面壳配置文件、热键注册与分发、打点全程与确认卡、桥的串行队列、navigate 动作，以及两条已知界限。
+> [desktop](../desktop.md) 的**热键子文档**：桌面壳配置文件、热键注册与分发、打点全程与确认卡、桥的串行队列、navigate 动作，以及三条已知界限。
 > 讲什么：`desktop-config.json` 的字段与三态读、两把锁的分工与锁序、punch 的四条出口、串行队列的身份比对、navigate 的校验分工。
 > 不讲什么：壳的构成与窗口/托盘语义、开机自启、速记浮窗与双窗口、配置闸、构建发布（都在 [母文档](../desktop.md)）。
 
@@ -139,3 +141,13 @@ Rust 单测不在 `pnpm gate` 里（门禁机器没有 Rust 工具链），走 `
 
 1. **删掉一个动作变体**会抹掉用户已配的该动作绑定。三个写命令都是 load→改→**全量覆盖**写回；变体一删，存量条目在 `parse_config` 的 `filter_map` 处被跳过，此后任何一次保存就把它永久抹掉——无提示、零测试红。**做删除时必须显式处理存量绑定**（读时迁移剥离 / 保留变体空转 / 删除时通知用户），不能只删变体。反向的「保留变体、只删窗口」同样静默：`target_window` 仍返回那个 label，每次按键往一条没有窗口的队列里塞。
 2. **改路由名**会让 `navigate` 的存量 `target` 失效。主窗口开着时表现是按下没反应；**隐藏 / 最小化时窗口仍会被拉出来、页面停在原处**（`show_main_window` 无条件先执行，见 §7）。这一条有回显——设置页在该行标红字「目标页「…」不存在，重新选一个」。
+
+## 9. 已知界限：第二个带参动作要自己补三段
+
+`navigate` 是唯一的带参动作，参数完整性的三段都是为它一个人搭的，第二个带参动作各要自己补一遍：
+
+1. **载荷参数槽是 navigate 专属命名。** `HotkeyEventPayload.target`（`hotkeys.rs`）这个名字只对 navigate 成立；第二个带参动作要么扩结构按动作分槽，要么让 `target` 对它撒谎。
+2. **参数名 `target` 六处手工一致、零闸。** Rust 枚举字段（`config.rs::HotkeyAction::Navigate`）、投递载荷（`hotkeys.rs::HotkeyEventPayload`）、`lib/desktop/api.ts` 两处类型、设置页（`SettingsDesktopPage.tsx`）、`lib/desktop/navigateAction.ts`，加上配置 JSON 键——改名漏一处就是静默丢弃，因为前端按 `=== undefined` 判「没带」（见 §7 载荷构造那段）。
+3. **无效参数的红字回显是手工链路，不是通用机制。** 它由设置页的 `navTargetErrorOf` 一处做，只认 navigate；新动作漏搭就退回静默——而 §7「校验分工」正是拿「那条路径上有回显、不是静默」当「页面清单只放前端一处」的正当性依据。漏搭等于抽掉那条依据。
+
+三段之外，结构层有闸：`hotkey_payload` 与 `binding_is_structurally_valid` 都不用 `_` 兜底而是显式列举变体，加变体不补 arm 会编译红。
