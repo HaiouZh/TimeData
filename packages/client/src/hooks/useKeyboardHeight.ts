@@ -63,13 +63,35 @@ export function useKeyboardVisible(): boolean {
   useEffect(() => {
     if (typeof window === "undefined") return;
 
+    // 壳还没让位时的 innerHeight 基线。安卓的 adjustResize 与 IME 动画同步地缩 webview，
+    // 而插件的 keyboardWillShow 由 OnGlobalLayoutListener 驱动、**键盘显示完毕才发**；中间这段
+    // 窗口里在场信号是假的「不在场」，消费方（待办页的 navOffsetPx）据此还给底栏留着一个身位，
+    // 等事件到了才把输入条向下吸附一段——真机观感即「先渲染到页面中间，键盘完整出现后才吸附」。
+    // 缩量与动画同步，拿它把这段窗口补上。
+    let baselineInnerHeight = readInnerHeight();
+    // keyboardWillHide 之后压住缩量路径，直到壳真的把 webview 恢复回来。事件先到、壳 reflow 在后，
+    // 恢复途中的中间帧缩量仍超阈值，不压就会把刚落下的在场状态一路顶回 true（底栏收着不回来、
+    // 输入条停在键盘早已消失的位置）。按缩量解除、不猜动画时长——壳分几帧恢复都不影响判定。
+    let shrinkSuppressed = false;
+
     const handleViewportChange = () => {
       // 实测路径只在「没有插件事件可依赖」时说了算——native 上它会在壳让位后恒 0，
       // 不能让它把事件置起的 true 冲掉，故只升不降由事件层决定：web 平台事件层缺席，
       // 实测是唯一信源，双向都归它。
       if (Capacitor.getPlatform() === "web") {
         setVisible(readViewportBottomGap() > 0);
+        return;
       }
+      const shrinkPx = baselineInnerHeight - readInnerHeight();
+      if (shrinkPx <= KEYBOARD_BOTTOM_GAP_THRESHOLD_PX) {
+        // 壳没让位（或已恢复）：此刻的 innerHeight 才是真基线，顺手校准；压制随之解除。
+        shrinkSuppressed = false;
+        baselineInnerHeight = readInnerHeight();
+        return;
+      }
+      if (shrinkSuppressed) return;
+      // native 提前量：**只升不降**，落回仍归 keyboardWillHide 管。
+      setVisible(true);
     };
 
     const viewport = window.visualViewport;
@@ -81,9 +103,11 @@ export function useKeyboardVisible(): boolean {
     if (Capacitor.getPlatform() !== "web") {
       try {
         const showListener = Keyboard.addListener("keyboardWillShow", () => {
+          shrinkSuppressed = false;
           setVisible(true);
         }).catch(() => null);
         const hideListener = Keyboard.addListener("keyboardWillHide", () => {
+          shrinkSuppressed = true;
           setVisible(false);
         }).catch(() => null);
         removeNative = () => {

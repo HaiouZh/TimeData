@@ -397,6 +397,72 @@ describe("useKeyboardVisible — 键盘在不在场，与「还挡着多少」�
     await unmount(root);
   });
 
+  // 安卓的 keyboardWillShow 由 OnGlobalLayoutListener 驱动，**键盘显示完毕才发**；而壳的
+  // adjustResize 在 IME 动画一开始就把 webview 缩了。中间这段窗口里「键盘明明在场、信号还说不在」
+  // ——待办页的输入条因此先停在「还给底栏留着一个身位」的位置，等事件到了才向下吸附一段，真机
+  // 观感是「先渲染到页面中间，键盘完整出现后才吸附过去」。壳缩 webview 这件事本身与动画同步，
+  // 拿它当在场信号才追得上。
+  it("native：壳缩 webview 那一刻就算在场，不等滞后的插件事件", async () => {
+    getPlatformMock.mockReturnValue("android");
+    addListenerMock.mockImplementation(() => Promise.resolve({ remove: vi.fn() }));
+    Object.defineProperty(window, "innerHeight", { value: 800, configurable: true });
+    const viewport = createViewportMock({ height: 800, offsetTop: 0 });
+    (window as unknown as { visualViewport?: unknown }).visualViewport = viewport;
+
+    const { host, root } = await renderDom(createElement(VisibleProbe));
+    expect(readVisible(host)).toBe("false");
+
+    // 壳让位：innerHeight 与 visualViewport 一起变小，故实测遮挡恒 0——判不出键盘在场的正是这一步。
+    Object.defineProperty(window, "innerHeight", { value: 500, configurable: true });
+    viewport.height = 500;
+    await act(async () => {
+      viewport.fire("resize");
+    });
+    expect(readVisible(host)).toBe("true");
+
+    await unmount(root);
+  });
+
+  // 上一条的「只升不降」若不加约束就有反面：keyboardWillHide 先到、壳把 webview 恢复全高在后，
+  // 恢复途中的每一次 resize 缩量都还超阈值，会把刚落下的在场状态一路顶回 true——底栏收着不回来、
+  // 输入条停在键盘早已消失的位置。压制到壳真的恢复为止（按缩量判，不猜动画时长）。
+  it("native：keyboardWillHide 之后，壳恢复途中的 resize 不把在场状态顶回来", async () => {
+    getPlatformMock.mockReturnValue("android");
+    const callbacks: Record<string, (arg?: unknown) => void> = {};
+    addListenerMock.mockImplementation((eventName: string, cb: (arg?: unknown) => void) => {
+      callbacks[eventName] = cb;
+      return Promise.resolve({ remove: vi.fn() });
+    });
+    Object.defineProperty(window, "innerHeight", { value: 800, configurable: true });
+    const viewport = createViewportMock({ height: 800, offsetTop: 0 });
+    (window as unknown as { visualViewport?: unknown }).visualViewport = viewport;
+
+    const { host, root } = await renderDom(createElement(VisibleProbe));
+
+    Object.defineProperty(window, "innerHeight", { value: 500, configurable: true });
+    viewport.height = 500;
+    await act(async () => {
+      viewport.fire("resize");
+    });
+    expect(readVisible(host)).toBe("true");
+
+    // 键盘落下：插件事件先到，壳的 reflow 还没发生。
+    await act(async () => {
+      callbacks.keyboardWillHide?.();
+    });
+    expect(readVisible(host)).toBe("false");
+
+    // 壳恢复途中的中间帧：innerHeight 还没回到 800，缩量仍超阈值。
+    Object.defineProperty(window, "innerHeight", { value: 600, configurable: true });
+    viewport.height = 600;
+    await act(async () => {
+      viewport.fire("resize");
+    });
+    expect(readVisible(host)).toBe("false");
+
+    await unmount(root);
+  });
+
   it("web：无插件事件，实测遮挡超阈值即在场、回落即离场", async () => {
     getPlatformMock.mockReturnValue("web");
     Object.defineProperty(window, "innerHeight", { value: 800, configurable: true });
