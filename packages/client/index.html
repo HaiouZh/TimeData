@@ -23,15 +23,15 @@
          失败不该影响启动。 -->
     <script>
       try {
-        var apiUrl = localStorage.getItem("timedata_api_url");
+        const apiUrl = localStorage.getItem("timedata_api_url");
         if (apiUrl) {
-          var link = document.createElement("link");
+          const link = document.createElement("link");
           link.rel = "preconnect";
           link.href = new URL(apiUrl).origin;
           link.crossOrigin = "";
           document.head.appendChild(link);
         }
-      } catch (e) {
+      } catch {
         /* 地址缺失或非法：跳过预热即可 */
       }
     </script>
