@@ -1,11 +1,6 @@
 import type { Track, TrackStep } from "@timedata/shared";
 import { describe, expect, it } from "vitest";
-import {
-  dispatchItems,
-  dispatchStats,
-  groupDispatchItems,
-  STALL_THRESHOLD_MS,
-} from "./tracksDispatch.js";
+import { dispatchItems, dispatchStats, groupDispatchItems, STALL_THRESHOLD_MS } from "./tracksDispatch.js";
 
 const NOW = new Date("2026-07-09T12:00:00.000Z");
 const DAY = 86_400_000;
@@ -36,6 +31,7 @@ function makeStep(trackId: string, endedAgo: number, tags: string[] = []): Track
 const ACTION = ["待我处理", "需决策"];
 const EXEC = ["agent在做"];
 const WAIT = ["等外部"];
+const RESUME = ["推进中"];
 
 function itemsOf(entries: [Track, TrackStep[]][]) {
   return dispatchItems(
@@ -44,6 +40,7 @@ function itemsOf(entries: [Track, TrackStep[]][]) {
     ACTION,
     EXEC,
     WAIT,
+    RESUME,
     NOW,
   );
 }
@@ -77,9 +74,7 @@ describe("dispatchItems 分组判定", () => {
   });
 
   it("信号口径=最近带信号的步：中途补无信号步不清除信号", () => {
-    const item = itemsOf([
-      [makeTrack("a"), [makeStep("a", 2 * DAY, ["待我处理"]), makeStep("a", DAY, [])]],
-    ])[0];
+    const item = itemsOf([[makeTrack("a"), [makeStep("a", 2 * DAY, ["待我处理"]), makeStep("a", DAY, [])]]])[0];
     expect(item.signal?.tag).toBe("待我处理");
     expect(item.group).toBe("awaiting-me");
   });
@@ -106,6 +101,34 @@ describe("dispatchItems 分组判定", () => {
     const beyond = itemsOf([[makeTrack("b"), [makeStep("b", STALL_THRESHOLD_MS + DAY)]]])[0];
     expect(beyond.group).toBe("in-progress");
     expect(beyond.stalledDays).toBe(8);
+  });
+});
+
+describe("恢复推进信号", () => {
+  it("缺口守卫：等外部后补推进中 → 覆盖回推进中", () => {
+    const item = itemsOf([[makeTrack("a"), [makeStep("a", 2 * DAY, ["等外部"]), makeStep("a", DAY, ["推进中"])]]])[0];
+    expect(item.signal?.tag).toBe("推进中");
+    expect(item.group).toBe("in-progress");
+  });
+
+  it("只有推进中步 → 推进中", () => {
+    const item = itemsOf([[makeTrack("a"), [makeStep("a", DAY, ["推进中"])]]])[0];
+    expect(item.signal?.tag).toBe("推进中");
+    expect(item.group).toBe("in-progress");
+  });
+
+  it("resume 显式 [] 时推进中不是信号步 → 等外部仍在", () => {
+    const track = makeTrack("a");
+    const steps = [makeStep("a", 2 * DAY, ["等外部"]), makeStep("a", DAY, ["推进中"])];
+    const items = dispatchItems([track], new Map([[track.id, steps]]), ACTION, EXEC, WAIT, [], NOW);
+    expect(items[0].signal?.tag).toBe("等外部");
+    expect(items[0].group).toBe("wait-external");
+  });
+
+  it("推进中更早、等我接更晚 → 时间序压过为等我接", () => {
+    const item = itemsOf([[makeTrack("a"), [makeStep("a", 2 * DAY, ["推进中"]), makeStep("a", DAY, ["待我处理"])]]])[0];
+    expect(item.signal?.tag).toBe("待我处理");
+    expect(item.group).toBe("awaiting-me");
   });
 });
 

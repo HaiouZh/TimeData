@@ -6,11 +6,8 @@ import {
   setTrackActionTags,
   useTrackActionTags,
 } from "../../lib/settings/trackActionTagsSetting.js";
-import {
-  readAgentExecTags,
-  setAgentExecTags,
-  useAgentExecTags,
-} from "../../lib/settings/trackAgentExecTagsSetting.js";
+import { readAgentExecTags, setAgentExecTags, useAgentExecTags } from "../../lib/settings/trackAgentExecTagsSetting.js";
+import { readResumeTags, setResumeTags, useResumeTags } from "../../lib/settings/trackResumeTagsSetting.js";
 import {
   readWaitExternalTags,
   setWaitExternalTags,
@@ -25,6 +22,8 @@ export function SettingsTracksPage() {
   const [execDraft, setExecDraft] = useState("");
   const waitTags = useWaitExternalTags();
   const [waitDraft, setWaitDraft] = useState("");
+  const resumeTags = useResumeTags();
+  const [resumeDraft, setResumeDraft] = useState("");
 
   async function add(raw: string) {
     const trimmed = raw.trim();
@@ -63,6 +62,19 @@ export function SettingsTracksPage() {
   async function removeWait(tag: string) {
     const current = await readWaitExternalTags();
     await setWaitExternalTags(current.filter((item) => item !== tag));
+  }
+
+  async function addResume(raw: string) {
+    const trimmed = raw.trim().replace(/^#/, "");
+    setResumeDraft("");
+    const current = await readResumeTags();
+    if (!trimmed || current.includes(trimmed)) return;
+    await setResumeTags([...current, trimmed]);
+  }
+
+  async function removeResume(tag: string) {
+    const current = await readResumeTags();
+    await setResumeTags(current.filter((item) => item !== tag));
   }
 
   return (
@@ -165,7 +177,8 @@ export function SettingsTracksPage() {
       <section className="mt-6 space-y-3">
         <h2 className="td-text-label text-ink">等外部信号</h2>
         <p className="td-text-body text-ink-3">
-          步骤带这些标签时，调度台把该轨道归入「等外部」分组（在等一个不是自己也不是 agent 的条件）。清空则不再归出该分组。
+          步骤带这些标签时，调度台把该轨道归入「等外部」分组（在等一个不是自己也不是 agent
+          的条件）。清空则不再归出该分组。
         </p>
         <form
           onSubmit={(e) => {
@@ -202,6 +215,56 @@ export function SettingsTracksPage() {
                   type="button"
                   aria-label={`删除等外部信号 ${tag}`}
                   onClick={() => void removeWait(tag)}
+                  className="flex items-center text-ink-3 transition hover:text-ink"
+                >
+                  <Icon icon={X} size={16} />
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+      <section className="mt-6 space-y-3">
+        <h2 className="td-text-label text-ink">恢复推进信号</h2>
+        <p className="td-text-body text-ink-3">
+          步骤带这些标签时视为显式宣告『恢复推进』——它是信号步、会覆盖旧信号，调度台将其归回「推进中」（打此标签 =
+          宣告恢复推进，用于从等我接/agent在做/等外部切回）。清空则关闭该出口。
+        </p>
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            void addResume(resumeDraft);
+          }}
+          className="flex gap-2"
+        >
+          <input
+            value={resumeDraft}
+            onChange={(e) => setResumeDraft(e.target.value)}
+            placeholder="如:推进中"
+            aria-label="新增恢复推进信号"
+            className="min-h-10 flex-1 rounded-ctl border border-border bg-surface px-3 text-ink placeholder:text-ink-3 focus:outline-none focus:ring-1 focus:ring-accent"
+          />
+          <button
+            type="submit"
+            className="shrink-0 rounded-ctl bg-accent px-3 td-text-label text-page transition hover:bg-accent-strong"
+          >
+            添加
+          </button>
+        </form>
+        {resumeTags.length === 0 ? (
+          <p className="td-text-body text-ink-3">未配置；调度台不再单独归出「推进中」出口（关闭恢复）。</p>
+        ) : (
+          <ul className="space-y-2">
+            {resumeTags.map((tag) => (
+              <li
+                key={tag}
+                className="flex items-center justify-between gap-2 rounded-card border border-border bg-surface-elevated p-2"
+              >
+                <span className="td-text-body text-ink-2">#{tag}</span>
+                <button
+                  type="button"
+                  aria-label={`删除恢复推进信号 ${tag}`}
+                  onClick={() => void removeResume(tag)}
                   className="flex items-center text-ink-3 transition hover:text-ink"
                 >
                   <Icon icon={X} size={16} />

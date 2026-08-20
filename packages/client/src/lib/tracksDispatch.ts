@@ -1,5 +1,6 @@
 // tracks 调度台纯函数层：状态卡分组/统计带。不碰 db/DOM，node 快桶可测。
 // 分组由显式信号决定，停滞退出分组判定、只作 stalledDays 提醒——信号是用户宣告的，系统只提醒不改判。
+// resumeTags 为恢复推进信号：并入 boardSignals 成为信号步，命中时不进前三组、落回兜底推进中（用于从等外部/等我接/agent在跑切回的出口）。
 import { latestTrackBoardSignal, type Track, type TrackBoardSignal, type TrackStep } from "@timedata/shared";
 import { lastActivityAt, latestStep } from "./tracksView.js";
 
@@ -57,10 +58,11 @@ export function dispatchItems(
   actionTags: readonly string[],
   agentExecTags: readonly string[],
   waitExternalTags: readonly string[],
+  resumeTags: readonly string[],
   now: Date,
 ): DispatchItem[] {
   const awaitTag = actionTags[0] ?? null;
-  const boardSignals = [...actionTags, ...agentExecTags, ...waitExternalTags];
+  const boardSignals = [...actionTags, ...agentExecTags, ...waitExternalTags, ...resumeTags];
   return tracks.map((track) => {
     const steps = stepsByTrack.get(track.id) ?? [];
     const activityAt = lastActivityAt(steps);

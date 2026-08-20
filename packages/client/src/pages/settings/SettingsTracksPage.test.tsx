@@ -3,6 +3,7 @@ import { act, createElement } from "react";
 import { MemoryRouter } from "react-router";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { readTrackActionTags, setTrackActionTags } from "../../lib/settings/trackActionTagsSetting.js";
+import { readResumeTags, setResumeTags } from "../../lib/settings/trackResumeTagsSetting.js";
 import { readWaitExternalTags, setWaitExternalTags } from "../../lib/settings/trackWaitExternalTagsSetting.js";
 import { resetDb } from "../../test/dbReset.js";
 import { click, renderDom, unmount } from "../../test/domHarness.js";
@@ -46,6 +47,14 @@ async function waitForWaitTags(predicate: (tags: string[]) => boolean): Promise<
     await flush();
   }
   throw new Error("Timed out waiting for track.waitExternalTags.v1");
+}
+
+async function waitForResumeTags(predicate: (tags: string[]) => boolean): Promise<void> {
+  for (let i = 0; i < MAX_FLUSHES; i += 1) {
+    if (predicate(await readResumeTags())) return;
+    await flush();
+  }
+  throw new Error("Timed out waiting for track.resumeTags.v1");
 }
 
 // 元素异步渲染出来才能操作：不等就 querySelector 会拿到 null，
@@ -93,6 +102,24 @@ async function submitWaitForm(host: HTMLElement): Promise<void> {
   });
 }
 
+async function fillResumeInput(host: HTMLElement, value: string): Promise<void> {
+  const input = await waitForElement<HTMLInputElement>(host, 'input[aria-label="新增恢复推进信号"]');
+  const setValue = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
+  await act(async () => {
+    setValue?.call(input, value);
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+}
+
+async function submitResumeForm(host: HTMLElement): Promise<void> {
+  const input = await waitForElement<HTMLInputElement>(host, 'input[aria-label="新增恢复推进信号"]');
+  const form = input.closest("form");
+  if (!(form instanceof HTMLFormElement)) throw new Error("Missing resume form");
+  await act(async () => {
+    form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+  });
+}
+
 describe("SettingsTracksPage", () => {
   it("shows the default board signal tags when nothing is configured", async () => {
     const host = await renderPage();
@@ -102,9 +129,14 @@ describe("SettingsTracksPage", () => {
     expect(host.textContent).toContain("待我处理");
     expect(host.textContent).toContain("agent在做");
     expect(host.textContent).toContain("等外部");
-    expect(host.textContent).not.toContain("等我");
-    expect(host.textContent).not.toContain("待决策");
-    expect(host.textContent).not.toContain("阵营");
+    expect(host.textContent).toContain("恢复推进信号");
+    expect(host.textContent).toContain("推进中");
+    expect(host.textContent).toContain("打此标签");
+    expect(host.textContent).toContain("宣告恢复推进");
+    expect(host.textContent).toContain("等我接/agent在做/等外部切回");
+    expect(host.textContent).not.toContain("#等我");
+    expect(host.textContent).not.toContain("#待决策");
+    expect(host.textContent).not.toContain("#卡住");
     expect(host.querySelector('[role="radiogroup"]')).toBeNull();
   });
 
@@ -160,5 +192,32 @@ describe("SettingsTracksPage", () => {
     await fillWaitInput(host, "   ");
     await submitWaitForm(host);
     await expect(readWaitExternalTags()).resolves.toEqual(["等外部"]);
+  });
+
+  it("adds a new resume signal via the input form", async () => {
+    const host = await renderPage();
+    await flush();
+    await fillResumeInput(host, "继续推进");
+    await submitResumeForm(host);
+    await waitForResumeTags((tags) => tags.includes("继续推进"));
+  });
+
+  it("removes an existing resume signal", async () => {
+    await setResumeTags(["推进中", "继续推进"]);
+    const host = await renderPage();
+    await waitForResumeTags((tags) => tags.length === 2);
+    await click(host.querySelector('button[aria-label="删除恢复推进信号 推进中"]'));
+    await waitForResumeTags((tags) => tags.length === 1 && tags[0] === "继续推进");
+  });
+
+  it("does not add duplicate or empty resume signals", async () => {
+    await setResumeTags(["推进中"]);
+    const host = await renderPage();
+    await flush();
+    await fillResumeInput(host, " 推进中 ");
+    await submitResumeForm(host);
+    await fillResumeInput(host, "   ");
+    await submitResumeForm(host);
+    await expect(readResumeTags()).resolves.toEqual(["推进中"]);
   });
 });
