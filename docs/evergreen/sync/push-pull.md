@@ -71,7 +71,7 @@ last-reviewed: 2026-08-10
 
 这解决 R2 场景：设备 A 勾选任务并带 `op: complete` 上行后，设备 B 基于旧快照只改标题或排序，即使整行 payload 里仍是 `done=false`，无 `op` 的 update 也只能更新标题/排序，不能把服务器上的完成态翻回。部署顺序为客户端先行、服务端后行：旧客户端遇到新服务端时无 `op` 的勾选无法写入完成字段，但旧客户端的拖拽/改标题也无法误翻完成态；新客户端遇到旧服务端时 `op` 会被旧契约剥离，行为退回旧整行覆盖，不比现状更差。完整决策见 [ADR 0018](../../adr/0018-tasks-completion-op.md)。
 
-`tracks.status` 同样是守卫列。`updateTrack` / `setTrackStatus` / agent `PATCH /api/agent/tracks/:id` 只有在状态实际变化时附 `op:{type:"status",at}`；无 op 的 tracks upsert 仍可更新标题、摘要、refs，但不能覆盖服务器上的 `status`。`track_steps` 另有宿主轨道闸：create/update 找不到宿主 track 时返回 `orphan_step_rejected` 并跳过落库；客户端把它归类为 `stale_rejected`，标记本地日志已处理并通过回声 pull 接受服务器权威状态，避免孤儿步骤重复推送。
+`tracks.status` 同样是守卫列。`updateTrack` / `setTrackStatus` / agent `PATCH /api/agent/tracks/:id` 只有在状态实际变化时附 `op:{type:"status",at}`；无 op 的 tracks upsert 仍可更新标题、摘要、refs，但不能覆盖服务器上的 `status`。`track_steps` / `track_milestones` 另有宿主轨道闸：create/update 找不到宿主 track 时分别返回 `orphan_step_rejected` / `orphan_milestone_rejected` 并跳过落库；客户端把两者都归类为 `stale_rejected`，标记本地日志已处理并通过回声 pull 接受服务器权威状态，避免孤儿行重复推送。
 
 ### 1.2.2 tasks 删除死因归档
 

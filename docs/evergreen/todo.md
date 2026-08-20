@@ -38,7 +38,7 @@ contracts:
   - packages/shared/src/taskDates.ts
   - packages/shared/src/syncDomains.ts
   - packages/server/src/db/schema.ts
-last-reviewed: 2026-08-18
+last-reviewed: 2026-08-20
 ---
 
 # 待办任务

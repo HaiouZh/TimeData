@@ -169,7 +169,7 @@ UI 挂起冲突只发生在 manual 域（categories / time_entries）。lww 域�
 | `validated` | `unknown`（防御性） | 仅出现在 409 原子拒绝批的 accepted outcome：只代表通过校验、未落库，绝不能据此确认日志；客户端只看 `status === "accepted"` 决定重试子批。 |
 | `missing_payload` / `invalid_shape` / `id_mismatch` | `client_bug` | 标 `synced=1` 停止反复推送；放入 `clientBugIssues` 供诊断。 |
 | `archived_category` / `missing_category` / `overlap` / `invalid_time_range` / `foreign_key_failed` | `user_actionable` | 200 响应中保留在 `syncLog`；原子 409 中隔离为死信（`synced=2`），设置页同步摘要提示用户处理。 |
-| `stale_change_rejected` / `orphan_step_rejected` | `stale_rejected` | 标 `synced=1` 放弃本地主张；放入同步问题列表，回声 pull 落地服务器权威版本。 |
+| `stale_change_rejected` / `orphan_step_rejected` / `orphan_milestone_rejected` | `stale_rejected` | 标 `synced=1` 放弃本地主张；放入同步问题列表，回声 pull 落地服务器权威版本。 |
 | `unseen_record_deletion_rejected` | `needs_arbitration` | 服务端拦下「会隐式删除本设备从未见过的记录」的写入。客户端三件事一起做：标 `synced=2` 移出上传队列、把完整 change 存进纯本地 `pendingArbitrations` 表、放入同步问题列表。见下方「隐式删除守卫」。 |
 | `server_version_newer_or_same` | `conflict` | 200 响应中保留，进入冲突/同步问题处理路径；原子 409 中隔离为死信（`synced=2`）。 |
 | 未识别值 | `unknown` | 200 响应中保留；原子 409 中隔离为死信，避免未知拒因引发无限重发。 |

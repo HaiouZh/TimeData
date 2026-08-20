@@ -13,7 +13,7 @@ contracts:
   - packages/shared/src/entitySchemas.ts
   - packages/shared/src/recurrence.ts
   - packages/shared/src/occurrence.ts
-last-reviewed: 2026-07-28
+last-reviewed: 2026-08-20
 ---
 
 # 待办 · 重复规则引擎
