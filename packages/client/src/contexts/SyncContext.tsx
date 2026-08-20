@@ -203,3 +203,12 @@ export function useSyncContext(): SyncContextValue {
   }
   return value;
 }
+
+/**
+ * 无 Provider 时返回 null 而不抛错。给「同步态只是锦上添花、缺了也要能渲染」的地方用——
+ * 典型是页面级测试直接挂载组件、不套 SyncProvider。
+ * 不要用 try/catch 包 useSyncContext() 来达到同样效果：那是条件调用 hook，违反 hook 规则。
+ */
+export function useOptionalSyncContext(): SyncContextValue | null {
+  return useContext(SyncContext);
+}

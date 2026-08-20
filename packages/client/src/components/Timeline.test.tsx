@@ -201,4 +201,36 @@ describe("Timeline", () => {
 
     expect(html).not.toContain('data-slot-highlighted="true"');
   });
+
+  it("传入 conflictEntryIds 命中某条 → 该条渲染出 data-slot-conflicted=\"true\"，其余条目没有这个属性", () => {
+    const slots: TimeSlot[] = [
+      {
+        startTime: "2026-05-08T07:00:00.000Z",
+        endTime: "2026-05-08T07:30:00.000Z",
+        entry: entry("entry-1", "2026-05-08T07:00:00.000Z", "2026-05-08T07:30:00.000Z"),
+        kind: "entry",
+        displayMode: "default",
+      },
+      {
+        startTime: "2026-05-08T07:30:00.000Z",
+        endTime: "2026-05-08T08:00:00.000Z",
+        entry: entry("entry-2", "2026-05-08T07:30:00.000Z", "2026-05-08T08:00:00.000Z"),
+        kind: "entry",
+        displayMode: "default",
+      },
+    ];
+    const html = renderToStaticMarkup(
+      createElement(Timeline, {
+        slots,
+        onGapClick: () => {},
+        onEntryClick: () => {},
+        conflictEntryIds: new Set(["entry-1"]),
+      }),
+    );
+
+    const matches = html.match(/data-slot-conflicted="true"/g) ?? [];
+    expect(matches).toHaveLength(1);
+    expect(html).toContain('data-slot-conflicted="true"');
+    // 其余条目没有：总数 1 即代表 entry-2 没有
+  });
 });

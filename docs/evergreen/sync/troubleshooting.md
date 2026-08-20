@@ -3,8 +3,10 @@ type: evergreen
 title: 同步 · 观测与排障
 covers:
   - packages/client/src/components/SyncTimingsPanel.tsx
+  - packages/client/src/components/ArbitrationBanner.tsx
 contracts:
   - packages/client/src/components/SyncTimingsPanel.tsx
+  - packages/client/src/components/ArbitrationBanner.tsx
   - packages/client/src/db/index.ts
   - packages/client/src/lib/storageKeys.ts
   - packages/client/src/sync/engine.ts
@@ -41,7 +43,15 @@ last-reviewed: 2026-08-14
 
 **`requeueQuarantinedSyncLogs()` 只重新入队没有待裁决存档的死信**：`disposition="pending"` 的存档所指向的日志被跳过，也不计入返回值。理由是那类死信重推即等于放行——拒收当轮必然触发一次回声 pull（`canSkipEchoPull()` 遇到任何 issue 即返回 false），游标随之推进；此后重推同一载荷时[隐式删除守卫](../sync.md#sync-unseen-delete-guard)的判据不再命中，服务端放行，净效果是一次静默删除。**该判据只能由用户裁决解开，不能由重新入队解开**，这条排除是它的实现方式。
 
-## 2. 分段耗时观测
+## 2. 被拦下的写入在界面上的出口
+
+时间轴页（`/`）在 `pendingArbitrations` 存在 `time_entries` 行时显示一条常驻横幅（`ArbitrationBanner`）。它的数据源是 `SyncContext` 的 live query，**与「上一轮同步的结果」无关**——因此不随同步轮次消失，这正是它与设置页那条依赖 `lastResult.pushIssues` 的提示的分工。横幅只呈现最近一条（按 `rejectedAt` 倒序），给两个动作：把时间轴切到该记录所在日期，以及清掉这一行存档（`clearPendingArbitration`，只清当前这条）。存档解不出 `startTime` / `endTime` 的行（含序列化失败留下的 `__serializeFailed` 存根）被跳过。
+
+**横幅必须写明「原样再保存会删掉云端记录」，这不是文案偏好而是机制**：拒收那一轮必然触发一次回声 pull（`canSkipEchoPull()` 遇到任何 issue 即返回 false），云端那些记录因此已经落到本地——设备「见过」它们了，而[隐式删除守卫](../sync.md#sync-unseen-delete-guard)的判据正是「见过没」。用户此后再保存同一时段的记录，判据不再命中，服务端放行并执行重叠删除。语义上这是用户的意图（看过冲突仍坚持保存），而横幅那句警告是它**唯一**的告知点。
+
+时间流里那条未能上传的记录由 `Timeline` 的 `conflictEntryIds` 标出，`TimeSlot` 渲染 `data-slot-conflicted`，与 `highlighted` 同构但不带它的 `scrollIntoView` 副作用。**分类删除被拦下的那类不进入这条链路**——它没有时间点可回，只留在设置页的同步问题列表里。
+
+## 3. 分段耗时观测
 
 `useSync.sync()` 每轮用 `createPhaseRecorder()`（`packages/client/src/sync/phaseTimings.ts`）给 status / push / pull / bumpApply 阶段计时。写后路径只有 push/pull；补差路径只有 status/pull；SSE bump payload 就地应用只有 bumpApply。无论成功还是失败，收尾都会落一条 `SyncTimingEntry` 到 localStorage `timedata_sync_phase_timings` 环形缓冲（最多 20 条，最新在前）。
 
@@ -49,7 +59,7 @@ last-reviewed: 2026-08-14
 
 设置页同步卡片展示最近一次各阶段耗时、p50/p95，以及最新一条的 `waitMs` / `reason` / `connection` / `transport`。带 push 或补差的那一轮，客户端审计日志会多写 `action: "phase_timings"`；服务端侧 push/pull 在 `sync_logs.detail.timings` 记录 parse / validate / apply / read / total 等阶段耗时。这套观测纯附加，不改变任何同步判定或行为。
 
-## 3. 同步慢排查入口
+## 4. 同步慢排查入口
 
 同步指示灯开始闪只说明客户端进入了同步轮次，不能据此判断慢在调度器、网络还是服务端。排查先固定一条完整时间线（触发动作、指示灯开始、最新数据可见），再按以下顺序对同一轮数据取证：
 

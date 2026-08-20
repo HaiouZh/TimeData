@@ -1,11 +1,13 @@
 import { useMemo, useRef, useState } from "react";
 import type { PointerEvent as ReactPointerEvent } from "react";
 import { useNavigate, useSearchParams } from "react-router";
+import ArbitrationBanner, { selectTimeEntryConflicts } from "../components/ArbitrationBanner.tsx";
 import { ActionToastBar } from "../components/ui/ActionToastBar.tsx";
 import CircularTimeline, { type RingSelectionTarget } from "../components/CircularTimeline.tsx";
 import DateNav from "../components/DateNav.tsx";
 import SyncIndicator from "../components/SyncIndicator.tsx";
 import Timeline from "../components/Timeline.tsx";
+import { useOptionalSyncContext } from "../contexts/SyncContext.tsx";
 import { useActionToast } from "../hooks/useActionToast.ts";
 import { useEntries, useEntryMutations } from "../hooks/useEntries.ts";
 import { useNowMinute } from "../hooks/useNowMinute.ts";
@@ -34,6 +36,16 @@ export default function TimelinePage() {
     [date, entries, mergeOvernight, now, previousEntry],
   );
   const { toast, showToast, clearToast } = useActionToast();
+  const syncContext = useOptionalSyncContext();
+  const pendingArbitrations = syncContext?.pendingArbitrations ?? [];
+  const timeEntryConflicts = useMemo(
+    () => selectTimeEntryConflicts(pendingArbitrations),
+    [pendingArbitrations],
+  );
+  const conflictEntryIds = useMemo(
+    () => new Set(timeEntryConflicts.map((item) => item.row.recordId)),
+    [timeEntryConflicts],
+  );
 
   function handleDateChange(nextDate: string) {
     clearToast();
@@ -112,6 +124,7 @@ export default function TimelinePage() {
       }}
     >
       <DateNav date={date} onDateChange={handleDateChange} onSearch={() => navigate("/search")} />
+      <ArbitrationBanner onGoToDate={handleDateChange} />
       <div data-swipe-exempt="true">
         <CircularTimeline
           date={date}
@@ -129,6 +142,7 @@ export default function TimelinePage() {
         onGapClick={(startTime, endTime) => navigate(gapEntryUrl(startTime, endTime))}
         onEntryClick={(entry) => navigate(`/entries/${entry.id}/edit`)}
         highlight={ringSelection}
+        conflictEntryIds={conflictEntryIds}
       />
     </div>
   );

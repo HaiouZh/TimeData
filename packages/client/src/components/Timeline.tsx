@@ -10,6 +10,7 @@ interface TimelineProps {
   onGapClick: (startTime: string, endTime: string) => void;
   onEntryClick: (entry: TimeEntry) => void;
   highlight?: RingSelectionTarget | null;
+  conflictEntryIds?: Set<string>;
 }
 
 const MIN_TERMINAL_GAP_MS = 2 * 60 * 1000;
@@ -24,7 +25,7 @@ function isHighlighted(slot: TimeSlot, highlight: RingSelectionTarget | null | u
   return highlight.type === "gap" && highlight.startTime === slot.startTime;
 }
 
-export default function Timeline({ slots, onGapClick, onEntryClick, highlight }: TimelineProps) {
+export default function Timeline({ slots, onGapClick, onEntryClick, highlight, conflictEntryIds }: TimelineProps) {
   const { getCategoryPath, getCategoryColor } = useCategories();
   const displaySlots = slots
     .filter((slot, index) => {
@@ -45,6 +46,7 @@ export default function Timeline({ slots, onGapClick, onEntryClick, highlight }:
         const slotKey = slot.entry
           ? `entry-${slot.entry.id}-${slot.startTime}-${slot.endTime}`
           : `gap-${slot.startTime}-${slot.endTime}`;
+        const conflicted = slot.entry ? (conflictEntryIds?.has(slot.entry.id) ?? false) : false;
         return (
           <TimeSlotComponent
             key={slotKey}
@@ -52,6 +54,7 @@ export default function Timeline({ slots, onGapClick, onEntryClick, highlight }:
             categoryPath={slot.entry ? getCategoryPath(slot.entry.categoryId) : ""}
             categoryColor={slot.entry ? getCategoryColor(slot.entry.categoryId) : ""}
             highlighted={isHighlighted(slot, highlight)}
+            conflicted={conflicted}
             onClick={() => (slot.entry ? onEntryClick(slot.entry) : onGapClick(slot.startTime, slot.endTime))}
           />
         );

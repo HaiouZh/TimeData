@@ -18,7 +18,7 @@ const syncDbMock = vi.hoisted(() => {
   const count = vi.fn(async () => state.persistedUnsyncedCount);
   const equals = vi.fn(() => ({ count }));
   const where = vi.fn(() => ({ equals }));
-  const useLiveQuery = vi.fn((querier: unknown, deps: unknown, defaultValue: unknown) => {
+  const useLiveQuery = vi.fn((_querier: unknown, _deps: unknown, defaultValue: unknown) => {
     if (Array.isArray(defaultValue)) return state.pendingArbitrations;
     return state.liveUnsyncedCount;
   });

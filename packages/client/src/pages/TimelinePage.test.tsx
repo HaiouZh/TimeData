@@ -1,10 +1,21 @@
-import { createElement } from "react";
+// @vitest-environment jsdom
+import { act, createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { MemoryRouter } from "react-router";
 import { describe, expect, it, vi } from "vitest";
+import { beforeEach } from "vitest";
 import { MAIN_NAV_ITEMS } from "../lib/navigation/navRegistry.js";
 import { addDays, getDateString } from "../lib/time.js";
+import { renderDom, unmount } from "../test/domHarness.tsx";
 import TimelinePage from "./TimelinePage.js";
+
+const useSyncContextMock = vi.hoisted(() => vi.fn(() => ({ pendingArbitrations: [] })));
+vi.mock("../contexts/SyncContext.tsx", () => ({
+  useOptionalSyncContext: useSyncContextMock,
+}));
+vi.mock("../sync/arbitration.ts", () => ({
+  clearPendingArbitration: vi.fn(),
+}));
 
 vi.mock("../components/DateNav.tsx", () => ({
   default: ({ date }: { date: string }) => createElement("div", null, `日期 ${date}`),
@@ -48,6 +59,10 @@ vi.mock("../hooks/useEntries.ts", () => ({
 vi.mock("../lib/overnightDisplaySetting.ts", () => ({
   getMergeOvernightEnabled: () => true,
 }));
+
+beforeEach(() => {
+  useSyncContextMock.mockReturnValue({ pendingArbitrations: [] });
+});
 
 describe("TimelinePage sync indicator", () => {
   it("passes SyncIndicator into the circular timeline overlay", () => {
@@ -109,5 +124,48 @@ describe("TimelinePage date 参数校验", () => {
   it("导航注册表的时间轴链接是纯 / （切 tab 必回今天视图）", () => {
     const timelineItem = MAIN_NAV_ITEMS.find((item) => item.label === "时间轴");
     expect(timelineItem?.to).toBe("/");
+  });
+});
+
+describe("TimelinePage 横幅去看", () => {
+  beforeEach(() => {
+    useSyncContextMock.mockReturnValue({
+      pendingArbitrations: [
+        {
+          recordId: "entry-conflict",
+          tableName: "time_entries",
+          action: "create" as const,
+          payloadJson: JSON.stringify({ startTime: "2026-08-19T01:00:00.000Z", endTime: "2026-08-19T02:00:00.000Z" }),
+          syncLogIds: ["log-1"],
+          rejectedAt: "2026-08-19T12:00:00.000Z",
+          disposition: "pending" as const,
+        },
+      ],
+    });
+  });
+
+  it("点「去看」→ 时间轴切到那条记录的日期", async () => {
+    const { host, root } = await renderDom(
+      createElement(MemoryRouter, { initialEntries: ["/"] }, createElement(TimelinePage)),
+    );
+    try {
+      const expectedDate = "2026-08-19";
+      // 初始应不在目标日期
+      // 若今天恰好是 2026-08-19，则换一个初始路径
+      const today = getDateString(new Date());
+      if (today === expectedDate) {
+        expect(host.textContent).toContain(`日期 ${expectedDate}`);
+        return;
+      }
+      expect(host.textContent).not.toContain(`日期 ${expectedDate}`);
+      const btn = Array.from(host.querySelectorAll("button")).find((b) => b.textContent?.includes("去") && b.textContent?.includes("看"));
+      expect(btn).toBeTruthy();
+      await act(async () => {
+        btn?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      });
+      expect(host.textContent).toContain(`日期 ${expectedDate}`);
+    } finally {
+      await unmount(root);
+    }
   });
 });

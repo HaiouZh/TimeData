@@ -10,9 +10,10 @@ interface TimeSlotProps {
   categoryColor: string;
   onClick: () => void;
   highlighted?: boolean;
+  conflicted?: boolean;
 }
 
-export default function TimeSlot({ slot, categoryPath, categoryColor, onClick, highlighted }: TimeSlotProps) {
+export default function TimeSlot({ slot, categoryPath, categoryColor, onClick, highlighted, conflicted }: TimeSlotProps) {
   const rootRef = useRef<HTMLDivElement>(null);
   const isGap = slot.entry === null;
   const duration = formatDuration(slot.startTime, slot.endTime);
@@ -24,10 +25,15 @@ export default function TimeSlot({ slot, categoryPath, categoryColor, onClick, h
 
   if (isGap) {
     return (
-      <div ref={rootRef} className="mb-1.5" data-slot-highlighted={highlighted ? "true" : undefined}>
+      <div
+        ref={rootRef}
+        className="mb-1.5"
+        data-slot-highlighted={highlighted ? "true" : undefined}
+        data-slot-conflicted={conflicted ? "true" : undefined}
+      >
         <button
           onClick={onClick}
-          className={`group flex min-h-14 w-full flex-col justify-center gap-0.5 rounded-row border border-dashed border-border bg-surface/40 py-3 pl-3.5 pr-3 text-left transition-colors hover:border-border-strong hover:bg-surface-hover/60 active:bg-surface-hover${highlighted ? " ring-2 ring-inset ring-accent" : ""}`}
+          className={`group flex min-h-14 w-full flex-col justify-center gap-0.5 rounded-row border border-dashed border-border bg-surface/40 py-3 pl-3.5 pr-3 text-left transition-colors hover:border-border-strong hover:bg-surface-hover/60 active:bg-surface-hover${highlighted ? " ring-2 ring-inset ring-accent" : ""}${conflicted ? " ring-2 ring-inset ring-warn" : ""}`}
         >
           <span className="td-time td-text-caption text-ink-2">{timeRange}</span>
           <div className="flex items-center gap-1.5 text-ink-2 transition-colors group-hover:text-ink">
@@ -43,10 +49,15 @@ export default function TimeSlot({ slot, categoryPath, categoryColor, onClick, h
   }
 
   return (
-    <div ref={rootRef} className="mb-1.5" data-slot-highlighted={highlighted ? "true" : undefined}>
+    <div
+      ref={rootRef}
+      className="mb-1.5"
+      data-slot-highlighted={highlighted ? "true" : undefined}
+      data-slot-conflicted={conflicted ? "true" : undefined}
+    >
       <button
         onClick={onClick}
-        className={`w-full rounded-row border border-transparent py-2.5 pl-3.5 pr-3 text-left transition-all hover:border-border${highlighted ? " ring-2 ring-inset ring-accent" : ""}`}
+        className={`w-full rounded-row border border-transparent py-2.5 pl-3.5 pr-3 text-left transition-all hover:border-border${highlighted ? " ring-2 ring-inset ring-accent" : ""}${conflicted ? " ring-2 ring-inset ring-warn" : ""}`}
         style={{ backgroundColor: `${categoryColor}1a`, boxShadow: `inset 3px 0 0 ${categoryColor}` }}
       >
         <div className="flex items-start justify-between gap-2">
