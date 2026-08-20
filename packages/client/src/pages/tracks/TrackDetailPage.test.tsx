@@ -1,8 +1,9 @@
 // @vitest-environment jsdom
 import { act, createElement } from "react";
 import { MemoryRouter, Route, Routes } from "react-router";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { setTrackActionTags } from "../../lib/settings/trackActionTagsSetting.js";
+import * as trackMilestonesOps from "../../lib/trackMilestones.js";
 import { addTrack, addTrackStep, getTrack, listTrackSteps, listTracks } from "../../lib/tracks.js";
 import { db } from "../../test/dbReset.js";
 import { renderDom, unmount } from "../../test/domHarness.js";
@@ -15,10 +16,12 @@ beforeEach(async () => {
   await db.open();
   await db.tracks.clear();
   await db.trackSteps.clear();
+  await db.trackMilestones.clear();
   await db.settings.clear();
   await db.syncLog.clear();
 });
 afterEach(async () => {
+  vi.restoreAllMocks();
   if (mounted) await unmount(mounted.root);
   mounted = null;
 });
@@ -149,7 +152,8 @@ async function submitComposer(host: HTMLElement): Promise<void> {
 
 async function openHistory(host: HTMLElement): Promise<void> {
   await act(async () => {
-    const details = host.querySelector("details");
+    const detailsList = [...host.querySelectorAll("details")] as HTMLDetailsElement[];
+    const details = detailsList.find((d) => d.textContent?.includes("历史")) ?? detailsList[0] ?? null;
     if (details) {
       details.open = true;
       details.dispatchEvent(new Event("toggle", { bubbles: true }));
@@ -211,7 +215,8 @@ describe("TrackDetailPage", () => {
     const host = await renderDetail(track.id);
     await waitForText(host, "初具雏形");
 
-    const details = host.querySelector("details");
+    const detailsList = [...host.querySelectorAll("details")] as HTMLDetailsElement[];
+    const details = detailsList.find((d) => d.textContent?.includes("历史")) ?? detailsList[0] ?? null;
     expect(details?.open).toBe(false);
     expect(host.textContent).toContain("历史");
     expect(details?.textContent).toContain("2");
@@ -239,7 +244,10 @@ describe("TrackDetailPage", () => {
     const host = mounted.host;
     await waitForText(host, "base 期第一周");
 
-    expect(host.querySelector("details")?.open).toBe(true);
+    const historyDetails = [...host.querySelectorAll("details")].find((d) => d.textContent?.includes("历史")) as
+      | HTMLDetailsElement
+      | undefined;
+    expect(historyDetails?.open).toBe(true);
   });
 
   it("当前帧卡可就地编辑（user 步）", async () => {
@@ -584,5 +592,81 @@ describe("TrackDetailPage", () => {
     const banner = host.querySelector('[data-tone="danger"]');
     expect(banner).toBeInstanceOf(HTMLElement);
     expect(banner?.getAttribute("role")).toBe("alert");
+  });
+
+  it("① 详情渲染后编排面出现（SignalSwitcher 胶囊或立骨架 textarea）", async () => {
+    const track = await seedTrack();
+    const host = await renderDetail(track.id);
+    await waitForText(host, "全马破三");
+    // 编排面：SignalSwitcher 或 MilestonePanel 至少其一可见（active 轨道应两者皆可见，判宽松）
+    for (let i = 0; i < 20; i += 1) await flush();
+    const hasSwitcher = host.querySelector('[data-testid="signal-switcher"]') !== null;
+    const hasSkeleton = host.querySelector('[data-testid="milestone-skeleton-textarea"]') !== null;
+    const hasPanel = host.querySelector('[data-testid="milestone-panel"]') !== null;
+    expect(hasSwitcher || hasSkeleton || hasPanel).toBe(true);
+    expect(host.querySelector('[data-testid="milestone-panel"]')).not.toBeNull();
+  });
+
+  it("② xl 双栏容器含 xl:grid-cols- 冒烟", async () => {
+    const track = await seedTrack();
+    const host = await renderDetail(track.id);
+    await waitForText(host, "全马破三");
+    // 冒烟：存在含 xl:grid-cols- 的布局容器
+    expect(host.innerHTML).toContain("xl:grid-cols-");
+    const grid = host.querySelector('div[class*="xl:grid-cols-"]');
+    expect(grid).not.toBeNull();
+    // 外层容器放大到 xl:max-w-6xl
+    expect(host.innerHTML).toContain("xl:max-w-6xl");
+  });
+
+  it("③ 编排面在叙事面之前（立骨架区先于当前帧卡）", async () => {
+    const track = await seedTrack();
+    const host = await renderDetail(track.id);
+    await waitForText(host, "全马破三");
+    for (let i = 0; i < 20; i += 1) await flush();
+    const workbench = host.querySelector('[data-testid="milestone-panel"]');
+    const card = host.querySelector('[data-testid="current-frame-card"]');
+    expect(workbench).not.toBeNull();
+    expect(card).not.toBeNull();
+    // DOM 顺序：workbench 先于 card
+    const pos = workbench!.compareDocumentPosition(card!);
+    expect(pos & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it("④ concluded 轨道：MilestonePanel 为 readOnly 且 SignalSwitcher 不渲染", async () => {
+    await addTrack({ title: "已收束轨道", status: "concluded", now });
+    const [track] = await listTracks("concluded");
+    const host = await renderDetail(track.id);
+    await waitForText(host, "已收束轨道");
+    for (let i = 0; i < 20; i += 1) await flush();
+    expect(host.querySelector('[data-testid="signal-switcher"]')).toBeNull();
+    expect(host.querySelector('[data-testid="milestone-skeleton-textarea"]')).toBeNull();
+    // 面板仍在但为只读（有面板容器、无输入）
+    expect(host.querySelector('[data-testid="milestone-panel"]')).not.toBeNull();
+  });
+
+  it("⑤ 编排面写入失败落 actionError 横幅", async () => {
+    const track = await seedTrack();
+    const host = await renderDetail(track.id);
+    await waitForText(host, "全马破三");
+    for (let i = 0; i < 20; i += 1) await flush();
+    const spy = vi.spyOn(trackMilestonesOps, "addMilestones").mockRejectedValue(new Error("立骨架失败 mock"));
+    const textarea = await waitForElement<HTMLTextAreaElement>(host, '[data-testid="milestone-skeleton-textarea"]');
+    await act(async () => {
+      const setValue = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")?.set;
+      setValue?.call(textarea, "段A\n段B");
+      textarea.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    await flush();
+    const btn = await waitForElement<HTMLElement>(host, '[data-testid="milestone-skeleton-submit"]');
+    await act(async () => {
+      btn.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+    });
+    await waitForText(host, "立骨架失败 mock");
+    const banner = host.querySelector('[data-tone="danger"]');
+    expect(banner).not.toBeNull();
+    expect(banner?.getAttribute("role")).toBe("alert");
+    expect(banner?.textContent).toContain("立骨架失败 mock");
+    spy.mockRestore();
   });
 });

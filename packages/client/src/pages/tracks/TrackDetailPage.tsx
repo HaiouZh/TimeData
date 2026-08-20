@@ -25,6 +25,8 @@ import { CurrentFrameCard } from "./CurrentFrameCard.js";
 import { RefChip } from "./RefChip.js";
 import { StepComposer, type StepDraft } from "./StepComposer.js";
 import { TrackTimeline } from "./TrackTimeline.js";
+import { MilestonePanel } from "./workbench/MilestonePanel.js";
+import { SignalSwitcher } from "./workbench/SignalSwitcher.js";
 
 const STATUS_LABEL: Record<string, string> = { active: "推进中", concluded: "已归档", parked: "已归档" };
 
@@ -149,7 +151,7 @@ export default function TrackDetailPage() {
   return (
     <div className="min-h-full bg-page text-ink">
       {dialog}
-      <div className="mx-auto w-full max-w-3xl px-4 py-4 pb-24">
+      <div className="mx-auto w-full max-w-3xl xl:max-w-6xl px-4 py-4 pb-24">
         <div className="mb-3">
           <PageBackButton to="/tracks" label="轨道" />
         </div>
@@ -256,31 +258,55 @@ export default function TrackDetailPage() {
                 {actionError}
               </StatusBanner>
             )}
-            {latest ? (
-              <CurrentFrameCard key={latest.id} step={latest} onEdit={editStep} onDelete={removeStep} />
-            ) : (
-              <p className="mb-3 rounded-card bg-surface px-3 py-6 td-text-body text-center text-ink-3">尚无步骤</p>
-            )}
-            {isActive && <StepComposer onSubmit={(draft) => addStep(draft)} statusTags={actionTags} />}
-            {isActive && hasOpenStep && (
-              <button
-                type="button"
-                onClick={() => void closeStep()}
-                className="mb-3 w-full rounded-ctl border border-border bg-surface px-3 py-2 td-text-label text-ink-2 hover:border-accent hover:text-accent"
-              >
-                闭合当前步
-              </button>
-            )}
-            {history.length > 0 && (
-              <CollapsibleSection title="历史" count={history.length} defaultOpen={historyHighlighted}>
-                <TrackTimeline
-                  steps={history}
-                  highlightStepId={highlightStepId}
-                  onEditStep={editStep}
-                  onDeleteStep={removeStep}
-                />
-              </CollapsibleSection>
-            )}
+            <div className="xl:grid xl:grid-cols-[minmax(300px,380px)_1fr] xl:gap-4 xl:items-start">
+              <div data-testid="detail-workbench" className="mb-3 xl:mb-0">
+                <div className="xl:hidden">
+                  <CollapsibleSection title="阶段骨架" count={0}>
+                    <div className="flex flex-col gap-3 pt-2">
+                      <SignalSwitcher track={track} steps={steps} />
+                      <MilestonePanel
+                        trackId={track.id}
+                        readOnly={track.status !== "active"}
+                        onError={setActionError}
+                      />
+                    </div>
+                  </CollapsibleSection>
+                </div>
+                <div className="hidden xl:block">
+                  <div className="flex flex-col gap-3">
+                    <SignalSwitcher track={track} steps={steps} />
+                    <MilestonePanel trackId={track.id} readOnly={track.status !== "active"} onError={setActionError} />
+                  </div>
+                </div>
+              </div>
+              <div data-testid="detail-narrative">
+                {latest ? (
+                  <CurrentFrameCard key={latest.id} step={latest} onEdit={editStep} onDelete={removeStep} />
+                ) : (
+                  <p className="mb-3 rounded-card bg-surface px-3 py-6 td-text-body text-center text-ink-3">尚无步骤</p>
+                )}
+                {isActive && <StepComposer onSubmit={(draft) => addStep(draft)} statusTags={actionTags} />}
+                {isActive && hasOpenStep && (
+                  <button
+                    type="button"
+                    onClick={() => void closeStep()}
+                    className="mb-3 w-full rounded-ctl border border-border bg-surface px-3 py-2 td-text-label text-ink-2 hover:border-accent hover:text-accent"
+                  >
+                    闭合当前步
+                  </button>
+                )}
+                {history.length > 0 && (
+                  <CollapsibleSection title="历史" count={history.length} defaultOpen={historyHighlighted}>
+                    <TrackTimeline
+                      steps={history}
+                      highlightStepId={highlightStepId}
+                      onEditStep={editStep}
+                      onDeleteStep={removeStep}
+                    />
+                  </CollapsibleSection>
+                )}
+              </div>
+            </div>
           </>
         )}
       </div>

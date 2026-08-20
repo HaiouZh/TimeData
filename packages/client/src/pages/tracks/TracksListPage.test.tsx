@@ -2,6 +2,7 @@
 import { act, createElement } from "react";
 import { MemoryRouter, Route, Routes, useParams } from "react-router";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { addMilestones } from "../../lib/trackMilestones.js";
 import { addTrack, addTrackStep, listTracks, updateTrack } from "../../lib/tracks.js";
 import { db } from "../../test/dbReset.js";
 import { click, renderDom, unmount } from "../../test/domHarness.js";
@@ -20,6 +21,7 @@ beforeEach(async () => {
   await db.open();
   await db.tracks.clear();
   await db.trackSteps.clear();
+  await db.trackMilestones.clear();
   await db.settings.clear();
   await db.syncLog.clear();
 });
@@ -221,7 +223,6 @@ describe("TracksListPage", () => {
       "dispatch-group-wait-external",
       "dispatch-group-in-progress",
     ]);
-
   });
 
   it("看板信号 facet 面板已退役", async () => {
@@ -319,5 +320,25 @@ describe("TracksListPage", () => {
     await submitInlineForm(host);
     await waitForText(host, "#agent在做");
     expect(trackCardsText(host)).toContain("待处理轨道");
+  });
+
+  it("⑥ 状态卡有段显示 mini 分段条、无段不显示", async () => {
+    await addTrack({ title: "有段轨道", now });
+    const withTrack = (await listTracks()).find((t) => t.title === "有段轨道");
+    if (!withTrack) throw new Error("missing withTrack");
+    await addMilestones(withTrack.id, ["段A", "段B"]);
+    await addTrack({ title: "无段轨道", now });
+    const host = await renderList();
+    await waitForText(host, "有段轨道");
+    await waitForText(host, "无段轨道");
+    for (let i = 0; i < 40; i += 1) await flush();
+    const lis = [...host.querySelectorAll("li")];
+    const withLi = lis.find((li) => li.textContent?.includes("有段轨道"));
+    const withoutLi = lis.find((li) => li.textContent?.includes("无段轨道"));
+    expect(withLi).toBeDefined();
+    expect(withoutLi).toBeDefined();
+    expect(withLi?.querySelector('[data-testid="segment-progress-bar"]')).not.toBeNull();
+    expect(withLi?.querySelector('[data-testid="segment-progress-text"]')?.textContent).toContain("0/2");
+    expect(withoutLi?.querySelector('[data-testid="segment-progress-bar"]')).toBeNull();
   });
 });
