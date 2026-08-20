@@ -527,21 +527,29 @@ export function selectChangedEvergreenDocs(changed) {
 
 // 纯函数：给定改动集与判定字段（covers / contracts），算出命中的文档及是否同步更新。
 // warn 用 covers（软提示，列出可能受影响的文档），strict 用 contracts（改契约必改文档）。
-export function evaluateDocSync(docs, changed, { field }) {
+// 「已同步」有两种表达：文档在本批 diff 里，或 last-reviewed 恰为今天——后者覆盖同日多批的撞车：
+// 前一批合并时已把日期刷成今天，后一批再刷是 no-op、永远进不了 diff，闸会把 reviewed 误判成未更新。
+export function evaluateDocSync(docs, changed, { field, today = localToday() }) {
   const codeChanged = changed.filter(isCodeFile);
   const docsChanged = new Set(changed.filter(isDocFile));
+  const isSynced = (doc) => docsChanged.has(doc.filePath) || doc.lastReviewed === today;
   const hits = [];
   for (const f of codeChanged) {
     const md = docs.filter((d) => matchesAny(f, d[field] ?? []));
     if (md.length > 0) hits.push({ file: f, docs: md });
   }
-  const unmatched = hits.flatMap((hit) => hit.docs).filter((doc) => !docsChanged.has(doc.filePath)).length;
-  return { codeChanged, docsChanged, hits, unmatched };
+  const unmatched = hits.flatMap((hit) => hit.docs).filter((doc) => !isSynced(doc)).length;
+  return { codeChanged, docsChanged, hits, unmatched, isSynced };
+}
+
+function localToday() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
 function modeWarnOrStrict(docs, changed, strict) {
   const field = strict ? "contracts" : "covers";
-  const { codeChanged, docsChanged, hits } = evaluateDocSync(docs, changed, { field });
+  const { codeChanged, hits, isSynced } = evaluateDocSync(docs, changed, { field });
   // 改了 evergreen 正文就提醒自查 §0——不管本次检查过不过：内容写错层是机检查不出的，只能在写的时刻拦。
   const touchedEvergreen = selectChangedEvergreenDocs(changed);
   if (touchedEvergreen.length > 0) {
@@ -567,7 +575,7 @@ function modeWarnOrStrict(docs, changed, strict) {
   let unmatched = 0;
   for (const hit of hits) {
     for (const doc of hit.docs) {
-      const updated = docsChanged.has(doc.filePath);
+      const updated = isSynced(doc);
       const status = updated ? "✅ 已同步更新" : "⚠️ 未更新";
       if (!updated) unmatched++;
       console.log(`| \`${hit.file}\` | [${doc.title}](${doc.filePath}) | ${status} |`);

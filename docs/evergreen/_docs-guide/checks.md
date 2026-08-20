@@ -4,7 +4,7 @@ title: 文档组织规则 · 检查与闭环
 covers:
 contracts:
   - scripts/check-evergreen-docs.mjs
-last-reviewed: 2026-08-05
+last-reviewed: 2026-08-21
 ---
 
 # 文档组织规则 · 检查与闭环
@@ -17,7 +17,7 @@ last-reviewed: 2026-08-05
 
 | 命令 | 守什么 | 失败条件 |
 |---|---|---|
-| `check:docs:strict --since=<base>` | 改了契约点就同步对应文档 | 改动命中文档 `contracts`，而该文档没有一起改。`covers` 不触发 strict |
+| `check:docs:strict --since=<base>` | 改了契约点就同步对应文档 | 改动命中文档 `contracts`，而该文档没有一起改**且** `last-reviewed` 不是今天。日期恰为今天视同已复查——同日多批时前一批合并已把日期刷成今天，后一批再刷是 no-op、文档进不了 diff，reviewed 的事实只剩日期能表达。`covers` 不触发 strict |
 | `check:docs:coverage --since=<base>` | 新源码必须有文档认领 | 新增文件落在 `COVERAGE_ROOTS` 下却不匹配任何 covers，且不属于测试、`.d.ts`、mock、夹具、story 或 `src/test/` 这类测试基建目录豁免 |
 | `check:docs:size` | frontmatter 有效、单文档别膨胀到该拆 | frontmatter 形状错误、`covers`/`contracts` 双空、字符数超 hard cap、covers 数超基线，或基线漏项、保留已删除文档；另守 `AGENTS.md` 的入口体量闸（9000 字符——入口每次会话全文进 agent context，超闸的出路是机制沉 evergreen、细则沉 skill、入口留一句规则 + 指针，不是压缩措辞）。拆分处置见 [拆分与体量](splitting.md) |
 | `check:docs:links` | 互链和指针不指向消失目标 | 链接源（`docs/evergreen` + `docs/adr` 全部文档，外加 `AGENTS.md` / `README.md`）里的 Markdown `.md` 链接不存在；目标 `.md#id` 缺独立 `<a id="..."></a>` 显式锚点；独立锚点行畸形；锚点 ID 重复 |

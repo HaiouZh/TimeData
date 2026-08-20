@@ -200,6 +200,35 @@ test("evaluateDocSync strict uses contracts, not covers", () => {
   assert.equal(contractSynced.unmatched, 0);
 });
 
+test("evaluateDocSync counts last-reviewed === today as synced (same-day second batch)", () => {
+  // 同日两批撞车：前一批合并时已把 last-reviewed 刷成今天，后一批再刷是 no-op、
+  // 文档进不了 diff——reviewed 的事实只剩日期本身能表达。
+  const docs = [
+    {
+      filePath: "docs/evergreen/sync.md",
+      title: "同步机制",
+      covers: [],
+      contracts: ["packages/shared/src/syncDomains.ts"],
+      lastReviewed: "2026-08-21",
+    },
+  ];
+  const reviewedToday = evaluateDocSync(docs, ["packages/shared/src/syncDomains.ts"], {
+    field: "contracts",
+    today: "2026-08-21",
+  });
+  assert.equal(reviewedToday.hits.length, 1);
+  assert.equal(reviewedToday.unmatched, 0);
+  assert.equal(reviewedToday.isSynced(docs[0]), true);
+
+  // 反证：日期早于 today 不享受豁免，仍记未更新。
+  const reviewedEarlier = evaluateDocSync(docs, ["packages/shared/src/syncDomains.ts"], {
+    field: "contracts",
+    today: "2026-08-22",
+  });
+  assert.equal(reviewedEarlier.unmatched, 1);
+  assert.equal(reviewedEarlier.isSynced(docs[0]), false);
+});
+
 test("evaluateDocSync treats a doc with no contracts as a strict no-op", () => {
   const docs = [{ filePath: "docs/evergreen/cli.md", title: "CLI", covers: ["packages/cli/**"], contracts: [] }];
 

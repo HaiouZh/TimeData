@@ -4,7 +4,7 @@ title: 文档组织规则 · 拆分与体量
 covers:
 contracts:
   - scripts/check-evergreen-docs.mjs
-last-reviewed: 2026-08-04
+last-reviewed: 2026-08-21
 ---
 
 # 文档组织规则 · 拆分与体量

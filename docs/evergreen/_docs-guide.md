@@ -6,7 +6,7 @@ covers:
   - scripts/check-evergreen-docs.test.mjs
 contracts:
   - scripts/check-evergreen-docs.mjs
-last-reviewed: 2026-08-04
+last-reviewed: 2026-08-21
 ---
 
 # 文档组织规则
