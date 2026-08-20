@@ -286,9 +286,9 @@ export const TrackStepSchema = z
 export const TrackMilestoneSchema = z.object({
   id: NonEmptyTrimmedStringSchema,
   trackId: NonEmptyTrimmedStringSchema,
-  title: NonEmptyTrimmedStringSchema.refine((v) => v.length <= 200, "title must be at most 200 characters"),
+  title: NonEmptyTrimmedStringSchema.refine((v) => v.length <= 200, "阶段标题最长 200 字"),
   status: z.enum(["pending", "done", "dropped"]),
-  note: z.string().max(200).nullable().default(null),
+  note: z.string().max(200, "备注最长 200 字").nullable().default(null),
   taskId: NonEmptyTrimmedStringSchema.nullable().default(null),
   position: z.number().int().finite(),
   createdAt: UtcIsoStringSchema,
