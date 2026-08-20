@@ -85,7 +85,7 @@ last-reviewed: 2026-08-14
 | `stats.todo.layout.v1` | [stats-insights](stats-insights.md) |
 | `todo.defaultDestination.v1` | [todo](todo.md) |
 | `todo.gravity.v1`、`todo.gravity.review.v1` | [todo](todo.md) |
-| `track.actionTags.v2`、`track.agentExecTags.v1` | [categories-settings/settings-catalog](categories-settings/settings-catalog.md) |
+| `track.actionTags.v2`、`track.agentExecTags.v1`、`track.waitExternalTags.v1` | [categories-settings/settings-catalog](categories-settings/settings-catalog.md) |
 
 ## 3. SyncLogEntry
 

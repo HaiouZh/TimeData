@@ -56,6 +56,7 @@ last-reviewed: 2026-08-14
 | `todo.gravity.review.v1` | JSON `{[taskId]: iso}`；机器轮换状态，写时 merge + prune `max(90, waterlineDays*4)` 天 | `lib/tasks/gravityReviewStorage.ts`（covers 归 [todo](../todo.md)） | [todo](../todo.md)（翻牌跨设备避重） |
 | `track.actionTags.v2` | JSON 字符串数组；旧 `{tag,court}` 数组兼容读取但忽略 `court`；未配置→种子 `[待我处理,agent在做]`；旧默认 `[等我,待决策,卡住,agent在做]` 读时归一为新默认；显式 `"[]"`→空 | `lib/settings/trackActionTagsSetting.ts` + `shared/src/trackBoardSignals.ts` parser（covers 归 [tracks](../tracks.md)） | [tracks](../tracks.md)(看板信号 + 步骤检索标签) |
 | `track.agentExecTags.v1` | JSON 字符串数组；未配置→默认 `[agent在做]`；显式 `"[]"`→空，即调度台不归出「agent 在跑」分组；读时去 `#` 前缀、trim、去重，单条 ≤64 字符、至多 20 条 | `lib/settings/trackAgentExecTagsSetting.ts`（covers 归 [tracks](../tracks.md)） | [tracks](../tracks.md)（调度台「agent 在跑」分组判据，不论这一步是谁写的） |
+| `track.waitExternalTags.v1` | JSON 字符串数组；未配置→默认 `[等外部]`；显式 `"[]"`→空，即调度台不归出「等外部」分组；读时去 `#` 前缀、trim、去重，单条 ≤64 字符、至多 20 条 | `lib/settings/trackWaitExternalTagsSetting.ts`（covers 归 [tracks](../tracks.md)） | [tracks](../tracks.md)（调度台「等外部」分组判据：在等一个不是自己也不是 agent 的条件） |
 
 > **`nav.visibleTabs.v1` 兼容警告**：key 仍是 v1，新旧端读写同一个 key。未升级的旧端（APK / PWA 缓存）读到新 `{to,hidden}[]` 格式会视为空列表（底栏只剩固定 `/settings`）；旧端再写入会按「仅可见项 string[]」覆盖，冲掉 hidden 标记与自定义排序。
 
