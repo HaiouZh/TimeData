@@ -1,19 +1,20 @@
 import type { TrackMilestone } from "@timedata/shared";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { db } from "../test/dbReset.js";
-import { addTrack } from "./tracks.js";
 import {
   addMilestones,
   buildMilestoneTaskIndex,
-  insertMilestoneAt,
-  listTrackMilestones,
   dropMilestone,
+  insertMilestoneAt,
+  linkMilestoneTask,
+  listTrackMilestones,
+  moveMilestone,
   setMilestoneStatus,
   syncLinkedMilestoneOnTaskToggle,
-  updateMilestoneTitle,
-  linkMilestoneTask,
   unlinkMilestoneTask,
+  updateMilestoneTitle,
 } from "./trackMilestones.js";
+import { addTrack } from "./tracks.js";
 
 const now = new Date("2026-06-21T08:00:00.000Z");
 
@@ -63,7 +64,7 @@ describe("trackMilestones 写入层", () => {
     }
   });
 
-  it("insertMilestoneAt(trackId, \"新段\", 第一段id)：新段 position 0，原两段重编号 1/2；syncLog = 1 create + 2 update", async () => {
+  it('insertMilestoneAt(trackId, "新段", 第一段id)：新段 position 0，原两段重编号 1/2；syncLog = 1 create + 2 update', async () => {
     const track = await addTrack({ title: "T1", now });
     const initial = await addMilestones(track.id, ["第一阶段", "第二阶段"]);
     await db.syncLog.clear();
@@ -128,7 +129,7 @@ describe("trackMilestones 写入层", () => {
     expect(logs[0].timestamp).toBe(updated.updatedAt);
   });
 
-  it("dropMilestone(id, \"转 ideas，买账号后复活\")：status=dropped、note 落库、行还在（不物理删）", async () => {
+  it('dropMilestone(id, "转 ideas，买账号后复活")：status=dropped、note 落库、行还在（不物理删）', async () => {
     const track = await addTrack({ title: "T1", now });
     const [m1] = await addMilestones(track.id, ["待砍"]);
     await db.syncLog.clear();
@@ -148,7 +149,7 @@ describe("trackMilestones 写入层", () => {
     expect(logs[0]).toMatchObject({ tableName: "track_milestones", action: "update" });
   });
 
-  it("setMilestoneStatus(droppedId, \"pending\")：翻回 pending、note 保留", async () => {
+  it('setMilestoneStatus(droppedId, "pending")：翻回 pending、note 保留', async () => {
     const track = await addTrack({ title: "T1", now });
     const [m1] = await addMilestones(track.id, ["待砍"]);
     const dropped = await dropMilestone(m1.id, "转 ideas，买账号后复活");
@@ -481,5 +482,112 @@ describe("syncLinkedMilestoneOnTaskToggle", () => {
     expect(result).toBeNull();
     const logs = await db.syncLog.where("tableName").equals("track_milestones").toArray();
     expect(logs).toHaveLength(0);
+  });
+});
+
+describe("moveMilestone", () => {
+  it("把末尾段移到首位：顺序 [2,0,1]，position 0/1/2；syncLog 3 条 update（被移段+其余全变位）", async () => {
+    const track = await addTrack({ title: "T1", now });
+    const initial = await addMilestones(track.id, ["第一段", "第二段", "第三段"]);
+    await db.syncLog.clear();
+
+    const moved = await moveMilestone(initial[2].id, initial[0].id);
+
+    expect(moved.id).toBe(initial[2].id);
+    expect(moved.trackId).toBe(track.id);
+    expect(moved.position).toBe(0);
+
+    const listed = await listTrackMilestones(track.id);
+    expect(listed.map((m) => m.id)).toEqual([initial[2].id, initial[0].id, initial[1].id]);
+    expect(listed.map((m) => m.position)).toEqual([0, 1, 2]);
+    expect(listed[0].title).toBe("第三段");
+    expect(listed[1].title).toBe("第一段");
+    expect(listed[2].title).toBe("第二段");
+
+    const logs = await db.syncLog.where("tableName").equals("track_milestones").toArray();
+    expect(logs).toHaveLength(3);
+    expect(logs.every((l) => l.action === "update")).toBe(true);
+    expect(logs.every((l) => l.tableName === "track_milestones")).toBe(true);
+    expect(logs.find((l) => l.recordId === initial[2].id)).toBeDefined();
+    expect(logs.find((l) => l.recordId === initial[0].id)).toBeDefined();
+    expect(logs.find((l) => l.recordId === initial[1].id)).toBeDefined();
+    const movedLog = logs.find((l) => l.recordId === moved.id);
+    expect(movedLog?.timestamp).toBe(moved.updatedAt);
+  });
+
+  it("把首段移到末尾（beforeId=null）：顺序 [1,2,0]；syncLog 3 条 update", async () => {
+    const track = await addTrack({ title: "T1", now });
+    const initial = await addMilestones(track.id, ["第一段", "第二段", "第三段"]);
+    await db.syncLog.clear();
+
+    const moved = await moveMilestone(initial[0].id, null);
+
+    expect(moved.id).toBe(initial[0].id);
+    expect(moved.position).toBe(2);
+
+    const listed = await listTrackMilestones(track.id);
+    expect(listed.map((m) => m.id)).toEqual([initial[1].id, initial[2].id, initial[0].id]);
+    expect(listed.map((m) => m.position)).toEqual([0, 1, 2]);
+
+    const logs = await db.syncLog.where("tableName").equals("track_milestones").toArray();
+    expect(logs).toHaveLength(3);
+    expect(logs.every((l) => l.action === "update")).toBe(true);
+    expect(new Set(logs.map((l) => l.recordId))).toEqual(new Set(initial.map((m) => m.id)));
+    expect(logs.find((l) => l.recordId === moved.id)?.timestamp).toBe(moved.updatedAt);
+  });
+
+  it("把中段移到原后一段前（原地不动）：顺序不变；syncLog 恰 1 条 update（仅被移段）", async () => {
+    const track = await addTrack({ title: "T1", now });
+    const initial = await addMilestones(track.id, ["第一段", "第二段", "第三段"]);
+    await db.syncLog.clear();
+
+    const moved = await moveMilestone(initial[1].id, initial[2].id);
+
+    expect(moved.id).toBe(initial[1].id);
+
+    const listed = await listTrackMilestones(track.id);
+    expect(listed.map((m) => m.id)).toEqual([initial[0].id, initial[1].id, initial[2].id]);
+    expect(listed.map((m) => m.position)).toEqual([0, 1, 2]);
+
+    const logs = await db.syncLog.where("tableName").equals("track_milestones").toArray();
+    expect(logs).toHaveLength(1);
+    expect(logs[0]).toMatchObject({ tableName: "track_milestones", action: "update", recordId: initial[1].id });
+    expect(logs[0].timestamp).toBe(moved.updatedAt);
+  });
+
+  it("beforeId===id 与跨轨道目标均 reject", async () => {
+    const track1 = await addTrack({ title: "T1", now });
+    const track2 = await addTrack({ title: "T2", now });
+    const [m1] = await addMilestones(track1.id, ["轨道1一段"]);
+    const [m2] = await addMilestones(track2.id, ["轨道2一段"]);
+    await db.syncLog.clear();
+
+    await expect(moveMilestone(m1.id, m1.id)).rejects.toThrow();
+    await expect(moveMilestone(m1.id, m2.id)).rejects.toThrow("目标段不在同一轨道");
+    await expect(moveMilestone(m1.id, "missing-before")).rejects.toThrow("里程碑不存在");
+
+    const logs = await db.syncLog.where("tableName").equals("track_milestones").toArray();
+    expect(logs).toHaveLength(0);
+
+    const listed1 = await listTrackMilestones(track1.id);
+    expect(listed1.map((m) => m.id)).toEqual([m1.id]);
+    const listed2 = await listTrackMilestones(track2.id);
+    expect(listed2.map((m) => m.id)).toEqual([m2.id]);
+  });
+
+  it("id 不存在时 reject", async () => {
+    const track = await addTrack({ title: "T1", now });
+    const [m1] = await addMilestones(track.id, ["仅一段"]);
+    await db.syncLog.clear();
+
+    await expect(moveMilestone("missing-id", null)).rejects.toThrow("里程碑不存在");
+    await expect(moveMilestone("missing-id", m1.id)).rejects.toThrow("里程碑不存在");
+
+    const logs = await db.syncLog.where("tableName").equals("track_milestones").toArray();
+    expect(logs).toHaveLength(0);
+
+    const listed = await listTrackMilestones(track.id);
+    expect(listed.map((m) => m.id)).toEqual([m1.id]);
+    expect(listed[0].position).toBe(0);
   });
 });
