@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
 import type { Task } from "@timedata/shared";
 import type { TodoProjectGroup } from "./goalMembership.js";
+import { DEFAULT_TODO_GRAVITY_SETTINGS } from "./gravity.js";
 import {
   goalBarTaskIds,
+  isProjectDormant,
   landsInCollapsedProjectGroup,
   projectChipIndex,
   projectMemberRowActions,
@@ -369,5 +371,41 @@ describe("landsInCollapsedProjectGroup", () => {
   it("已完成 → false：已完成成员待在组内另一个默认折叠的子区，展开也看不到，指错更糟", () => {
     const t = task({ id: "t1", done: true, completedAt: "2026-07-25T09:00:00.000Z" });
     expect(landsInCollapsedProjectGroup(t, opts)).toBe(false);
+  });
+});
+
+describe("isProjectDormant", () => {
+  const now = new Date("2026-06-28T00:00:00.000Z");
+  const settings = DEFAULT_TODO_GRAVITY_SETTINGS;
+
+  it("空 pending → false（走全完成三态，不算沉睡）", () => {
+    expect(isProjectDormant({ pendingTasks: [], hasActiveTrack: false, settings, now })).toBe(false);
+  });
+
+  it("hasActiveTrack → false（有在飞轨道的项目不沉睡）", () => {
+    const sunken = task({ id: "s1", updatedAt: "2026-05-01T00:00:00.000Z", createdAt: "2026-05-01T00:00:00.000Z" });
+    expect(isProjectDormant({ pendingTasks: [sunken], hasActiveTrack: true, settings, now })).toBe(false);
+  });
+
+  it("一新鲜一沉 → false（有非沉睡成员的项目不沉睡）", () => {
+    const sunken = task({ id: "s1", updatedAt: "2026-05-01T00:00:00.000Z", createdAt: "2026-05-01T00:00:00.000Z" });
+    const fresh = task({ id: "f1", updatedAt: "2026-06-24T00:00:00.000Z", createdAt: "2026-05-01T00:00:00.000Z" });
+    expect(isProjectDormant({ pendingTasks: [sunken, fresh], hasActiveTrack: false, settings, now })).toBe(false);
+  });
+
+  it("全沉且无轨道 → true", () => {
+    const sunken1 = task({ id: "s1", updatedAt: "2026-05-01T00:00:00.000Z", createdAt: "2026-05-01T00:00:00.000Z" });
+    const sunken2 = task({ id: "s2", updatedAt: "2026-05-10T00:00:00.000Z", createdAt: "2026-05-01T00:00:00.000Z" });
+    expect(isProjectDormant({ pendingTasks: [sunken1, sunken2], hasActiveTrack: false, settings, now })).toBe(true);
+  });
+
+  it("已排期的成员 → not sunken → false（有排期的项目不沉睡）", () => {
+    const scheduled = task({
+      id: "s1",
+      updatedAt: "2026-05-01T00:00:00.000Z",
+      createdAt: "2026-05-01T00:00:00.000Z",
+      scheduledAt: "2026-07-01T00:00:00.000Z",
+    });
+    expect(isProjectDormant({ pendingTasks: [scheduled], hasActiveTrack: false, settings, now })).toBe(false);
   });
 });

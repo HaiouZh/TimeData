@@ -27,3 +27,15 @@ export function buildTrackProjectIndex(goals: readonly Goal[]): Map<string, { go
   }
   return index;
 }
+
+export function groupTracksByProject(
+  projectIndex: ReadonlyMap<string, { goalId: string; name: string }>,
+): Map<string, string[]> {
+  const result = new Map<string, string[]>();
+  for (const [trackId, entry] of projectIndex) {
+    const list = result.get(entry.goalId);
+    if (list) list.push(trackId);
+    else result.set(entry.goalId, [trackId]);
+  }
+  return result;
+}

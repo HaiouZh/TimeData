@@ -1,5 +1,7 @@
 import type { Task } from "@timedata/shared";
 import type { TodoProjectGroup } from "./goalMembership.js";
+import type { TodoGravitySettings } from "./gravity.js";
+import { isTaskSunken } from "./gravity.js";
 import { placementForTask } from "./placement.js";
 
 /**
@@ -221,4 +223,18 @@ export function landsInCollapsedProjectGroup(
   if ((task.parentId ?? null) !== null || task.ruleId !== null) return false;
   if (options.handSessionId !== null && (task.sessionId ?? null) === options.handSessionId) return false;
   return placementForTask(task, options.now).pool === "inbox";
+}
+
+export function isProjectDormant(args: {
+  pendingTasks: readonly Task[];
+  hasActiveTrack: boolean;
+  settings: TodoGravitySettings;
+  now: Date;
+}): boolean {
+  if (args.pendingTasks.length === 0) return false;
+  if (args.hasActiveTrack) return false;
+  for (const task of args.pendingTasks) {
+    if (!isTaskSunken(task, args.settings, args.now)) return false;
+  }
+  return true;
 }

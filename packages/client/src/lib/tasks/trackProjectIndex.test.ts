@@ -1,6 +1,6 @@
 import type { Goal } from "@timedata/shared";
 import { describe, expect, it } from "vitest";
-import { buildTrackProjectIndex } from "./trackProjectIndex.js";
+import { buildTrackProjectIndex, groupTracksByProject } from "./trackProjectIndex.js";
 
 function goal(overrides: Partial<Goal> & Pick<Goal, "id" | "title">): Goal {
   return {
@@ -73,5 +73,34 @@ describe("buildTrackProjectIndex", () => {
     const missing = { id: "g2", title: "缺字段", kind: "project", status: "active" } as unknown as Goal;
     const index = buildTrackProjectIndex([emptyMembers, missing]);
     expect(index.size).toBe(0);
+  });
+});
+
+describe("groupTracksByProject", () => {
+  it("空表 → 空 Map", () => {
+    expect(groupTracksByProject(new Map()).size).toBe(0);
+  });
+
+  it("两轨道同组 + 一轨道另组 → 分组正确且序保持", () => {
+    const projectIndex = new Map<string, { goalId: string; name: string }>([
+      ["tr1", { goalId: "g1", name: "项目1" }],
+      ["tr2", { goalId: "g1", name: "项目1" }],
+      ["tr3", { goalId: "g2", name: "项目2" }],
+    ]);
+    const grouped = groupTracksByProject(projectIndex);
+    expect(grouped.get("g1")).toEqual(["tr1", "tr2"]);
+    expect(grouped.get("g2")).toEqual(["tr3"]);
+    expect([...grouped.keys()]).toEqual(["g1", "g2"]);
+  });
+
+  it("保持 projectIndex 迭代序", () => {
+    const projectIndex = new Map<string, { goalId: string; name: string }>([
+      ["trB", { goalId: "g2", name: "项目2" }],
+      ["trA", { goalId: "g1", name: "项目1" }],
+      ["trC", { goalId: "g2", name: "项目2" }],
+    ]);
+    const grouped = groupTracksByProject(projectIndex);
+    expect(grouped.get("g2")).toEqual(["trB", "trC"]);
+    expect([...grouped.keys()]).toEqual(["g2", "g1"]);
   });
 });
