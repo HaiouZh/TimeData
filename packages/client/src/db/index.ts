@@ -1,6 +1,6 @@
 import Dexie, { type EntityTable, type Table } from "dexie";
 import type {
-  Category, Goal, GoalLayoutPin, GoalPrerequisite, QuickNote, Session, Setting, Task, TaskRelation, TimeEntry, SyncLogEntry, Track, TrackStep,
+  Category, Goal, GoalLayoutPin, GoalPrerequisite, QuickNote, Session, Setting, SyncChange, Task, TaskRelation, TimeEntry, SyncLogEntry, Track, TrackStep,
 } from "@timedata/shared";
 import { createDefaultCategories, taskRelationKey, TaskRelationSchema } from "@timedata/shared";
 import { v4 as uuid } from "uuid";
@@ -31,6 +31,7 @@ export const db = new Dexie("timedata") as Dexie & {
   sessions: EntityTable<Session, "id">;
   taskRelations: Table<TaskRelation, [string, string, string, string]>;
   migrationSnapshots: EntityTable<MigrationSnapshot, "key">;
+  pendingArbitrations: EntityTable<PendingArbitration, "recordId">;
 };
 
 /** 纯本地快照行：value 存 JSON 字符串，不进任何同步域（见 v19 注释）。 */
@@ -38,6 +39,19 @@ export interface MigrationSnapshot {
   key: string;
   value: string;
   updatedAt: string;
+}
+
+/** 待裁决冲突行：服务端拦下了一次会删掉本设备没见过的记录的写入，那条写入的完整快照存在这里等人裁决。
+ *  纯本地：不登记任何同步域（登记了会被 force-push 整表推送毁掉）。
+ *  payloadJson 是完整快照而不是指向 syncLog 的引用——syncLog 会被 pruneSyncedLogs 按 7 天窗口清掉，
+ *  只存引用的话用户搁置超过 7 天，内容就真丢了。 */
+export interface PendingArbitration {
+  recordId: string;
+  tableName: SyncChange["tableName"];
+  action: SyncChange["action"];
+  payloadJson: string;
+  syncLogIds: string[];
+  rejectedAt: string;
 }
 
 db.version(1).stores({
@@ -337,6 +351,13 @@ db.version(19).stores({
   migrationSnapshots: "key",
 });
 
+// 止血阶段：服务端拒收「会删掉本设备没见过的记录」的写入后，本地在此保存完整 payload 等人裁决。
+// 纯本地、不进任何同步域；但与 v19 的 migrationSnapshots 不同，本表**进** resetLocalDataToDefaults
+// 的清空清单——本地记录都被重置掉之后，指向它们的冲突记录只会是悬空的。
+db.version(20).stores({
+  pendingArbitrations: "recordId, tableName, rejectedAt",
+});
+
 export async function seedDefaultCategories(): Promise<void> {
   const count = await db.categories.count();
   if (count > 0) return;
@@ -544,7 +565,7 @@ export async function migrateLocalSettingsToDexie(): Promise<void> {
 export async function resetLocalDataToDefaults(): Promise<void> {
   // 有意不清 migrationSnapshots（迁移快照是纯本地底牌，见 v19 注释）：重置本地数据之后
   // goals 会从服务端重新拉到「已清空」的版本，那正是最需要底牌的时刻。
-  await db.transaction("rw", [db.categories, db.timeEntries, db.tasks, db.tracks, db.trackSteps, db.goals, db.goalLayoutPins, db.taskRelations, db.syncLog, db.settings], async () => {
+  await db.transaction("rw", [db.categories, db.timeEntries, db.tasks, db.tracks, db.trackSteps, db.goals, db.goalLayoutPins, db.taskRelations, db.syncLog, db.settings, db.pendingArbitrations], async () => {
     const nonQuickNoteLogs = await db.syncLog.filter((log) => log.tableName !== "quick_notes").toArray();
     await db.timeEntries.clear();
     await db.goals.clear();
@@ -554,6 +575,7 @@ export async function resetLocalDataToDefaults(): Promise<void> {
     await db.tracks.clear();
     await db.taskRelations.clear();
     await db.syncLog.bulkDelete(nonQuickNoteLogs.map((log) => log.id));
+    await db.pendingArbitrations.clear();
     await db.settings.clear();
     await db.categories.clear();
     await db.categories.bulkAdd(createDefaultCategories());

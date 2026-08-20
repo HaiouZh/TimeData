@@ -152,7 +152,7 @@ describe("Dexie database", () => {
     await seedDefaultCategories();
 
     expect(await db.categories.count()).toBeGreaterThan(0);
-    expect(db.verno).toBe(19);
+    expect(db.verno).toBe(20);
     expect(db.tables.some((table) => table.name === "autoBackups")).toBe(false);
     expect(db.settings.schema.primKey.keyPath).toBe("key");
     expect(db.quickNotes.schema.primKey.keyPath).toBe("id");
@@ -191,6 +191,7 @@ describe("Dexie database", () => {
     expect(db.goalLayoutPins.schema.idxByName.nodeId).toBeDefined();
     expect(db.goalLayoutPins.schema.idxByName.updatedAt).toBeDefined();
     expect(db.migrationSnapshots.schema.primKey.keyPath).toBe("key");
+    expect(db.pendingArbitrations.schema.primKey.keyPath).toBe("recordId");
   });
 
   it("exposes a tasks table keyed by id", async () => {
