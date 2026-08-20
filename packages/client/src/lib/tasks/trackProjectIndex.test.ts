@@ -74,6 +74,21 @@ describe("buildTrackProjectIndex", () => {
     const index = buildTrackProjectIndex([emptyMembers, missing]);
     expect(index.size).toBe(0);
   });
+
+  it("同 trackId 出现在两个 goal 的 members → 归先者（first-wins 锁）", () => {
+    const g1 = goal({ id: "g1", title: "先到项目", members: [{ kind: "track", id: "trX" }] });
+    const g2 = goal({ id: "g2", title: "后到项目", members: [{ kind: "track", id: "trX" }] });
+    const index = buildTrackProjectIndex([g1, g2]);
+    expect(index.get("trX")).toEqual({ goalId: "g1", name: "先到项目" });
+    // 反序时后者先到则归后者，证明取的是首次遇到的而非覆盖
+    const rev = buildTrackProjectIndex([g2, g1]);
+    expect(rev.get("trX")).toEqual({ goalId: "g2", name: "后到项目" });
+    // 同 goal 内重复成员也保持 first-wins，不产生重复条目
+    const gDup = goal({ id: "g3", title: "重复目标", members: [{ kind: "track", id: "trY" }, { kind: "track", id: "trY" }] });
+    const dupIndex = buildTrackProjectIndex([gDup]);
+    expect(dupIndex.size).toBe(1);
+    expect(dupIndex.get("trY")).toEqual({ goalId: "g3", name: "重复目标" });
+  });
 });
 
 describe("groupTracksByProject", () => {

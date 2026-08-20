@@ -95,20 +95,23 @@ export function ProjectTrackRows({
   const items = useMemo(() => ctx.buildItems(scoped, stepsByTrack), [scoped, stepsByTrack, ctx.buildItems]);
   if (items.length === 0) return null;
   return (
-    <div className="space-y-1">
-      {items.map((item) => (
-        <TrackBucketRow
-          key={item.track.id}
-          item={item}
-          steps={stepsByTrack.get(item.track.id) ?? []}
-          milestones={ctx.milestonesByTrack.get(item.track.id) ?? []}
-          project={null}
-          expanded={expandedTrackIds.has(item.track.id)}
-          onToggleExpand={onToggleExpand}
-          onError={onError}
-        />
-      ))}
-    </div>
+    <>
+      <p className="px-2 pt-1 td-text-caption text-ink-3">在飞的线</p>
+      <div className="space-y-1">
+        {items.map((item) => (
+          <TrackBucketRow
+            key={item.track.id}
+            item={item}
+            steps={stepsByTrack.get(item.track.id) ?? []}
+            milestones={ctx.milestonesByTrack.get(item.track.id) ?? []}
+            project={null}
+            expanded={expandedTrackIds.has(item.track.id)}
+            onToggleExpand={onToggleExpand}
+            onError={onError}
+          />
+        ))}
+      </div>
+    </>
   );
 }
 

@@ -436,4 +436,12 @@ describe("isProjectDormant", () => {
       }),
     ).toBe(false);
   });
+
+  it("settings.enabled=false 时全老成员 → 恒不沉睡（isTaskSunken 恒 false 锁）", () => {
+    const sunken1 = task({ id: "s1", updatedAt: "2026-05-01T00:00:00.000Z", createdAt: "2026-05-01T00:00:00.000Z" });
+    const sunken2 = task({ id: "s2", updatedAt: "2026-05-10T00:00:00.000Z", createdAt: "2026-05-01T00:00:00.000Z" });
+    const disabled = { ...settings, enabled: false };
+    expect(isProjectDormant({ pendingTasks: [sunken1, sunken2], hasActiveTrack: false, settings: disabled, now, blockedTaskIds: new Set() })).toBe(false);
+    expect(isProjectDormant({ pendingTasks: [sunken1], hasActiveTrack: false, settings: disabled, now, blockedTaskIds: new Set() })).toBe(false);
+  });
 });

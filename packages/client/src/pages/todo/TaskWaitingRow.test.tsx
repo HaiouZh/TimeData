@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 // Dexie 在构造时即捕获 globalThis.indexedDB，顺序错了会 MissingAPIError）。
 import { db, resetDb } from "../../test/dbReset.js";
 import { addTask, toggleTaskDone } from "../../lib/tasks.js";
+import type { Goal } from "@timedata/shared";
 import { addTaskRelation } from "../../lib/taskRelations.js";
 import { click, renderDom, unmount } from "../../test/domHarness.js";
 import { TaskWaitingRow } from "./TaskWaitingRow.js";
@@ -464,5 +465,126 @@ describe("TaskWaitingRow picker 修复（过滤/搜索/上下文）", () => {
     expect(host.querySelector('button[aria-label="添加前置 Alpha"]')).not.toBeNull();
     expect(host.querySelector('button[aria-label="添加前置 Zoom Sprint"]')).toBeNull();
     await unmount(root);
+  });
+
+  it("同任务挂两组 → 上下文取先者（first-wins）", async () => {
+    const self = await addTask({ title: "自己" });
+    const parent = await addTask({ title: "父标题" });
+    const candidate = await addTask({ title: "候选多组" });
+    await db.goals.add({
+      id: "g1",
+      title: "项目A",
+      kind: "project",
+      status: "active",
+      members: [{ kind: "task", id: candidate.id }],
+      prerequisites: [],
+      createdAt: now,
+      updatedAt: now,
+    } as never);
+    await db.goals.add({
+      id: "g2",
+      title: "项目B",
+      kind: "project",
+      status: "active",
+      members: [{ kind: "task", id: candidate.id }],
+      prerequisites: [],
+      createdAt: now,
+      updatedAt: now,
+    } as never);
+    await db.tasks.update(candidate.id, { parentId: parent.id });
+    const { host, root } = await renderRow(self.id);
+    await click(host.querySelector('button[aria-label="添加前置"]'));
+    const btn = host.querySelector(`button[aria-label="添加前置 ${candidate.title}"]`) as HTMLElement;
+    expect(btn).not.toBeNull();
+    expect(btn.textContent).toContain("项目A");
+    expect(btn.textContent).not.toContain("项目B");
+    await unmount(root);
+  });
+
+  it("空白标题组 → 回落父标题（跳过空白）", async () => {
+    const self = await addTask({ title: "自己2" });
+    const parent = await addTask({ title: "父标题B" });
+    const candidate = await addTask({ title: "候选空白" });
+    await db.goals.add({
+      id: "g-blank",
+      title: "   ",
+      kind: "project",
+      status: "active",
+      members: [{ kind: "task", id: candidate.id }],
+      prerequisites: [],
+      createdAt: now,
+      updatedAt: now,
+    } as never);
+    await db.tasks.update(candidate.id, { parentId: parent.id });
+    const { host, root } = await renderRow(self.id);
+    await click(host.querySelector('button[aria-label="添加前置"]'));
+    const btn = host.querySelector(`button[aria-label="添加前置 ${candidate.title}"]`) as HTMLElement;
+    expect(btn).not.toBeNull();
+    expect(btn.textContent).toContain("父标题B");
+    await unmount(root);
+  });
+
+  it("goal.members 为 null 时不崩且候选仍展示", async () => {
+    const self = await addTask({ title: "自己" });
+    const candidate = await addTask({ title: "候选正常", toInbox: true });
+    await db.goals.add({
+      id: "g-null",
+      title: "异常项目",
+      kind: "project",
+      status: "active",
+      members: null as unknown as Goal["members"],
+      prerequisites: [],
+      createdAt: now,
+      updatedAt: now,
+    } as unknown as Goal);
+    const { host, root } = await renderRow(self.id);
+    await click(host.querySelector('button[aria-label="添加前置"]'));
+    // 脏数据不崩，候选正常展示且无项目上下文
+    const btn = host.querySelector(`button[aria-label="添加前置 ${candidate.title}"]`) as HTMLElement;
+    expect(btn).not.toBeNull();
+    expect(btn.textContent).toBe(candidate.title);
+    await unmount(root);
+  });
+
+  it("member 缺 kind 时不崩且不产生项目上下文", async () => {
+    const self = await addTask({ title: "自己" });
+    const candidate = await addTask({ title: "候选缺kind", toInbox: true });
+    await db.goals.add({
+      id: "g-bad",
+      title: "异常项目2",
+      kind: "project",
+      status: "active",
+      members: [{ id: candidate.id } as unknown as Goal["members"][number], { kind: "task", id: candidate.id }],
+      prerequisites: [],
+      createdAt: now,
+      updatedAt: now,
+    } as unknown as Goal);
+    const { host, root } = await renderRow(self.id);
+    await click(host.querySelector('button[aria-label="添加前置"]'));
+    const btn = host.querySelector(`button[aria-label="添加前置 ${candidate.title}"]`) as HTMLElement;
+    expect(btn).not.toBeNull();
+    // 缺 kind 的成员应被跳过，但后一条合法成员仍产生上下文
+    expect(btn.textContent).toContain("异常项目2");
+    await unmount(root);
+    // 完全脏 member（无 kind）单独时不崩
+    await resetDb();
+    const self2 = await addTask({ title: "自己3" });
+    const cand2 = await addTask({ title: "候选2", toInbox: true });
+    await db.goals.add({
+      id: "g-bad2",
+      title: "项目",
+      kind: "project",
+      status: "active",
+      members: [{ id: cand2.id } as unknown as Goal["members"][number]],
+      prerequisites: [],
+      createdAt: now,
+      updatedAt: now,
+    } as unknown as Goal);
+    const r2 = await renderRow(self2.id);
+    await click(r2.host.querySelector('button[aria-label="添加前置"]'));
+    const btn2 = r2.host.querySelector(`button[aria-label="添加前置 ${cand2.title}"]`) as HTMLElement;
+    expect(btn2).not.toBeNull();
+    expect(btn2.querySelector("span.shrink-0")).toBeNull();
+    await unmount(r2.root);
   });
 });

@@ -177,6 +177,46 @@ describe("filterBlockerCandidates", () => {
     });
     expect(all.tracks.map((t) => t.id)).toEqual(["trA", "trB"]);
   });
+
+  it("query 含特殊字符 ( [ 不崩且正常过滤", () => {
+    const tasks = [task({ id: "1", title: "Alpha (test)" }), task({ id: "2", title: "Beta [test]" }), task({ id: "3", title: "Gamma" })];
+    // 含 ( 的查询
+    const r1 = filterBlockerCandidates({ tasks, tracks: [], selfTaskId: "self", existingBlockerKeys: new Set(), query: "(" });
+    expect(r1.tasks.map((t) => t.id)).toEqual(["1"]);
+    // 含 [ 的查询
+    const r2 = filterBlockerCandidates({ tasks, tracks: [], selfTaskId: "self", existingBlockerKeys: new Set(), query: "[" });
+    expect(r2.tasks.map((t) => t.id)).toEqual(["2"]);
+    // 轨道同理
+    const tracks = [track({ id: "tr1", title: "Alpha (x)" }), track({ id: "tr2", title: "Beta" })];
+    const r3 = filterBlockerCandidates({ tasks: [], tracks, selfTaskId: "self", existingBlockerKeys: new Set(), query: "(" });
+    expect(r3.tracks.map((t) => t.id)).toEqual(["tr1"]);
+    expect(() => filterBlockerCandidates({ tasks, tracks, selfTaskId: "self", existingBlockerKeys: new Set(), query: "(" })).not.toThrow();
+  });
+
+  it("existingBlockerKeys 含悬空 id 无影响", () => {
+    const tasks = [task({ id: "a" }), task({ id: "b" })];
+    const tracks = [track({ id: "tr1" }), track({ id: "tr2" })];
+    const result = filterBlockerCandidates({
+      tasks,
+      tracks,
+      selfTaskId: "self",
+      existingBlockerKeys: new Set(["task:nonexistent", "track:ghost", "task:a"]),
+      query: "",
+    });
+    // 悬空 id 不影响其他候选过滤，仅已存在的 a 被过滤
+    expect(result.tasks.map((t) => t.id)).toEqual(["b"]);
+    expect(result.tracks.map((t) => t.id)).toEqual(["tr1", "tr2"]);
+    // 全部悬空时全量保留
+    const all = filterBlockerCandidates({
+      tasks,
+      tracks,
+      selfTaskId: "self",
+      existingBlockerKeys: new Set(["task:ghost1", "track:ghost2"]),
+      query: "",
+    });
+    expect(all.tasks.length).toBe(2);
+    expect(all.tracks.length).toBe(2);
+  });
 });
 
 describe("blockerCandidateContext", () => {

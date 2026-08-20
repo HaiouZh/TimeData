@@ -127,9 +127,10 @@ export function TaskWaitingRow({ taskId }: TaskWaitingRowProps) {
       if (raw.status !== "active" || raw.kind !== "project") continue;
       if (!Array.isArray(raw.members)) continue;
       const title = raw.title ?? "";
+      if (title.trim() === "") continue;
       for (const member of raw.members) {
-        if (member?.kind !== "task" || typeof member.id !== "string" || member.id === "") continue;
-        map.set(member.id, title);
+        if (member?.kind !== "task" || typeof member.id !== "string" || member.id.trim() === "") continue;
+        if (!map.has(member.id)) map.set(member.id, title);
       }
     }
     return map;

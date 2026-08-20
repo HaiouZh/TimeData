@@ -7,6 +7,7 @@ import { MemoryRouter } from "react-router";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { TodoProjectGroup } from "../../lib/tasks/goalMembership.js";
 import { GOAL_MEMBERS_MAX } from "../../lib/tasks/goalMembership.js";
+import { DEFAULT_TODO_GRAVITY_SETTINGS } from "../../lib/tasks/gravity.js";
 import { sortProjectMembers } from "../../lib/tasks/projectZone.js";
 import { click, renderDom, unmount } from "../../test/domHarness.js";
 import { TaskRow } from "./TaskRow.js";
@@ -91,7 +92,8 @@ function sectionElement(props: Partial<Parameters<typeof TodoProjectSection>[0]>
         indentTargetId={props.indentTargetId ?? null}
         revealChildren={props.revealChildren ?? null}
         projectTrackRows={props.projectTrackRows}
-        gravitySettings={props.gravitySettings}
+        gravitySettings={props.gravitySettings ?? { ...DEFAULT_TODO_GRAVITY_SETTINGS, enabled: false }}
+        dormantGoalIds={props.dormantGoalIds ?? new Set<string>()}
         onPromoteToTrack={props.onPromoteToTrack}
         onBumpTask={props.onBumpTask}
         onToggle={props.onToggle ?? handlers.onToggle}
@@ -1181,7 +1183,7 @@ describe("TodoProjectSection 切片新增", () => {
     await unmount(root);
   });
 
-  it("在飞插槽：返回节点时渲染标题与内容", async () => {
+  it("在飞插槽：返回节点时渲染内容（标题由 ProjectTrackRows 负责）", async () => {
     const { host, root } = await renderDom(
       sectionElement({
         groups: [group({ goalId: "g1", tasks: [task({ id: "t1", title: "刷墙" })] })],
@@ -1190,8 +1192,9 @@ describe("TodoProjectSection 切片新增", () => {
       }),
     );
     await click(host.querySelector('[data-testid="project-group-toggle"]'));
-    expect(host.textContent).toContain("在飞的线");
+    // 标题已内移到 ProjectTrackRows，此处仅验证透传节点渲染，不再由 TodoProjectSection 渲染标题
     expect(host.querySelector('[data-testid="probe-track"]')).not.toBeNull();
+    expect(host.textContent).not.toContain("在飞的线");
     await unmount(root);
   });
 
@@ -1388,6 +1391,127 @@ describe("TodoProjectSection 切片新增", () => {
     expect(host.textContent).not.toContain("水下");
     const visibleLabels = [...host.querySelectorAll('[aria-label^="打开 "]')].map((el) => el.getAttribute("aria-label"));
     expect(visibleLabels.some((l) => l?.includes("陈年沉员"))).toBe(true);
+    await unmount(root);
+  });
+
+  it("水下展开后清空再新增沉员应回到收起", async () => {
+    const fresh = freshTask("fresh", "新鲜");
+    const sunken = oldTask("sunken", "陈年");
+    const sunken2 = oldTask("sunken2", "陈年2");
+    const g = group({ goalId: "g1", tasks: [fresh, sunken] });
+    const element = (groups: TodoProjectGroup[]) =>
+      sectionElement({
+        groups,
+        gravitySettings: gravityEnabled,
+      });
+    const { host, root } = await renderDom(element([g]));
+    await click(host.querySelector('[data-testid="project-group-toggle"]'));
+    const toggle = [...host.querySelectorAll("button")].find((b) => b.textContent?.includes("水下 ·"));
+    expect(toggle).not.toBeUndefined();
+    await click(toggle!);
+    expect(host.textContent).toContain("陈年");
+    // 清空 sunken
+    await act(async () => root.render(element([group({ goalId: "g1", tasks: [fresh] })])));
+    expect(host.textContent).not.toContain("水下");
+    // 再传新沉员
+    await act(async () => root.render(element([group({ goalId: "g1", tasks: [fresh, sunken2] })])));
+    const newToggle = [...host.querySelectorAll("button")].find((b) => b.textContent?.includes("水下"));
+    expect(newToggle?.textContent).toContain("水下 · 1");
+    expect(newToggle?.textContent).not.toContain("收起水下");
+    expect(host.textContent).not.toContain("陈年2");
+    await unmount(root);
+  });
+});
+
+describe("沉睡项目段", () => {
+  it("全部组沉睡时主列表 header 计数为 0 且组都在沉睡折叠段内", async () => {
+    const g1 = group({ goalId: "g1", goalTitle: "项目一", tasks: [task({ id: "t1", title: "任务一" })] });
+    const g2 = group({ goalId: "g2", goalTitle: "项目二", tasks: [task({ id: "t2", title: "任务二" })] });
+    const dormantGoalIds = new Set<string>(["g1", "g2"]);
+    const { host, root } = await renderDom(
+      sectionElement({
+        groups: [g1, g2],
+        hasActiveProjects: true,
+        gravitySettings: { ...DEFAULT_TODO_GRAVITY_SETTINGS, enabled: false },
+        dormantGoalIds,
+      }),
+    );
+    // 主列表 header 计数为 0（全部在沉睡段）
+    const headerCount = host.querySelector('[data-section="todo-projects"] > div > span')?.textContent ?? "";
+    expect(headerCount).toBe("0");
+    // 折叠段存在但默认收起，组不在主列表直接可见
+    const dormantSection = host.querySelector('[data-testid="dormant-projects-section"]');
+    expect(dormantSection).not.toBeNull();
+    expect(dormantSection?.textContent).toContain("沉睡项目 · 2");
+    // 主列表的项目组在未展开沉睡段时不应直接可见（仍折叠）
+    expect(host.querySelectorAll('[data-testid="project-group"]')).toHaveLength(0);
+    // 展开沉睡段后两组出现
+    const toggle = host.querySelector('[data-testid="dormant-projects-toggle"]') as HTMLElement;
+    await click(toggle);
+    const groups = host.querySelectorAll('[data-testid="project-group"]');
+    expect(groups).toHaveLength(2);
+    expect(host.textContent).toContain("项目一");
+    expect(host.textContent).toContain("项目二");
+    await unmount(root);
+  });
+
+  it("dormantGoalIds 空时不渲染折叠段", async () => {
+    const g1 = group({ goalId: "g1", goalTitle: "项目一", tasks: [task({ id: "t1" })] });
+    const { host, root } = await renderDom(
+      sectionElement({
+        groups: [g1],
+        gravitySettings: { ...DEFAULT_TODO_GRAVITY_SETTINGS, enabled: false },
+        dormantGoalIds: new Set<string>(),
+      }),
+    );
+    expect(host.querySelector('[data-testid="dormant-projects-section"]')).toBeNull();
+    // 主列表仍显示该组 header 计数 1
+    const headerCount = host.querySelector('[data-section="todo-projects"] > div > span')?.textContent ?? "";
+    expect(headerCount).toBe("1");
+    await unmount(root);
+  });
+});
+
+describe("边界用例包", () => {
+  it("全被挡组不画分界线（无 divider）", async () => {
+    const t1 = task({ id: "b1", title: "被挡1" });
+    const t2 = task({ id: "b2", title: "被挡2" });
+    const blockedByMember = new Map<string, string[]>([
+      ["b1", ["等水电"]],
+      ["b2", ["等水电"]],
+    ]);
+    const sorted = sortProjectMembers([t1, t2], { handSessionId: null, now: NOW, blockedIds: new Set(blockedByMember.keys()) });
+    const g = group({ goalId: "g1", goalTitle: "全被挡组", tasks: sorted, blockedByMember });
+    const { host, root } = await renderDom(
+      sectionElement({
+        groups: [g],
+        gravitySettings: { ...DEFAULT_TODO_GRAVITY_SETTINGS, enabled: false },
+      }),
+    );
+    await click(host.querySelector('[data-testid="project-group-toggle"]'));
+    expect(host.querySelector("[data-blocked-boundary]")).toBeNull();
+    expect(host.querySelectorAll('[data-testid="project-blocker-chip"]')).toHaveLength(2);
+    await unmount(root);
+  });
+
+  it("水下 0 条不渲染尾按钮", async () => {
+    const fresh = task({
+      id: "fresh",
+      title: "新鲜活",
+      createdAt: "2026-07-24T00:00:00.000Z",
+      updatedAt: "2026-07-24T10:00:00.000Z",
+    });
+    const g = group({ goalId: "g1", tasks: [fresh] });
+    const { host, root } = await renderDom(
+      sectionElement({
+        groups: [g],
+        gravitySettings: { ...DEFAULT_TODO_GRAVITY_SETTINGS, enabled: true, waterlineDays: 14, weightStepDays: 7, graceDays: 7, drawM: 5, pickN: 1 },
+      }),
+    );
+    await click(host.querySelector('[data-testid="project-group-toggle"]'));
+    // 无沉任务时不应渲染水下尾按钮
+    expect(host.textContent).not.toContain("水下");
+    expect([...host.querySelectorAll("button")].some((b) => b.textContent?.includes("水下"))).toBe(false);
     await unmount(root);
   });
 });

@@ -17,7 +17,8 @@ import {
   summarizeProjectGroup,
 } from "../../lib/tasks/projectZone.js";
 import { taskDueDateLabel } from "../../lib/tasks/taskTimeLabel.js";
-import { DEFAULT_TODO_GRAVITY_SETTINGS, splitInboxByGravity, type TodoGravitySettings } from "../../lib/tasks/gravity.js";
+import type { TodoGravitySettings } from "../../lib/tasks/gravity.js";
+import { splitInboxByGravity } from "../../lib/tasks/gravity.js";
 import { TaskList } from "./TaskList.js";
 import { META_CHIP_CLASS } from "./TaskRow.js";
 import { projectContainerId, todoProjectRowIdPrefix } from "./todoDnd.js";
@@ -79,10 +80,10 @@ export interface TodoProjectSectionProps {
   /** 收纳后要展开的父行 id（落点反馈，透传 TaskList → TaskRow）。 */
   revealChildren?: { id: string; nonce: number } | null;
   projectTrackRows?: (goalId: string) => ReactNode;
-  gravitySettings?: TodoGravitySettings;
+  gravitySettings: TodoGravitySettings;
   onPromoteToTrack?: (task: Task) => void;
   onBumpTask?: (task: Task) => void;
-  dormantGoalIds?: ReadonlySet<string>;
+  dormantGoalIds: ReadonlySet<string>;
   onToggle: (task: Task) => void;
   onEdit: (task: Task) => void;
   onDelete: (task: Task) => void;
@@ -239,6 +240,10 @@ function ProjectGroupCard({
   useEffect(() => {
     if (renaming) renameInputRef.current?.focus();
   }, [renaming]);
+
+  useEffect(() => {
+    if ((sunkenTasks?.length ?? 0) === 0) setSunkenExpanded(false);
+  }, [sunkenTasks?.length]);
 
   function openCreate(): void {
     if (!expanded) onToggleExpand();
@@ -522,12 +527,7 @@ function ProjectGroupCard({
           )}
           {/* 组内容区退回页面底色：行自带 bg-surface，与卡片同色时行缝隐形、子项糊成一块（其他区域的行铺在 bg-page 上才有分割感）。 */}
           <div className="todo-project-group-body mx-1.5 mb-1.5 overflow-y-auto rounded-ctl bg-page p-1.5">
-            {trackRows !== null && trackRows !== undefined ? (
-              <>
-                <p className="px-2 pt-1 td-text-caption text-ink-3">在飞的线</p>
-                {trackRows}
-              </>
-            ) : null}
+            {trackRows}
             {children}
             {sunkenTasks !== undefined && sunkenTasks.length > 0 && (
               <div className="mt-1">
@@ -613,7 +613,7 @@ export function TodoProjectSection({
     onRevealConsumed(consumed);
   }, [revealGoals, groups, onRevealConsumed, filterActive]);
 
-  const dormantSet = dormantGoalIds ?? new Set<string>();
+  const dormantSet = dormantGoalIds;
   const activeGroups = dormantSet.size === 0 ? groups : groups.filter((g) => !dormantSet.has(g.goalId));
   const dormantGroups = dormantSet.size === 0 ? [] : groups.filter((g) => dormantSet.has(g.goalId));
 
@@ -634,138 +634,130 @@ export function TodoProjectSection({
     return null;
   }
 
+  const renderProjectGroup = (group: TodoProjectGroup) => {
+    const visibleTasks = displayProjectTasks(group, recentTaskIds.get(group.goalId) ?? [], handSessionId, now);
+    const blocked = group.blockedByMember;
+    const sunkenSet = filterActive
+      ? new Set<string>()
+      : new Set(
+          splitInboxByGravity(
+            visibleTasks.filter((t) => !blocked.has(t.id)),
+            gravitySettings,
+            now,
+          ).sunken.map((t) => t.id),
+        );
+    const aboveWater = visibleTasks.filter((t) => !sunkenSet.has(t.id));
+    const sunkenTasks = visibleTasks.filter((t) => sunkenSet.has(t.id));
+    const trackRows = projectTrackRows?.(group.goalId) ?? null;
+    // 被挡成员已由 sortProjectMembers 沉底且连续，首个被挡成员即分界。
+    // 全部能动 → find 返回 undefined；全部被挡 → 首条就是第 0 条、没有「线以上」可分，两种都不画线。
+    const firstBlocked = aboveWater.find((t) => blocked.has(t.id));
+    const blockedBoundaryId =
+      firstBlocked !== undefined && firstBlocked.id !== aboveWater[0]?.id ? firstBlocked.id : null;
+    const rowActions = new Map(aboveWater.map((task) => [task.id, projectMemberRowActions(task, { handSessionId, now })]));
+    const extraAction = (task: Task) => (
+      <>
+        {onPromoteToTrack ? (
+          <button
+            type="button"
+            aria-label={`升格为轨道 ${task.title}`}
+            onClick={(event) => {
+              event.stopPropagation();
+              onPromoteToTrack(task);
+            }}
+            className="flex h-6 w-6 items-center justify-center rounded-ctl text-ink-3 hover:bg-surface-elevated hover:text-ink"
+          >
+            <Icon icon={ArrowUp} size={16} />
+          </button>
+        ) : null}
+        <button
+          type="button"
+          aria-label={`退出项目 ${task.title}`}
+          onClick={(event) => {
+            event.stopPropagation();
+            onExitProject(group.goalId, task);
+          }}
+          className="flex h-6 w-6 items-center justify-center rounded-ctl text-ink-3 hover:bg-surface-elevated hover:text-ink"
+        >
+          <Icon icon={SignOut} size={16} />
+        </button>
+      </>
+    );
+    return (
+      <ProjectGroupCard
+        key={group.goalId}
+        group={group}
+        tint={projectTints.get(group.goalId) ?? ""}
+        expanded={isExpanded(group.goalId)}
+        filterActive={filterActive}
+        matchCount={aboveWater.length}
+        dropBlocked={dropBlocked}
+        onToggleExpand={() => toggleExpanded(group.goalId)}
+        onCreateTask={onCreateTask}
+        onTaskCreated={(goalId, taskId) => {
+          setRecentTaskIds((prev) => {
+            const next = new Map(prev);
+            next.set(goalId, [taskId, ...(prev.get(goalId) ?? []).filter((id) => id !== taskId)]);
+            return next;
+          });
+        }}
+        onRenameGoal={onRenameGoal}
+        onOpenGoal={onOpenGoal}
+        registerRef={(el) => {
+          rowRefs.current.set(group.goalId, el);
+        }}
+        trackRows={trackRows}
+        sunkenTasks={sunkenTasks}
+        onBumpTask={onBumpTask}
+        sunkenRowHandlers={rowHandlers}
+      >
+        {aboveWater.length > 0 && (
+          <TaskList
+            pool="inbox"
+            rowPool={(task) => rowActions.get(task.id)?.pool ?? "inbox"}
+            atHandIds={new Set([...rowActions].filter(([, a]) => a.atHand).map(([id]) => id))}
+            tasks={aboveWater}
+            sortable
+            containerId={projectContainerId(group.goalId)}
+            dndIdPrefix={todoProjectRowIdPrefix(group.goalId)}
+            indentTargetId={indentTargetId}
+            revealChildren={revealChildren}
+            childrenModeOverride="draggable"
+            blockedBoundaryId={blockedBoundaryId}
+            metaChip={(task) => {
+              const blockerTitles = blocked.get(task.id);
+              const blockerChip =
+                blockerTitles !== undefined && blockerTitles.length > 0 ? (
+                  <span data-testid="project-blocker-chip" className={`${META_CHIP_CLASS} text-ink-2`}>
+                    等 {blockerTitles.join("、")}
+                  </span>
+                ) : null;
+              const stateChip = memberStateChip(task, handSessionId, now);
+              const trackChip = trackChipFor?.(task) ?? null;
+              if (blockerChip === null && stateChip === null && trackChip === null) return null;
+              return (
+                <>
+                  {blockerChip}
+                  {stateChip}
+                  {trackChip}
+                </>
+              );
+            }}
+            extraAction={extraAction}
+            {...rowHandlers}
+          />
+        )}
+      </ProjectGroupCard>
+    );
+  };
+
   return (
     <section data-section="todo-projects">
       <div className="mb-2 flex items-baseline justify-between px-2">
         <h2 className="td-text-label font-medium text-ink">项目</h2>
         <span className="td-text-caption text-ink-3">{activeGroups.length}</span>
       </div>
-      <div className="space-y-1">
-        {activeGroups.map((group) => {
-          const visibleTasks = displayProjectTasks(group, recentTaskIds.get(group.goalId) ?? [], handSessionId, now);
-          const blocked = group.blockedByMember;
-          const effectiveGravity = gravitySettings ?? { ...DEFAULT_TODO_GRAVITY_SETTINGS, enabled: false };
-          const sunkenSet = filterActive
-            ? new Set<string>()
-            : new Set(
-                splitInboxByGravity(
-                  visibleTasks.filter((t) => !blocked.has(t.id)),
-                  effectiveGravity,
-                  now,
-                ).sunken.map((t) => t.id),
-              );
-          const aboveWater = visibleTasks.filter((t) => !sunkenSet.has(t.id));
-          const sunkenTasks = visibleTasks.filter((t) => sunkenSet.has(t.id));
-          const trackRows = projectTrackRows?.(group.goalId) ?? null;
-          // 被挡成员已由 sortProjectMembers 沉底且连续，首个被挡成员即分界。
-          // 全部能动 → find 返回 undefined；全部被挡 → 首条就是第 0 条、没有「线以上」可分，两种都不画线。
-          const firstBlocked = aboveWater.find((t) => blocked.has(t.id));
-          const blockedBoundaryId =
-            firstBlocked !== undefined && firstBlocked.id !== aboveWater[0]?.id ? firstBlocked.id : null;
-          const rowActions = new Map(
-            aboveWater.map((task) => [task.id, projectMemberRowActions(task, { handSessionId, now })]),
-          );
-          return (
-            <ProjectGroupCard
-              key={group.goalId}
-              group={group}
-              tint={projectTints.get(group.goalId) ?? ""}
-              expanded={isExpanded(group.goalId)}
-              filterActive={filterActive}
-              matchCount={aboveWater.length}
-              dropBlocked={dropBlocked}
-              onToggleExpand={() => toggleExpanded(group.goalId)}
-              onCreateTask={onCreateTask}
-              onTaskCreated={(goalId, taskId) => {
-                setRecentTaskIds((prev) => {
-                  const next = new Map(prev);
-                  next.set(goalId, [taskId, ...(prev.get(goalId) ?? []).filter((id) => id !== taskId)]);
-                  return next;
-                });
-              }}
-              onRenameGoal={onRenameGoal}
-              onOpenGoal={onOpenGoal}
-              registerRef={(el) => {
-                rowRefs.current.set(group.goalId, el);
-              }}
-              trackRows={trackRows}
-              sunkenTasks={sunkenTasks}
-              onBumpTask={onBumpTask}
-              sunkenRowHandlers={rowHandlers}
-            >
-              {aboveWater.length > 0 && (
-                <TaskList
-                  // pool="inbox" 只定这块「怎么铺」（组内不排序、不换池）；行动作各自按真实状态走 rowPool /
-                  // atHandIds——组内混着在手头的、排了今天的、躺着的，跟着列表级 pool 会让前两类挂上空动作。
-                  pool="inbox"
-                  rowPool={(task) => rowActions.get(task.id)?.pool ?? "inbox"}
-                  atHandIds={new Set([...rowActions].filter(([, a]) => a.atHand).map(([id]) => id))}
-                  tasks={aboveWater}
-                  // 组内逐行可拖：本批开的组内父子收纳的前提。整卡片那个 `project:<goalId>`
-                  // droppable 保持不变——它仍是外区归入的落点，也是组内子任务往左拖升根回组的落点。
-                  sortable
-                  containerId={projectContainerId(group.goalId)}
-                  dndIdPrefix={todoProjectRowIdPrefix(group.goalId)}
-                  indentTargetId={indentTargetId}
-                  revealChildren={revealChildren}
-                  // 从 "static" 改开：子任务要能往左拖升根回组
-                  childrenModeOverride="draggable"
-                  blockedBoundaryId={blockedBoundaryId}
-                  metaChip={(task) => {
-                    // 皆缺必须返回 null：空 fragment 也是非 null 节点，会把 TaskRow 的 hasMeta 闸顶开、凭空画出空 meta 带。
-                    const blockerTitles = blocked.get(task.id);
-                    const blockerChip =
-                      blockerTitles !== undefined && blockerTitles.length > 0 ? (
-                        <span data-testid="project-blocker-chip" className={`${META_CHIP_CLASS} text-ink-2`}>
-                          等 {blockerTitles.join("、")}
-                        </span>
-                      ) : null;
-                    const stateChip = memberStateChip(task, handSessionId, now);
-                    const trackChip = trackChipFor?.(task) ?? null;
-                    if (blockerChip === null && stateChip === null && trackChip === null) return null;
-                    return (
-                      <>
-                        {blockerChip}
-                        {stateChip}
-                        {trackChip}
-                      </>
-                    );
-                  }}
-                  extraAction={(task) => (
-                    <>
-                      {onPromoteToTrack ? (
-                        <button
-                          type="button"
-                          aria-label={`升格为轨道 ${task.title}`}
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            onPromoteToTrack(task);
-                          }}
-                          className="flex h-6 w-6 items-center justify-center rounded-ctl text-ink-3 hover:bg-surface-elevated hover:text-ink"
-                        >
-                          <Icon icon={ArrowUp} size={16} />
-                        </button>
-                      ) : null}
-                      <button
-                        type="button"
-                        aria-label={`退出项目 ${task.title}`}
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          onExitProject(group.goalId, task);
-                        }}
-                        className="flex h-6 w-6 items-center justify-center rounded-ctl text-ink-3 hover:bg-surface-elevated hover:text-ink"
-                      >
-                        <Icon icon={SignOut} size={16} />
-                      </button>
-                    </>
-                  )}
-                  {...rowHandlers}
-                />
-              )}
-            </ProjectGroupCard>
-          );
-        })}
-      </div>
+      <div className="space-y-1">{activeGroups.map(renderProjectGroup)}</div>
       {dormantGroups.length > 0 && (
         <div data-testid="dormant-projects-section" className="mt-2">
           <button
@@ -776,126 +768,7 @@ export function TodoProjectSection({
           >
             {dormantExpanded ? `收起沉睡项目 ${dormantGroups.length} 个` : `沉睡项目 · ${dormantGroups.length}`}
           </button>
-          {dormantExpanded && (
-            <div className="mt-1 space-y-1">
-              {dormantGroups.map((group) => {
-                const visibleTasks = displayProjectTasks(group, recentTaskIds.get(group.goalId) ?? [], handSessionId, now);
-                const blocked = group.blockedByMember;
-                const effectiveGravity = gravitySettings ?? { ...DEFAULT_TODO_GRAVITY_SETTINGS, enabled: false };
-                const sunkenSet = filterActive
-                  ? new Set<string>()
-                  : new Set(
-                      splitInboxByGravity(
-                        visibleTasks.filter((t) => !blocked.has(t.id)),
-                        effectiveGravity,
-                        now,
-                      ).sunken.map((t) => t.id),
-                    );
-                const aboveWater = visibleTasks.filter((t) => !sunkenSet.has(t.id));
-                const sunkenTasks = visibleTasks.filter((t) => sunkenSet.has(t.id));
-                const trackRows = projectTrackRows?.(group.goalId) ?? null;
-                const firstBlocked = aboveWater.find((t) => blocked.has(t.id));
-                const blockedBoundaryId =
-                  firstBlocked !== undefined && firstBlocked.id !== aboveWater[0]?.id ? firstBlocked.id : null;
-                const rowActions = new Map(
-                  aboveWater.map((task) => [task.id, projectMemberRowActions(task, { handSessionId, now })]),
-                );
-                return (
-                  <ProjectGroupCard
-                    key={group.goalId}
-                    group={group}
-                    tint={projectTints.get(group.goalId) ?? ""}
-                    expanded={isExpanded(group.goalId)}
-                    filterActive={filterActive}
-                    matchCount={aboveWater.length}
-                    dropBlocked={dropBlocked}
-                    onToggleExpand={() => toggleExpanded(group.goalId)}
-                    onCreateTask={onCreateTask}
-                    onTaskCreated={(goalId, taskId) => {
-                      setRecentTaskIds((prev) => {
-                        const next = new Map(prev);
-                        next.set(goalId, [taskId, ...(prev.get(goalId) ?? []).filter((id) => id !== taskId)]);
-                        return next;
-                      });
-                    }}
-                    onRenameGoal={onRenameGoal}
-                    onOpenGoal={onOpenGoal}
-                    registerRef={(el) => {
-                      rowRefs.current.set(group.goalId, el);
-                    }}
-                    trackRows={trackRows}
-                    sunkenTasks={sunkenTasks}
-                    onBumpTask={onBumpTask}
-                    sunkenRowHandlers={rowHandlers}
-                  >
-                    {aboveWater.length > 0 && (
-                      <TaskList
-                        pool="inbox"
-                        rowPool={(task) => rowActions.get(task.id)?.pool ?? "inbox"}
-                        atHandIds={new Set([...rowActions].filter(([, a]) => a.atHand).map(([id]) => id))}
-                        tasks={aboveWater}
-                        sortable
-                        containerId={projectContainerId(group.goalId)}
-                        dndIdPrefix={todoProjectRowIdPrefix(group.goalId)}
-                        indentTargetId={indentTargetId}
-                        revealChildren={revealChildren}
-                        childrenModeOverride="draggable"
-                        blockedBoundaryId={blockedBoundaryId}
-                        metaChip={(task) => {
-                          const blockerTitles = blocked.get(task.id);
-                          const blockerChip =
-                            blockerTitles !== undefined && blockerTitles.length > 0 ? (
-                              <span data-testid="project-blocker-chip" className={`${META_CHIP_CLASS} text-ink-2`}>
-                                等 {blockerTitles.join("、")}
-                              </span>
-                            ) : null;
-                          const stateChip = memberStateChip(task, handSessionId, now);
-                          const trackChip = trackChipFor?.(task) ?? null;
-                          if (blockerChip === null && stateChip === null && trackChip === null) return null;
-                          return (
-                            <>
-                              {blockerChip}
-                              {stateChip}
-                              {trackChip}
-                            </>
-                          );
-                        }}
-                        extraAction={(task) => (
-                          <>
-                            {onPromoteToTrack ? (
-                              <button
-                                type="button"
-                                aria-label={`升格为轨道 ${task.title}`}
-                                onClick={(event) => {
-                                  event.stopPropagation();
-                                  onPromoteToTrack(task);
-                                }}
-                                className="flex h-6 w-6 items-center justify-center rounded-ctl text-ink-3 hover:bg-surface-elevated hover:text-ink"
-                              >
-                                <Icon icon={ArrowUp} size={16} />
-                              </button>
-                            ) : null}
-                            <button
-                              type="button"
-                              aria-label={`退出项目 ${task.title}`}
-                              onClick={(event) => {
-                                event.stopPropagation();
-                                onExitProject(group.goalId, task);
-                              }}
-                              className="flex h-6 w-6 items-center justify-center rounded-ctl text-ink-3 hover:bg-surface-elevated hover:text-ink"
-                            >
-                              <Icon icon={SignOut} size={16} />
-                            </button>
-                          </>
-                        )}
-                        {...rowHandlers}
-                      />
-                    )}
-                  </ProjectGroupCard>
-                );
-              })}
-            </div>
-          )}
+          {dormantExpanded && <div className="mt-1 space-y-1">{dormantGroups.map(renderProjectGroup)}</div>}
         </div>
       )}
     </section>

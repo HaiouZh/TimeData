@@ -464,4 +464,41 @@ describe("ProjectTrackRows", () => {
     await unmount(root);
     mounted = null;
   });
+
+  it("幽灵 trackIds（tracks 无此 id）→ 不渲染标题与行（无孤立标题）", async () => {
+    const t1 = trackFactory({ id: "t1", title: "轨道1" });
+    const s1 = stepFactory({ id: "s1", seq: 0, trackId: "t1", tags: [] });
+    const stepsByTrack = new Map<string, TrackStep[]>([["t1", [s1]]]);
+    const { host, root } = await renderProjectRows({
+      trackIds: ["ghost"],
+      tracks: [t1],
+      stepsByTrack,
+      expandedTrackIds: new Set(),
+      onToggleExpand: vi.fn(),
+      onError: vi.fn(),
+    });
+    expect(host.querySelector('[data-testid="track-bucket-row"]')).toBeNull();
+    expect(host.textContent).not.toContain("在飞的线");
+    await unmount(root);
+    mounted = null;
+  });
+
+  it("命中轨道时渲染标题与行", async () => {
+    const t1 = trackFactory({ id: "t1", title: "轨道标题" });
+    const s1 = stepFactory({ id: "s1", seq: 0, trackId: "t1", tags: [], content: "步骤内容" });
+    const stepsByTrack = new Map<string, TrackStep[]>([["t1", [s1]]]);
+    const { host, root } = await renderProjectRows({
+      trackIds: ["t1"],
+      tracks: [t1],
+      stepsByTrack,
+      expandedTrackIds: new Set(),
+      onToggleExpand: vi.fn(),
+      onError: vi.fn(),
+    });
+    expect(host.querySelector('[data-testid="track-bucket-row"]')).not.toBeNull();
+    expect(host.textContent).toContain("在飞的线");
+    expect(host.textContent).toContain("轨道标题");
+    await unmount(root);
+    mounted = null;
+  });
 });
