@@ -73,6 +73,45 @@ export function HandTrackRows({
   );
 }
 
+export interface ProjectTrackRowsProps {
+  trackIds: readonly string[];
+  tracks: readonly Track[];
+  stepsByTrack: Map<string, TrackStep[]>;
+  expandedTrackIds: ReadonlySet<string>;
+  onToggleExpand: (trackId: string) => void;
+  onError: (message: string) => void;
+}
+
+export function ProjectTrackRows({
+  trackIds,
+  tracks,
+  stepsByTrack,
+  expandedTrackIds,
+  onToggleExpand,
+  onError,
+}: ProjectTrackRowsProps): ReactElement | null {
+  const ctx = useTrackBucketContext();
+  const scoped = useMemo(() => tracks.filter((t) => trackIds.includes(t.id)), [tracks, trackIds]);
+  const items = useMemo(() => ctx.buildItems(scoped, stepsByTrack), [scoped, stepsByTrack, ctx.buildItems]);
+  if (items.length === 0) return null;
+  return (
+    <div className="space-y-1">
+      {items.map((item) => (
+        <TrackBucketRow
+          key={item.track.id}
+          item={item}
+          steps={stepsByTrack.get(item.track.id) ?? []}
+          milestones={ctx.milestonesByTrack.get(item.track.id) ?? []}
+          project={null}
+          expanded={expandedTrackIds.has(item.track.id)}
+          onToggleExpand={onToggleExpand}
+          onError={onError}
+        />
+      ))}
+    </div>
+  );
+}
+
 export interface TrackBucketSectionProps {
   tracks: readonly Track[];
   stepsByTrack: Map<string, TrackStep[]>;

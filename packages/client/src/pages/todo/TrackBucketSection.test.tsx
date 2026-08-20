@@ -6,7 +6,7 @@ import { MemoryRouter, Route, Routes } from "react-router";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { renderDom, unmount } from "../../test/domHarness.js";
 import { DISPATCH_GROUP_LABELS } from "../../lib/tracksDispatch.js";
-import { HandTrackRows, TrackBucketSection } from "./TrackBucketSection.js";
+import { HandTrackRows, ProjectTrackRows, TrackBucketSection } from "./TrackBucketSection.js";
 
 let mounted: Awaited<ReturnType<typeof renderDom>> | null = null;
 
@@ -95,6 +95,33 @@ async function renderHandRows(props: Parameters<typeof HandTrackRows>[0]): Promi
           path="/todo"
           element={
             <HandTrackRows
+              tracks={props.tracks}
+              stepsByTrack={props.stepsByTrack}
+              expandedTrackIds={props.expandedTrackIds}
+              onToggleExpand={props.onToggleExpand}
+              onError={props.onError}
+            />
+          }
+        />
+        <Route path="/tracks/:id" element={<div data-testid="track-detail-page" />} />
+        <Route path="/goals/:id" element={<div data-testid="goal-detail-page" />} />
+      </Routes>
+    </MemoryRouter>
+  );
+  mounted = await renderDom(element);
+  for (let i = 0; i < 5; i += 1) await flush();
+  return mounted;
+}
+
+async function renderProjectRows(props: Parameters<typeof ProjectTrackRows>[0]): Promise<ReturnType<typeof renderDom>> {
+  const element = (
+    <MemoryRouter initialEntries={["/todo"]}>
+      <Routes>
+        <Route
+          path="/todo"
+          element={
+            <ProjectTrackRows
+              trackIds={props.trackIds}
               tracks={props.tracks}
               stepsByTrack={props.stepsByTrack}
               expandedTrackIds={props.expandedTrackIds}
@@ -340,6 +367,100 @@ describe("TrackBucketSection", () => {
     for (let i = 0; i < 5; i += 1) await flush();
     expect(host.querySelector('[data-testid="track-project-chip"]')).toBeNull();
     expect(host.textContent).toContain("无项目轨道");
+    await unmount(root);
+    mounted = null;
+  });
+});
+
+describe("ProjectTrackRows", () => {
+  it("空 trackIds 返回 null（不渲染任何行）", async () => {
+    const t1 = trackFactory({ id: "t1", title: "轨道1" });
+    const s1 = stepFactory({ id: "s1", seq: 0, trackId: "t1", tags: [] });
+    const stepsByTrack = new Map<string, TrackStep[]>([["t1", [s1]]]);
+    const { host, root } = await renderProjectRows({
+      trackIds: [],
+      tracks: [t1],
+      stepsByTrack,
+      expandedTrackIds: new Set(),
+      onToggleExpand: vi.fn(),
+      onError: vi.fn(),
+    });
+    expect(host.querySelector('[data-testid="track-bucket-row"]')).toBeNull();
+    expect(host.textContent).not.toContain("轨道1");
+    await unmount(root);
+    mounted = null;
+  });
+
+  it("trackIds 过滤：只渲染命中 id 的轨道", async () => {
+    const t1 = trackFactory({ id: "t1", title: "轨道1" });
+    const t2 = trackFactory({ id: "t2", title: "轨道2" });
+    const s1 = stepFactory({ id: "s1", seq: 0, trackId: "t1", tags: [] });
+    const s2 = stepFactory({ id: "s2", seq: 0, trackId: "t2", tags: [] });
+    const stepsByTrack = new Map<string, TrackStep[]>([
+      ["t1", [s1]],
+      ["t2", [s2]],
+    ]);
+    const { host, root } = await renderProjectRows({
+      trackIds: ["t1"],
+      tracks: [t1, t2],
+      stepsByTrack,
+      expandedTrackIds: new Set(),
+      onToggleExpand: vi.fn(),
+      onError: vi.fn(),
+    });
+    expect(host.querySelectorAll('[data-testid="track-bucket-row"]').length).toBe(1);
+    expect(host.textContent).toContain("轨道1");
+    expect(host.textContent).not.toContain("轨道2");
+    await unmount(root);
+    mounted = null;
+  });
+
+  it("在项目内渲染时 project 恒 null（不显示项目 chip）", async () => {
+    const t1 = trackFactory({ id: "t1", title: "项目轨道" });
+    const s1 = stepFactory({ id: "s1", seq: 0, trackId: "t1", tags: [] });
+    const stepsByTrack = new Map<string, TrackStep[]>([["t1", [s1]]]);
+    await db.goals.add({
+      id: "g1",
+      title: "项目 Alpha",
+      kind: "project",
+      status: "active",
+      members: [{ kind: "track", id: "t1" }],
+      prerequisites: [],
+      createdAt: "2026-08-18T00:00:00.000Z",
+      updatedAt: "2026-08-18T00:00:00.000Z",
+    } as unknown as Goal);
+    const { host, root } = await renderProjectRows({
+      trackIds: ["t1"],
+      tracks: [t1],
+      stepsByTrack,
+      expandedTrackIds: new Set(),
+      onToggleExpand: vi.fn(),
+      onError: vi.fn(),
+    });
+    for (let i = 0; i < 5; i += 1) await flush();
+    expect(host.querySelector('[data-testid="track-bucket-row"]')).not.toBeNull();
+    expect(host.querySelector('[data-testid="track-project-chip"]')).toBeNull();
+    expect(host.textContent).toContain("项目轨道");
+    await unmount(root);
+    mounted = null;
+  });
+
+  it("无匹配轨道时也返回 null（trackIds 存在但无 active 项）", async () => {
+    const t1 = trackFactory({ id: "t1", title: "轨道1" });
+    const s1 = stepFactory({ id: "s1", seq: 0, trackId: "t1", tags: [] });
+    // trackIds 指向不存在的 id，且全部被过滤后无 dispatch 项
+    const stepsByTrack = new Map<string, TrackStep[]>([["t1", [s1]]]);
+    // 让 t1 的最新动作为空但仍可渲染，改为传空 trackIds 已在第一条覆盖
+    // 这里覆盖 trackIds 命中但 steps 缺失仍有行，但若 trackIds 命中不存在的轨道则空
+    const { host, root } = await renderProjectRows({
+      trackIds: ["missing"],
+      tracks: [t1],
+      stepsByTrack,
+      expandedTrackIds: new Set(),
+      onToggleExpand: vi.fn(),
+      onError: vi.fn(),
+    });
+    expect(host.querySelector('[data-testid="track-bucket-row"]')).toBeNull();
     await unmount(root);
     mounted = null;
   });

@@ -90,7 +90,15 @@ function sectionElement(props: Partial<Parameters<typeof TodoProjectSection>[0]>
         trackChipFor={props.trackChipFor}
         indentTargetId={props.indentTargetId ?? null}
         revealChildren={props.revealChildren ?? null}
-        {...handlers}
+        projectTrackRows={props.projectTrackRows}
+        gravitySettings={props.gravitySettings}
+        onPromoteToTrack={props.onPromoteToTrack}
+        onBumpTask={props.onBumpTask}
+        onToggle={props.onToggle ?? handlers.onToggle}
+        onEdit={props.onEdit ?? handlers.onEdit}
+        onDelete={props.onDelete ?? handlers.onDelete}
+        onToToday={props.onToToday ?? handlers.onToToday}
+        onToInbox={props.onToInbox ?? handlers.onToInbox}
         onToHand={props.onToHand}
       />
     </MemoryRouter>
@@ -629,7 +637,7 @@ describe("TodoProjectSection", () => {
     await unmount(root);
   });
 
-  it("组标题显示「下一步」徽章，取组内第一条未完成成员", async () => {
+  it("组标题不再显示「下一步」徽章（已退役）", async () => {
     const { host, root } = await renderDom(
       sectionElement({
         groups: [
@@ -640,28 +648,30 @@ describe("TodoProjectSection", () => {
         ],
       }),
     );
-    expect(host.textContent).toContain("下一步 接线在等区");
-    expect(host.textContent).not.toContain("下一步 写收尾");
+    expect(host.querySelector('[data-testid="project-next-badge"]')).toBeNull();
+    expect(host.textContent).not.toContain("下一步");
     await unmount(root);
   });
 
-  it("筛选激活时不显示「下一步」徽章", async () => {
+  it("筛选激活时不显示「下一步」徽章（退役守卫）", async () => {
     const { host, root } = await renderDom(
       sectionElement({
         groups: [group({ goalId: "g1", tasks: [task({ id: "t1", title: "接线在等区" })] })],
         filterActive: true,
       }),
     );
+    expect(host.querySelector('[data-testid="project-next-badge"]')).toBeNull();
     expect(host.textContent).not.toContain("下一步");
     await unmount(root);
   });
 
-  it("组内没有未完成成员时不显示「下一步」徽章", async () => {
+  it("组内没有未完成成员时不显示「下一步」徽章（退役守卫）", async () => {
     const { host, root } = await renderDom(
       sectionElement({
         groups: [group({ goalId: "g1", tasks: [], doneCount: 3 })],
       }),
     );
+    expect(host.querySelector('[data-testid="project-next-badge"]')).toBeNull();
     expect(host.textContent).not.toContain("下一步");
     await unmount(root);
   });
@@ -957,7 +967,7 @@ describe("被挡徽章", () => {
     await unmount(root);
   });
 
-  it("被挡徽章与「下一步」徽章并存", async () => {
+  it("被挡徽章独立显示（下一步徽章已退役）", async () => {
     const { host, root } = await renderDom(
       sectionElement({
         groups: [
@@ -970,7 +980,7 @@ describe("被挡徽章", () => {
         ],
       }),
     );
-    expect(host.querySelector('[data-testid="project-next-badge"]')?.textContent).toContain("下一步 刷墙");
+    expect(host.querySelector('[data-testid="project-next-badge"]')).toBeNull();
     expect(host.querySelector('[data-testid="project-blocked-badge"]')?.textContent).toContain("1 条被挡");
     await unmount(root);
   });
@@ -988,7 +998,7 @@ describe("展开态：能动的 / 被挡着的", () => {
     });
   }
 
-  it("「下一步」徽章不指向被挡成员——沉底之后 group.tasks[0] 必然能动", async () => {
+  it("下一步徽章已退役——沉底后也不再推荐（退役守卫）", async () => {
     const { host, root } = await renderDom(
       sectionElement({
         groups: [
@@ -999,15 +1009,13 @@ describe("展开态：能动的 / 被挡着的", () => {
         ],
       }),
     );
-    const badge = host.querySelector('[data-testid="project-next-badge"]');
-    expect(badge?.textContent).toContain("买漆");
-    expect(badge?.textContent).not.toContain("刷墙");
+    expect(host.querySelector('[data-testid="project-next-badge"]')).toBeNull();
+    expect(host.textContent).not.toContain("下一步");
     await unmount(root);
   });
 
-  // 沉底只保证「存在能动成员时 tasks[0] 能动」。整组全被挡时它不成立——终审 L1 抓到的就是这一档，
-  // 那时徽章会推荐一件界面上明确标着「等 XX」的活。
-  it("整组全被挡时不显示「下一步」徽章——没有能动的活可推荐", async () => {
+  // 退役守卫：整组全被挡时下一步徽章恒不存在
+  it("整组全被挡时下一步徽章依然不存在（退役守卫）", async () => {
     const { host, root } = await renderDom(
       sectionElement({
         groups: [
@@ -1128,6 +1136,240 @@ describe("展开态：能动的 / 被挡着的", () => {
     );
     await click(host.querySelector('[data-testid="project-group-toggle"]'));
     expect(host.querySelector("[data-blocked-boundary]")).toBeNull();
+    await unmount(root);
+  });
+});
+
+describe("TodoProjectSection 切片新增", () => {
+  const gravityEnabled = {
+    enabled: true,
+    waterlineDays: 14,
+    weightStepDays: 7,
+    graceDays: 7,
+    drawM: 5,
+    pickN: 1,
+  };
+  function oldTask(id: string, title: string, overrides: Partial<Task> = {}): Task {
+    return task({
+      id,
+      title,
+      createdAt: "2026-07-01T00:00:00.000Z",
+      updatedAt: "2026-07-01T00:00:00.000Z",
+      ...overrides,
+    } as Partial<Task> & Pick<Task, "id">);
+  }
+  function freshTask(id: string, title: string, overrides: Partial<Task> = {}): Task {
+    return task({
+      id,
+      title,
+      createdAt: "2026-07-24T00:00:00.000Z",
+      updatedAt: "2026-07-24T10:00:00.000Z",
+      ...overrides,
+    } as Partial<Task> & Pick<Task, "id">);
+  }
+
+  it("在飞插槽：projectTrackRows 返回 null 时不渲染标题", async () => {
+    const { host, root } = await renderDom(
+      sectionElement({
+        groups: [group({ goalId: "g1", tasks: [task({ id: "t1", title: "刷墙" })] })],
+        projectTrackRows: () => null,
+        gravitySettings: gravityEnabled,
+      }),
+    );
+    await click(host.querySelector('[data-testid="project-group-toggle"]'));
+    expect(host.textContent).not.toContain("在飞的线");
+    await unmount(root);
+  });
+
+  it("在飞插槽：返回节点时渲染标题与内容", async () => {
+    const { host, root } = await renderDom(
+      sectionElement({
+        groups: [group({ goalId: "g1", tasks: [task({ id: "t1", title: "刷墙" })] })],
+        projectTrackRows: (goalId: string) => (goalId === "g1" ? (<span data-testid="probe-track">轨道行</span>) : null),
+        gravitySettings: gravityEnabled,
+      }),
+    );
+    await click(host.querySelector('[data-testid="project-group-toggle"]'));
+    expect(host.textContent).toContain("在飞的线");
+    expect(host.querySelector('[data-testid="probe-track"]')).not.toBeNull();
+    await unmount(root);
+  });
+
+  it("水下切分：沉任务进尾，主列表不直接出现", async () => {
+    const fresh = freshTask("fresh", "新鲜");
+    const sunken = oldTask("sunken", "陈年");
+    const { host, root } = await renderDom(
+      sectionElement({
+        groups: [group({ goalId: "g1", tasks: [fresh, sunken] })],
+        gravitySettings: gravityEnabled,
+      }),
+    );
+    await click(host.querySelector('[data-testid="project-group-toggle"]'));
+    const visibleLabels = [...host.querySelectorAll('[aria-label^="打开 "]')].map((el) => el.getAttribute("aria-label"));
+    expect(visibleLabels.some((l) => l?.includes("新鲜"))).toBe(true);
+    expect(visibleLabels.some((l) => l?.includes("陈年"))).toBe(false);
+    expect(host.textContent).toContain("水下 · 1");
+    await unmount(root);
+  });
+
+  it("水下切分：被挡且老的成员豁免沉降", async () => {
+    const fresh = freshTask("fresh", "新鲜");
+    const blockedOld = oldTask("blocked", "被挡老活");
+    const { host, root } = await renderDom(
+      sectionElement({
+        groups: [
+          group({
+            goalId: "g1",
+            tasks: [fresh, blockedOld],
+            blockedByMember: new Map([["blocked", ["等水电"]]]),
+          }),
+        ],
+        gravitySettings: gravityEnabled,
+      }),
+    );
+    await click(host.querySelector('[data-testid="project-group-toggle"]'));
+    const visibleLabels = [...host.querySelectorAll('[aria-label^="打开 "]')].map((el) => el.getAttribute("aria-label"));
+    expect(visibleLabels.some((l) => l?.includes("被挡老活"))).toBe(true);
+    // 被挡老活豁免，不应计入水下
+    expect(host.textContent).not.toContain("水下");
+    await unmount(root);
+  });
+
+  it("水下尾默认收起，点开后渲染沉任务", async () => {
+    const fresh = freshTask("fresh", "新鲜");
+    const sunken = oldTask("sunken", "陈年2");
+    const { host, root } = await renderDom(
+      sectionElement({
+        groups: [group({ goalId: "g1", tasks: [fresh, sunken] })],
+        gravitySettings: gravityEnabled,
+      }),
+    );
+    await click(host.querySelector('[data-testid="project-group-toggle"]'));
+    expect(host.textContent).not.toContain("陈年2");
+    const toggle = [...host.querySelectorAll("button")].find((b) => b.textContent?.includes("水下 ·"));
+    expect(toggle).not.toBeUndefined();
+    await click(toggle!);
+    expect(host.textContent).toContain("陈年2");
+    const expandedBtn = [...host.querySelectorAll("button")].find((b) => b.textContent?.includes("收起水下"));
+    expect(expandedBtn).not.toBeUndefined();
+    await unmount(root);
+  });
+
+  it("水下尾顶一下回调", async () => {
+    const fresh = freshTask("fresh", "新鲜");
+    const sunken = oldTask("sunken", "陈年顶");
+    const onBumpTask = vi.fn();
+    const { host, root } = await renderDom(
+      sectionElement({
+        groups: [group({ goalId: "g1", tasks: [fresh, sunken] })],
+        gravitySettings: gravityEnabled,
+        onBumpTask,
+      }),
+    );
+    await click(host.querySelector('[data-testid="project-group-toggle"]'));
+    const toggle = [...host.querySelectorAll("button")].find((b) => b.textContent?.includes("水下"));
+    await click(toggle!);
+    const bump = host.querySelector('[aria-label="顶一下 陈年顶"]') as HTMLElement | null;
+    expect(bump).not.toBeNull();
+    await click(bump!);
+    expect(onBumpTask).toHaveBeenCalledTimes(1);
+    expect(onBumpTask).toHaveBeenCalledWith(expect.objectContaining({ id: "sunken" }));
+    await unmount(root);
+  });
+
+  it("徽章消失：不再渲染 project-next-badge", async () => {
+    const { host, root } = await renderDom(
+      sectionElement({
+        groups: [group({ goalId: "g1", tasks: [task({ id: "t1", title: "任务A" })] })],
+        gravitySettings: gravityEnabled,
+      }),
+    );
+    expect(host.querySelector('[data-testid="project-next-badge"]')).toBeNull();
+    await click(host.querySelector('[data-testid="project-group-toggle"]'));
+    expect(host.querySelector('[data-testid="project-next-badge"]')).toBeNull();
+    await unmount(root);
+  });
+
+  it("升格按钮渲染与回调", async () => {
+    const onPromoteToTrack = vi.fn();
+    const member = freshTask("t1", "要升格");
+    const { host, root } = await renderDom(
+      sectionElement({
+        groups: [group({ goalId: "g1", tasks: [member] })],
+        gravitySettings: gravityEnabled,
+        onPromoteToTrack,
+      }),
+    );
+    await click(host.querySelector('[data-testid="project-group-toggle"]'));
+    const btn = host.querySelector('[aria-label="升格为轨道 要升格"]') as HTMLElement | null;
+    expect(btn).not.toBeNull();
+    await click(btn!);
+    expect(onPromoteToTrack).toHaveBeenCalledTimes(1);
+    expect(onPromoteToTrack).toHaveBeenCalledWith(expect.objectContaining({ id: "t1" }));
+    await unmount(root);
+  });
+
+  it("未传 onPromoteToTrack 时不渲染升格按钮", async () => {
+    const member = freshTask("t1", "要升格");
+    const { host, root } = await renderDom(
+      sectionElement({
+        groups: [group({ goalId: "g1", tasks: [member] })],
+        gravitySettings: gravityEnabled,
+      }),
+    );
+    await click(host.querySelector('[data-testid="project-group-toggle"]'));
+    expect(host.querySelector('[aria-label^="升格为轨道"]')).toBeNull();
+    // 退出按钮仍在
+    expect(host.querySelector('[aria-label="退出项目 要升格"]')).not.toBeNull();
+    await unmount(root);
+  });
+
+  it("aboveWater 的被挡分界仍在（水下不影响）", async () => {
+    const freshFree = freshTask("free", "自由");
+    const blocked = freshTask("blocked", "被挡");
+    const sunken = oldTask("sunken", "陈年不影响");
+    const blockedByMember = new Map([["blocked", ["等水电"]]]);
+    const sortedTasks = sortProjectMembers([freshFree, blocked, sunken], {
+      handSessionId: null,
+      now: new Date("2026-07-25T10:00:00.000Z"),
+      blockedIds: new Set(["blocked"]),
+    });
+    const sorted = group({
+      goalId: "g1",
+      goalTitle: "装修",
+      tasks: sortedTasks,
+      blockedByMember,
+    });
+    const { host, root } = await renderDom(
+      sectionElement({
+        groups: [sorted],
+        gravitySettings: gravityEnabled,
+        now: new Date("2026-07-25T10:00:00.000Z"),
+      }),
+    );
+    await click(host.querySelector('[data-testid="project-group-toggle"]'));
+    // aboveWater 中 blocked 仍在，分界线应存在
+    expect(host.querySelectorAll('[data-blocked-boundary="true"]')).toHaveLength(1);
+    await unmount(root);
+  });
+
+  it("升格与退出按钮并存且顺序正确（升格在前）", async () => {
+    const onPromoteToTrack = vi.fn();
+    const member = freshTask("t1", "并存");
+    const { host, root } = await renderDom(
+      sectionElement({
+        groups: [group({ goalId: "g1", tasks: [member] })],
+        gravitySettings: gravityEnabled,
+        onPromoteToTrack,
+      }),
+    );
+    await click(host.querySelector('[data-testid="project-group-toggle"]'));
+    const row = host.querySelector('[data-goal-id="g1"]');
+    const promoteIndex = [...(row?.querySelectorAll("button") ?? [])].findIndex((b) => b.getAttribute("aria-label")?.startsWith("升格为轨道"));
+    const exitIndex = [...(row?.querySelectorAll("button") ?? [])].findIndex((b) => b.getAttribute("aria-label")?.startsWith("退出项目"));
+    expect(promoteIndex).toBeGreaterThan(-1);
+    expect(exitIndex).toBeGreaterThan(-1);
+    expect(promoteIndex).toBeLessThan(exitIndex);
     await unmount(root);
   });
 });

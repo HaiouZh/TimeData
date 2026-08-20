@@ -1,5 +1,5 @@
 import { useDroppable } from "@dnd-kit/core";
-import { CaretDown, CaretRight, DotsThree, Plus, SignOut } from "@phosphor-icons/react";
+import { ArrowUp, CaretDown, CaretRight, DotsThree, Plus, SignOut } from "@phosphor-icons/react";
 import type { Task } from "@timedata/shared";
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import { Link } from "react-router";
@@ -17,9 +17,11 @@ import {
   summarizeProjectGroup,
 } from "../../lib/tasks/projectZone.js";
 import { taskDueDateLabel } from "../../lib/tasks/taskTimeLabel.js";
+import { DEFAULT_TODO_GRAVITY_SETTINGS, splitInboxByGravity, type TodoGravitySettings } from "../../lib/tasks/gravity.js";
 import { TaskList } from "./TaskList.js";
 import { META_CHIP_CLASS } from "./TaskRow.js";
 import { projectContainerId, todoProjectRowIdPrefix } from "./todoDnd.js";
+import { makeSunkenExtraAction } from "./SunkenInboxTail.js";
 
 export interface TodoProjectSectionProps {
   /** 已按组间排序好的项目区分组，调用方可传入已按当前筛选裁剪的成员。 */
@@ -76,6 +78,10 @@ export interface TodoProjectSectionProps {
   indentTargetId?: string | null;
   /** 收纳后要展开的父行 id（落点反馈，透传 TaskList → TaskRow）。 */
   revealChildren?: { id: string; nonce: number } | null;
+  projectTrackRows?: (goalId: string) => ReactNode;
+  gravitySettings?: TodoGravitySettings;
+  onPromoteToTrack?: (task: Task) => void;
+  onBumpTask?: (task: Task) => void;
   onToggle: (task: Task) => void;
   onEdit: (task: Task) => void;
   onDelete: (task: Task) => void;
@@ -140,6 +146,10 @@ function ProjectGroupCard({
   onTaskCreated,
   onRenameGoal,
   onOpenGoal,
+  trackRows,
+  sunkenTasks,
+  onBumpTask,
+  sunkenRowHandlers,
   children,
 }: {
   group: TodoProjectGroup;
@@ -156,6 +166,17 @@ function ProjectGroupCard({
   onTaskCreated: (goalId: string, taskId: string) => void;
   onRenameGoal: (goalId: string, title: string) => Promise<void>;
   onOpenGoal: (goalId: string) => void;
+  trackRows?: ReactNode | null;
+  sunkenTasks?: Task[];
+  onBumpTask?: (task: Task) => void;
+  sunkenRowHandlers: {
+    onToggle: (task: Task) => void;
+    onEdit: (task: Task) => void;
+    onDelete: (task: Task) => void;
+    onToToday: (task: Task) => void;
+    onToInbox: (task: Task) => void;
+    onToHand?: (task: Task) => void;
+  };
   children: ReactNode;
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
@@ -164,6 +185,7 @@ function ProjectGroupCard({
   const [createError, setCreateError] = useState<string | null>(null);
   const [renaming, setRenaming] = useState(false);
   const [renameDraft, setRenameDraft] = useState(group.goalTitle);
+  const [sunkenExpanded, setSunkenExpanded] = useState(false);
   const createBusyRef = useRef(false);
   const renameBusyRef = useRef(false);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -368,21 +390,7 @@ function ProjectGroupCard({
                     ? `还剩 ${summary.remaining} · 近 ${RECENT_DONE_WINDOW_DAYS} 天 +${summary.recentDoneCount}`
                     : `还剩 ${summary.remaining}`}
             </span>
-            {/* 「下一步」= 组内第一条**能动的**未完成成员。沉底只保证「存在能动成员时 tasks[0] 能动」，
-                整组全被挡时 tasks[0] 就是被挡的那条——那时不显示徽章，而不是推荐一件做不了的活
-                （标题行的「N 条被挡」已经把状态说清楚了）。
-                筛选激活时也不显示：那时标题行右侧换成「N 项匹配」、group.tasks 也被裁剪过，
-                两种口径混在一行里会互相打架。 */}
-            {!filterActive && group.tasks[0] !== undefined && !group.blockedByMember.has(group.tasks[0].id) && (
-              <span
-                data-testid="project-next-badge"
-                className="max-w-32 shrink-0 truncate rounded-pill bg-accent-soft px-2 py-0.5 td-text-caption font-normal text-accent-ink"
-              >
-                下一步 {group.tasks[0].title}
-              </span>
-            )}
-            {/* 被挡计数对 group.tasks 求交（summarizeProjectGroup），筛选裁剪后自动跟着变小，
-                故不像「下一步」徽章那样加 filterActive 门——两枚徽章的口径不打架。 */}
+            {/* 被挡计数对 group.tasks 求交（summarizeProjectGroup），筛选裁剪后自动跟着变小。 */}
             {summary.blockedCount > 0 && (
               <span
                 data-testid="project-blocked-badge"
@@ -512,7 +520,34 @@ function ProjectGroupCard({
             </div>
           )}
           {/* 组内容区退回页面底色：行自带 bg-surface，与卡片同色时行缝隐形、子项糊成一块（其他区域的行铺在 bg-page 上才有分割感）。 */}
-          <div className="todo-project-group-body mx-1.5 mb-1.5 overflow-y-auto rounded-ctl bg-page p-1.5">{children}</div>
+          <div className="todo-project-group-body mx-1.5 mb-1.5 overflow-y-auto rounded-ctl bg-page p-1.5">
+            {trackRows !== null && trackRows !== undefined ? (
+              <>
+                <p className="px-2 pt-1 td-text-caption text-ink-3">在飞的线</p>
+                {trackRows}
+              </>
+            ) : null}
+            {children}
+            {sunkenTasks !== undefined && sunkenTasks.length > 0 && (
+              <div className="mt-1">
+                <button
+                  type="button"
+                  onClick={() => setSunkenExpanded((v) => !v)}
+                  className="w-full rounded-ctl px-2 py-1.5 td-text-caption text-ink-3 hover:bg-surface-hover"
+                >
+                  {sunkenExpanded ? `收起水下 ${sunkenTasks.length} 条` : `水下 · ${sunkenTasks.length}`}
+                </button>
+                {sunkenExpanded && (
+                  <TaskList
+                    pool="inbox"
+                    tasks={sunkenTasks}
+                    extraAction={onBumpTask ? makeSunkenExtraAction(onBumpTask) : undefined}
+                    {...sunkenRowHandlers}
+                  />
+                )}
+              </div>
+            )}
+          </div>
         </>
       )}
     </div>
@@ -536,6 +571,10 @@ export function TodoProjectSection({
   trackChipFor,
   indentTargetId,
   revealChildren,
+  projectTrackRows,
+  gravitySettings,
+  onPromoteToTrack,
+  onBumpTask,
   ...rowHandlers
 }: TodoProjectSectionProps) {
   const [overrides, setOverrides] = useState<Map<string, boolean>>(() => new Map());
@@ -597,13 +636,25 @@ export function TodoProjectSection({
       <div className="space-y-1">
         {groups.map((group) => {
           const visibleTasks = displayProjectTasks(group, recentTaskIds.get(group.goalId) ?? [], handSessionId, now);
+          const blocked = group.blockedByMember;
+          const effectiveGravity = gravitySettings ?? { ...DEFAULT_TODO_GRAVITY_SETTINGS, enabled: false };
+          const sunkenSet = new Set(
+            splitInboxByGravity(
+              visibleTasks.filter((t) => !blocked.has(t.id)),
+              effectiveGravity,
+              now,
+            ).sunken.map((t) => t.id),
+          );
+          const aboveWater = visibleTasks.filter((t) => !sunkenSet.has(t.id));
+          const sunkenTasks = visibleTasks.filter((t) => sunkenSet.has(t.id));
+          const trackRows = projectTrackRows?.(group.goalId) ?? null;
           // 被挡成员已由 sortProjectMembers 沉底且连续，首个被挡成员即分界。
           // 全部能动 → find 返回 undefined；全部被挡 → 首条就是第 0 条、没有「线以上」可分，两种都不画线。
-          const firstBlocked = visibleTasks.find((t) => group.blockedByMember.has(t.id));
+          const firstBlocked = aboveWater.find((t) => blocked.has(t.id));
           const blockedBoundaryId =
-            firstBlocked !== undefined && firstBlocked.id !== visibleTasks[0]?.id ? firstBlocked.id : null;
+            firstBlocked !== undefined && firstBlocked.id !== aboveWater[0]?.id ? firstBlocked.id : null;
           const rowActions = new Map(
-            visibleTasks.map((task) => [task.id, projectMemberRowActions(task, { handSessionId, now })]),
+            aboveWater.map((task) => [task.id, projectMemberRowActions(task, { handSessionId, now })]),
           );
           return (
             <ProjectGroupCard
@@ -612,7 +663,7 @@ export function TodoProjectSection({
               tint={projectTints.get(group.goalId) ?? ""}
               expanded={isExpanded(group.goalId)}
               filterActive={filterActive}
-              matchCount={visibleTasks.length}
+              matchCount={aboveWater.length}
               dropBlocked={dropBlocked}
               onToggleExpand={() => toggleExpanded(group.goalId)}
               onCreateTask={onCreateTask}
@@ -628,15 +679,19 @@ export function TodoProjectSection({
               registerRef={(el) => {
                 rowRefs.current.set(group.goalId, el);
               }}
+              trackRows={trackRows}
+              sunkenTasks={sunkenTasks}
+              onBumpTask={onBumpTask}
+              sunkenRowHandlers={rowHandlers}
             >
-              {visibleTasks.length > 0 && (
+              {aboveWater.length > 0 && (
                 <TaskList
                   // pool="inbox" 只定这块「怎么铺」（组内不排序、不换池）；行动作各自按真实状态走 rowPool /
                   // atHandIds——组内混着在手头的、排了今天的、躺着的，跟着列表级 pool 会让前两类挂上空动作。
                   pool="inbox"
                   rowPool={(task) => rowActions.get(task.id)?.pool ?? "inbox"}
                   atHandIds={new Set([...rowActions].filter(([, a]) => a.atHand).map(([id]) => id))}
-                  tasks={visibleTasks}
+                  tasks={aboveWater}
                   // 组内逐行可拖：本批开的组内父子收纳的前提。整卡片那个 `project:<goalId>`
                   // droppable 保持不变——它仍是外区归入的落点，也是组内子任务往左拖升根回组的落点。
                   sortable
@@ -649,7 +704,7 @@ export function TodoProjectSection({
                   blockedBoundaryId={blockedBoundaryId}
                   metaChip={(task) => {
                     // 皆缺必须返回 null：空 fragment 也是非 null 节点，会把 TaskRow 的 hasMeta 闸顶开、凭空画出空 meta 带。
-                    const blockerTitles = group.blockedByMember.get(task.id);
+                    const blockerTitles = blocked.get(task.id);
                     const blockerChip =
                       blockerTitles !== undefined && blockerTitles.length > 0 ? (
                         <span data-testid="project-blocker-chip" className={`${META_CHIP_CLASS} text-ink-2`}>
@@ -668,17 +723,32 @@ export function TodoProjectSection({
                     );
                   }}
                   extraAction={(task) => (
-                    <button
-                      type="button"
-                      aria-label={`退出项目 ${task.title}`}
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        onExitProject(group.goalId, task);
-                      }}
-                      className="flex h-6 w-6 items-center justify-center rounded-ctl text-ink-3 hover:bg-surface-elevated hover:text-ink"
-                    >
-                      <Icon icon={SignOut} size={16} />
-                    </button>
+                    <>
+                      {onPromoteToTrack ? (
+                        <button
+                          type="button"
+                          aria-label={`升格为轨道 ${task.title}`}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            onPromoteToTrack(task);
+                          }}
+                          className="flex h-6 w-6 items-center justify-center rounded-ctl text-ink-3 hover:bg-surface-elevated hover:text-ink"
+                        >
+                          <Icon icon={ArrowUp} size={16} />
+                        </button>
+                      ) : null}
+                      <button
+                        type="button"
+                        aria-label={`退出项目 ${task.title}`}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          onExitProject(group.goalId, task);
+                        }}
+                        className="flex h-6 w-6 items-center justify-center rounded-ctl text-ink-3 hover:bg-surface-elevated hover:text-ink"
+                      >
+                        <Icon icon={SignOut} size={16} />
+                      </button>
+                    </>
                   )}
                   {...rowHandlers}
                 />
