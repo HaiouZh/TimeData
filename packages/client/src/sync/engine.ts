@@ -5,6 +5,7 @@ import { STORAGE_KEYS } from "../lib/storageKeys.ts";
 import { callWithTotp, TotpCancelledError } from "../lib/totpChallenge.ts";
 import { safeGetItem, safeSetItem, safeRemoveItem } from "../lib/safeStorage.js";
 import type { Table } from "dexie";
+import { recordPendingArbitration } from "./arbitration.ts";
 import { classifyReasonCode } from "./reason.ts";
 import { CLIENT_SYNC_DOMAINS, parseRemoteRecord, type ClientDomainConfig } from "./clientDomains.ts";
 import { mergeSyncTimingTransport, type PhaseRecorder } from "./phaseTimings.ts";
@@ -385,6 +386,7 @@ async function fetchPullBatches(
 
 async function applyPushResponse(
   response: SyncPushResponse,
+  changes: SyncChange[],
   sourceLogIdsByChangeKey: Map<string, string[]>,
   changeKey: (tableName: SyncChange["tableName"], recordId: string, action: SyncChange["action"]) => string,
   baseSeq: number | null,
@@ -394,6 +396,11 @@ async function applyPushResponse(
   const clientBugIssues: SyncPushOutcome[] = [];
   const userActionableIssues: SyncPushOutcome[] = [];
   const issues: SyncPushOutcome[] = [];
+  const arbitrationLogIds: string[] = [];
+  const arbitrationChanges: SyncChange[] = [];
+  const changeByKey = new Map(
+    changes.map((change) => [changeKey(change.tableName, change.recordId, change.action), change]),
+  );
 
   for (const outcome of response.outcomes) {
     const category = classifyReasonCode(outcome.reasonCode);
@@ -415,6 +422,15 @@ async function applyPushResponse(
         acceptedLogIds.push(...logIds);
         issues.push(outcome);
         break;
+      case "needs_arbitration": {
+        // 绝不能像 user_actionable 那样把 pending 留在队列里：echo pull 会推进 baseSeq，
+        // 下一轮 push 判据就不再命中，等于延迟一轮的静默删除。
+        arbitrationLogIds.push(...logIds);
+        const rejected = changeByKey.get(changeKey(outcome.tableName, outcome.recordId, outcome.action));
+        if (rejected) arbitrationChanges.push(rejected);
+        issues.push(outcome);
+        break;
+      }
       case "conflict":
       case "unknown":
         issues.push(outcome);
@@ -425,6 +441,16 @@ async function applyPushResponse(
   const logIdsToMarkSynced = [...new Set([...acceptedLogIds, ...clientBugLogIds])];
   if (logIdsToMarkSynced.length > 0) {
     await db.syncLog.bulkUpdate(logIdsToMarkSynced.map((id) => ({ key: id, changes: { synced: 1 } })));
+  }
+
+  if (arbitrationLogIds.length > 0) {
+    await db.syncLog.bulkUpdate(
+      arbitrationLogIds.map((id) => ({ key: id, changes: { synced: SYNC_LOG_QUARANTINED } })),
+    );
+  }
+  for (const change of arbitrationChanges) {
+    const key = changeKey(change.tableName, change.recordId, change.action);
+    await recordPendingArbitration(change, sourceLogIdsByChangeKey.get(key) ?? []);
   }
 
   return {
@@ -456,6 +482,10 @@ async function applyAtomicRejectedPushResponse(
   const clientBugIssues: SyncPushOutcome[] = [];
   const userActionableIssues: SyncPushOutcome[] = [];
   const issues: SyncPushOutcome[] = [];
+  const arbitrationChanges: SyncChange[] = [];
+  const changeByKey = new Map(
+    changes.map((change) => [changeKey(change.tableName, change.recordId, change.action), change]),
+  );
 
   for (const outcome of response.outcomes) {
     const key = changeKey(outcome.tableName, outcome.recordId, outcome.action);
@@ -473,6 +503,12 @@ async function applyAtomicRejectedPushResponse(
       // 服务端拒收过期/孤儿主张：放弃本地主张，与 200 路径同语义。
       staleRejectedLogIds.push(...logIds);
       issues.push(outcome);
+    } else if (category === "needs_arbitration") {
+      // 与 200 路径同语义：隔离本地主张 + 留住内容
+      quarantineLogIds.push(...logIds);
+      const rejected = changeByKey.get(key);
+      if (rejected) arbitrationChanges.push(rejected);
+      issues.push(outcome);
     } else {
       // 服务端会持续拒收同一载荷——隔离为死信（synced=2），不再逐轮重发引爆 409 拆批；
       // 用户修正记录会产生新日志（synced=0），自然重新进入上传队列。
@@ -489,6 +525,13 @@ async function applyAtomicRejectedPushResponse(
   const markQuarantined = [...new Set(quarantineLogIds)].filter((id) => !markSynced.includes(id));
   if (markQuarantined.length > 0) {
     await db.syncLog.bulkUpdate(markQuarantined.map((id) => ({ key: id, changes: { synced: SYNC_LOG_QUARANTINED } })));
+  }
+
+  for (const change of arbitrationChanges) {
+    await recordPendingArbitration(
+      change,
+      sourceLogIdsByChangeKey.get(changeKey(change.tableName, change.recordId, change.action)) ?? [],
+    );
   }
 
   const retryChanges = changes.filter((change) => retryKeys.has(changeKey(change.tableName, change.recordId, change.action)));
@@ -533,7 +576,7 @@ async function submitPushBatch(
       }),
     );
     recordClockSkew(response.serverTime);
-    return applyPushResponse(response, sourceLogIdsByChangeKey, changeKey, baseSeq);
+    return applyPushResponse(response, changes, sourceLogIdsByChangeKey, changeKey, baseSeq);
   } catch (error) {
     if (error instanceof ApiError && error.status === 409 && isSyncPushResponse(error.body)) {
       recordClockSkew(error.body.serverTime);

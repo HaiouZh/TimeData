@@ -20,7 +20,8 @@ vi.mock("../lib/api.js", () => ({
   apiFetch: apiFetchMock,
 }));
 
-import { advanceSeqCursor, canSkipEchoPull, clearBumpStash, compactSyncLogs, getClockSkewMs, getConsecutiveSyncFailureCount, getLastSyncedSeq, getQuarantinedSyncLogs, getSyncHealth, localContentHash, prepareForcePush, pruneSyncedLogs, requeueQuarantinedSyncLogs, recordClockSkew, recordRegularSyncFailure, recordSyncLog, recordSyncLogs, regularSync, resetConsecutiveSyncFailures, setLastSyncedSeq, shouldOpenSyncDiagnostics, stashBumpPayload, syncForcePushToServer, syncPush, syncPull, syncPullSinceSeq, syncForceReplace, yieldToMainThread, SYNC_HEDGE_DELAY_MS } from "./engine.js";
+import { advanceSeqCursor, canSkipEchoPull, clearBumpStash, compactSyncLogs, getClockSkewMs, getConsecutiveSyncFailureCount, getLastSyncedSeq, getQuarantinedSyncLogs, getSyncHealth, localContentHash, prepareForcePush, pruneSyncedLogs, requeueQuarantinedSyncLogs, recordClockSkew, recordRegularSyncFailure, recordSyncLog, recordSyncLogs, regularSync, resetConsecutiveSyncFailures, setLastSyncedSeq, shouldOpenSyncDiagnostics, stashBumpPayload, syncForcePushToServer, syncPush, syncPull, syncPullSinceSeq, syncForceReplace, yieldToMainThread, SYNC_HEDGE_DELAY_MS, SYNC_LOG_QUARANTINED } from "./engine.js";
+import { listPendingArbitrations } from "./arbitration.ts";
 import { createPhaseRecorder } from "./phaseTimings.js";
 import { syncScheduler } from "./scheduler.js";
 
@@ -4160,3 +4161,59 @@ describe("applyPullChangesBatch 迁移前置边", () => {
     await expect(db.syncLog.count()).resolves.toBe(0);
   });
 });
+
+describe("needs_arbitration 拒收", () => {
+  it("隔离本地主张并落库，下一轮同步不会把它自动重发", async () => {
+    await db.pendingArbitrations.clear();
+    await db.timeEntries.put({
+      id: "entry-offline",
+      categoryId: "cat-wash",
+      startTime: "2026-08-19T11:58:00.000Z",
+      endTime: "2026-08-19T12:42:00.000Z",
+      note: null,
+      createdAt: "2026-08-19T15:31:00.000Z",
+      updatedAt: "2026-08-19T15:31:00.000Z",
+    });
+    await recordSyncLog("time_entries", "entry-offline", "create");
+    const logs = await db.syncLog.where("recordId").equals("entry-offline").toArray();
+
+    apiFetchMock.mockResolvedValue({
+      outcomes: [
+        {
+          tableName: "time_entries",
+          recordId: "entry-offline",
+          action: "create",
+          status: "conflict",
+          reasonCode: "unseen_record_deletion_rejected",
+          message: "unseen record deletion rejected",
+          incomingTimestamp: logs[0].timestamp,
+        },
+      ],
+      accepted: 0,
+      rejected: 0,
+      conflicts: 1,
+      backupId: null,
+      serverTime: "2026-08-19T15:31:28.000Z",
+      latestSeq: 15840,
+      appliedCount: 0,
+    });
+
+    await syncPush();
+
+    // 支点断言排最前：留在队列里就会被下一轮 push 自动带上，
+    // 而那时 echo pull 已推进 baseSeq、判据不再命中 → 延迟一轮的静默删除。
+    const log = await db.syncLog.get(logs[0].id);
+    expect(log?.synced).toBe(SYNC_LOG_QUARANTINED);
+    expect(await db.syncLog.where("synced").equals(0).count()).toBe(0);
+
+    // 内容必须留下来
+    const pending = await listPendingArbitrations();
+    expect(pending).toHaveLength(1);
+    expect(pending[0].recordId).toBe("entry-offline");
+    expect(JSON.parse(pending[0].payloadJson)).toMatchObject({
+      startTime: "2026-08-19T11:58:00.000Z",
+      endTime: "2026-08-19T12:42:00.000Z",
+    });
+  });
+});
+
