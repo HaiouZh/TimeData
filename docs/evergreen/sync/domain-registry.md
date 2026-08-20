@@ -59,6 +59,7 @@ last-reviewed: 2026-08-14
 | `tasks` | lww | `countsInStatus=false`；服务端配置完成语义 `guardedColumns`，无 `op` 的 upsert 撞现存行时不覆盖 `done` / `completed_at` / `skipped` / `last_done_at` / `completed_count`；delete 前走 `lww.archiveDelete` 把整行快照写进 `deleted_tasks_archive` |
 | `tracks` | lww | `countsInStatus=false`；服务端配置状态语义 `guardedColumns`，无 `op` 的 upsert 撞现存行时不覆盖 `status` |
 | `track_steps` | lww | `countsInStatus=false`；服务端 `guard: guardTrackStepHost`——非 delete 写入找不到宿主 track 时拒收（`orphan_step_rejected`） |
+| `track_milestones` | lww | `countsInStatus=false`；轨道阶段骨架（进度分段条），服务端 `guard: guardTrackMilestoneHost`——非 delete 写入找不到宿主 track 时拒收（`orphan_milestone_rejected`）；无 op、无 guardedColumns，并发改同段后写胜（接受，见 [ADR 0035](../../adr/0035-track-milestones-and-signal-priority.md)） |
 | `goals` | lww | `countsInStatus=false`，目标层 |
 | `goal_layout_pins` | lww | `countsInStatus=false`，目标图用户钉点，复合键域 |
 | `sessions` | lww | 零钩子，`countsInStatus=false`；"手头"软会话元数据，`Task.sessionId` 反挂引用它，不在 force-push 五域兜底范围内，见 [todo/at-hand](../todo/at-hand.md) |
@@ -69,7 +70,7 @@ last-reviewed: 2026-08-14
 
 **pull 对此已有兜底**：`readChangesSinceSeq` 遇到登记簿里没有的 `table_name` 就跳过该条、游标照常前进，不让历史记录炸掉整个 pull（回归测试见 `routes/sync.test.ts`）。没有这道兜底时，游标早于那些历史 seq 的设备会整个 pull 拿到 500——判例见 [ADR 0031](../../adr/0031-delete-health-data-layer.md)。
 
-登记簿是封闭的：加域必须改代码、过测试。静态类型 `SyncChange`（`types.ts` 手工判别联合）与运行时 schema（登记簿生成）必须同步修改；`tracks`、`track_steps`、`goals`、`goal_layout_pins` 都已有静态分支。
+登记簿是封闭的：加域必须改代码、过测试。静态类型 `SyncChange`（`types.ts` 手工判别联合）与运行时 schema（登记簿生成）必须同步修改；`tracks`、`track_steps`、`track_milestones`、`goals`、`goal_layout_pins` 都已有静态分支。
 
 ## 3. 新增域成本
 
@@ -85,7 +86,7 @@ last-reviewed: 2026-08-14
    - `categories.validate`：不能自引用、只支持两级（`invalid_shape`）；父分类必须存在（`missing_category`，同批 push 的算存在）。
    - `goal_layout_pins.validate`：delete 时也必须能 decode 复合 `recordId`。
    - `settings` / `quick_notes` / `tasks` / `tracks` / `goals` / `sessions`：无钩子，通用校验即全部。
-   - `track_steps`：无 `validate` / `crossValidate`，但有写前 `guard: guardTrackStepHost`——非 delete 写入找不到宿主 track 时不落库、回 `orphan_step_rejected`（§2）。**`guard` 与「走通用 LWW 路径」不冲突**：前者管收不收，后者管怎么写。
+   - `track_steps` / `track_milestones`：无 `validate` / `crossValidate`，但各有写前 `guard`（`guardTrackStepHost` / `guardTrackMilestoneHost`）——非 delete 写入找不到宿主 track 时不落库、回 `orphan_step_rejected` / `orphan_milestone_rejected`（§2）。**`guard` 与「走通用 LWW 路径」不冲突**：前者管收不收，后者管怎么写。
 
 `applyChange` 按登记簿分发：有 `apply` 钩子走钩子，否则走通用 LWW 路径。**所有路径的 `updated_at` / `deleted_at` 都取服务器当前时间 `serverNow`，不取 `change.timestamp`**。push 路由对 `baseSeq` 重叠或 unknown-base 记录启用的 staleGuard 是登记簿分发前的通用守卫，不改变任何域的 `validate` / `apply` 钩子归属。
 
@@ -118,7 +119,7 @@ LWW 只定义“同一记录发生并发修改时如何自动收敛”，字段�
 5. 参照 `fake-domain.e2e.test.ts` 写一条全链路域测试，并更新对应业务域文档、[data-model](../data-model.md)、[backup](../backup.md) 与 [sync](../sync.md) 摘要。
 6. 补齐 server 里**手写 `CREATE TABLE` 建库**（不走 `initializeDatabase()`）又会触发 sync-state / commit-hash 计算的测试夹具：`computeAndPersistCommitHash` 会遍历每个 `domain.table` 查询，漏建新表即 `SqliteError: no such table: <域>`。已知需要补的是 `db/reset.test.ts`、`db/utcReset.test.ts`、`lib/entry-service.test.ts`（canonical 建表语句可从 `db/backfillSeq.test.ts` 抄）；`schema.test.ts` 走 `initializeDatabase` 不受影响。**合并前跑无参全量 `pnpm --filter @timedata/server test`**——窄过滤跑不到这几个文件，`goals` 域当年就是这么漏到合并后才暴露。
 
-校验、排序、写入、记账、seq 补差、墓碑、SSE 实时下发全部复用同步内核。任务轨道和目标层都是这个模式：`tracks.upsertPriority=70/deletePriority=71`，`track_steps.upsertPriority=71/deletePriority=70`，`goals.upsertPriority=72/deletePriority=72`。验收证明见 `packages/server/src/sync/fake-domain.e2e.test.ts`、`tracks-domain.e2e.test.ts` 与 `goals-domain.e2e.test.ts`。
+校验、排序、写入、记账、seq 补差、墓碑、SSE 实时下发全部复用同步内核。任务轨道和目标层都是这个模式：`tracks.upsertPriority=70/deletePriority=71`，`track_steps.upsertPriority=71/deletePriority=70`，`track_milestones.upsertPriority=76/deletePriority=70`，`goals.upsertPriority=72/deletePriority=72`。验收证明见 `packages/server/src/sync/fake-domain.e2e.test.ts`、`tracks-domain.e2e.test.ts`、`goals-domain.e2e.test.ts` 与 `track-milestones-domain.e2e.test.ts`。
 
 复合键 LWW 域还要补：
 

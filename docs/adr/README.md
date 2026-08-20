@@ -43,13 +43,14 @@ status: living
 | [0032](0032-desktop-auto-update-via-github-release.md) | 桌面自动更新走 tauri-plugin-updater，更新源托管在 GitHub 固定 tag | 2026-08-14 | 手动装新版会撞 NSIS「删除应用数据」复选框、一次手滑清空本机全部记录；走 updater 则 `/UPDATE` 与 `passive` 两道独立的锁让它结构上不可能发生。托管走 GitHub 固定 tag `desktop-latest`（实测比自建快 12 倍，且 `releases/latest/` 被 Android 包占用）；静默下载 + 设置页手点安装，逻辑全在 Rust 侧 | 补充 [0029](0029-desktop-shell-embeds-frontend.md) |
 | [0033](0033-agent-task-create-endpoint.md) | agent 可经受控端点新建任务 | 2026-08-15 | agent 原本只能改已有任务、建不了新任务，而待办的捕捉入口已经跑进 ClaudeCode 会话里。新开 `POST /api/agent/tasks` 建 root task（请求体不含 `parentId`），`requestId` 幂等，调用方拥有语义时间（`createdAt` / `completedAt` 可回填历史，向未来卡 5 分钟容差），`updatedAt` 与 `op.at` 仍由服务端分配 | 延续 [0011](0011-server-api-as-write-boundary.md) |
 | [0034](0034-task-relations-as-own-table.md) | 前置关系独立成表，父子仍留在 `Task.parentId` | 2026-08-16 | 前置挂在 `Goal.prerequisites` 这类实体字段上时，一条边的增删是整行写，LWW 下两台设备各连一条会互相覆盖、先连的静默消失。独立成表后每条边是自己的同步单元。父子不跟着搬：恒一层、承载排序与级联删除，搬进通用关系表要把这三样摊平成额外校验；子任务松绑改为逐条解除守卫达成，`parentId` 结构未动 | 修正 metaspec 拍板③措辞 |
+| [0035](0035-track-milestones-and-signal-priority.md) | 阶段骨架独立成表 `track_milestones`，调度信号显式宣告优先 | 2026-08-20 | 轨道用不起来的根因是没有推进感：阶段骨架给「离目标多远」一个家（刻度出生、可挂任务镜像完成、七种修改操作第一类公民、进度=手动分段条且 dropped 剔除分母）；调度台判定反转为 等我接>agent在跑>等外部>推进中，停滞退出分组降为 `stalledDays` 提醒——信号是用户宣告的，系统只提醒不改判 | 改写 tracks.md §8 判定优先级；track-workbench metaspec 阶段1 |
 
 ## 按主题速查
 
 - **同步内核**：0012（账本+登记簿）→ 0006（墓碑）、0016（免回声+分页）、0017（staleGuard）、0018（完成 op）、0019（破坏性操作）、0020（push 幂等）、0021（bump 带数据）
 - **写入边界与鉴权**：0001 → 0011 → 0013、0005、0025（陌生来源收敛）、0033（agent 建任务）
 - **备份**：0002、0003、0007、0015
-- **数据建模**：0004（UTC）、0008（Dexie 版本链）、0010（QuickNote 域）、0014（tags vs 字段）
+- **数据建模**：0004（UTC）、0008（Dexie 版本链）、0010（QuickNote 域）、0014（tags vs 字段）、0035（阶段骨架 + 信号显式宣告）
 - **日记编辑器**：0022（列表识别口径）、0023（跨断点重挂）
 - **设计语言**：0026（用户内容身份色共用 tint 色板 + 形状分型）→ 0027（退役 data palette + Track agent scoped tone）
 - **范围决策**：0005、0009、0024（健康子系统退役）→ 0031（健康数据层删除）、0029（桌面壳内嵌前端）→ 0032（桌面自动更新）

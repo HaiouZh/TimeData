@@ -225,10 +225,10 @@ SQL 使用 `snake_case`，JS 使用 `camelCase`。没有 ORM，跨边界时手�
 
 ## 10. Dexie schema
 
-当前 Dexie v20：
+当前 Dexie v21：
 
 ```ts
-// 当前 store 全集。v17 只声明 6 个健康 store 的删除，其余沿用 v16；v18 / v19 / v20 各只加一张新表。
+// 当前 store 全集。v17 只声明 6 个健康 store 的删除，其余沿用 v16；v18-v21 各只加一张新表。
 {
   categories: "id, parentId, sortOrder",
   quickNotes: "id, occurredAt, updatedAt",
@@ -237,6 +237,7 @@ SQL 使用 `snake_case`，JS 使用 `camelCase`。没有 ORM，跨边界时手�
   taskRelations: "[blockerKind+blockerId+blockedKind+blockedId], blockerId, blockedId, updatedAt",
   tracks: "id, status, updatedAt",
   trackSteps: "id, trackId, [trackId+seq], updatedAt",
+  trackMilestones: "id, trackId, taskId, updatedAt",
   goals: "id, kind, status, updatedAt",
   goalLayoutPins: "[goalId+nodeKind+nodeId], goalId, nodeKind, nodeId, updatedAt",
   syncLog: "id, tableName, recordId, synced, [tableName+synced]",
@@ -256,7 +257,7 @@ SQL 使用 `snake_case`，JS 使用 `camelCase`。没有 ORM，跨边界时手�
 存档只为留住内容供找回。写入与 `syncLog` 状态标记同处一个 Dexie 事务，且**存档一律排在标记之前**——
 拆开会让失败留在「标记了没存档」这一侧，即本地主张已放弃且内容无处可寻。
 
-版本历史：v1 初始；v2 `settings`；v3 `quickNotes`；v4 健康表；v5 `tasks`；v6 `tasks.scheduledAt`；v7 `healthCharts`；v8 `tasks.parentId`（子任务=独立 Task，纯 schema 升级无 upgrade 函数）；v9 `tracks` / `trackSteps`（任务轨道数据地基，新表为空，不需要历史归一迁移）；v10 `goals` + 旧 `tasks.goalId` / `tracks.goalId` 索引；v11 移除旧目标归属索引，目标成员关系改由 `Goal.members` JSON 字段承载；v12 `goalLayoutPins`，用 `[goalId+nodeKind+nodeId]` 复合主键保存目标图钉点；v13 `tasks.weight`（想法重力引擎，**只加 upgrade hook 给旧 tasks 补 `weight=0`，`.stores()` 与 v12 逐行相同、没建索引**）；v14 `tasks.ruleId` / `tasks.skipped`（occurrence 实体化地基，`ruleId` 建索引，upgrade hook 给旧 tasks 补 `ruleId=null`、`skipped=false`）；v15 物理删除 `autoBackups`（设备端自动快照整层退役，`autoBackups: null`，见 [ADR 0015](../adr/0015-remove-client-auto-snapshots.md)）；v16 `sessions` 表 + `tasks.sessionId` 索引（手头软会话地基，upgrade hook 给旧 tasks 补 `sessionId=null`，见 [todo/at-hand](todo/at-hand.md)）；v17 物理删除 6 个健康 store（`healthHeartRate` / `healthHrv` / `healthSleep` / `healthStress` / `runs` / `healthCharts` 全部置 `null`，健康数据层整层退役，见 [ADR 0031](../adr/0031-delete-health-data-layer.md)）；v18 `taskRelations`（阻塞关系走复合主键 `[blockerKind+blockerId+blockedKind+blockedId]`，纯新增表、无 upgrade 函数，见 [todo/task-relations](todo/task-relations.md)）；v19 `migrationSnapshots`（纯本地迁移回滚凭据，`key` 主键，纯新增表）；v20 `pendingArbitrations`（纯本地待裁决冲突表，`recordId` 主键，纯新增表、无 upgrade 函数，见 [sync](sync.md#sync-unseen-delete-guard) 的「隐式删除守卫」）。
+版本历史：v1 初始；v2 `settings`；v3 `quickNotes`；v4 健康表；v5 `tasks`；v6 `tasks.scheduledAt`；v7 `healthCharts`；v8 `tasks.parentId`（子任务=独立 Task，纯 schema 升级无 upgrade 函数）；v9 `tracks` / `trackSteps`（任务轨道数据地基，新表为空，不需要历史归一迁移）；v10 `goals` + 旧 `tasks.goalId` / `tracks.goalId` 索引；v11 移除旧目标归属索引，目标成员关系改由 `Goal.members` JSON 字段承载；v12 `goalLayoutPins`，用 `[goalId+nodeKind+nodeId]` 复合主键保存目标图钉点；v13 `tasks.weight`（想法重力引擎，**只加 upgrade hook 给旧 tasks 补 `weight=0`，`.stores()` 与 v12 逐行相同、没建索引**）；v14 `tasks.ruleId` / `tasks.skipped`（occurrence 实体化地基，`ruleId` 建索引，upgrade hook 给旧 tasks 补 `ruleId=null`、`skipped=false`）；v15 物理删除 `autoBackups`（设备端自动快照整层退役，`autoBackups: null`，见 [ADR 0015](../adr/0015-remove-client-auto-snapshots.md)）；v16 `sessions` 表 + `tasks.sessionId` 索引（手头软会话地基，upgrade hook 给旧 tasks 补 `sessionId=null`，见 [todo/at-hand](todo/at-hand.md)）；v17 物理删除 6 个健康 store（`healthHeartRate` / `healthHrv` / `healthSleep` / `healthStress` / `runs` / `healthCharts` 全部置 `null`，健康数据层整层退役，见 [ADR 0031](../adr/0031-delete-health-data-layer.md)）；v18 `taskRelations`（阻塞关系走复合主键 `[blockerKind+blockerId+blockedKind+blockedId]`，纯新增表、无 upgrade 函数，见 [todo/task-relations](todo/task-relations.md)）；v19 `migrationSnapshots`（纯本地迁移回滚凭据，`key` 主键，纯新增表）；v20 `pendingArbitrations`（纯本地待裁决冲突表，`recordId` 主键，纯新增表、无 upgrade 函数，见 [sync](sync.md#sync-unseen-delete-guard) 的「隐式删除守卫」）；v21 `trackMilestones`（轨道阶段骨架，纯新增表、无 upgrade 函数，见 [tracks](tracks.md) 与 [ADR 0035](../adr/0035-track-milestones-and-signal-priority.md)）。
 
 ## 11. SQLite schema 迁移边界
 
