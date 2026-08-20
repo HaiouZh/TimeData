@@ -1,5 +1,7 @@
+import { DotsThree } from "@phosphor-icons/react";
 import type { TrackMilestone } from "@timedata/shared";
 import { useState } from "react";
+import { Icon } from "../../../components/Icon.js";
 import { Checkbox } from "../../../components/ui/Checkbox.js";
 import {
   dropMilestone,
@@ -202,7 +204,7 @@ export function MilestoneRow(props: {
             <button
               type="button"
               onClick={() => void handleInsert()}
-              className="rounded-ctl bg-accent px-3 py-1.5 td-text-label text-white"
+              className="rounded-ctl bg-accent px-3 py-1.5 td-text-label text-accent-contrast"
             >
               确认
             </button>
@@ -232,7 +234,7 @@ export function MilestoneRow(props: {
             <button
               type="button"
               onClick={() => void handleDrop()}
-              className="rounded-ctl bg-danger px-3 py-1.5 td-text-label text-white"
+              className="rounded-ctl bg-danger px-3 py-1.5 td-text-label text-accent-contrast"
             >
               确认砍掉
             </button>
@@ -253,14 +255,14 @@ export function MilestoneRow(props: {
             aria-label="操作菜单"
             data-testid="milestone-menu-trigger"
             onClick={() => setMenuOpen((v) => !v)}
-            className="rounded-ctl px-2 py-1 td-text-body text-ink-2 hover:text-ink"
+            className="rounded-ctl px-2 py-1 text-ink-2 hover:text-ink"
           >
-            ⋯
+            <Icon icon={DotsThree} size={18} />
           </button>
           {menuOpen && (
             <div
               data-testid="milestone-menu-content"
-              className="absolute right-0 z-10 mt-1 flex min-w-[160px] flex-col gap-1 rounded-ctl border border-border bg-surface p-2 shadow"
+              className="absolute right-0 z-10 mt-1 flex min-w-40 flex-col gap-1 rounded-ctl border border-border bg-surface p-2 shadow"
             >
               {isDropped ? (
                 <button

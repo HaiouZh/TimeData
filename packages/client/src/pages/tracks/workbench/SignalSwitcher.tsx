@@ -83,7 +83,7 @@ export function SignalSwitcher(props: SignalSwitcherProps): React.JSX.Element | 
             }}
             className={
               isActive
-                ? "rounded-pill border border-accent bg-accent px-3 py-1 td-text-caption text-white"
+                ? "rounded-pill border border-accent bg-accent px-3 py-1 td-text-caption text-accent-contrast"
                 : "rounded-pill border border-border bg-surface px-3 py-1 td-text-caption text-ink-2 hover:border-accent/40 hover:text-accent"
             }
           >

@@ -57,7 +57,7 @@ export function MilestonePanel(props: {
             type="button"
             data-testid="milestone-skeleton-submit"
             onClick={() => void handleCreateSkeleton()}
-            className="self-start rounded-ctl bg-accent px-4 py-1.5 td-text-label text-white"
+            className="self-start rounded-ctl bg-accent px-4 py-1.5 td-text-label text-accent-contrast"
           >
             立骨架
           </button>
@@ -102,7 +102,7 @@ export function MilestonePanel(props: {
                 type="button"
                 data-testid="milestone-add-submit"
                 onClick={() => void handleAddOne()}
-                className="rounded-ctl bg-accent px-3 py-1.5 td-text-label text-white"
+                className="rounded-ctl bg-accent px-3 py-1.5 td-text-label text-accent-contrast"
               >
                 ＋ 加一段
               </button>

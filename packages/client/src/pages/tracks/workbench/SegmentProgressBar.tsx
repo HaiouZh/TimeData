@@ -49,10 +49,7 @@ export function SegmentProgressBar(props: SegmentProgressBarProps): React.JSX.El
           );
         })}
       </div>
-      <span
-        data-testid="segment-progress-text"
-        className={isMini ? "td-text-caption text-xs text-ink-2" : "td-text-caption text-ink-2"}
-      >
+      <span data-testid="segment-progress-text" className="td-text-caption text-ink-2">
         {done}/{total}
       </span>
     </div>
