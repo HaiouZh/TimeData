@@ -18,6 +18,7 @@ import { fetchServerVersion, pollServerUpdate, triggerServerUpdate } from "../li
 import type { SyncStreamState } from "../lib/syncStream.js";
 import { formatAppDateTime } from "../lib/time.ts";
 import { CLOCK_SKEW_WARN_MS, getClockSkewMs, type RegularSyncResult } from "../sync/engine.ts";
+import type { PendingArbitration } from "../db/index.ts";
 import {
   ArrowsClockwise,
   BookOpen,
@@ -102,6 +103,20 @@ function SyncIssueList({ issues }: { issues: NonNullable<RegularSyncResult["push
   );
 }
 
+function PendingArbitrationBanner({ rows }: { rows: PendingArbitration[] }) {
+  if (rows.length === 0) return null;
+  return (
+    <StatusBanner tone="warn" className="space-y-1">
+      <p>有 {rows.length} 条本地写入被云端拦下，内容已存档等待处理：</p>
+      {rows.map((row) => (
+        <p key={`${row.tableName}:${row.recordId}`}>
+          {row.tableName}/{row.recordId}（{formatAppDateTime(row.rejectedAt)}）
+        </p>
+      ))}
+    </StatusBanner>
+  );
+}
+
 function ClockSkewWarning() {
   const skew = getClockSkewMs();
   if (skew == null || Math.abs(skew) <= CLOCK_SKEW_WARN_MS) return null;
@@ -125,6 +140,7 @@ function ServerStatusCard() {
     conflicts,
     lastResult,
     sync,
+    pendingArbitrations,
   } = useSyncContext();
   const connectionState = getServerConnectionState(apiUrl, connection, cloudSyncEnabled);
 
@@ -171,6 +187,7 @@ function ServerStatusCard() {
               <p className="text-warn">云端冲突 {lastResult.pushConflicts} 条</p>
             )}
             {lastResult?.pushIssues && <SyncIssueList issues={lastResult.pushIssues} />}
+            <PendingArbitrationBanner rows={pendingArbitrations ?? []} />
             {conflicts.length > 0 && (
               <p className="text-warn">发现 {conflicts.length} 条冲突，请到数据设置处理。</p>
             )}

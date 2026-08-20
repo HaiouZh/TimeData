@@ -45,6 +45,7 @@ function defaultSyncState() {
       pulled: 3,
       conflicts: [],
     },
+    pendingArbitrations: [] as Array<{ tableName: string; recordId: string; rejectedAt: string }>,
     apiUrl: localStorage.getItem("timedata_api_url") || "",
     updateApiUrl: vi.fn(),
     cloudSyncEnabled: true,
@@ -393,6 +394,62 @@ describe("SettingsPage", () => {
     const html = renderToStaticMarkup(createElement(MemoryRouter, null, createElement(SettingsPage)));
 
     expect(html).toContain("本地与云端数据一致，无需同步。");
+  });
+
+  it("lastResult 为空但有待裁决时仍显示持久提示（信号不随同步周期消失）", () => {
+    useSyncContextMock.mockReturnValue({
+      ...defaultSyncState(),
+      lastResult: null as unknown as ReturnType<typeof defaultSyncState>["lastResult"],
+      pendingArbitrations: [
+        {
+          tableName: "time_entries",
+          recordId: "entry-offline",
+          rejectedAt: "2026-08-19T12:00:00.000Z",
+          action: "create",
+          payloadJson: "{}",
+          syncLogIds: ["log-1"],
+          disposition: "pending",
+        } as never,
+      ],
+    });
+
+    const html = renderToStaticMarkup(createElement(MemoryRouter, null, createElement(SettingsPage)));
+
+    expect(html).toContain("有 1 条本地写入被云端拦下");
+    expect(html).toContain("time_entries/entry-offline");
+    expect(html).toContain('data-tone="warn"');
+  });
+
+  it("pushIssues 为空数组但有待裁决时仍显示持久提示", () => {
+    useSyncContextMock.mockReturnValue({
+      ...defaultSyncState(),
+      lastResult: {
+        checked: true,
+        identical: false,
+        pushed: 0,
+        rejected: 0,
+        pushConflicts: 0,
+        pushIssues: [],
+        pulled: 0,
+        conflicts: [],
+      },
+      pendingArbitrations: [
+        {
+          tableName: "categories",
+          recordId: "cat-1",
+          rejectedAt: "2026-08-20T00:00:00.000Z",
+          action: "delete",
+          payloadJson: "{}",
+          syncLogIds: ["log-2"],
+          disposition: "pending",
+        } as never,
+      ],
+    });
+
+    const html = renderToStaticMarkup(createElement(MemoryRouter, null, createElement(SettingsPage)));
+
+    expect(html).toContain("有 1 条本地写入被云端拦下");
+    expect(html).toContain("categories/cat-1");
   });
 });
 

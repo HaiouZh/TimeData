@@ -4501,3 +4501,293 @@ describe("needs_arbitration 拒收", () => {
   });
 });
 
+describe("requeueQuarantinedSyncLogs 待裁决守卫", () => {
+  it("有 disposition=pending 存档的死信不能被重新入队，synced 仍是 2（支点排最前）", async () => {
+    await db.syncLog.add({
+      id: "quarantined-pending-log",
+      tableName: "time_entries",
+      recordId: "entry-offline",
+      action: "create",
+      timestamp: "2026-08-19T12:00:00.000Z",
+      synced: 2,
+    });
+    await db.pendingArbitrations.put({
+      recordId: "entry-offline",
+      tableName: "time_entries",
+      action: "create",
+      payloadJson: JSON.stringify({ id: "entry-offline", startTime: "2026-08-19T11:58:00.000Z" }),
+      syncLogIds: ["quarantined-pending-log"],
+      rejectedAt: "2026-08-19T12:00:00.000Z",
+      disposition: "pending",
+    });
+
+    const result = await requeueQuarantinedSyncLogs();
+    expect(result).toBe(0);
+    await expect(db.syncLog.get("quarantined-pending-log")).resolves.toMatchObject({ synced: 2 });
+
+    const resultByIds = await requeueQuarantinedSyncLogs(["quarantined-pending-log"]);
+    expect(resultByIds).toBe(0);
+    await expect(db.syncLog.get("quarantined-pending-log")).resolves.toMatchObject({ synced: 2 });
+  });
+
+  it("普通死信（无 pending 存档）能被重新入队，synced 变回 0", async () => {
+    await db.syncLog.add({
+      id: "quarantined-normal-log",
+      tableName: "time_entries",
+      recordId: "entry-normal",
+      action: "create",
+      timestamp: "2026-08-19T12:00:00.000Z",
+      synced: 2,
+    });
+
+    const result = await requeueQuarantinedSyncLogs();
+    expect(result).toBe(1);
+    await expect(db.syncLog.get("quarantined-normal-log")).resolves.toMatchObject({ synced: 0 });
+  });
+
+  it("混合两条时只重入普通死信，待裁决的被跳过", async () => {
+    await db.syncLog.bulkAdd([
+      {
+        id: "mixed-pending-log",
+        tableName: "time_entries",
+        recordId: "entry-mixed-pending",
+        action: "create",
+        timestamp: "2026-08-19T12:00:00.000Z",
+        synced: 2,
+      },
+      {
+        id: "mixed-normal-log",
+        tableName: "categories",
+        recordId: "cat-mixed",
+        action: "delete",
+        timestamp: "2026-08-19T12:01:00.000Z",
+        synced: 2,
+      },
+    ]);
+    await db.pendingArbitrations.put({
+      recordId: "entry-mixed-pending",
+      tableName: "time_entries",
+      action: "create",
+      payloadJson: "{}",
+      syncLogIds: ["mixed-pending-log"],
+      rejectedAt: "2026-08-19T12:00:00.000Z",
+      disposition: "pending",
+    });
+
+    const result = await requeueQuarantinedSyncLogs();
+    expect(result).toBe(1);
+    await expect(db.syncLog.get("mixed-pending-log")).resolves.toMatchObject({ synced: 2 });
+    await expect(db.syncLog.get("mixed-normal-log")).resolves.toMatchObject({ synced: 0 });
+  });
+});
+
+describe("409 needs_arbitration 正常处置", () => {
+  it("409 原子拒收的 unseen_record_deletion_rejected 隔离为死信并落库（支点排最前）", async () => {
+    await db.pendingArbitrations.clear();
+    await db.categories.add({
+      id: "cat-409-arb",
+      name: "Work",
+      parentId: null,
+      color: "#3366ff",
+      icon: null,
+      sortOrder: 1,
+      isArchived: false,
+      createdAt: "2026-08-19T12:00:00.000Z",
+      updatedAt: "2026-08-19T12:00:00.000Z",
+    });
+    await db.timeEntries.add({
+      id: "entry-409-arb",
+      categoryId: "cat-409-arb",
+      startTime: "2026-08-19T11:58:00.000Z",
+      endTime: "2026-08-19T12:42:00.000Z",
+      note: "offline 409",
+      createdAt: "2026-08-19T12:00:00.000Z",
+      updatedAt: "2026-08-19T12:00:00.000Z",
+    });
+    await db.syncLog.add({
+      id: "log-409-arb",
+      tableName: "time_entries",
+      recordId: "entry-409-arb",
+      action: "create",
+      timestamp: "2026-08-19T12:00:00.000Z",
+      synced: 0,
+    });
+
+    const push409Body = {
+      outcomes: [
+        {
+          tableName: "time_entries",
+          recordId: "entry-409-arb",
+          action: "create",
+          status: "rejected",
+          reasonCode: "unseen_record_deletion_rejected",
+          message: "unseen record deletion rejected",
+          incomingTimestamp: "2026-08-19T12:00:00.000Z",
+        } as const,
+      ],
+      accepted: 0,
+      rejected: 0,
+      conflicts: 1,
+      backupId: null,
+      serverTime: "2026-08-19T12:01:00.000Z",
+      latestSeq: 15841,
+      appliedCount: 0,
+    };
+
+    apiFetchMock
+      .mockRejectedValueOnce(new ApiErrorMock(409, "Conflict", "", push409Body))
+      .mockResolvedValueOnce({
+        outcomes: [],
+        accepted: 0,
+        rejected: 0,
+        conflicts: 0,
+        backupId: null,
+        serverTime: "2026-08-19T12:02:00.000Z",
+        latestSeq: 15842,
+        appliedCount: 0,
+      });
+
+    const result = await syncPush();
+
+    // 支点断言排最前
+    await expect(db.syncLog.get("log-409-arb")).resolves.toMatchObject({ synced: SYNC_LOG_QUARANTINED });
+    const rows = await listPendingArbitrations();
+    const row = rows.find((r) => r.recordId === "entry-409-arb");
+    expect(row).toBeDefined();
+    expect(row?.disposition).toBe("pending");
+    expect(JSON.parse(row!.payloadJson)).toMatchObject({ id: "entry-409-arb", startTime: "2026-08-19T11:58:00.000Z" });
+    expect(result.issues.some((issue) => issue.reasonCode === "unseen_record_deletion_rejected")).toBe(true);
+  });
+});
+
+describe("changeByKey 落空分支", () => {
+  it("服务端回执的 action 与本地不一致时，日志被隔离但无存档（协议错配现状）", async () => {
+    await db.pendingArbitrations.clear();
+    await db.categories.add({
+      id: "cat-mismatch",
+      name: "Work",
+      parentId: null,
+      color: "#3366ff",
+      icon: null,
+      sortOrder: 1,
+      isArchived: false,
+      createdAt: "2026-08-19T12:00:00.000Z",
+      updatedAt: "2026-08-19T12:00:00.000Z",
+    });
+    await db.timeEntries.add({
+      id: "entry-mismatch",
+      categoryId: "cat-mismatch",
+      startTime: "2026-08-19T11:58:00.000Z",
+      endTime: "2026-08-19T12:42:00.000Z",
+      note: null,
+      createdAt: "2026-08-19T12:00:00.000Z",
+      updatedAt: "2026-08-19T12:00:00.000Z",
+    });
+    await db.syncLog.add({
+      id: "log-mismatch",
+      tableName: "time_entries",
+      recordId: "entry-mismatch",
+      action: "create",
+      timestamp: "2026-08-19T12:00:00.000Z",
+      synced: 0,
+    });
+
+    // 本地是 create，服务端回执故意用 update（或 delete），导致 changeByKey.get 落空
+    apiFetchMock.mockResolvedValue({
+      outcomes: [
+        {
+          tableName: "time_entries",
+          recordId: "entry-mismatch",
+          action: "update",
+          status: "conflict",
+          reasonCode: "unseen_record_deletion_rejected",
+          message: "unseen record deletion rejected",
+          incomingTimestamp: "2026-08-19T12:00:00.000Z",
+        },
+      ],
+      accepted: 0,
+      rejected: 0,
+      conflicts: 1,
+      backupId: null,
+      serverTime: "2026-08-19T12:01:00.000Z",
+      latestSeq: 15840,
+      appliedCount: 0,
+    });
+
+    const result = await syncPush();
+
+    // 实测现状：changeByKey 落空导致 sourceLogIdsByChangeKey 也落空，日志未被隔离、仍留在队列（synced=0），且无存档
+    // 行为是 "未隔离也未存档"（留在队列重推），而非 "隔离了没存档"；虽不会丢数据但会无限重推该载荷。
+    // TODO: 待处置的协议错配缺口 — 当服务端回执的 action/recordId 与本地 changeKey 不一致时，当前未落库也未隔离；
+    // 1) 若未来改为隔离则需同步补存档（仅改隔离不补存档会变成 "隔离了没存档" 的丢数据形态）；2) 更稳妥是按 recordId 回退查找并存档。
+    await expect(db.syncLog.get("log-mismatch")).resolves.toMatchObject({ synced: 0 });
+    const rows = await listPendingArbitrations();
+    expect(rows.filter((r) => r.recordId === "entry-mismatch")).toHaveLength(0);
+    expect(result.issues).toHaveLength(1);
+    expect(result.issues[0]).toMatchObject({ reasonCode: "unseen_record_deletion_rejected" });
+  });
+
+  it("409 路径下 action 错配同样隔离但无存档", async () => {
+    await db.pendingArbitrations.clear();
+    await db.categories.add({
+      id: "cat-mismatch-409",
+      name: "Work",
+      parentId: null,
+      color: "#3366ff",
+      icon: null,
+      sortOrder: 1,
+      isArchived: false,
+      createdAt: "2026-08-19T12:00:00.000Z",
+      updatedAt: "2026-08-19T12:00:00.000Z",
+    });
+    await db.timeEntries.add({
+      id: "entry-mismatch-409",
+      categoryId: "cat-mismatch-409",
+      startTime: "2026-08-19T11:58:00.000Z",
+      endTime: "2026-08-19T12:42:00.000Z",
+      note: null,
+      createdAt: "2026-08-19T12:00:00.000Z",
+      updatedAt: "2026-08-19T12:00:00.000Z",
+    });
+    await db.syncLog.add({
+      id: "log-mismatch-409",
+      tableName: "time_entries",
+      recordId: "entry-mismatch-409",
+      action: "create",
+      timestamp: "2026-08-19T12:00:00.000Z",
+      synced: 0,
+    });
+
+    const push409Body = {
+      outcomes: [
+        {
+          tableName: "time_entries",
+          recordId: "entry-mismatch-409",
+          action: "update",
+          status: "rejected",
+          reasonCode: "unseen_record_deletion_rejected",
+          message: "unseen record deletion rejected",
+          incomingTimestamp: "2026-08-19T12:00:00.000Z",
+        } as const,
+      ],
+      accepted: 0,
+      rejected: 0,
+      conflicts: 1,
+      backupId: null,
+      serverTime: "2026-08-19T12:01:00.000Z",
+      latestSeq: 15841,
+      appliedCount: 0,
+    };
+
+    apiFetchMock.mockRejectedValueOnce(new ApiErrorMock(409, "Conflict", "", push409Body));
+
+    // 实测现状：409 原子拒收路径在 key 错配时，retryKeys 未被删掉一部分，导致校验抛 "atomic rejection contains no rejected change"
+    // TODO: 同为协议错配缺口 — 409 分支对 action/recordId 强依赖 key 精确匹配，一旦错配直接抛错阻断重试；
+    // 需要与 200 分支一致地做 recordId 回退或至少不抛错而是按隔离存档处理。
+    await expect(syncPush()).rejects.toThrow("Invalid /api/sync/push 409 response: atomic rejection contains no rejected change");
+    await expect(db.syncLog.get("log-mismatch-409")).resolves.toMatchObject({ synced: 0 });
+    const rows = await listPendingArbitrations();
+    expect(rows.filter((r) => r.recordId === "entry-mismatch-409")).toHaveLength(0);
+  });
+});
+

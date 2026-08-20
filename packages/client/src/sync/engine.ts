@@ -1404,7 +1404,16 @@ export async function getQuarantinedSyncLogs(): Promise<SyncLogEntry[]> {
 export async function requeueQuarantinedSyncLogs(ids?: string[]): Promise<number> {
   const targets = ids ?? (await getQuarantinedSyncLogs()).map((log) => log.id);
   if (targets.length === 0) return 0;
-  await db.syncLog.bulkUpdate(targets.map((id) => ({ key: id, changes: { synced: 0 } })));
+  // 待裁决的死信不走这个出口：拒收当轮的回声 pull 已推进游标，重推时服务端判据不再命中，
+  // 净效果是一次静默删除。它只能由用户裁决解开（阶段 2），不能由重新入队解开。
+  const arbitrated = new Set(
+    (await db.pendingArbitrations.toArray())
+      .filter((row) => row.disposition === "pending")
+      .flatMap((row) => row.syncLogIds),
+  );
+  const requeueable = targets.filter((id) => !arbitrated.has(id));
+  if (requeueable.length === 0) return 0;
+  await db.syncLog.bulkUpdate(requeueable.map((id) => ({ key: id, changes: { synced: 0 } })));
   syncScheduler.notifyWrite();
-  return targets.length;
+  return requeueable.length;
 }

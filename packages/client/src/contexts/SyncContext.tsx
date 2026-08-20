@@ -1,7 +1,7 @@
 import { useLiveQuery } from "dexie-react-hooks";
 import { createContext, type ReactNode, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { SyncStreamBumpSchema } from "@timedata/shared";
-import { db } from "../db/index.ts";
+import { db, type PendingArbitration } from "../db/index.ts";
 import { useAppHideFlush } from "../hooks/useAppHideFlush.ts";
 import { useAppResumeRefresh } from "../hooks/useAppResumeRefresh.ts";
 import { useSync } from "../hooks/useSync.ts";
@@ -52,6 +52,7 @@ export interface SyncContextValue extends SyncActions {
   cloudSyncEnabled: boolean;
   setCloudSyncEnabledInContext: (enabled: boolean) => void;
   connection: SyncStreamState;
+  pendingArbitrations: PendingArbitration[];
 }
 
 const SyncContext = createContext<SyncContextValue | null>(null);
@@ -62,6 +63,11 @@ export function SyncProvider({ children }: { children: ReactNode }) {
   const [cloudSyncEnabled, setCloudSyncEnabledState] = useState(getCloudSyncEnabled);
   const [connection, setConnection] = useState<SyncStreamState>("disconnected");
   const liveUnsyncedCount = useLiveQuery(() => db.syncLog.where("synced").equals(0).count(), [], 0);
+  const livePendingArbitrations = useLiveQuery(
+    async () => (await db.pendingArbitrations.toArray()).filter((row) => row.disposition === "pending"),
+    [],
+    [] as PendingArbitration[],
+  );
   const syncRef = useRef(syncState.sync);
   const connectionRef = useRef(connection);
   const lastRunFailedRef = useRef(false);
@@ -182,8 +188,9 @@ export function SyncProvider({ children }: { children: ReactNode }) {
       cloudSyncEnabled,
       setCloudSyncEnabledInContext,
       connection,
+      pendingArbitrations: livePendingArbitrations,
     }),
-    [apiUrl, cloudSyncEnabled, connection, setCloudSyncEnabledInContext, status, syncState, updateApiUrl],
+    [apiUrl, cloudSyncEnabled, connection, livePendingArbitrations, setCloudSyncEnabledInContext, status, syncState, updateApiUrl],
   );
 
   return <SyncContext.Provider value={value}>{children}</SyncContext.Provider>;

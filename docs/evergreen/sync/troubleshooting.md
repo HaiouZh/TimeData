@@ -39,7 +39,7 @@ last-reviewed: 2026-08-14
 
 **「待同步 0 条」不等于本地写入都已到达服务端**：`synced=1`（已放弃本地主张）与 `synced=2`（死信隔离）都已移出上传队列，两者都不计入 `unsyncedCount`。被[隐式删除守卫](../sync.md#sync-unseen-delete-guard)拦下的写入属这一类——它的内容快照落在 Dexie `pendingArbitrations`（`listPendingArbitrations()` 读取），`disposition` 区分两种归宿：`pending` 对应 `synced=2`、等用户裁决，`discarded` 对应 `synced=1`、主张已放弃而仅留内容备查。字段契约见 [data-model](../data-model.md) §Dexie schema。**`syncLog` 的 `synced=1/2` 行走 7 天回收窗口，而 `pendingArbitrations` 不参与该回收**：日志被回收之后，快照是唯一还留着原始 payload 的地方。
 
-**`requeueQuarantinedSyncLogs()` 的边界**：它把 `synced=2` 一律翻回 `0`，不区分死信成因。隐式删除守卫拦下的那类不适用这个出口——拒收当轮必然触发一次回声 pull（`canSkipEchoPull()` 遇到任何 issue 即返回 false），游标随之推进；此后重推同一载荷时判据不再命中，服务端放行。该判据只能由用户裁决解开，不能由重新入队解开。
+**`requeueQuarantinedSyncLogs()` 只重新入队没有待裁决存档的死信**：`disposition="pending"` 的存档所指向的日志被跳过，也不计入返回值。理由是那类死信重推即等于放行——拒收当轮必然触发一次回声 pull（`canSkipEchoPull()` 遇到任何 issue 即返回 false），游标随之推进；此后重推同一载荷时[隐式删除守卫](../sync.md#sync-unseen-delete-guard)的判据不再命中，服务端放行，净效果是一次静默删除。**该判据只能由用户裁决解开，不能由重新入队解开**，这条排除是它的实现方式。
 
 ## 2. 分段耗时观测
 

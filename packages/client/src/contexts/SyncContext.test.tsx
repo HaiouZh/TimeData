@@ -13,11 +13,15 @@ const syncDbMock = vi.hoisted(() => {
   const state = {
     liveUnsyncedCount: 0,
     persistedUnsyncedCount: 0,
+    pendingArbitrations: [] as unknown[],
   };
   const count = vi.fn(async () => state.persistedUnsyncedCount);
   const equals = vi.fn(() => ({ count }));
   const where = vi.fn(() => ({ equals }));
-  const useLiveQuery = vi.fn(() => state.liveUnsyncedCount);
+  const useLiveQuery = vi.fn((querier: unknown, deps: unknown, defaultValue: unknown) => {
+    if (Array.isArray(defaultValue)) return state.pendingArbitrations;
+    return state.liveUnsyncedCount;
+  });
 
   return {
     state,
@@ -25,7 +29,7 @@ const syncDbMock = vi.hoisted(() => {
     equals,
     where,
     useLiveQuery,
-    db: { syncLog: { where } },
+    db: { syncLog: { where }, pendingArbitrations: { toArray: vi.fn(async () => state.pendingArbitrations) } },
   };
 });
 
@@ -133,6 +137,7 @@ beforeEach(() => {
   Object.defineProperty(document, "visibilityState", { value: "visible", configurable: true });
   syncDbMock.state.liveUnsyncedCount = 0;
   syncDbMock.state.persistedUnsyncedCount = 0;
+  syncDbMock.state.pendingArbitrations = [];
   mockSyncState.syncing = false;
   mockSyncState.lastSynced = null;
   mockSyncState.error = null;
@@ -300,7 +305,8 @@ describe("SyncProvider", () => {
 
     const { root } = await renderDom(createElement(SyncProvider, null, createElement(Probe)));
 
-    const liveQuery = syncDbMock.useLiveQuery.mock.calls.at(-1)?.[0] as (() => Promise<number>) | undefined;
+    const unsyncedCall = syncDbMock.useLiveQuery.mock.calls.find((call) => call[2] === 0);
+    const liveQuery = unsyncedCall?.[0] as (() => Promise<number>) | undefined;
     await expect(liveQuery?.()).resolves.toBe(2);
     expect(syncDbMock.where).toHaveBeenCalledWith("synced");
     expect(syncDbMock.equals).toHaveBeenCalledWith(0);
