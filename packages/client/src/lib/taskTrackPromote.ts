@@ -2,6 +2,7 @@ import type { Task, Track } from "@timedata/shared";
 import { db } from "../db/index.js";
 import { findActiveTrackForTask } from "./taskTrackIndex.js";
 import { toggleTaskDone } from "./tasks.js";
+import { syncLinkedMilestoneOnTaskToggle } from "./trackMilestones.js";
 import { addTrack, listTracks, setTrackStatus } from "./tracks.js";
 
 // RefSchema 的 label 上限（entitySchemas.ts RefSchema：z.string().max(200)）。
@@ -58,6 +59,11 @@ export async function toggleTaskDoneWithTrackConclude(
   options: { now?: Date } = {},
 ): Promise<ToggleWithTrackConcludeResult> {
   const task = await toggleTaskDone(id, options);
+  try {
+    await syncLinkedMilestoneOnTaskToggle(task.id, task.done);
+  } catch (error) {
+    console.warn("[taskTrackPromote] 勾选镜像挂靠里程碑失败（勾选本身已生效）", error);
+  }
   if (!task.done) return { task, concludedTrack: null };
   try {
     const track = findActiveTrackForTask(await listTracks("active"), task.id);

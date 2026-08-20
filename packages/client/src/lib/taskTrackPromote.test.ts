@@ -1,7 +1,8 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { db, resetDb } from "../test/dbReset.js";
 import { addTask, updateTask } from "./tasks.js";
 import { addTrack, listTrackSteps, setTrackStatus } from "./tracks.js";
+import { addMilestones, dropMilestone, linkMilestoneTask } from "./trackMilestones.js";
 import type { Track } from "@timedata/shared";
 import {
   buildTrackConcludeUndo,
@@ -181,5 +182,80 @@ describe("buildTrackConcludeUndo", () => {
     await undoState!.onUndo();
     expect((await db.tasks.get(task.id))?.done).toBe(false);
     expect((await db.tracks.get(track.id))?.status).toBe("active");
+  });
+});
+
+describe("toggleTaskDoneWithTrackConclude 里程碑镜像", () => {
+  it("建轨道+两段骨架，第二段挂任务；勾掉任务 → 该段 status=done", async () => {
+    const task = await addTask({ title: "里程碑任务" });
+    const track = await addTrack({ title: "T-milestone" });
+    const milestones = await addMilestones(track.id, ["第一阶段", "第二阶段"]);
+    await linkMilestoneTask(milestones[1].id, task.id);
+
+    const { task: next } = await toggleTaskDoneWithTrackConclude(task.id);
+
+    expect(next.done).toBe(true);
+    const linked = await db.trackMilestones.get(milestones[1].id);
+    expect(linked?.status).toBe("done");
+    const first = await db.trackMilestones.get(milestones[0].id);
+    expect(first?.status).toBe("pending");
+  });
+
+  it("再次取消勾选 → 翻回 pending（守 early-return 之前执行）", async () => {
+    const task = await addTask({ title: "里程碑任务" });
+    const track = await addTrack({ title: "T-milestone" });
+    const milestones = await addMilestones(track.id, ["第一阶段", "第二阶段"]);
+    await linkMilestoneTask(milestones[1].id, task.id);
+
+    await toggleTaskDoneWithTrackConclude(task.id);
+    expect((await db.trackMilestones.get(milestones[1].id))?.status).toBe("done");
+
+    const { task: reopened } = await toggleTaskDoneWithTrackConclude(task.id);
+    expect(reopened.done).toBe(false);
+    expect((await db.trackMilestones.get(milestones[1].id))?.status).toBe("pending");
+  });
+
+  it("挂靠段是 dropped 时勾任务不改它", async () => {
+    const task = await addTask({ title: "里程碑任务" });
+    const track = await addTrack({ title: "T-milestone" });
+    const milestones = await addMilestones(track.id, ["第一阶段", "第二阶段"]);
+    await linkMilestoneTask(milestones[1].id, task.id);
+    await dropMilestone(milestones[1].id, "砍掉");
+
+    await toggleTaskDoneWithTrackConclude(task.id);
+
+    expect((await db.trackMilestones.get(milestones[1].id))?.status).toBe("dropped");
+  });
+
+  it("镜像路径抛错时 task.done 照常翻转、console.warn 被调、函数不 throw", async () => {
+    const task = await addTask({ title: "里程碑任务" });
+    const track = await addTrack({ title: "T-milestone" });
+    const milestones = await addMilestones(track.id, ["第一阶段", "第二阶段"]);
+    await linkMilestoneTask(milestones[1].id, task.id);
+
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const whereSpy = vi.spyOn(db.trackMilestones, "where").mockImplementation(((..._args: unknown[]) => ({
+      equals: () => ({
+        toArray: () => Promise.reject(new Error("boom")),
+      }),
+    })) as unknown as typeof db.trackMilestones.where);
+
+    let result: Awaited<ReturnType<typeof toggleTaskDoneWithTrackConclude>> | null = null;
+    let threw = false;
+    try {
+      result = await toggleTaskDoneWithTrackConclude(task.id);
+    } catch {
+      threw = true;
+    }
+
+    expect(threw).toBe(false);
+    expect(result?.task.done).toBe(true);
+    expect((await db.tasks.get(task.id))?.done).toBe(true);
+    expect(warn).toHaveBeenCalled();
+    // 轨道联动仍独立：没挂 refs 轨道自然为 null，但不应因前面的 warn 而崩
+    expect(result?.concludedTrack).toBeNull();
+
+    warn.mockRestore();
+    whereSpy.mockRestore();
   });
 });

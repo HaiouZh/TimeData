@@ -4,10 +4,12 @@ import { db } from "../test/dbReset.js";
 import { addTrack, addTrackStep } from "./tracks.js";
 import {
   addMilestones,
+  buildMilestoneTaskIndex,
   insertMilestoneAt,
   listTrackMilestones,
   dropMilestone,
   setMilestoneStatus,
+  syncLinkedMilestoneOnTaskToggle,
   updateMilestoneTitle,
   linkMilestoneTask,
   unlinkMilestoneTask,
@@ -298,5 +300,148 @@ describe("trackMilestones 写入层", () => {
     expect(listed[0].title).toBe("正常");
     expect(warn).toHaveBeenCalled();
     warn.mockRestore();
+  });
+});
+
+describe("buildMilestoneTaskIndex", () => {
+  it("同一任务被两段挂靠时取 position 小者", () => {
+    const list: TrackMilestone[] = [
+      {
+        id: "m2",
+        trackId: "t1",
+        title: "第二",
+        status: "pending",
+        note: null,
+        taskId: "task-1",
+        position: 1,
+        createdAt: "2026-06-21T08:00:01.000Z",
+        updatedAt: "2026-06-21T08:00:01.000Z",
+      },
+      {
+        id: "m1",
+        trackId: "t1",
+        title: "第一",
+        status: "pending",
+        note: null,
+        taskId: "task-1",
+        position: 0,
+        createdAt: "2026-06-21T08:00:00.000Z",
+        updatedAt: "2026-06-21T08:00:00.000Z",
+      },
+      {
+        id: "m3",
+        trackId: "t1",
+        title: "第三",
+        status: "pending",
+        note: null,
+        taskId: "task-2",
+        position: 2,
+        createdAt: "2026-06-21T08:00:02.000Z",
+        updatedAt: "2026-06-21T08:00:02.000Z",
+      },
+    ];
+    const index = buildMilestoneTaskIndex(list);
+    expect(index.size).toBe(2);
+    expect(index.get("task-1")?.id).toBe("m1");
+    expect(index.get("task-2")?.id).toBe("m3");
+  });
+
+  it("dropped 的段不进索引", () => {
+    const list: TrackMilestone[] = [
+      {
+        id: "m1",
+        trackId: "t1",
+        title: "被砍",
+        status: "dropped",
+        note: null,
+        taskId: "task-1",
+        position: 0,
+        createdAt: "2026-06-21T08:00:00.000Z",
+        updatedAt: "2026-06-21T08:00:00.000Z",
+      },
+      {
+        id: "m2",
+        trackId: "t1",
+        title: "正常",
+        status: "pending",
+        note: null,
+        taskId: "task-2",
+        position: 1,
+        createdAt: "2026-06-21T08:00:01.000Z",
+        updatedAt: "2026-06-21T08:00:01.000Z",
+      },
+      {
+        id: "m3",
+        trackId: "t1",
+        title: "无挂靠",
+        status: "pending",
+        note: null,
+        taskId: null,
+        position: 2,
+        createdAt: "2026-06-21T08:00:02.000Z",
+        updatedAt: "2026-06-21T08:00:02.000Z",
+      },
+    ];
+    const index = buildMilestoneTaskIndex(list);
+    expect(index.has("task-1")).toBe(false);
+    expect(index.get("task-2")?.id).toBe("m2");
+    expect(index.size).toBe(1);
+  });
+
+  it("同位时按 createdAt/id 仲裁，position 小者仍胜", () => {
+    const list: TrackMilestone[] = [
+      {
+        id: "m2",
+        trackId: "t1",
+        title: "后",
+        status: "pending",
+        note: null,
+        taskId: "task-1",
+        position: 0,
+        createdAt: "2026-06-21T08:00:01.000Z",
+        updatedAt: "2026-06-21T08:00:01.000Z",
+      },
+      {
+        id: "m1",
+        trackId: "t1",
+        title: "前",
+        status: "pending",
+        note: null,
+        taskId: "task-1",
+        position: 0,
+        createdAt: "2026-06-21T08:00:00.000Z",
+        updatedAt: "2026-06-21T08:00:00.000Z",
+      },
+    ];
+    const index = buildMilestoneTaskIndex(list);
+    expect(index.get("task-1")?.id).toBe("m1");
+  });
+});
+
+describe("syncLinkedMilestoneOnTaskToggle", () => {
+  it("目标态一致时不产生新 syncLog 条目（幂等）", async () => {
+    const track = await addTrack({ title: "T1", now });
+    const [m1] = await addMilestones(track.id, ["阶段一"]);
+    await linkMilestoneTask(m1.id, "task-123");
+    await setMilestoneStatus(m1.id, "done");
+    await db.syncLog.clear();
+    const before = await db.syncLog.where("tableName").equals("track_milestones").toArray();
+    expect(before).toHaveLength(0);
+
+    const result = await syncLinkedMilestoneOnTaskToggle("task-123", true);
+
+    expect(result?.id).toBe(m1.id);
+    expect(result?.status).toBe("done");
+    const after = await db.syncLog.where("tableName").equals("track_milestones").toArray();
+    expect(after).toHaveLength(0);
+    const stored = await db.trackMilestones.get(m1.id);
+    expect(stored?.status).toBe("done");
+  });
+
+  it("无挂靠时返回 null，不写库", async () => {
+    const result = await syncLinkedMilestoneOnTaskToggle("missing-task", true);
+    expect(result).toBeNull();
+    const logs = await db.syncLog.where("tableName").equals("track_milestones").toArray();
+    expect(logs).toHaveLength(0);
   });
 });

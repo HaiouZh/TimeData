@@ -211,3 +211,27 @@ export async function unlinkMilestoneTask(id: string): Promise<TrackMilestone> {
   if (!updated) throw new Error("里程碑写入失败");
   return updated;
 }
+
+/** taskId → 挂靠里程碑。同一任务被多段挂靠时取排序在前者（与 UI 徽章仲裁同源）。 */
+export function buildMilestoneTaskIndex(list: readonly TrackMilestone[]): Map<string, TrackMilestone> {
+  const ordered = orderMilestones(list);
+  const index = new Map<string, TrackMilestone>();
+  for (const item of ordered) {
+    if (item.status === "dropped") continue;
+    const tid = item.taskId;
+    if (tid === null) continue;
+    if (!index.has(tid)) index.set(tid, item);
+  }
+  return index;
+}
+
+/** 任务勾选镜像：查挂靠段（跳过 dropped），目标态 done?"done":"pending"，已一致不写。无挂靠返回 null。 */
+export async function syncLinkedMilestoneOnTaskToggle(taskId: string, done: boolean): Promise<TrackMilestone | null> {
+  const rows = (await db.trackMilestones.where("taskId").equals(taskId).toArray()) as unknown as TrackMilestone[];
+  const ordered = orderMilestones(rows);
+  const target = ordered.find((m) => m.status !== "dropped");
+  if (!target) return null;
+  const desired: TrackMilestone["status"] = done ? "done" : "pending";
+  if (target.status === desired) return target;
+  return setMilestoneStatus(target.id, desired);
+}
