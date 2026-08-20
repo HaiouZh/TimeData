@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { db, resetDb } from "../test/dbReset.js";
-import { addTask, updateTask } from "./tasks.js";
+import { addTask, toggleTaskDone, updateTask } from "./tasks.js";
 import { addTrack, listTrackSteps, setTrackStatus } from "./tracks.js";
 import { addMilestones, dropMilestone, linkMilestoneTask } from "./trackMilestones.js";
 import type { Track } from "@timedata/shared";
@@ -152,6 +152,44 @@ describe("undoToggleWithTrackConclude", () => {
     await undoToggleWithTrackConclude(done.id, (concludedTrack as Track).id);
     expect((await db.tasks.get(done.id))?.done).toBe(false);
     expect((await db.tracks.get(track.id))?.status).toBe("active");
+  });
+
+  it("撤销回退里程碑镜像：勾选时段被镜像成 done，撤销后段归位 pending", async () => {
+    const task = await addTask({ title: "撤销镜像活" });
+    const track = await addTrack({ title: "T-undo-milestone" });
+    const milestones = await addMilestones(track.id, ["第一阶段", "第二阶段"]);
+    await linkMilestoneTask(milestones[1].id, task.id);
+    // 挂轨道用于归档校验（与里程碑无关，复用既有 promote 能力）
+    const promoted = await promoteTaskToTrack(task);
+    const { task: done, concludedTrack } = await toggleTaskDoneWithTrackConclude(task.id);
+    expect(done.done).toBe(true);
+    expect((await db.trackMilestones.get(milestones[1].id))?.status).toBe("done");
+    expect(concludedTrack?.id).toBe(promoted.id);
+
+    await undoToggleWithTrackConclude(done.id, (concludedTrack as Track).id);
+
+    expect((await db.tasks.get(done.id))?.done).toBe(false);
+    expect((await db.tracks.get(promoted.id))?.status).toBe("active");
+    expect((await db.trackMilestones.get(milestones[1].id))?.status).toBe("pending");
+  });
+
+  it("撤销无条件回退里程碑：用户先直调 toggleTaskDone 取消勾选后，撤销仍把段归位 pending", async () => {
+    const task = await addTask({ title: "撤销无条件镜像活" });
+    const track = await addTrack({ title: "T-undo-milestone-2" });
+    const milestones = await addMilestones(track.id, ["第一阶段", "第二阶段"]);
+    await linkMilestoneTask(milestones[1].id, task.id);
+    const promoted = await promoteTaskToTrack(task);
+    const { task: done, concludedTrack } = await toggleTaskDoneWithTrackConclude(task.id);
+    expect((await db.trackMilestones.get(milestones[1].id))?.status).toBe("done");
+    // 用户没点撤销，而是直调 toggleTaskDone 取消勾选（绕过镜像，段仍停在 done）
+    await toggleTaskDone(done.id);
+    expect((await db.tasks.get(done.id))?.done).toBe(false);
+    expect((await db.trackMilestones.get(milestones[1].id))?.status).toBe("done");
+
+    await undoToggleWithTrackConclude(done.id, (concludedTrack as Track).id);
+
+    expect((await db.tasks.get(done.id))?.done).toBe(false);
+    expect((await db.trackMilestones.get(milestones[1].id))?.status).toBe("pending");
   });
 });
 

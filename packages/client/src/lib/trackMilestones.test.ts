@@ -301,6 +301,44 @@ describe("trackMilestones 写入层", () => {
     expect(warn).toHaveBeenCalled();
     warn.mockRestore();
   });
+
+  it("addMilestones 追加到非空轨道时 position 从 max+1 续接（2/3）", async () => {
+    const track = await addTrack({ title: "T1", now });
+    const firstTwo = await addMilestones(track.id, ["第一段", "第二段"]);
+    expect(firstTwo.map((m) => m.position)).toEqual([0, 1]);
+
+    const nextTwo = await addMilestones(track.id, ["第三段", "第四段"]);
+
+    expect(nextTwo).toHaveLength(2);
+    expect(nextTwo[0].position).toBe(2);
+    expect(nextTwo[1].position).toBe(3);
+    expect(nextTwo[0].title).toBe("第三段");
+    expect(nextTwo[1].title).toBe("第四段");
+
+    const listed = await listTrackMilestones(track.id);
+    expect(listed.map((m) => m.title)).toEqual(["第一段", "第二段", "第三段", "第四段"]);
+    expect(listed.map((m) => m.position)).toEqual([0, 1, 2, 3]);
+  });
+
+  it("dropMilestone 空白 note 时保留原备注", async () => {
+    const track = await addTrack({ title: "T1", now });
+    const [m1] = await addMilestones(track.id, ["待砍"]);
+    // 先铺底原备注
+    const droppedOnce = await dropMilestone(m1.id, "原备注");
+    expect(droppedOnce.note).toBe("原备注");
+    // 翻回 pending 保留备注（借 setMilestoneStatus 的既有语义）
+    const revived = await setMilestoneStatus(m1.id, "pending");
+    expect(revived.note).toBe("原备注");
+    expect(revived.status).toBe("pending");
+
+    const droppedBlank = await dropMilestone(m1.id, "   ");
+
+    expect(droppedBlank.status).toBe("dropped");
+    expect(droppedBlank.note).toBe("原备注");
+    const stored = await db.trackMilestones.get(m1.id);
+    expect(stored?.status).toBe("dropped");
+    expect(stored?.note).toBe("原备注");
+  });
 });
 
 describe("buildMilestoneTaskIndex", () => {

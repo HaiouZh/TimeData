@@ -77,8 +77,9 @@ export async function toggleTaskDoneWithTrackConclude(
 }
 
 /**
- * 撤销「勾选附带归档」：取消勾选任务 + 把轨道重开为 active，两件事都回退。
- * 两步串行、不同事务（同 `toggleTaskDoneWithTrackConclude` 的既有取舍）：中途失败可重试，
+ * 撤销「勾选附带归档」：取消勾选任务 + 把轨道重开为 active + 里程碑镜像回退，三件事都回退。
+ * 里程碑镜像语义：勾选时段被镜像成 done，撤销时无条件归位为 pending（幂等，已一致不写）。
+ * 三步串行、不同事务（同 `toggleTaskDoneWithTrackConclude` 的既有取舍）：中途失败可重试，
  * 不做补偿回滚——轨道与任务各自都留在能手动收拾的状态。
  */
 export async function undoToggleWithTrackConclude(
@@ -91,6 +92,11 @@ export async function undoToggleWithTrackConclude(
   // 与「撤销 = 回退」正好相反。只有仍停在已完成态时才需要翻回去。
   const current = await db.tasks.get(taskId);
   if (current?.done === true) await toggleTaskDone(taskId, options);
+  try {
+    await syncLinkedMilestoneOnTaskToggle(taskId, false);
+  } catch (error) {
+    console.warn("[taskTrackPromote] 撤销镜像挂靠里程碑失败（撤销本身已生效）", error);
+  }
   await setTrackStatus(trackId, "active", { now: options.now });
 }
 

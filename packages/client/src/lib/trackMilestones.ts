@@ -225,13 +225,23 @@ export function buildMilestoneTaskIndex(list: readonly TrackMilestone[]): Map<st
   return index;
 }
 
-/** 任务勾选镜像：查挂靠段（跳过 dropped），目标态 done?"done":"pending"，已一致不写。无挂靠返回 null。 */
+/** 任务勾选镜像：查挂靠段（跳过 dropped），目标态 done?"done":"pending"，已一致不写。无挂靠返回 null。查写同事务，防两条勾选链交错读到未提交态。 */
 export async function syncLinkedMilestoneOnTaskToggle(taskId: string, done: boolean): Promise<TrackMilestone | null> {
-  const rows = (await db.trackMilestones.where("taskId").equals(taskId).toArray()) as unknown as TrackMilestone[];
-  const ordered = orderMilestones(rows);
-  const target = ordered.find((m) => m.status !== "dropped");
-  if (!target) return null;
-  const desired: TrackMilestone["status"] = done ? "done" : "pending";
-  if (target.status === desired) return target;
-  return setMilestoneStatus(target.id, desired);
+  let result: TrackMilestone | null = null;
+  await db.transaction("rw", db.tracks, db.trackMilestones, db.syncLog, async () => {
+    const rows = (await db.trackMilestones.where("taskId").equals(taskId).toArray()) as unknown as TrackMilestone[];
+    const ordered = orderMilestones(rows);
+    const target = ordered.find((m) => m.status !== "dropped");
+    if (!target) {
+      result = null;
+      return;
+    }
+    const desired: TrackMilestone["status"] = done ? "done" : "pending";
+    if (target.status === desired) {
+      result = target;
+      return;
+    }
+    result = await setMilestoneStatus(target.id, desired);
+  });
+  return result;
 }
