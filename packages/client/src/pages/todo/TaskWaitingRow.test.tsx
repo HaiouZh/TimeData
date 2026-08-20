@@ -171,3 +171,298 @@ describe("TaskWaitingRow", () => {
     await unmount(root);
   });
 });
+
+describe("TaskWaitingRow picker 修复（过滤/搜索/上下文）", () => {
+  const now = "2026-07-01T00:00:00.000Z";
+
+  function setInputValue(input: HTMLInputElement, value: string) {
+    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
+    setter?.call(input, value);
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+  }
+
+  it("occurrence 候选（ruleId 非空的同名发）不出现在候选列表", async () => {
+    const self = await addTask({ title: "自己" });
+    const normal = await addTask({ title: "同名任务" });
+    // occurrence：同名但带 ruleId，应被滤掉
+    await db.tasks.add({
+      id: "occ-1",
+      parentId: null,
+      title: "同名任务",
+      done: false,
+      recurrence: null,
+      lastDoneAt: null,
+      startAt: null,
+      scheduledAt: null,
+      completedCount: 0,
+      weight: 0,
+      completedAt: null,
+      tags: [],
+      ruleId: "rule-1",
+      sessionId: null,
+      skipped: false,
+      sortOrder: 99,
+      createdAt: now,
+      updatedAt: now,
+    });
+    const { host, root } = await renderRow(self.id);
+    await click(host.querySelector('button[aria-label="添加前置"]'));
+    // 只有一个“同名任务”候选（normal），occurrence 被滤掉，按钮只出现一次
+    const buttons = host.querySelectorAll('button[aria-label="添加前置 同名任务"]');
+    expect(buttons.length).toBe(1);
+    // 再确认 occurrence 单独时不出现：清空后只剩 occurrence 标题的测试
+    await unmount(root);
+    await resetDb();
+    const self2 = await addTask({ title: "自己2" });
+    await db.tasks.add({
+      id: "occ-only",
+      parentId: null,
+      title: "发次独有标题",
+      done: false,
+      recurrence: null,
+      lastDoneAt: null,
+      startAt: null,
+      scheduledAt: null,
+      completedCount: 0,
+      weight: 0,
+      completedAt: null,
+      tags: [],
+      ruleId: "rule-1",
+      sessionId: null,
+      skipped: false,
+      sortOrder: 0,
+      createdAt: now,
+      updatedAt: now,
+    });
+    const rendered2 = await renderRow(self2.id);
+    await click(rendered2.host.querySelector('button[aria-label="添加前置"]'));
+    expect(rendered2.host.querySelector('button[aria-label="添加前置 发次独有标题"]')).toBeNull();
+    expect(normal.title).toBe("同名任务");
+    await unmount(rendered2.root);
+  });
+
+  it("重复模板（recurrence 非空）不出现在候选列表", async () => {
+    const self = await addTask({ title: "自己" });
+    await addTask({ title: "普通候选" });
+    await db.tasks.add({
+      id: "tmpl-1",
+      parentId: null,
+      title: "模板任务",
+      done: false,
+      recurrence: { freq: "daily", interval: 1, basis: "due" } as never,
+      lastDoneAt: null,
+      startAt: now,
+      scheduledAt: null,
+      completedCount: 0,
+      weight: 0,
+      completedAt: null,
+      tags: [],
+      ruleId: null,
+      sessionId: null,
+      skipped: false,
+      sortOrder: 10,
+      createdAt: now,
+      updatedAt: now,
+    });
+    const { host, root } = await renderRow(self.id);
+    await click(host.querySelector('button[aria-label="添加前置"]'));
+    expect(host.querySelector('button[aria-label="添加前置 模板任务"]')).toBeNull();
+    expect(host.querySelector('button[aria-label="添加前置 普通候选"]')).not.toBeNull();
+    await unmount(root);
+  });
+
+  it("搜索框按标题过滤候选（大小写不敏感）", async () => {
+    const self = await addTask({ title: "自己" });
+    await addTask({ title: "Alpha Task" });
+    await addTask({ title: "beta task" });
+    const { host, root } = await renderRow(self.id);
+    await click(host.querySelector('button[aria-label="添加前置"]'));
+    const input = host.querySelector('input[aria-label="搜索前置候选"]') as HTMLInputElement;
+    expect(input).not.toBeNull();
+    expect(input.placeholder).toBe("搜索…");
+    await act(async () => {
+      setInputValue(input, "ALPHA");
+    });
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 0));
+    });
+    expect(host.querySelector('button[aria-label="添加前置 Alpha Task"]')).not.toBeNull();
+    expect(host.querySelector('button[aria-label="添加前置 beta task"]')).toBeNull();
+    await unmount(root);
+  });
+
+  it("清空搜索恢复全量候选", async () => {
+    const self = await addTask({ title: "自己" });
+    await addTask({ title: "Alpha Task" });
+    await addTask({ title: "beta task" });
+    const { host, root } = await renderRow(self.id);
+    await click(host.querySelector('button[aria-label="添加前置"]'));
+    const input = host.querySelector('input[aria-label="搜索前置候选"]') as HTMLInputElement;
+    await act(async () => {
+      setInputValue(input, "Alpha");
+    });
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 0));
+    });
+    expect(host.querySelector('button[aria-label="添加前置 beta task"]')).toBeNull();
+    await act(async () => {
+      setInputValue(input, "");
+    });
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 0));
+    });
+    expect(host.querySelector('button[aria-label="添加前置 Alpha Task"]')).not.toBeNull();
+    expect(host.querySelector('button[aria-label="添加前置 beta task"]')).not.toBeNull();
+    await unmount(root);
+  });
+
+  it("关闭重开 picker 时清空搜索框", async () => {
+    const self = await addTask({ title: "自己" });
+    await addTask({ title: "Alpha Task" });
+    await addTask({ title: "beta task" });
+    const { host, root } = await renderRow(self.id);
+    await click(host.querySelector('button[aria-label="添加前置"]'));
+    const input = host.querySelector('input[aria-label="搜索前置候选"]') as HTMLInputElement;
+    await act(async () => {
+      setInputValue(input, "Alpha");
+    });
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 0));
+    });
+    expect(host.querySelector('button[aria-label="添加前置 beta task"]')).toBeNull();
+    // 关闭
+    await click(host.querySelector('button[aria-label="添加前置"]'));
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 0));
+    });
+    expect(host.querySelector('input[aria-label="搜索前置候选"]')).toBeNull();
+    // 重开
+    await click(host.querySelector('button[aria-label="添加前置"]'));
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 0));
+    });
+    const input2 = host.querySelector('input[aria-label="搜索前置候选"]') as HTMLInputElement;
+    expect(input2).not.toBeNull();
+    expect(input2.value).toBe("");
+    // 全量恢复
+    expect(host.querySelector('button[aria-label="添加前置 Alpha Task"]')).not.toBeNull();
+    expect(host.querySelector('button[aria-label="添加前置 beta task"]')).not.toBeNull();
+    await unmount(root);
+  });
+
+  it("任务候选上下文：项目名优先于父标题与排期", async () => {
+    const self = await addTask({ title: "自己" });
+    const parent = await addTask({ title: "父标题A" });
+    const candidate = await addTask({ title: "候选项目优" });
+    await db.tasks.update(candidate.id, { parentId: parent.id, scheduledAt: "2026-07-20T12:00:00.000Z" });
+    await db.goals.add({
+      id: "g-proj",
+      title: "项目A",
+      kind: "project",
+      status: "active",
+      members: [{ kind: "task", id: candidate.id }],
+      prerequisites: [],
+      createdAt: now,
+      updatedAt: now,
+    } as never);
+    const { host, root } = await renderRow(self.id);
+    await click(host.querySelector('button[aria-label="添加前置"]'));
+    const btn = host.querySelector(`button[aria-label="添加前置 ${candidate.title}"]`) as HTMLElement;
+    expect(btn).not.toBeNull();
+    expect(btn.textContent).toContain("项目A");
+    // 父标题与日期不应出现，项目名已覆盖
+    expect(btn.textContent).not.toContain("父标题A");
+    await unmount(root);
+  });
+
+  it("任务候选上下文：无项目时显示父标题", async () => {
+    const self = await addTask({ title: "自己" });
+    const parent = await addTask({ title: "父标题B" });
+    const candidate = await addTask({ title: "候选父优" });
+    await db.tasks.update(candidate.id, { parentId: parent.id, scheduledAt: "2026-07-21T12:00:00.000Z" });
+    const { host, root } = await renderRow(self.id);
+    await click(host.querySelector('button[aria-label="添加前置"]'));
+    const btn = host.querySelector(`button[aria-label="添加前置 ${candidate.title}"]`) as HTMLElement;
+    expect(btn).not.toBeNull();
+    expect(btn.textContent).toContain("父标题B");
+    await unmount(root);
+  });
+
+  it("任务候选上下文：无项目无父时显示排期日期", async () => {
+    const self = await addTask({ title: "自己" });
+    const candidate = await addTask({ title: "候选排期" });
+    const scheduledAt = "2026-07-22T12:00:00.000Z";
+    await db.tasks.update(candidate.id, { scheduledAt });
+    const d = new Date(scheduledAt);
+    const expected = `${d.getMonth() + 1}月${d.getDate()}日`;
+    const { host, root } = await renderRow(self.id);
+    await click(host.querySelector('button[aria-label="添加前置"]'));
+    const btn = host.querySelector(`button[aria-label="添加前置 ${candidate.title}"]`) as HTMLElement;
+    expect(btn).not.toBeNull();
+    expect(btn.textContent).toContain(expected);
+    await unmount(root);
+  });
+
+  it("任务候选上下文为 null 时不渲染右列", async () => {
+    const self = await addTask({ title: "自己", toInbox: true });
+    const candidate = await addTask({ title: "候选无上下文", toInbox: true });
+    const { host, root } = await renderRow(self.id);
+    await click(host.querySelector('button[aria-label="添加前置"]'));
+    const btn = host.querySelector(`button[aria-label="添加前置 ${candidate.title}"]`) as HTMLElement;
+    expect(btn).not.toBeNull();
+    // 右列是 shrink-0 td-text-caption，null 时不应存在
+    expect(btn.querySelector("span.shrink-0")).toBeNull();
+    expect(btn.textContent).toBe(candidate.title);
+    await unmount(root);
+  });
+
+  it("轨道候选行不显示上下文列", async () => {
+    const self = await addTask({ title: "自己" });
+    await db.tracks.add({
+      id: "track-ctx",
+      title: "轨道候选",
+      status: "active",
+      refs: [],
+      createdAt: now,
+      updatedAt: now,
+    } as never);
+    const { host, root } = await renderRow(self.id);
+    await click(host.querySelector('button[aria-label="添加前置"]'));
+    const btn = host.querySelector('button[aria-label="添加前置 轨道候选"]') as HTMLElement;
+    expect(btn).not.toBeNull();
+    expect(btn.querySelector("span.shrink-0")).toBeNull();
+    await unmount(root);
+  });
+
+  it("搜索框受控且占位文本正确，过滤对轨道同样生效", async () => {
+    const self = await addTask({ title: "自己" });
+    await db.tracks.add({
+      id: "trA",
+      title: "Zoom Sprint",
+      status: "active",
+      refs: [],
+      createdAt: now,
+      updatedAt: now,
+    } as never);
+    await db.tracks.add({
+      id: "trB",
+      title: "Alpha",
+      status: "active",
+      refs: [],
+      createdAt: now,
+      updatedAt: now,
+    } as never);
+    const { host, root } = await renderRow(self.id);
+    await click(host.querySelector('button[aria-label="添加前置"]'));
+    const input = host.querySelector('input[aria-label="搜索前置候选"]') as HTMLInputElement;
+    await act(async () => {
+      setInputValue(input, "alpha");
+    });
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 0));
+    });
+    expect(host.querySelector('button[aria-label="添加前置 Alpha"]')).not.toBeNull();
+    expect(host.querySelector('button[aria-label="添加前置 Zoom Sprint"]')).toBeNull();
+    await unmount(root);
+  });
+});

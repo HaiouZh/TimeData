@@ -1,9 +1,10 @@
 import { Plus, X } from "@phosphor-icons/react";
 import type { TaskRelation } from "@timedata/shared";
 import { useLiveQuery } from "dexie-react-hooks";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Icon } from "../../components/Icon.js";
 import { db } from "../../db/index.js";
+import { blockerCandidateContext, filterBlockerCandidates } from "../../lib/tasks/blockerCandidates.js";
 import {
   addTaskRelation,
   listRelationsBlocking,
@@ -69,19 +70,21 @@ export interface TaskWaitingRowProps {
  */
 export function TaskWaitingRow({ taskId }: TaskWaitingRowProps) {
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [query, setQuery] = useState("");
   const [error, setError] = useState<string | null>(null);
 
   const data = useLiveQuery(
     async () => {
       // allRelations 供成环归因用（要出边，见 cycleBlameTitle 的注释）；relations 只是它按
       // 「blocked 端 = 本任务」筛出的入边，供本行列表用。两者口径不同，别合并成一个。
-      const [relations, allRelations, tasks, tracks] = await Promise.all([
+      const [relations, allRelations, tasks, tracks, goals] = await Promise.all([
         listRelationsBlocking({ kind: "task", id: taskId }),
         listTaskRelations(),
         db.tasks.toArray(),
         db.tracks.toArray(),
+        db.goals.toArray(),
       ]);
-      return { relations, allRelations, tasks, tracks };
+      return { relations, allRelations, tasks, tracks, goals };
     },
     [taskId],
   );
@@ -89,6 +92,7 @@ export function TaskWaitingRow({ taskId }: TaskWaitingRowProps) {
   const allRelations = data?.allRelations ?? [];
   const tasks = data?.tasks ?? [];
   const tracks = data?.tracks ?? [];
+  const goals = data?.goals ?? [];
 
   const titleByKey = new Map<string, string>();
   const completedKeys = new Set<string>();
@@ -110,12 +114,36 @@ export function TaskWaitingRow({ taskId }: TaskWaitingRowProps) {
     return { key, end, title: titleByKey.get(key) ?? "（已删除）", satisfied: completedKeys.has(key) };
   });
   const existingBlockerKeys = new Set(blockers.map((blocker) => blocker.key));
-  const taskCandidates = tasks
-    .filter((task) => !task.done && task.id !== taskId && !existingBlockerKeys.has(`task:${task.id}`))
-    .sort((a, b) => a.sortOrder - b.sortOrder || a.title.localeCompare(b.title));
-  const trackCandidates = tracks
-    .filter((track) => track.status === "active" && !existingBlockerKeys.has(`track:${track.id}`))
-    .sort((a, b) => a.title.localeCompare(b.title));
+
+  const projectNameByTaskId = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const goal of goals) {
+      const raw = goal as unknown as {
+        status?: string;
+        kind?: string;
+        title?: string;
+        members?: Array<{ kind?: string; id?: string }>;
+      };
+      if (raw.status !== "active" || raw.kind !== "project") continue;
+      if (!Array.isArray(raw.members)) continue;
+      const title = raw.title ?? "";
+      for (const member of raw.members) {
+        if (member?.kind !== "task" || typeof member.id !== "string" || member.id === "") continue;
+        map.set(member.id, title);
+      }
+    }
+    return map;
+  }, [goals]);
+
+  const taskTitleById = useMemo(() => new Map(tasks.map((t) => [t.id, t.title])), [tasks]);
+
+  const { tasks: taskCandidates, tracks: trackCandidates } = filterBlockerCandidates({
+    tasks,
+    tracks,
+    selfTaskId: taskId,
+    existingBlockerKeys,
+    query,
+  });
 
   function errorMessage(err: unknown, attempted: TaskRelationEnd): string {
     const reason = err instanceof Error ? err.message : "";
@@ -132,6 +160,7 @@ export function TaskWaitingRow({ taskId }: TaskWaitingRowProps) {
       await addTaskRelation({ blocker: end, blocked: { kind: "task", id: taskId } });
       setError(null);
       setPickerOpen(false);
+      setQuery("");
     } catch (err) {
       setError(errorMessage(err, end));
     }
@@ -156,7 +185,10 @@ export function TaskWaitingRow({ taskId }: TaskWaitingRowProps) {
           aria-expanded={pickerOpen}
           onClick={() => {
             setError(null);
-            setPickerOpen((open) => !open);
+            setPickerOpen((open) => {
+              if (open) setQuery("");
+              return !open;
+            });
           }}
           className="inline-flex min-h-8 items-center gap-1 rounded-ctl px-2 td-text-caption text-ink-3 hover:bg-surface-hover hover:text-accent"
         >
@@ -200,47 +232,62 @@ export function TaskWaitingRow({ taskId }: TaskWaitingRowProps) {
 
       {!pickerOpen && blockers.length === 0 && <p className="td-text-caption text-ink-3">没有前置</p>}
 
-      {pickerOpen &&
-        (taskCandidates.length === 0 && trackCandidates.length === 0 ? (
-          <p className="rounded-row border border-dashed border-border-hairline px-3 py-3 td-text-body text-ink-3">
-            没有可添加的前置
-          </p>
-        ) : (
-          <div className="space-y-2">
-            {taskCandidates.length > 0 && (
-              <div className="space-y-1">
-                <p className="px-1 td-text-caption text-ink-3">任务</p>
-                {taskCandidates.map((task) => (
-                  <button
-                    key={task.id}
-                    type="button"
-                    aria-label={`添加前置 ${task.title}`}
-                    onClick={() => void addBlocker({ kind: "task", id: task.id })}
-                    className="flex min-h-9 w-full items-center rounded-row border border-border bg-surface-elevated px-2 td-text-body text-ink hover:bg-surface-hover"
-                  >
-                    <span className="min-w-0 flex-1 truncate text-left">{task.title}</span>
-                  </button>
-                ))}
-              </div>
-            )}
-            {trackCandidates.length > 0 && (
-              <div className="space-y-1">
-                <p className="px-1 td-text-caption text-ink-3">轨道</p>
-                {trackCandidates.map((track) => (
-                  <button
-                    key={track.id}
-                    type="button"
-                    aria-label={`添加前置 ${track.title}`}
-                    onClick={() => void addBlocker({ kind: "track", id: track.id })}
-                    className="flex min-h-9 w-full items-center rounded-row border border-border bg-surface-elevated px-2 td-text-body text-ink hover:bg-surface-hover"
-                  >
-                    <span className="min-w-0 flex-1 truncate text-left">{track.title}</span>
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-        ))}
+      {pickerOpen && (
+        <div className="space-y-2">
+          <input
+            aria-label="搜索前置候选"
+            placeholder="搜索…"
+            value={query}
+            onChange={(event) => setQuery(event.currentTarget.value)}
+            autoFocus
+            className="w-full rounded-ctl border border-border bg-surface px-2 py-1 text-ink outline-none placeholder:text-ink-3 focus:border-accent"
+          />
+          {taskCandidates.length === 0 && trackCandidates.length === 0 ? (
+            <p className="rounded-row border border-dashed border-border-hairline px-3 py-3 td-text-body text-ink-3">
+              没有可添加的前置
+            </p>
+          ) : (
+            <div className="space-y-2">
+              {taskCandidates.length > 0 && (
+                <div className="space-y-1">
+                  <p className="px-1 td-text-caption text-ink-3">任务</p>
+                  {taskCandidates.map((task) => {
+                    const context = blockerCandidateContext(task, { projectNameByTaskId, taskTitleById });
+                    return (
+                      <button
+                        key={task.id}
+                        type="button"
+                        aria-label={`添加前置 ${task.title}`}
+                        onClick={() => void addBlocker({ kind: "task", id: task.id })}
+                        className="flex min-h-9 w-full items-center gap-2 rounded-row border border-border bg-surface-elevated px-2 td-text-body text-ink hover:bg-surface-hover"
+                      >
+                        <span className="min-w-0 flex-1 truncate text-left">{task.title}</span>
+                        {context !== null && <span className="shrink-0 td-text-caption text-ink-3">{context}</span>}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+              {trackCandidates.length > 0 && (
+                <div className="space-y-1">
+                  <p className="px-1 td-text-caption text-ink-3">轨道</p>
+                  {trackCandidates.map((track) => (
+                    <button
+                      key={track.id}
+                      type="button"
+                      aria-label={`添加前置 ${track.title}`}
+                      onClick={() => void addBlocker({ kind: "track", id: track.id })}
+                      className="flex min-h-9 w-full items-center rounded-row border border-border bg-surface-elevated px-2 td-text-body text-ink hover:bg-surface-hover"
+                    >
+                      <span className="min-w-0 flex-1 truncate text-left">{track.title}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
     </section>
   );
 }
