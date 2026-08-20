@@ -107,6 +107,33 @@ function seedTrackStep(overrides: {
   );
 }
 
+function seedTrackMilestone(overrides: {
+  id: string;
+  trackId?: string;
+  title?: string;
+  status?: "pending" | "done" | "dropped";
+  note?: string | null;
+  taskId?: string | null;
+  position?: number;
+  createdAt?: string;
+  updatedAt?: string;
+}): void {
+  db.prepare(`
+    INSERT INTO track_milestones (id, track_id, title, status, note, task_id, position, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    overrides.id,
+    overrides.trackId ?? "track-1",
+    overrides.title ?? overrides.id,
+    overrides.status ?? "pending",
+    overrides.note ?? null,
+    overrides.taskId ?? null,
+    overrides.position ?? 0,
+    overrides.createdAt ?? "2026-06-21T01:00:00.000Z",
+    overrides.updatedAt ?? overrides.createdAt ?? "2026-06-21T01:00:00.000Z",
+  );
+}
+
 describe("GET /api/agent/tracks/context", () => {
   it("returns active tracks with board signals, recent steps and no write-side effects", async () => {
     seedSetting(TRACK_ACTION_TAGS_KEY, JSON.stringify(["agent在做", "待我处理"]));
@@ -177,6 +204,34 @@ describe("GET /api/agent/tracks/context", () => {
 
     expect(body.tracks[0]?.recentSteps[0]?.id).toBe("today");
   });
+
+  it("列表 context 每条摘要透出 progress 且不含全量 milestones", async () => {
+    seedTrack("active-a", { title: "A 轨道", updatedAt: "2026-06-21T07:00:00.000Z" });
+    seedTrack("active-b", { title: "B 轨道", updatedAt: "2026-06-21T05:00:00.000Z" });
+    // a: 1 done + 1 dropped + 1 pending => progress {done:1,total:2}
+    seedTrackMilestone({ id: "m-done", trackId: "active-a", status: "done", position: 0 });
+    seedTrackMilestone({ id: "m-dropped", trackId: "active-a", status: "dropped", position: 1 });
+    seedTrackMilestone({ id: "m-pending", trackId: "active-a", status: "pending", position: 2 });
+    // b 无里程碑 => {done:0,total:0}
+
+    const beforeSeq = syncSeqCount();
+    const res = await get("/api/agent/tracks/context");
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      ok: boolean;
+      tracks: Array<{ track: { id: string }; progress: { done: number; total: number } }>;
+    };
+    expect(body.tracks).toHaveLength(2);
+    for (const entry of body.tracks) {
+      expect(entry).toHaveProperty("progress");
+      expect(entry).not.toHaveProperty("milestones");
+    }
+    const a = body.tracks.find((t) => t.track.id === "active-a")!;
+    const b = body.tracks.find((t) => t.track.id === "active-b")!;
+    expect(a.progress).toEqual({ done: 1, total: 2 });
+    expect(b.progress).toEqual({ done: 0, total: 0 });
+    expect(syncSeqCount()).toBe(beforeSeq);
+  });
 });
 
 describe("GET /api/agent/tracks/:id/context", () => {
@@ -222,6 +277,43 @@ describe("GET /api/agent/tracks/:id/context", () => {
     const inactive = await get("/api/agent/tracks/parked-1/context");
     expect(inactive.status).toBe(409);
     await expect(inactive.json()).resolves.toMatchObject({ ok: false, error: { code: "TRACK_NOT_ACTIVE" } });
+  });
+
+  it("详情 context 按 position 升序返回 milestones 且 dropped 不计入 progress", async () => {
+    seedTrack();
+    // 乱序插入：position 2, 0, 1，含 1 个 dropped
+    seedTrackMilestone({ id: "m2", trackId: "track-1", title: "M2", status: "pending", position: 2 });
+    seedTrackMilestone({ id: "m0", trackId: "track-1", title: "M0", status: "done", position: 0 });
+    seedTrackMilestone({ id: "m1", trackId: "track-1", title: "M1", status: "dropped", position: 1 });
+
+    const beforeSeq = syncSeqCount();
+    const res = await get("/api/agent/tracks/track-1/context");
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      ok: boolean;
+      milestones: Array<{ id: string; position: number; status: string }>;
+      progress: { done: number; total: number };
+    };
+    expect(body.milestones.map((m) => m.id)).toEqual(["m0", "m1", "m2"]);
+    expect(body.milestones.map((m) => m.position)).toEqual([0, 1, 2]);
+    // dropped 剔除分母：3 段中 1 段 dropped => total 2，done 1
+    expect(body.progress).toEqual({ done: 1, total: 2 });
+    expect(syncSeqCount()).toBe(beforeSeq);
+  });
+
+  it("无里程碑的 track 详情 context 返回 progress {done:0,total:0} 与空 milestones", async () => {
+    seedTrack();
+    const beforeSeq = syncSeqCount();
+    const res = await get("/api/agent/tracks/track-1/context");
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      ok: boolean;
+      milestones: unknown[];
+      progress: { done: number; total: number };
+    };
+    expect(body.milestones).toEqual([]);
+    expect(body.progress).toEqual({ done: 0, total: 0 });
+    expect(syncSeqCount()).toBe(beforeSeq);
   });
 });
 

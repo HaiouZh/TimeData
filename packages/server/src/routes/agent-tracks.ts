@@ -5,9 +5,12 @@ import {
   TRACK_ACTION_TAGS_KEY,
   TrackSchema,
   TrackStepSchema,
+  milestoneProgress,
+  orderMilestones,
   trackStatusOp,
   type SyncChange,
   type Track,
+  type TrackMilestone,
   type TrackStatusOp,
   type TrackStep,
   UtcIsoStringSchema,
@@ -17,7 +20,14 @@ import {
 import { Hono } from "hono";
 import { z } from "zod";
 import { getDb } from "../db/connection.js";
-import { rowToTrack, rowToTrackStep, type TrackRow, type TrackStepRow } from "../lib/track-rows.js";
+import {
+  rowToMilestone,
+  rowToTrack,
+  rowToTrackStep,
+  type TrackMilestoneRow,
+  type TrackRow,
+  type TrackStepRow,
+} from "../lib/track-rows.js";
 import { notifySyncChange } from "../sync/notifier.js";
 import { applyChange } from "../sync/resolver.js";
 import { getLatestSeq } from "../sync/seq.js";
@@ -94,6 +104,13 @@ function listTrackStepsAsc(trackId: string): TrackStep[] {
   return rows.map(rowToTrackStep);
 }
 
+function listTrackMilestonesAsc(trackId: string): TrackMilestone[] {
+  const rows = getDb()
+    .prepare("SELECT * FROM track_milestones WHERE track_id = ? ")
+    .all(trackId) as TrackMilestoneRow[];
+  return orderMilestones(rows.map(rowToMilestone));
+}
+
 function latestBoardSignalTag(steps: readonly TrackStep[], boardSignals: readonly string[]): string | null {
   return latestTrackBoardSignal(steps, boardSignals)?.tag ?? null;
 }
@@ -105,6 +122,7 @@ function trackContextSummary(track: Track, boardSignals: readonly string[]) {
     latestBoardSignal: latestBoardSignalTag(allSteps, boardSignals),
     stepCount: allSteps.length,
     recentSteps: [...allSteps].slice(-3).reverse(),
+    progress: milestoneProgress(listTrackMilestonesAsc(track.id)),
   };
 }
 
@@ -200,6 +218,7 @@ agentTracks.get("/tracks/:id/context", (c) => {
 
   const boardSignals = readTrackBoardSignals();
   const steps = listTrackStepsAsc(id);
+  const milestones = listTrackMilestonesAsc(id);
   return c.json({
     ok: true,
     boardSignals,
@@ -207,6 +226,8 @@ agentTracks.get("/tracks/:id/context", (c) => {
     latestBoardSignal: latestBoardSignalTag(steps, boardSignals),
     stepCount: steps.length,
     steps,
+    milestones,
+    progress: milestoneProgress(milestones),
   });
 });
 
