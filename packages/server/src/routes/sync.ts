@@ -663,6 +663,18 @@ sync.post("/push", async (c) => {
       const touchesOverlappingRecord = impactRecords.some((record) =>
         staleGuardKeys.has(`${record.tableName}:${record.recordId}`),
       );
+      // 隐式目标 = 影响记录里除 change 自身之外的那些（时间重叠删除、分类级联删除）。
+      // 命中 staleGuardKeys 即"设备没见过其最新状态"。部分见过部分没见过时整条拒收：
+      // 半截执行会产生用户既没预期、也没被告知的结果。
+      //
+      // 刻意不含 staleGuardAll：unknown_base 时客户端根本没报视图，服务端无从判断"见没见过"，
+      // 而 overlappingRecords 恒为空。若在那里一律拒收，等于让所有不带 baseSeq 的 push
+      // （老客户端、CLI 等入口）都做不了级联删除与重叠删除。那一档仍由 staleGuard 的时间戳兜。
+      const unseenImpactRecords = impactRecords.filter(
+        (record) =>
+          (record.tableName !== change.tableName || record.recordId !== change.recordId)
+          && staleGuardKeys.has(`${record.tableName}:${record.recordId}`),
+      );
       results.push(
         applyChange(change, {
           db,
@@ -671,6 +683,7 @@ sync.post("/push", async (c) => {
             (record) => record.tableName !== change.tableName || record.recordId !== change.recordId,
           ),
           staleServerTimestamps,
+          unseenImpactRecords,
         }),
       );
     }

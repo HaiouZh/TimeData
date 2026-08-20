@@ -11,6 +11,8 @@ export interface ApplyChangeOptions {
   staleGuard?: boolean;
   /** 隐式受影响记录（分类级联、时间重叠删除）也参与 staleGuard。 */
   staleAgainst?: Array<{ tableName: SyncChange["tableName"]; recordId: string }>;
+  /** 本次 change 会隐式删除、但本设备从未见过其最新状态的记录。非空即拒收，不比时间戳。 */
+  unseenImpactRecords?: Array<{ tableName: SyncChange["tableName"]; recordId: string }>;
   /** 本批 apply 开始前冻结的服务器时间戳，避免同批前序变更产生的 tombstone 误伤后序变更。 */
   staleServerTimestamps?: ReadonlyMap<string, string | null>;
   /** 复用调用方事务中的连接，避免写业务表和记账分叉。 */
@@ -74,6 +76,21 @@ export function applyChange(change: SyncChange, options: ApplyChangeOptions = {}
   if (options.staleGuard) {
     const stale = rejectIfStale(db, change, options.staleAgainst, options.staleServerTimestamps);
     if (stale) return stale;
+  }
+  // 排在 staleGuard 之后：来包确实更旧是更明确的拒收理由，让它先说话。
+  // 本判据兜的是另一半——时间戳看着没问题（离线设备的保存动作天然更晚，一比就放行），
+  // 但要删的是这台设备从未见过的记录。时间戳对"后发动作 + 旧视图"结构性失效。
+  const unseen = options.unseenImpactRecords ?? [];
+  if (unseen.length > 0) {
+    const names = unseen.map((record) => `${record.tableName}:${record.recordId}`).join(", ");
+    return applyResult(
+      change,
+      "skipped",
+      `unseen record deletion rejected: would delete ${names}`,
+      undefined,
+      undefined,
+      "unseen_record_deletion_rejected",
+    );
   }
   const domain = getServerDomain(change.tableName);
   if (domain.guard) {

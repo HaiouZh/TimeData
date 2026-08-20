@@ -3671,4 +3671,148 @@ describe("sync 路由 TOTP 闸", () => {
       (db.prepare("SELECT COUNT(*) AS count FROM sync_logs WHERE action = ?").get("push_replayed") as { count: number }).count,
     ).toBe(1);
   });
+
+});
+
+describe("sync route additional guards", () => {
+  beforeEach(() => {
+    db.prepare("DELETE FROM totp_config").run();
+    // 本文件约 965 行处的既有用例 vi.setSystemTime("2026-05-17") 之后从不还原，
+    // 全量跑时"现在"会停在那一刻，本组用例的 2026-08-19 时间戳就成了未来时间、
+    // 被 entry 校验的 "endTime cannot be in the future" 拒成 409。显式钉住自己的时钟，
+    // 不依赖别处有没有还原。
+    vi.setSystemTime(new Date("2026-08-20T00:00:00.000Z"));
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("rejects a push whose implicit overlap-delete would remove records the device never saw", async () => {
+    // 设备的视图停在这里
+    const baseSeq = latestSeq();
+
+    // 之后另一台设备上传了两条相邻记录——本设备从未见过
+    db.prepare("INSERT INTO categories (id, name, color, created_at, updated_at) VALUES (?, ?, ?, ?, ?)").run(
+      "cat-wash", "洗漱", "#4A90D9", "2026-08-19T00:00:00.000Z", "2026-08-19T00:00:00.000Z",
+    );
+    const seedEntry = (id: string, start: string, end: string) => {
+      db.prepare(`
+      INSERT INTO time_entries (id, category_id, start_time, end_time, note, created_at, updated_at)
+      VALUES (?, 'cat-wash', ?, ?, NULL, ?, ?)
+    `).run(id, start, end, start, end);
+      db.prepare("INSERT INTO sync_seq (table_name, record_id, action, created_at) VALUES ('time_entries', ?, 'create', ?)")
+        .run(id, end);
+    };
+    seedEntry("entry-wash", "2026-08-19T11:58:00.000Z", "2026-08-19T12:18:00.000Z");
+    seedEntry("entry-eat", "2026-08-19T12:18:00.000Z", "2026-08-19T12:42:00.000Z");
+
+    // 离线设备推一条盖住上面两条的新记录，时间戳晚于服务器（离线设备天然更晚）
+    const res = await pushChanges(
+      [
+        {
+          tableName: "time_entries",
+          recordId: "entry-offline",
+          action: "create",
+          data: {
+            id: "entry-offline",
+            categoryId: "cat-wash",
+            startTime: "2026-08-19T11:58:00.000Z",
+            endTime: "2026-08-19T12:42:00.000Z",
+            note: null,
+            createdAt: "2026-08-19T15:31:00.000Z",
+            updatedAt: "2026-08-19T15:31:00.000Z",
+          },
+          timestamp: "2026-08-19T15:31:00.000Z",
+        },
+      ],
+      baseSeq,
+    );
+
+    expect(res.status).toBe(200);
+    const body = await res.json();
+
+    // 数据断言排在 reasonCode 之前，刻意为之：反过来写的话，变异（拿掉拒收）时
+    // reasonCode 会先失败并中止用例，下面两行根本不执行——那样这条用例就只证明了
+    // "返回了正确的错误码"，从未证明"数据真的被保住"，是一条假闸。
+    expect(db.prepare("SELECT id FROM time_entries WHERE id = ?").get("entry-wash")).toBeTruthy();
+    expect(db.prepare("SELECT id FROM time_entries WHERE id = ?").get("entry-eat")).toBeTruthy();
+
+    expect(body.outcomes[0]).toMatchObject({
+      recordId: "entry-offline",
+      reasonCode: "unseen_record_deletion_rejected",
+    });
+    // 被拒的那条不得落库
+    expect(db.prepare("SELECT id FROM time_entries WHERE id = ?").get("entry-offline")).toBeUndefined();
+  });
+
+  it("still allows overlap-delete when the device has already seen the records", async () => {
+    db.prepare("INSERT INTO categories (id, name, color, created_at, updated_at) VALUES (?, ?, ?, ?, ?)").run(
+      "cat-seen", "已见", "#4A90D9", "2026-08-19T00:00:00.000Z", "2026-08-19T00:00:00.000Z",
+    );
+    db.prepare(`
+    INSERT INTO time_entries (id, category_id, start_time, end_time, note, created_at, updated_at)
+    VALUES ('entry-seen', 'cat-seen', '2026-08-19T11:58:00.000Z', '2026-08-19T12:18:00.000Z', NULL,
+            '2026-08-19T11:58:00.000Z', '2026-08-19T12:18:00.000Z')
+  `).run();
+    db.prepare("INSERT INTO sync_seq (table_name, record_id, action, created_at) VALUES ('time_entries', 'entry-seen', 'create', '2026-08-19T12:18:00.000Z')").run();
+
+    // baseSeq 取当前值 = 设备的视图已经涵盖那条记录
+    const res = await pushChanges(
+      [
+        {
+          tableName: "time_entries",
+          recordId: "entry-cover",
+          action: "create",
+          data: {
+            id: "entry-cover",
+            categoryId: "cat-seen",
+            startTime: "2026-08-19T11:58:00.000Z",
+            endTime: "2026-08-19T12:42:00.000Z",
+            note: null,
+            createdAt: "2026-08-19T15:31:00.000Z",
+            updatedAt: "2026-08-19T15:31:00.000Z",
+          },
+          timestamp: "2026-08-19T15:31:00.000Z",
+        },
+      ],
+      latestSeq(),
+    );
+
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.outcomes[0]).toMatchObject({ recordId: "entry-cover", status: "accepted" });
+    // 日常「看得见旧记录、记一条盖过去」必须照常工作
+    expect(db.prepare("SELECT id FROM time_entries WHERE id = ?").get("entry-seen")).toBeUndefined();
+    expect(db.prepare("SELECT id FROM time_entries WHERE id = ?").get("entry-cover")).toBeTruthy();
+  });
+
+  it("rejects a category delete whose cascade would remove entries the device never saw", async () => {
+    const baseSeq = latestSeq();
+    db.prepare("INSERT INTO categories (id, name, color, created_at, updated_at) VALUES (?, ?, ?, ?, ?)").run(
+      "cat-doomed", "待删", "#4A90D9", "2026-08-19T00:00:00.000Z", "2026-08-19T00:00:00.000Z",
+    );
+    db.prepare(`
+    INSERT INTO time_entries (id, category_id, start_time, end_time, note, created_at, updated_at)
+    VALUES ('entry-unseen', 'cat-doomed', '2026-08-19T13:00:00.000Z', '2026-08-19T13:30:00.000Z', NULL,
+            '2026-08-19T13:00:00.000Z', '2026-08-19T13:30:00.000Z')
+  `).run();
+    db.prepare("INSERT INTO sync_seq (table_name, record_id, action, created_at) VALUES ('time_entries', 'entry-unseen', 'create', '2026-08-19T13:30:00.000Z')").run();
+
+    const res = await pushChanges(
+      [{ tableName: "categories", recordId: "cat-doomed", action: "delete", data: null, timestamp: "2026-08-19T15:31:00.000Z" }],
+      baseSeq,
+    );
+
+    expect(res.status).toBe(200);
+    const body = await res.json();
+
+    // 同上：数据断言必须排在 reasonCode 之前，否则变异时走不到它。
+    expect(db.prepare("SELECT id FROM time_entries WHERE id = ?").get("entry-unseen")).toBeTruthy();
+
+    expect(body.outcomes[0]).toMatchObject({
+      recordId: "cat-doomed",
+      reasonCode: "unseen_record_deletion_rejected",
+    });
+  });
 });
