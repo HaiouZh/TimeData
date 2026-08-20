@@ -1,5 +1,5 @@
-import { SessionSchema, TaskSchema } from "@timedata/shared";
 import type { Session, Task } from "@timedata/shared";
+import { SessionSchema, TaskSchema } from "@timedata/shared";
 import { v4 as uuid } from "uuid";
 import { db } from "../db/index.js";
 import { recordSyncLog } from "../sync/engine.js";
@@ -73,6 +73,45 @@ export async function releaseTaskFromHand(taskId: string, options: { now?: Date 
   return db.transaction("rw", db.tasks, db.syncLog, async () => putTaskSessionId(taskId, null, ts));
 }
 
+/** 抓轨道到手头：track 须存在且 active；无活跃场零仪式开场；幂等（已在场内不重写）。返回活跃场。 */
+export async function grabTrackToHand(trackId: string, options: { now?: Date } = {}): Promise<Session> {
+  const ts = nowIso(options.now);
+  return db.transaction("rw", db.sessions, db.tracks, db.syncLog, async () => {
+    const track = await db.tracks.get(trackId);
+    if (!track) throw new Error("轨道不存在");
+    if (track.status !== "active") throw new Error("只有进行中的轨道可以抓到手头");
+
+    let active = await getActiveSession();
+    if (!active) {
+      active = SessionSchema.parse({ id: uuid(), startedAt: ts, createdAt: ts, updatedAt: ts, trackIds: [trackId] });
+      await db.sessions.add(active);
+      await recordSyncLog("sessions", active.id, "create", ts);
+      return active;
+    }
+    const ids = active.trackIds ?? [];
+    if (ids.includes(trackId)) return active;
+    const next = SessionSchema.parse({ ...active, trackIds: [...ids, trackId], updatedAt: ts });
+    await db.sessions.put(next);
+    await recordSyncLog("sessions", next.id, "update", ts);
+    return next;
+  });
+}
+
+/** 移出手头：从活跃场 trackIds 摘除。无活跃场或不含该 id 时 no-op 返回当前活跃场（可能 null）。 */
+export async function releaseTrackFromHand(trackId: string, options: { now?: Date } = {}): Promise<Session | null> {
+  const ts = nowIso(options.now);
+  return db.transaction("rw", db.sessions, db.tracks, db.syncLog, async () => {
+    const active = await getActiveSession();
+    if (!active) return null;
+    const ids = active.trackIds ?? [];
+    if (!ids.includes(trackId)) return active;
+    const next = SessionSchema.parse({ ...active, trackIds: ids.filter((id) => id !== trackId), updatedAt: ts });
+    await db.sessions.put(next);
+    await recordSyncLog("sessions", next.id, "update", ts);
+    return next;
+  });
+}
+
 /** 散场：只落会话行 endedAt，任务行（含 sessionId）一律不动——历史归属靠 sessionId 保留还原。 */
 export async function endActiveSession(options: { now?: Date } = {}): Promise<void> {
   const ts = nowIso(options.now);
@@ -131,9 +170,7 @@ export async function listResumableSessions(limit = 5): Promise<ResumableSession
       });
     }
   }
-  return result
-    .sort((a, b) => (b.session.endedAt ?? "").localeCompare(a.session.endedAt ?? ""))
-    .slice(0, limit);
+  return result.sort((a, b) => (b.session.endedAt ?? "").localeCompare(a.session.endedAt ?? "")).slice(0, limit);
 }
 
 /**

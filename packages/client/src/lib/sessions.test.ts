@@ -1,13 +1,15 @@
-import { SessionSchema, TaskSchema, type Session, type Task } from "@timedata/shared";
+import { type Session, SessionSchema, type Task, TaskSchema, type Track, TrackSchema } from "@timedata/shared";
 import { beforeEach, describe, expect, it } from "vitest";
 import { db, resetDb } from "../test/dbReset.js";
 import {
   endActiveSession,
   getActiveSession,
   grabTaskToHand,
+  grabTrackToHand,
   healActiveSessions,
   listResumableSessions,
   releaseTaskFromHand,
+  releaseTrackFromHand,
   resumeSession,
   updateSessionNote,
 } from "./sessions.js";
@@ -46,6 +48,17 @@ function makeSession(overrides: Partial<Session> & { id: string; startedAt: stri
     note: null,
     createdAt: overrides.startedAt,
     updatedAt: overrides.startedAt,
+    ...overrides,
+  });
+}
+
+function makeTrack(overrides: Partial<Track> & { id: string }): Track {
+  return TrackSchema.parse({
+    title: `轨道${overrides.id}`,
+    status: "active",
+    refs: [],
+    createdAt: "2026-07-24T00:00:00.000Z",
+    updatedAt: "2026-07-24T00:00:00.000Z",
     ...overrides,
   });
 }
@@ -123,7 +136,10 @@ describe("endActiveSession", () => {
     const task = await db.tasks.get("t1");
     expect(task?.sessionId).toBe(grabbed.sessionId);
 
-    const logs = await db.syncLog.where("recordId").equals(session?.id as string).toArray();
+    const logs = await db.syncLog
+      .where("recordId")
+      .equals(session?.id as string)
+      .toArray();
     expect(logs.some((l) => l.tableName === "sessions" && l.action === "update")).toBe(true);
   });
 });
@@ -275,9 +291,7 @@ describe("updateSessionNote", () => {
   });
 
   it("trim 后空串归一为 null", async () => {
-    await db.sessions.add(
-      makeSession({ id: "s1", startedAt: "2026-07-28T08:00:00.000Z", note: "旧便签" }),
-    );
+    await db.sessions.add(makeSession({ id: "s1", startedAt: "2026-07-28T08:00:00.000Z", note: "旧便签" }));
 
     const next = await updateSessionNote("s1", "   ");
     expect(next.note).toBeNull();
@@ -301,5 +315,126 @@ describe("收纳后不重复计入续场统计", () => {
     await moveTaskToParent("child", "parent");
 
     expect((await listResumableSessions())[0]?.pendingCount).toBe(1);
+  });
+});
+
+describe("grabTrackToHand", () => {
+  it("无活跃场抓轨道 → 新场 created、trackIds=[id]、syncLog 1 create", async () => {
+    await db.tracks.add(makeTrack({ id: "trk-1" }));
+    const now = new Date("2026-07-24T08:00:00.000Z");
+
+    const session = await grabTrackToHand("trk-1", { now });
+
+    const stored = await db.sessions.get(session.id);
+    expect(stored?.trackIds).toEqual(["trk-1"]);
+    expect(session.trackIds).toEqual(["trk-1"]);
+    expect(session.startedAt).toBe(now.toISOString());
+    expect(stored?.endedAt).toBeNull();
+    const logs = await db.syncLog.toArray();
+    expect(logs.filter((l) => l.tableName === "sessions" && l.action === "create")).toHaveLength(1);
+    expect(logs.filter((l) => l.tableName === "sessions")).toHaveLength(1);
+  });
+
+  it("已有活跃场抓 → 同场 trackIds 追加、syncLog 1 update", async () => {
+    await db.tracks.bulkAdd([makeTrack({ id: "trk-1" }), makeTrack({ id: "trk-2" })]);
+    const first = await grabTrackToHand("trk-1", { now: new Date("2026-07-24T08:00:00.000Z") });
+    const beforeLogs = await db.syncLog.count();
+
+    const second = await grabTrackToHand("trk-2", { now: new Date("2026-07-24T08:05:00.000Z") });
+
+    expect(second.id).toBe(first.id);
+    const stored = await db.sessions.get(first.id);
+    expect(stored?.trackIds).toEqual(["trk-1", "trk-2"]);
+    const afterLogs = await db.syncLog.toArray();
+    expect(afterLogs.filter((l) => l.tableName === "sessions" && l.action === "update")).toHaveLength(1);
+    expect(await db.syncLog.count()).toBe(beforeLogs + 1);
+  });
+
+  it("重复抓同轨道 → 幂等：trackIds 不重复、零新增 syncLog", async () => {
+    await db.tracks.add(makeTrack({ id: "trk-1" }));
+    const first = await grabTrackToHand("trk-1", { now: new Date("2026-07-24T08:00:00.000Z") });
+    const countBefore = await db.syncLog.count();
+
+    const second = await grabTrackToHand("trk-1", { now: new Date("2026-07-24T08:10:00.000Z") });
+
+    expect(second.id).toBe(first.id);
+    expect(second.trackIds).toEqual(["trk-1"]);
+    const stored = await db.sessions.get(first.id);
+    expect(stored?.trackIds).toEqual(["trk-1"]);
+    expect(await db.syncLog.count()).toBe(countBefore);
+  });
+
+  it("track 不存在 → reject，无场被创建", async () => {
+    const beforeSessions = await db.sessions.count();
+    const beforeLogs = await db.syncLog.count();
+
+    await expect(grabTrackToHand("missing")).rejects.toThrow();
+
+    expect(await db.sessions.count()).toBe(beforeSessions);
+    expect(await db.syncLog.count()).toBe(beforeLogs);
+  });
+
+  it("status=concluded / parked → reject，无场被创建", async () => {
+    await db.tracks.bulkAdd([
+      makeTrack({ id: "trk-c", status: "concluded" }),
+      makeTrack({ id: "trk-p", status: "parked" }),
+    ]);
+
+    await expect(grabTrackToHand("trk-c")).rejects.toThrow();
+    await expect(grabTrackToHand("trk-p")).rejects.toThrow();
+
+    expect(await db.sessions.count()).toBe(0);
+    expect(await db.syncLog.count()).toBe(0);
+  });
+});
+
+describe("releaseTrackFromHand", () => {
+  it("摘除 → trackIds 少一项、syncLog 1 update", async () => {
+    await db.tracks.bulkAdd([makeTrack({ id: "trk-1" }), makeTrack({ id: "trk-2" })]);
+    const session = await grabTrackToHand("trk-1", { now: new Date("2026-07-24T08:00:00.000Z") });
+    await grabTrackToHand("trk-2", { now: new Date("2026-07-24T08:05:00.000Z") });
+    const beforeLogs = await db.syncLog.count();
+
+    const after = await releaseTrackFromHand("trk-1", { now: new Date("2026-07-24T08:10:00.000Z") });
+
+    expect(after?.id).toBe(session.id);
+    expect(after?.trackIds).toEqual(["trk-2"]);
+    const stored = await db.sessions.get(session.id);
+    expect(stored?.trackIds).toEqual(["trk-2"]);
+    expect(await db.syncLog.count()).toBe(beforeLogs + 1);
+    const logs = await db.syncLog.toArray();
+    expect(logs.filter((l) => l.tableName === "sessions" && l.action === "update")).toHaveLength(2);
+  });
+
+  it("无活跃场或不含 id → no-op 零写", async () => {
+    await db.tracks.add(makeTrack({ id: "trk-1" }));
+    const beforeEmpty = await db.syncLog.count();
+    const none = await releaseTrackFromHand("trk-1");
+    expect(none).toBeNull();
+    expect(await db.syncLog.count()).toBe(beforeEmpty);
+
+    const session = await grabTrackToHand("trk-1", { now: new Date("2026-07-24T08:00:00.000Z") });
+    await db.tracks.add(makeTrack({ id: "trk-2" }));
+    const before = await db.syncLog.count();
+    const same = await releaseTrackFromHand("trk-2");
+    expect(same?.id).toBe(session.id);
+    expect(same?.trackIds).toEqual(["trk-1"]);
+    expect(await db.syncLog.count()).toBe(before);
+  });
+});
+
+describe("endActiveSession 保留 trackIds", () => {
+  it("散场后 trackIds 随场保留（读回归档场验证）", async () => {
+    await db.tracks.bulkAdd([makeTrack({ id: "trk-1" }), makeTrack({ id: "trk-2" })]);
+    const active = await grabTrackToHand("trk-1", { now: new Date("2026-07-24T08:00:00.000Z") });
+    await grabTrackToHand("trk-2", { now: new Date("2026-07-24T08:05:00.000Z") });
+    const later = new Date("2026-07-24T09:00:00.000Z");
+
+    await endActiveSession({ now: later });
+
+    const archived = await db.sessions.get(active.id);
+    expect(archived?.endedAt).toBe(later.toISOString());
+    expect(archived?.trackIds).toEqual(["trk-1", "trk-2"]);
+    expect(await getActiveSession()).toBeNull();
   });
 });
