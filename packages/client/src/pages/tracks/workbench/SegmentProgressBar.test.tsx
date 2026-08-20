@@ -114,7 +114,7 @@ describe("SegmentProgressBar", () => {
     expect(host.textContent).not.toContain("0/0");
   });
 
-  it("mini 档格子高度减半且数字更小", async () => {
+  it("mini 档格子高度减半（数字同用 td-text-caption 语义档）", async () => {
     const ms: TrackMilestone[] = [
       milestone({ id: "a", status: "done", position: 0 }),
       milestone({ id: "b", status: "pending", position: 1 }),
@@ -133,7 +133,7 @@ describe("SegmentProgressBar", () => {
     expect(fullClasses).toContain("h-2");
     expect(miniClasses).toContain("h-1");
     expect(miniClasses).not.toContain("h-2");
-    // mini 数字更小：包含 text-xs
-    expect(hostMini.querySelector('[data-testid="segment-progress-text"]')?.className).toContain("text-xs");
+    // 数字字号走 td-text-caption 语义类（设计语言禁裸字号；caption 已是最小档，mini 不再单独缩字）
+    expect(hostMini.querySelector('[data-testid="segment-progress-text"]')?.className).toContain("td-text-caption");
   });
 });
