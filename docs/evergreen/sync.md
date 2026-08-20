@@ -170,10 +170,22 @@ UI 挂起冲突只发生在 manual 域（categories / time_entries）。lww 域�
 | `missing_payload` / `invalid_shape` / `id_mismatch` | `client_bug` | 标 `synced=1` 停止反复推送；放入 `clientBugIssues` 供诊断。 |
 | `archived_category` / `missing_category` / `overlap` / `invalid_time_range` / `foreign_key_failed` | `user_actionable` | 200 响应中保留在 `syncLog`；原子 409 中隔离为死信（`synced=2`），设置页同步摘要提示用户处理。 |
 | `stale_change_rejected` / `orphan_step_rejected` | `stale_rejected` | 标 `synced=1` 放弃本地主张；放入同步问题列表，回声 pull 落地服务器权威版本。 |
+| `unseen_record_deletion_rejected` | `needs_arbitration` | 服务端拦下「会隐式删除本设备从未见过的记录」的写入。客户端三件事一起做：标 `synced=2` 移出上传队列、把完整 change 存进纯本地 `pendingArbitrations` 表、放入同步问题列表。见下方「隐式删除守卫」。 |
 | `server_version_newer_or_same` | `conflict` | 200 响应中保留，进入冲突/同步问题处理路径；原子 409 中隔离为死信（`synced=2`）。 |
 | 未识别值 | `unknown` | 200 响应中保留；原子 409 中隔离为死信，避免未知拒因引发无限重发。 |
 
 **死信隔离（`synced=2`）**：原子 409 中被服务端确定性拒收（非 client_bug / stale）的日志标 `synced=2`——不参与 push、pending 保护和未同步计数，避免每轮同步重复引爆 409 拆批。用户修正记录会产生新的 `synced=0` 日志自然重新入队；`requeueQuarantinedSyncLogs()` 提供手动重新入队出口，`getQuarantinedSyncLogs()` 供诊断读取。死信与 synced=1 同走 `pruneSyncedLogs()` 的 7 天回收窗口。
+
+<a id="sync-unseen-delete-guard"></a>
+
+**隐式删除守卫（`unseen_record_deletion_rejected`）**：一条写入可以**隐式删除**服务器上的其它记录——`time_entries` upsert 触发的时间重叠删除、`categories` delete 触发的级联删除。这类删除的目标若落在 `analyzePushBaseSeq()` 判出的「`baseSeq` 之后被改动过」集合里，即**该设备从未见过其最新状态**，`applyChange` 拒收整条 change（`resolver.ts`），拒收不占 `sync_seq`。
+
+判据**不比时间戳**：离线设备的保存动作在物理时间上天然更晚，`staleGuard` 一比就放行，对「后发动作 + 旧视图」结构性失效（2026-08-19 事故即此形态，见 [ADR 0017](../adr/0017-sync-stale-guard.md) 的遗留缺口）。四条边界都是实测定下来的，改动前先读：
+
+- **排在 `staleGuard` 之后**。放在之前会抢占它的场景，本该报 `stale_change_rejected` 的用例会收到本码。
+- **不含 `staleGuardAll`**。`unknown_base` 时客户端没报视图、`overlappingRecords` 恒空，在那里一律拒收会让所有不带 `baseSeq` 的入口（老客户端、CLI）都做不了级联/重叠删除。那一档仍由 `staleGuard` 的时间戳兜。
+- **force-push 路径不受影响**：那条路上用户的删除意图是明示且已确认的，`applyForcePush` 不传该选项。
+- **客户端必须隔离而非保留 pending**：`canSkipEchoPull` 遇到任何 issue 都返回 `false`，拒收后必然走一次 echo pull、游标推进；那条记录若仍是 `synced=0`，下一轮会自动重推，而彼时判据不再命中——净效果是延迟一轮的静默删除，且测试全绿。判据只允许被用户裁决解开，不允许被自动重试解开。
 
 `SyncPushReasonCode` 是封闭枚举；新增值必须同步更新 shared schema、server validation / resolver 映射、`classifyReasonCode()`、客户端测试和本文档表。**域登记簿同样封闭**：新增域必须同步 shared 配置、server 钩子/映射、客户端 Dexie 表与 pull 分支、静态 `SyncChange` 类型、文档。
 
