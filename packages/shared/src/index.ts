@@ -9,6 +9,8 @@ export * from "./taskDates.js";
 export * from "./taskCompletion.js";
 export * from "./trackBoardSignals.js";
 export * from "./trackStepOrder.js";
+export * from "./trackMilestones.js";
+export { TrackMilestoneSchema } from "./entitySchemas.js";
 export * from "./trackStatusOp.js";
 export * from "./goalLayoutPins.js";
 export * from "./taskRelations.js";

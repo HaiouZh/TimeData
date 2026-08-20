@@ -282,6 +282,19 @@ export const TrackStepSchema = z
     message: "endedAt must be at or after startedAt",
   });
 
+/** 轨道阶段骨架：刻度出生可挂任务。dropped 是独立终态，进度分母剔除。 */
+export const TrackMilestoneSchema = z.object({
+  id: NonEmptyTrimmedStringSchema,
+  trackId: NonEmptyTrimmedStringSchema,
+  title: NonEmptyTrimmedStringSchema.refine((v) => v.length <= 200, "title must be at most 200 characters"),
+  status: z.enum(["pending", "done", "dropped"]),
+  note: z.string().max(200).nullable().default(null),
+  taskId: NonEmptyTrimmedStringSchema.nullable().default(null),
+  position: z.number().int().finite(),
+  createdAt: UtcIsoStringSchema,
+  updatedAt: UtcIsoStringSchema,
+});
+
 /** 「手头」软会话：只存元数据，任务经 Task.sessionId 反挂（见 evergreen todo/at-hand）。 */
 export const SessionSchema = z.object({
   id: NonEmptyTrimmedStringSchema,

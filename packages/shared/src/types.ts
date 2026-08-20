@@ -62,6 +62,19 @@ export type Track = z.infer<typeof TrackSchema>;
 
 export type TrackStep = z.infer<typeof TrackStepSchema>;
 
+/** 轨道阶段骨架的一段：轻量刻度，dropped=砍掉留痕（不物理删）。taskId 是挂靠任务的弱引用。 */
+export interface TrackMilestone {
+  id: string;
+  trackId: string;
+  title: string;
+  status: "pending" | "done" | "dropped";
+  note: string | null;
+  taskId: string | null;
+  position: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export type SyncLogEntry = z.infer<typeof SyncLogEntrySchema>;
 
 export type SyncPushRequest = z.infer<typeof SyncPushRequestSchema>;

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { GoalLayoutPinSchema, GoalSchema, RecurrenceSchema, SessionSchema, TaskSchema, TrackSchema } from "./entitySchemas.js";
+import { GoalLayoutPinSchema, GoalSchema, RecurrenceSchema, SessionSchema, TaskSchema, TrackMilestoneSchema, TrackSchema } from "./entitySchemas.js";
 
 describe("RecurrenceSchema", () => {
   const base = { interval: 1, basis: "due" as const };
@@ -493,5 +493,25 @@ describe("TaskSchema sessionId", () => {
   });
   it("拒绝空串 sessionId", () => {
     expect(() => TaskSchema.parse({ ...baseTask, sessionId: "" })).toThrow();
+  });
+});
+
+describe("TrackMilestoneSchema", () => {
+  const base = {
+    id: "m1",
+    trackId: "t1",
+    title: "一段",
+    status: "pending" as const,
+    position: 0,
+    createdAt: "2026-08-20T00:00:00.000Z",
+    updatedAt: "2026-08-20T00:00:00.000Z",
+  };
+  it("解析合法对象时 note/taskId 缺省补 null", () => {
+    const parsed = TrackMilestoneSchema.parse(base);
+    expect(parsed.note).toBeNull();
+    expect(parsed.taskId).toBeNull();
+  });
+  it("title 超 200 字被拒", () => {
+    expect(() => TrackMilestoneSchema.parse({ ...base, title: "a".repeat(201) })).toThrow();
   });
 });
