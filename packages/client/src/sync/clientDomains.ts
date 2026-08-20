@@ -13,6 +13,7 @@ import {
   TaskSchema,
   taskRelationKey,
   TimeEntrySchema,
+  TrackMilestoneSchema,
   TrackSchema,
   TrackStepSchema,
 } from "@timedata/shared";
@@ -174,6 +175,12 @@ export const CLIENT_SYNC_DOMAINS: Record<string, ClientDomainConfig> = {
     table: "track_steps",
     storeName: "trackSteps",
     schema: TrackStepSchema,
+    backup: "bundled",
+  },
+  track_milestones: {
+    table: "track_milestones",
+    storeName: "trackMilestones",
+    schema: TrackMilestoneSchema,
     backup: "bundled",
   },
   goals: {

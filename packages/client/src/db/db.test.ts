@@ -13,7 +13,7 @@ describe("Dexie database", () => {
     await db.open();
     await seedDefaultCategories();
 
-    expect(db.verno).toBe(20);
+    expect(db.verno).toBe(21);
     expect(await db.categories.count()).toBeGreaterThan(0);
     expect(await db.timeEntries.count()).toBe(0);
     expect(await db.settings.count()).toBe(0);
@@ -21,6 +21,7 @@ describe("Dexie database", () => {
     expect(await db.tasks.count()).toBe(0);
     expect(await db.tracks.count()).toBe(0);
     expect(await db.trackSteps.count()).toBe(0);
+    expect(await db.trackMilestones.count()).toBe(0);
     expect(await db.goals.count()).toBe(0);
     expect(await db.goalLayoutPins.count()).toBe(0);
     expect(await db.sessions.count()).toBe(0);

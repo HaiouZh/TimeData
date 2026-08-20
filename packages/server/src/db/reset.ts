@@ -65,6 +65,7 @@ const RESET_DOMAIN_SPECS: readonly ResetDomainSpec[] = [
   },
   simpleDomain("goals"),
   simpleDomain("track_steps"),
+  simpleDomain("track_milestones"),
   simpleDomain("tracks"),
   simpleDomain("time_entries"),
   simpleDomain("tasks"),

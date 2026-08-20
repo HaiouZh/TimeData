@@ -58,6 +58,7 @@ export const SyncPushReasonCodeSchema = z.enum([
   "stale_change_rejected",
   "unseen_record_deletion_rejected",
   "orphan_step_rejected",
+  "orphan_milestone_rejected",
   "missing_payload",
   "invalid_shape",
   "id_mismatch",

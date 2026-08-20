@@ -33,6 +33,7 @@ describe("server sync domains", () => {
       "task_relations",
       "tasks",
       "time_entries",
+      "track_milestones",
       "track_steps",
       "tracks",
     ]);

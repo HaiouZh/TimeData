@@ -136,7 +136,9 @@ export type SyncChange =
   | SyncUpsertChange<"sessions", Session>
   | SyncDeleteChange<"sessions">
   | SyncUpsertChange<"task_relations", TaskRelation>
-  | SyncDeleteChange<"task_relations">;
+  | SyncDeleteChange<"task_relations">
+  | SyncUpsertChange<"track_milestones", TrackMilestone>
+  | SyncDeleteChange<"track_milestones">;
 
 export type SyncPushOutcomeStatus = "accepted" | "rejected" | "conflict";
 

@@ -16,6 +16,7 @@ describe("sync domain registry", () => {
       "goal_layout_pins",
       "sessions",
       "task_relations",
+      "track_milestones",
     ]);
   });
 
@@ -90,6 +91,25 @@ describe("track domain registration", () => {
           refs: [],
           tags: [],
           seq: 0,
+          createdAt: now,
+          updatedAt: now,
+        },
+      }).success,
+    ).toBe(true);
+    expect(
+      schema.safeParse({
+        tableName: "track_milestones",
+        recordId: "ms-1",
+        action: "create",
+        timestamp: now,
+        data: {
+          id: "ms-1",
+          trackId: "track-1",
+          title: "M1",
+          status: "pending",
+          note: null,
+          taskId: null,
+          position: 0,
           createdAt: now,
           updatedAt: now,
         },

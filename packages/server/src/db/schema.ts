@@ -239,6 +239,18 @@ export function initializeDatabase(): void {
       edited_at TEXT
     );
 
+    CREATE TABLE IF NOT EXISTS track_milestones (
+      id TEXT PRIMARY KEY,
+      track_id TEXT NOT NULL,
+      title TEXT NOT NULL,
+      status TEXT NOT NULL,
+      note TEXT,
+      task_id TEXT,
+      position INTEGER NOT NULL,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+
     CREATE TABLE IF NOT EXISTS sync_logs (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       timestamp TEXT NOT NULL DEFAULT (datetime('now')),
@@ -326,6 +338,8 @@ export function initializeDatabase(): void {
     CREATE INDEX IF NOT EXISTS idx_track_steps_track_id ON track_steps(track_id);
     CREATE INDEX IF NOT EXISTS idx_track_steps_track_seq ON track_steps(track_id, seq);
     CREATE INDEX IF NOT EXISTS idx_track_steps_updated_at ON track_steps(updated_at);
+    CREATE INDEX IF NOT EXISTS idx_track_milestones_track_id ON track_milestones(track_id);
+    CREATE INDEX IF NOT EXISTS idx_track_milestones_task_id ON track_milestones(task_id);
     CREATE INDEX IF NOT EXISTS idx_sync_logs_timestamp ON sync_logs(timestamp);
     CREATE INDEX IF NOT EXISTS idx_api_request_logs_timestamp ON api_request_logs(timestamp);
     CREATE INDEX IF NOT EXISTS idx_api_request_logs_status ON api_request_logs(status);

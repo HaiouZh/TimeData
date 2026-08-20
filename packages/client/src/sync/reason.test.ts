@@ -31,6 +31,10 @@ describe("classifyReasonCode", () => {
     expect(classifyReasonCode("orphan_step_rejected")).toBe("stale_rejected");
   });
 
+  it("orphan_milestone_rejected → stale_rejected", () => {
+    expect(classifyReasonCode("orphan_milestone_rejected")).toBe("stale_rejected");
+  });
+
   it("foreign_key_failed → user_actionable", () => {
     expect(classifyReasonCode("foreign_key_failed")).toBe("user_actionable");
   });

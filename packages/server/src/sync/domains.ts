@@ -38,7 +38,17 @@ import {
   taskRelationToRow,
 } from "../lib/task-relation-rows.js";
 import { type SessionRow, rowToSession, sessionToRow } from "../lib/session-rows.js";
-import { type TrackRow, type TrackStepRow, rowToTrack, rowToTrackStep, trackStepToRow, trackToRow } from "../lib/track-rows.js";
+import {
+  type TrackMilestoneRow,
+  type TrackRow,
+  type TrackStepRow,
+  milestoneToRow,
+  rowToMilestone,
+  rowToTrack,
+  rowToTrackStep,
+  trackStepToRow,
+  trackToRow,
+} from "../lib/track-rows.js";
 import { recordSeqWithDb } from "./seq.js";
 
 export interface ApplyChangeResult {
@@ -513,6 +523,11 @@ function readTrackStepRecord(db: Database, recordId: string): SyncChange | null 
   return row ? updateChange("track_steps", row.id, rowToTrackStep(row), row.updated_at) : null;
 }
 
+function readTrackMilestoneRecord(db: Database, recordId: string): SyncChange | null {
+  const row = db.prepare("SELECT * FROM track_milestones WHERE id = ?").get(recordId) as TrackMilestoneRow | undefined;
+  return row ? updateChange("track_milestones", row.id, rowToMilestone(row), row.updated_at) : null;
+}
+
 function guardTrackStepHost(db: Database, change: SyncChange): ApplyChangeResult | null {
   if (change.action === "delete") return null;
   const trackId = (change.data as { trackId?: unknown }).trackId;
@@ -527,6 +542,24 @@ function guardTrackStepHost(db: Database, change: SyncChange): ApplyChangeResult
     undefined,
     undefined,
     "orphan_step_rejected",
+  );
+}
+
+// 镜像 guardTrackStepHost：非 delete 写入找不到宿主 track 拒收，防离线旧里程碑复活孤儿。
+function guardTrackMilestoneHost(db: Database, change: SyncChange): ApplyChangeResult | null {
+  if (change.action === "delete") return null;
+  const trackId = (change.data as { trackId?: unknown }).trackId;
+  if (typeof trackId === "string") {
+    const host = db.prepare("SELECT id FROM tracks WHERE id = ?").get(trackId);
+    if (host) return null;
+  }
+  return applyResult(
+    change,
+    "skipped",
+    `host track ${typeof trackId === "string" ? trackId : "?"} not found`,
+    undefined,
+    undefined,
+    "orphan_milestone_rejected",
   );
 }
 
@@ -703,6 +736,11 @@ export const SERVER_SYNC_DOMAINS: Record<string, ServerDomainHooks> = {
     lww: { idColumn: "id", toRow: (data) => trackStepToRow(data as never) },
     guard: guardTrackStepHost,
     readRecord: readTrackStepRecord,
+  },
+  track_milestones: {
+    lww: { idColumn: "id", toRow: (data) => milestoneToRow(data as never) },
+    guard: guardTrackMilestoneHost,
+    readRecord: readTrackMilestoneRecord,
   },
   goals: simpleLwwDomain<GoalRow>("goals", (data) => goalToRow(data as never), rowToGoal),
   goal_layout_pins: {

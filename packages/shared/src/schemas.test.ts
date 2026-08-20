@@ -157,6 +157,7 @@ describe("SyncLogEntrySchema", () => {
 
   it("accepts track orphan rejection as a push reason code", () => {
     expect(SyncPushReasonCodeSchema.parse("orphan_step_rejected")).toBe("orphan_step_rejected");
+    expect(SyncPushReasonCodeSchema.parse("orphan_milestone_rejected")).toBe("orphan_milestone_rejected");
   });
 });
 

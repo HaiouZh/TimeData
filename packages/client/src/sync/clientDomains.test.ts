@@ -61,7 +61,7 @@ describe("taskNeedsApply", () => {
 describe("track client domains", () => {
   it("registers tracks and track_steps stores with bundled backup", () => {
     expect(Object.keys(CLIENT_SYNC_DOMAINS)).toEqual(
-      expect.arrayContaining(["tracks", "track_steps"]),
+      expect.arrayContaining(["tracks", "track_steps", "track_milestones"]),
     );
     expect(getClientDomain("tracks")).toMatchObject({
       table: "tracks",
@@ -73,8 +73,13 @@ describe("track client domains", () => {
       storeName: "trackSteps",
       backup: "bundled",
     });
+    expect(getClientDomain("track_milestones")).toMatchObject({
+      table: "track_milestones",
+      storeName: "trackMilestones",
+      backup: "bundled",
+    });
     expect(BACKUP_BUNDLED_DOMAINS.map((domain) => domain.table)).toEqual(
-      expect.arrayContaining(["tracks", "track_steps"]),
+      expect.arrayContaining(["tracks", "track_steps", "track_milestones"]),
     );
   });
 
@@ -101,6 +106,19 @@ describe("track client domains", () => {
         refs: [],
         tags: [],
         seq: 0,
+        createdAt: now,
+        updatedAt: now,
+      }).success,
+    ).toBe(true);
+    expect(
+      getClientDomain("track_milestones").schema.safeParse({
+        id: "ms-1",
+        trackId: "track-1",
+        title: "M1",
+        status: "pending",
+        note: null,
+        taskId: null,
+        position: 0,
         createdAt: now,
         updatedAt: now,
       }).success,

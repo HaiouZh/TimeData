@@ -1,6 +1,6 @@
 import Dexie, { type EntityTable, type Table } from "dexie";
 import type {
-  Category, Goal, GoalLayoutPin, GoalPrerequisite, QuickNote, Session, Setting, SyncChange, Task, TaskRelation, TimeEntry, SyncLogEntry, Track, TrackStep,
+  Category, Goal, GoalLayoutPin, GoalPrerequisite, QuickNote, Session, Setting, SyncChange, Task, TaskRelation, TimeEntry, SyncLogEntry, Track, TrackMilestone, TrackStep,
 } from "@timedata/shared";
 import { createDefaultCategories, taskRelationKey, TaskRelationSchema } from "@timedata/shared";
 import { v4 as uuid } from "uuid";
@@ -26,6 +26,7 @@ export const db = new Dexie("timedata") as Dexie & {
   settings: EntityTable<Setting, "key">;
   tracks: EntityTable<Track, "id">;
   trackSteps: EntityTable<TrackStep, "id">;
+  trackMilestones: EntityTable<TrackMilestone, "id">;
   goals: EntityTable<Goal, "id">;
   goalLayoutPins: Table<GoalLayoutPin, [string, GoalLayoutPin["nodeKind"], string]>;
   sessions: EntityTable<Session, "id">;
@@ -358,6 +359,10 @@ db.version(19).stores({
 // 的清空清单——本地记录都被重置掉之后，指向它们的冲突记录只会是悬空的。
 db.version(20).stores({
   pendingArbitrations: "recordId, tableName, rejectedAt",
+});
+
+db.version(21).stores({
+  trackMilestones: "id, trackId, taskId, updatedAt",
 });
 
 export async function seedDefaultCategories(): Promise<void> {

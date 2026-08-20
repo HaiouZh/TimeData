@@ -1,4 +1,4 @@
-import type { Track, TrackStep } from "@timedata/shared";
+import type { Track, TrackMilestone, TrackStep } from "@timedata/shared";
 
 export interface TrackRow {
   id: string;
@@ -24,6 +24,18 @@ export interface TrackStepRow {
   created_at: string;
   updated_at: string;
   edited_at: string | null;
+}
+
+export interface TrackMilestoneRow {
+  id: string;
+  track_id: string;
+  title: string;
+  status: string;
+  note: string | null;
+  task_id: string | null;
+  position: number;
+  created_at: string;
+  updated_at: string;
 }
 
 export function trackToRow(data: Track): Record<string, string | number | null> {
@@ -81,5 +93,32 @@ export function rowToTrackStep(row: TrackStepRow): TrackStep {
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     ...(row.edited_at !== null ? { editedAt: row.edited_at } : {}),
+  };
+}
+
+export function milestoneToRow(data: TrackMilestone): Record<string, string | number | null> {
+  return {
+    id: data.id,
+    track_id: data.trackId,
+    title: data.title,
+    status: data.status,
+    note: data.note ?? null,
+    task_id: data.taskId ?? null,
+    position: data.position,
+    created_at: data.createdAt,
+  };
+}
+
+export function rowToMilestone(row: TrackMilestoneRow): TrackMilestone {
+  return {
+    id: row.id,
+    trackId: row.track_id,
+    title: row.title,
+    status: row.status as TrackMilestone["status"],
+    note: row.note,
+    taskId: row.task_id,
+    position: row.position,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
   };
 }

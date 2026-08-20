@@ -9,6 +9,7 @@ import {
   TaskSchema,
   TaskRelationSchema,
   TimeEntrySchema,
+  TrackMilestoneSchema,
   TrackSchema,
   TrackStepSchema,
 } from "./entitySchemas.js";
@@ -116,6 +117,14 @@ export const SYNC_DOMAINS: readonly SyncDomainConfig[] = [
     dataSchema: TaskRelationSchema,
     upsertPriority: 75,
     deletePriority: 75,
+    conflictPolicy: "lww",
+    countsInStatus: false,
+  },
+  {
+    table: "track_milestones",
+    dataSchema: TrackMilestoneSchema,
+    upsertPriority: 76,
+    deletePriority: 70,
     conflictPolicy: "lww",
     countsInStatus: false,
   },
