@@ -1,5 +1,6 @@
 import type { TrackMilestone } from "@timedata/shared";
 import { useState } from "react";
+import { Checkbox } from "../../../components/ui/Checkbox.js";
 import {
   dropMilestone,
   insertMilestoneAt,
@@ -128,15 +129,15 @@ export function MilestoneRow(props: {
       className="flex items-start gap-2 border-b border-border py-2"
     >
       {!isDropped && (
-        <input
-          type="checkbox"
-          data-testid="milestone-checkbox"
-          aria-label={milestone.status === "done" ? "取消完成" : "标记完成"}
-          checked={milestone.status === "done"}
-          disabled={Boolean(readOnly)}
-          onChange={() => void handleToggle()}
-          className="mt-1"
-        />
+        <span data-testid="milestone-checkbox-host">
+          <Checkbox
+            checked={milestone.status === "done"}
+            onChange={() => void handleToggle()}
+            ariaLabel={milestone.status === "done" ? "取消完成" : "标记完成"}
+            disabled={Boolean(readOnly)}
+            dense
+          />
+        </span>
       )}
       <div className="min-w-0 flex-1">
         {isDropped ? (

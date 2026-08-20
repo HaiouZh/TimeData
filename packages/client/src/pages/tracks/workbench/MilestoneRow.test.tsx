@@ -128,7 +128,10 @@ describe("MilestoneRow", () => {
       isLast: true,
       onError,
     });
-    const checkbox = await waitForElement<HTMLInputElement>(host, '[data-testid="milestone-checkbox"]');
+    const checkbox = await waitForElement<HTMLInputElement>(
+      host,
+      '[data-testid="milestone-checkbox-host"] input[type="checkbox"]',
+    );
     expect(checkbox.checked).toBe(false);
 
     // first toggle -> done (click triggers onChange)
@@ -148,7 +151,10 @@ describe("MilestoneRow", () => {
       onError,
     });
     host = res2.host;
-    const checkbox2 = await waitForElement<HTMLInputElement>(host, '[data-testid="milestone-checkbox"]');
+    const checkbox2 = await waitForElement<HTMLInputElement>(
+      host,
+      '[data-testid="milestone-checkbox-host"] input[type="checkbox"]',
+    );
     expect(checkbox2.checked).toBe(true);
     await clickElement(checkbox2);
     for (let i = 0; i < 10; i += 1) await flush();
@@ -295,7 +301,7 @@ describe("MilestoneRow", () => {
     expect(titleEl.className).toContain("text-ink-3");
     const noteEl = await waitForElement<HTMLElement>(host2, '[data-testid="milestone-note"]');
     expect(noteEl.textContent).toContain("不需要了");
-    expect(host2.querySelector('[data-testid="milestone-checkbox"]')).toBeNull();
+    expect(host2.querySelector('[data-testid="milestone-checkbox-host"] input[type="checkbox"]')).toBeNull();
   });
 
   it("⑩ dropped 行菜单「恢复为待办」→ pending", async () => {
@@ -373,7 +379,10 @@ describe("MilestoneRow", () => {
       isLast: true,
       onError,
     });
-    const checkbox = await waitForElement<HTMLInputElement>(host, '[data-testid="milestone-checkbox"]');
+    const checkbox = await waitForElement<HTMLInputElement>(
+      host,
+      '[data-testid="milestone-checkbox-host"] input[type="checkbox"]',
+    );
     await clickElement(checkbox);
     for (let i = 0; i < 10; i += 1) await flush();
     expect(onError).toHaveBeenCalledWith("boom");
@@ -393,7 +402,10 @@ describe("MilestoneRow", () => {
       readOnly: true,
       onError,
     });
-    const checkbox = await waitForElement<HTMLInputElement>(host, '[data-testid="milestone-checkbox"]');
+    const checkbox = await waitForElement<HTMLInputElement>(
+      host,
+      '[data-testid="milestone-checkbox-host"] input[type="checkbox"]',
+    );
     expect(checkbox.disabled).toBe(true);
     expect(host.querySelector('[data-testid="milestone-menu"]')).toBeNull();
     // title should be span not button (no click to edit)
@@ -419,6 +431,6 @@ describe("MilestoneRow", () => {
       onError,
     });
     expect(host.querySelector('[data-testid="milestone-menu"]')).toBeNull();
-    expect(host.querySelector('[data-testid="milestone-checkbox"]')).toBeNull();
+    expect(host.querySelector('[data-testid="milestone-checkbox-host"] input[type="checkbox"]')).toBeNull();
   });
 });

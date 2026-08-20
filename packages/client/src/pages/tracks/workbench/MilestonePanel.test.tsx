@@ -192,7 +192,9 @@ describe("MilestonePanel", () => {
     expect(hostWith.querySelector('[data-testid="milestone-add-input"]')).toBeNull();
     expect(hostWith.querySelector('[data-testid="milestone-skeleton-textarea"]')).toBeNull();
     // rows should be readOnly: checkbox disabled, menu hidden
-    const checkbox = hostWith.querySelector('[data-testid="milestone-checkbox"]') as HTMLInputElement | null;
+    const checkbox = hostWith.querySelector(
+      '[data-testid="milestone-checkbox-host"] input[type="checkbox"]',
+    ) as HTMLInputElement | null;
     if (checkbox) expect(checkbox.disabled).toBe(true);
     expect(hostWith.querySelector('[data-testid="milestone-menu"]')).toBeNull();
   });
