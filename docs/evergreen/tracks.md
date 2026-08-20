@@ -10,6 +10,7 @@ covers:
   - packages/client/src/lib/tracks.ts
   - packages/client/src/lib/trackMilestones.ts
   - packages/client/src/lib/tracksDispatch.ts
+  - packages/client/src/lib/settings/trackWaitExternalTagsSetting.ts
   - packages/client/src/lib/tracksView.ts
   - packages/client/src/lib/trackBadgeTone.ts
   - packages/client/src/lib/taskTrackIndex.ts
