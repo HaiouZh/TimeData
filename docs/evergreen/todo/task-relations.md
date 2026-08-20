@@ -4,6 +4,7 @@ title: 待办 · 前置关系表
 covers:
   - packages/client/src/lib/taskRelations.ts
   - packages/client/src/lib/goalPrerequisiteHydration.ts
+  - packages/client/src/lib/tasks/blockerCandidates.ts
 contracts:
   - packages/shared/src/entitySchemas.ts:TaskRelationSchema
   - packages/shared/src/taskRelations.ts
@@ -54,6 +55,8 @@ last-reviewed: 2026-08-21
 **`hydrateGoalPrerequisites` 是兼容层不是数据源**：`goal.prerequisites` 这个字段在库里已被迁移清空，读取侧每次把关系表的边填回内存中的 goal 对象，让阶段2 就写好的目标页判定逻辑不必改。**写入侧一律不碰这个字段**——有一道机器闸 `scripts/check-legacy-prerequisites.mjs` 盯着，任何往 `prerequisites:` 写非空字面量的代码都会让 `pnpm check:prereq` 红。
 
 推进轴的 `bucketForTask` 也认这张表：被挡 → `waiting`。它与待办页分区的优先级**刻意不同**，见 [progress-axis](progress-axis.md) §3.1。
+
+**连边入口（picker）的候选口径**（`TaskWaitingRow` + `lib/tasks/blockerCandidates.ts`）：任务候选 = 未完成、非自己、非既有前置、**非 occurrence（`ruleId!==null`）、非重复模板（`recurrence!==null`）**——「等一次重复发完成」是边缘场景，重复的事永远有下一发，留着只会让 picker 塞满同名条目；按 `updatedAt` 倒序。轨道候选 = active 且非既有前置。picker 带搜索框（trim 子串、大小写不敏感）；任务候选行右列上下文按「项目名 > 父任务标题 > 排期日 `M月d日`」取一（`blockerCandidateContext`），轨道候选无上下文列。已存在的 occurrence 边不受候选口径影响（读侧照常解锁判定）。
 
 ## 5. 什么时候被清掉
 

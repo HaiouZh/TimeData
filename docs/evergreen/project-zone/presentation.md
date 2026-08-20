@@ -5,7 +5,7 @@ covers:
 contracts:
   - packages/client/src/lib/tasks/projectZone.ts
   - packages/client/src/pages/todo/todoDnd.ts
-last-reviewed: 2026-08-18
+last-reviewed: 2026-08-21
 ---
 
 # 项目区与归属轴 · 呈现与手势
@@ -28,6 +28,7 @@ last-reviewed: 2026-08-18
 - **位置**：收件箱正上方（两种布局都是）。零 active project 时整区不渲染。
 - **组三态**：0 可解析成员 → 不进项目区；有成员且全部完成 → `已完成 · M 条` + 「去归档」深链 `/goals/:id`；有未完成 → `还剩 N`，若近 7 天有完成则追加 `· 近 7 天 +M`。`+0` 不画，长期项目不显示总数分母。全完成态**不特殊置顶**（置顶会让已完成项目抢占进行中项目的注意力）。
 - **组内已完成不渲染**：已完成成员退出组内列表，标题行只回答「总共完成多少」与「最近推进多少」。没有等价的项目内已完成清单；低频出口是更多菜单的「在 goals 页打开」。
+- **切片展开态段序**（track-workbench 阶段4）：在飞的线（`projectTrackRows` 插槽——项目内 active 轨道行，`ProjectTrackRows` 复用轨道桶行、无项目 chip；回调对无轨道组返回 null 才不画小标题，JSX 恒 truthy 只能在调用点判）→ 既有 手头/今天/活水躺着/已排期/被挡 → 水下折叠尾（[母文档](../project-zone.md) §3.6）。「下一步」徽章退役；成员行 extraAction 双按钮 = 升格轨道（前，`onPromoteToTrack` 未传不渲染）+ 退出项目（后）。沉睡组渲染进区末尾「沉睡项目 · N」折叠段（母文档 §3.10）。在等区同批外包 CollapsibleSection 默认收起（`details` 语义，收起时内容仍在 DOM）。
 - **组内行可拖**：`TaskList` 接 `sortable` + `containerId = projectContainerId(goalId)` + `dndIdPrefix`，`childrenModeOverride` 从 `"static"` 改 `"draggable"`（升根手势的前提）。拖柄、缩进高亮环（`data-indent-target`）、收纳后展开父行的落点反馈（`revealChildren`）全部由页面透传的判定结果驱动，**组件不自己判**——跨组不亮高亮是页面侧 `hoveredRootIdFromOver` 就已过滤掉的结果，组件手上并没有「当前拖拽来自哪个组」这份信息。手势语义见 §3。
 - **内容区限高**：展开态内容区使用 `.todo-project-group-body` 语义类承载 `max-height: 45vh` 与 `overflow-anchor: none`，组件另挂 `overflow-y-auto`；限高加在内容区而不是组块外框。外框仍是 droppable 落点，内容区限高让落点 rect 有界且稳定，收件箱（唯一拖入源）不被大组推出视口。已知限制：落点反馈滚到组外框，不保证滚到内部那条成员；语义仍是「告诉你它在哪个组」。
 - **标题行操作**：未全完成组显示 `+`，点击后展开组并在内容区顶部显示就地输入框；Enter 以 trim 后标题调用 `createTaskForProject`，成功清空输入并保持打开，Esc 关闭。全完成组不显示 `+`，仍显示「去归档」。所有失败由页面 action toast 报原因，输入框保留草稿；筛选激活时，创建成功但新任务不匹配筛选条件会提示「任务已创建，但当前筛选未显示它」，写入结果不受筛选影响。
