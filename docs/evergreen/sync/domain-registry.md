@@ -62,7 +62,7 @@ last-reviewed: 2026-08-20
 | `track_milestones` | lww | `countsInStatus=false`；轨道阶段骨架（进度分段条），服务端 `guard: guardTrackMilestoneHost`——非 delete 写入找不到宿主 track 时拒收（`orphan_milestone_rejected`）；无 op、无 guardedColumns，并发改同段后写胜（接受，见 [ADR 0035](../../adr/0035-track-milestones-and-signal-priority.md)） |
 | `goals` | lww | `countsInStatus=false`，目标层 |
 | `goal_layout_pins` | lww | `countsInStatus=false`，目标图用户钉点，复合键域 |
-| `sessions` | lww | 零钩子，`countsInStatus=false`；"手头"软会话元数据，`Task.sessionId` 反挂引用它，不在 force-push 五域兜底范围内，见 [todo/at-hand](../todo/at-hand.md) |
+| `sessions` | lww | 零钩子，`countsInStatus=false`；"手头"软会话元数据，`Task.sessionId` 反挂引用它、`Session.trackIds` 正挂抓进场的轨道（JSON 列 `track_ids`，实体字段演进非新域），不在 force-push 五域兜底范围内，见 [todo/at-hand](../todo/at-hand.md) |
 
 登记簿里没有健康域：本仓不承载体征与跑步数据（决策见 [ADR 0024](../../adr/0024-retire-health-subsystem.md) 与 [ADR 0031](../../adr/0031-delete-health-data-layer.md)）。`syncDomains.test.ts` 有一条封闭性断言守着这一点——任何以 `health_` 开头的域或 `runs` 被加回登记簿，都会先红一次。
 

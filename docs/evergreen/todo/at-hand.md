@@ -7,13 +7,13 @@ covers:
   - packages/server/src/lib/session-rows.ts
 contracts:
   - packages/client/src/lib/sessions.ts
-last-reviewed: 2026-08-06
+last-reviewed: 2026-08-21
 ---
 
 # 待办 · 手头
 
-> [todo](../todo.md) 的子文档。手头 = **软会话**（`Session` 实体，只存 `{id, startedAt, endedAt, note, createdAt, updatedAt}` 元数据）+ `Task.sessionId` 反挂指针：用户"抓"几条 root 任务放进当前场，做完/散场后场行归档但不删除，任务的 `sessionId` 保留作历史归属。手头不是新的任务分类，是运行在既有 `tasks` 表之上的一层"当前在忙什么"投影。
-> 本文讲：单活跃场判定、抓/移/散/续四个动作的事务与 syncLog、`sessions` 域登记、`listTasks` 里的排他投影规则、续场的场迁移语义、读纯写显式自愈规则、关键不变量与测试清单。
+> [todo](../todo.md) 的子文档。手头 = **软会话**（`Session` 实体，存 `{id, startedAt, endedAt, note, trackIds, createdAt, updatedAt}` 元数据）+ 两种成员挂法：任务经 `Task.sessionId` **反挂**指针，轨道经场自身的 `trackIds` 数组**正挂**。用户"抓"几条 root 任务或几条轨道放进当前场，做完/散场后场行归档但不删除，归属保留作历史。手头不是新的任务分类，是运行在既有 `tasks`/`tracks` 表之上的一层"当前在忙什么"投影。
+> 本文讲：单活跃场判定、抓/移/散/续四个动作 + 抓/放轨道两个动作的事务与 syncLog、`sessions` 域登记、`listTasks` 里的排他投影规则、轨道桶排他、续场的场迁移语义、读纯写显式自愈规则、关键不变量与测试清单。
 > 不讲：Task 字段全貌与四分区落点（见母文档 [todo](../todo.md)）、同步账本与域登记簿机制（见 [sync](../sync.md) / [sync/domain-registry](../sync/domain-registry.md)）。
 
 ## 承上启下
@@ -27,13 +27,13 @@ last-reviewed: 2026-08-06
 
 "手头"回答的是"我现在正在忙哪几件事"，不是新的任务状态：
 
-- **`Session`** 只是一段时间区间的元数据：`{id, startedAt, endedAt, note, createdAt, updatedAt}`。它自己不持有任务列表——任务经 `Task.sessionId` 反过来指向它。`note` 是活跃场的随时可改小便签：`AtHandSection` 标题位展示（空回落显示「手头」），点标题行内编辑（Enter/失焦保存、Escape 取消、输入层 `maxLength=200`），经 `updateSessionNote` 写入（trim 后空串归一存 `null`）。散场不清 note，随场归档；续场列表态标题不可编辑、不消费历史场 note。
+- **`Session`** 只是一段时间区间的元数据：`{id, startedAt, endedAt, note, trackIds, createdAt, updatedAt}`。它自己不持有任务列表——任务经 `Task.sessionId` 反过来指向它；**轨道相反**，`trackIds: string[]`（默认 `[]`）由场正挂——轨道是长活过程，不给 Track 加归属字段，归属落在场这条会随场归档的行上（先例 `Goal.members`；ADR 0034 的独立成表判据「多对多且高频增删」此处不满足）。`note` 是活跃场的随时可改小便签：`AtHandSection` 标题位展示（空回落显示「手头」），点标题行内编辑（Enter/失焦保存、Escape 取消、输入层 `maxLength=200`），经 `updateSessionNote` 写入（trim 后空串归一存 `null`）。散场不清 note，随场归档；续场列表态标题不可编辑、不消费历史场 note。
 - **活跃场** = `endedAt === null` 的行里 `startedAt` 最大的那个（`getActiveSession()` / 内部 `pickActive()`）。正常情况下全库只有 0 或 1 个活跃场；抓活时零仪式自动开场，找不到活跃场才新建，已有活跃场就复用。
 - 任意时刻至多一个活跃场是**期望不变量**，不是数据库约束——跨设备并发开场可能短暂产生多行 `endedAt===null`，靠 §6 的显式自愈收敛，不靠事务锁或唯一索引。
 
-## 2. 数据流：抓 / 移 / 散 / 续
+## 2. 数据流：抓 / 移 / 散 / 续（任务）+ 抓 / 放（轨道）
 
-四个动作都在单个 Dexie `transaction("rw", ...)` 内完成，业务写入与 `syncLog` 同事务：
+全部动作都在单个 Dexie `transaction("rw", ...)` 内完成，业务写入与 `syncLog` 同事务：
 
 ```text
 抓活 grabTaskToHand(taskId)
@@ -44,9 +44,18 @@ last-reviewed: 2026-08-06
 移出 releaseTaskFromHand(taskId)
   → 只把 Task.sessionId 置 null；Session 行不动
 
+抓轨道 grabTrackToHand(trackId)
+  → 校验：track 存在且 active（否则 throw）
+  → 无活跃场 → 零仪式新建 Session（同任务抓取）
+  → 活跃场 trackIds 幂等追加（已含则零写返回原场；sessions update + syncLog）
+
+放轨道 releaseTrackFromHand(trackId)
+  → 活跃场 trackIds 摘除（sessions update + syncLog）
+  → 无活跃场或不含该 id → no-op 返回 null/原场
+
 散场 endActiveSession()
   → 只把当前活跃场 Session.endedAt 置当前时间（update + syncLog）
-  → 任务行（含其 sessionId）一律不碰——历史归属靠 sessionId 保留还原
+  → 任务行（含其 sessionId）与 trackIds 一律不碰——历史归属随场归档保留
 
 续场 resumeSession(sessionId)
   → 见 §5
@@ -63,6 +72,7 @@ last-reviewed: 2026-08-06
   startedAt: string;       // UTC ISO
   endedAt: string | null;  // null = 活跃
   note: string | null;     // 默认 null，最长 200
+  trackIds: string[];      // 默认 []；抓进本场的轨道 id（正挂，2026-08-21 阶段3）
   createdAt: string;
   updatedAt: string;       // 服务器分配
 }
@@ -70,7 +80,9 @@ last-reviewed: 2026-08-06
 
 `sessions` 是普通 LWW 域（`syncDomains.ts`，`upsertPriority`/`deletePriority` 74，`countsInStatus:false`），零自定义 `validate`/`apply`，与 `tasks`/`tracks`/`goals` 走同一套通用 LWW 路径。服务端行映射 `sessionToRow`/`rowToSession`（`server/src/lib/session-rows.ts`）不写 `updated_at`（服务器记账时分配）。Dexie v16 新增 `sessions: "id, startedAt, updatedAt"` 表，`tasks` 索引串加入 `sessionId`，SQLite `tasks` 幂等补 `session_id` 列 + `idx_tasks_session_id` 索引；client upgrade hook 给旧 `tasks` 行补 `sessionId=null`，`SCHEMA_NORMALIZATION_VERSION` 同步跟随到 8 作双保险。`sessions` 客户端 backup 角色是 `bundled`（完整备份携带，但**不进** force-push 五域兜底契约，见 §7.4）。完整域登记 checklist 见 [sync/domain-registry](../sync/domain-registry.md)。
 
-`Task.sessionId: string | null`（默认 `null`）是唯一挂钩：普通 create/update/delete 语义不变，`sessionId` 只是 `tasks` 域里新增的一个结构化字段，不新增同步域、不扩展 `SyncPushReasonCode`（与 `weight`/`ruleId` 同类先例）。
+`Task.sessionId: string | null`（默认 `null`）是任务侧的唯一挂钩：普通 create/update/delete 语义不变，`sessionId` 只是 `tasks` 域里新增的一个结构化字段，不新增同步域、不扩展 `SyncPushReasonCode`（与 `weight`/`ruleId` 同类先例）。
+
+`Session.trackIds` 同理是 sessions 域的**实体字段演进，非新同步域**：随 `SessionSchema`（`z.array(...).default([])`，旧行 parse 兜底出 `[]`）、`session-rows.ts` 映射（SQL JSON 文本列 `track_ids`，坏值回退 `[]`）、SQLite 幂等 `ALTER TABLE`（照 `tasks.session_id` 加列先例）一起演进；Dexie 不查询该字段、无索引变更，**v21 不动、无需升版**。LWW 整行覆盖意味着两设备并发抓不同轨道会互吞一条（后写胜）——单用户单活跃场接受此风险，真发生再抓一次即可，轨道本体无恙。
 
 ## 4. atHand 投影规则（`listTasks` 排他分桶）
 
@@ -98,6 +110,8 @@ if (handSessionId !== null && t.recurrence === null && (t.sessionId ?? null) ===
 
 **子任务回手头**：子任务拖到 `hand` 容器或投手头坞，走 `promoteTaskToHand`——先 `promoteToRoot(…, "inbox", …)` 升根再 `grabTaskToHand`。落 `"inbox"` 而非 `"today"`：抓到手头与排今天正交，`promoteToRoot` 会按 pool 写 `scheduledAt`，落 `"today"` 等于替用户排期。两步串行不合事务，中途失败是「升了根、落回它自身字段决定的分区（通常是收件箱；降级不清能力字段——见 [todo](../todo.md#todo-s2-2)——子任务可能带休眠 `recurrence`，升根后规则复活，会落重复管理区而非收件箱）」——可见可重试，非不可观测态。项目区有同款姊妹动作 `promoteTaskToProject`（组内子任务升根留在本组，先 `promoteToRoot(…, "inbox", …)` 再 `assignTaskToProject`），同样两步串行、同样的中途失败形状。
 
+**轨道的排他是另一条路径，不走 `listTasks`**：`TodoPage` 从 `buckets.handSession?.trackIds` 取 `handTrackIds`，① `TrackBucketSection` 收 `sessionTrackIds` prop 在渲染层过滤——被抓轨道不进桶；② 手头轨道行 = `trackData.tracks.filter(id ∈ handTrackIds)` 组装 `HandTrackRows` 经 `AtHandSection.handTracks` 插槽渲染在任务面之上（轨道是「线」比散任务重；抓了轨道不算空场）。散场回桶与任务同理是**投影结果**：桶的排他只认活跃场，场一散 `handSession` 为 null、`handTrackIds` 为空，轨道自然回桶，零写零迁移。轨道被删除/归档后 `trackIds` 里的悬空 id 由读侧过滤（`trackData.tracks` 只含 active 轨道，filter 天然滤掉）——不自动清写，同 Goal 对失效成员的 ghost 处置。
+
 **标题计数口径**：手头标题右侧的数字读 `TodoBuckets.atHandPendingTotal` = 手头未完 root 数 + 这些 root 名下未完 child 数。子任务被投影层按 `parentId` 早退丢出所有桶，`atHand` 数组里只有 root，故该计数在 `listTasks` 里另从全表按 `parentId` 反查累加。这一口径**与收件箱/今天区的 root 计数不同**且是刻意的：那两区是清单，数 root 合理；手头是工作台，把几条活压成父子只是整理结构，活的件数没变。**项目区走同一口径**（组标题三个数全含子任务，理由同上——组是一份承诺，不是清单；见 [project-zone](../project-zone.md)），两处反查同在 `listTasks` 里、同样剔 `skipped`。
 
 ## 5. 续场 = 散当前场 + 开新场 + 迁移未完任务
@@ -117,6 +131,7 @@ if (handSessionId !== null && t.recurrence === null && (t.sessionId ?? null) ===
 - **续场永远新建一个 Session**，绝不复活旧场（`endedAt` 单向只增不减）；旧场此后仍是一段已归档的历史区间。
 - **done 留旧场**：只迁移未完成任务；已完成的任务 `sessionId` 继续指向原场，历史战果不随续场漂移。
 - **对活跃场自身幂等 no-op**：如果传入的 `sessionId` 恰好是当前活跃场（例如跨设备并发下 UI 还持有一份 stale 的可续场列表），`resumeSession` 直接返回该场，不散场、不建新场、不迁移、零写——防止对自己续场产生一个多余的双活跃僵尸场。
+- **续场只续任务，不搬轨道**：新场 `trackIds` 恒为 `[]`，旧场的 `trackIds` 随行归档保留。轨道回桶再抓，语义简单（2026-08-21 阶段3 拍板，刻意不扩展场迁移语义）。
 
 ## 6. 自愈规则：读纯写显式分离
 
@@ -136,10 +151,11 @@ if (handSessionId !== null && t.recurrence === null && (t.sessionId ?? null) ===
 
 | 入口 | 职责 |
 |---|---|
-| `lib/sessions.ts` | 生命周期：`getActiveSession`（纯读）/ `healActiveSessions`（显式自愈）/ `grabTaskToHand` / `releaseTaskFromHand` / `endActiveSession` / `listResumableSessions` / `resumeSession` / `updateSessionNote`（场便签） |
-| `pages/todo/AtHandSection.tsx` | 手头区 UI：沿用待办区「独立标题行 + 等宽行面板」骨架；活跃场显示未完列表 / 「本场已完成」折叠 / 散场按钮，无活跃场时显示续场行列表，全无则隐藏；未完行是 sortable（容器 `hand`）并渲染拖柄，区内拖拽重排（见 §4.6） |
+| `lib/sessions.ts` | 生命周期：`getActiveSession`（纯读）/ `healActiveSessions`（显式自愈）/ `grabTaskToHand` / `releaseTaskFromHand` / `grabTrackToHand` / `releaseTrackFromHand` / `endActiveSession` / `listResumableSessions` / `resumeSession` / `updateSessionNote`（场便签） |
+| `pages/todo/AtHandSection.tsx` | 手头区 UI：沿用待办区「独立标题行 + 等宽行面板」骨架；活跃场显示 `handTracks` 插槽（抓进的轨道行，任务面之上）/ 未完列表 / 「本场已完成」折叠 / 散场按钮，无活跃场时显示续场行列表，全无则隐藏；未完行是 sortable（容器 `hand`）并渲染拖柄，区内拖拽重排（见 §4.6） |
+| `pages/todo/TrackBucketSection.tsx`（归 [todo](../todo.md) covers） | `useTrackBucketContext`（四组信号设置 + milestones 分组 + 项目索引）/ `HandTrackRows`（手头轨道裸行列，TodoPage 组装进 `handTracks` 插槽）/ `TrackBucketSection`（桶分区，`sessionTrackIds` 排他） |
 | `server/src/lib/session-rows.ts` | `sessionToRow` / `rowToSession`：SQL ↔ JS 映射，不写 `updated_at` |
 | `pages/TodoPage.tsx`（归 [todo](../todo.md) covers） | 接线：`buckets.atHand`/`handSession` 渲染 `AtHandSection`；`rowHandlers.onToHand` 透传给 `TaskRow`/`TaskList`/`TaskDetailSheet`/`GravityReviewSection`/`SunkenInboxTail`/`SunkenScheduledTail`；`useEffect` 触发 `healActiveSessions` |
 | `lib/tasks.ts: listTasks()`（归 [todo](../todo.md) covers） | `TodoBuckets.atHand`/`handSession` 字段与 §4 的排他投影判定 |
 
-测试：`lib/sessions.test.ts`（抓/移/散/续/自愈/可续列表全部行为，含幂等 no-op；`updateSessionNote` 写入/空串归 null/不存在场 throw）、`pages/todo/AtHandSection.test.tsx`（活跃场渲染/移出/续场行/全无隐藏；场便签标题显示回退/行内编辑保存与取消/续场态不可编辑；拖柄：未完行渲染/已完成行不渲染/续场态不渲染）、`pages/TodoPage.test.tsx`（手头区键盘拖拽重排：sortOrder 落库 + 视图顺序更新）、`lib/tasks.test.ts`（`describe("listTasks atHand 投影")`：排他、done 双显、散场回桶、指向已散场 sessionId 不影响分桶、occurrence 物化下一发不继承 sessionId）、`pages/todo/todoDnd.test.ts`（hand 容器：解析/id 往返/同容器 reorder/拖池与拖项目 null/缩进父 null/坞不显示/坞落点 invalid/clamp 夹 0）、`pages/todo/TaskRow.test.tsx`（overlay 抓取入口按钮 + 重复模板不渲染 + 不传 onToHand 不渲染）、`pages/todo/TaskDetailSheet.test.tsx`（抽屉抓/移按钮）、`shared/src/entitySchemas.test.ts` / `shared/src/syncDomains.test.ts`（`SessionSchema` + `sessions` 域注册）、`server/src/db/schema.test.ts`（`session_id` 列 + 索引幂等补齐）、`server/src/sync/domains.test.ts`（sessions 域注册）、`client/src/sync/clientDomains.test.ts`（sessions 客户端域 + bundled backup）、`client/src/db/schemaNormalization.test.ts`（`sessionId` 归一）。
+测试：`lib/sessions.test.ts`（抓/移/散/续/自愈/可续列表全部行为，含幂等 no-op；`updateSessionNote` 写入/空串归 null/不存在场 throw；`grabTrackToHand` 开新场/既有场追加/重复抓幂等零写/不存在与非 active 拒、`releaseTrackFromHand` 摘除/无场 no-op、`endActiveSession` 保留 trackIds）、`pages/todo/TrackBucketSection.test.tsx`（信号分组渲染/`sessionTrackIds` 排他/空则不渲染/展开态透传/项目 chip/`HandTrackRows` inHand 行与空 null）、`pages/TodoPage.test.tsx`（集成：桶分区渲染、抓走桶消失手头出现、散场回桶、新增轨道落点可见）、`pages/todo/AtHandSection.test.tsx`（活跃场渲染/移出/续场行/全无隐藏；场便签标题显示回退/行内编辑保存与取消/续场态不可编辑；拖柄：未完行渲染/已完成行不渲染/续场态不渲染）、`pages/TodoPage.test.tsx`（手头区键盘拖拽重排：sortOrder 落库 + 视图顺序更新）、`lib/tasks.test.ts`（`describe("listTasks atHand 投影")`：排他、done 双显、散场回桶、指向已散场 sessionId 不影响分桶、occurrence 物化下一发不继承 sessionId）、`pages/todo/todoDnd.test.ts`（hand 容器：解析/id 往返/同容器 reorder/拖池与拖项目 null/缩进父 null/坞不显示/坞落点 invalid/clamp 夹 0）、`pages/todo/TaskRow.test.tsx`（overlay 抓取入口按钮 + 重复模板不渲染 + 不传 onToHand 不渲染）、`pages/todo/TaskDetailSheet.test.tsx`（抽屉抓/移按钮）、`shared/src/entitySchemas.test.ts` / `shared/src/syncDomains.test.ts`（`SessionSchema` + `sessions` 域注册）、`server/src/db/schema.test.ts`（`session_id` 列 + 索引幂等补齐）、`server/src/sync/domains.test.ts`（sessions 域注册）、`client/src/sync/clientDomains.test.ts`（sessions 客户端域 + bundled backup）、`client/src/db/schemaNormalization.test.ts`（`sessionId` 归一）。
