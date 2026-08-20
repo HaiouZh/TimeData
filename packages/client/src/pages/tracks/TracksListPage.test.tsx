@@ -112,7 +112,7 @@ async function seedTrackWithStep(title: string, tags: string[]) {
 }
 
 // TracksBoard 的分组/停滞判定按真实 Date.now() 计时（非该文件其它用例的固定 `now`），
-// 造数须用相对真实当下的时间戳，8 天前才会真正落进「停滞」组。
+// 造数须用相对真实当下的时间戳，8 天前才会触发 stalledDays 提醒（已不改分组）。
 async function seedDispatchScenario(): Promise<void> {
   const nowMs = Date.now();
   const recentIso = new Date(nowMs - 60 * 60 * 1000).toISOString();
@@ -141,6 +141,19 @@ async function seedDispatchScenario(): Promise<void> {
     startedAt: recentIso,
     endedAt: null,
     tags: ["agent在做"],
+    seq: 0,
+  });
+
+  await addTrack({ title: "等外部的轨道" });
+  const external = (await listTracks()).find((item) => item.title === "等外部的轨道");
+  if (!external) throw new Error("missing external track");
+  await addTrackStep({
+    trackId: external.id,
+    source: "agent",
+    content: "等协作者反馈",
+    startedAt: recentIso,
+    endedAt: recentIso,
+    tags: ["等外部"],
     seq: 0,
   });
 
@@ -182,7 +195,7 @@ describe("TracksListPage", () => {
     expect(host.querySelector(`a[href="/tracks/${track.id}"]`)).not.toBeNull();
   });
 
-  it("统计带显示 等我接/agent在跑/停滞 计数", async () => {
+  it("统计带显示 等我接/agent在跑/等外部/停滞 计数", async () => {
     await seedDispatchScenario();
     const host = await renderList();
     // 统计带依赖 steps 的 useLiveQuery 结算，锚点必须等 steps 派生文本，不能等卡片标题（tracks 查询先到会读到 0/0/0）。
@@ -190,18 +203,24 @@ describe("TracksListPage", () => {
     const stats = host.querySelector('[data-testid="dispatch-stats"]');
     expect(stats?.textContent).toContain("等我接 1");
     expect(stats?.textContent).toContain("agent 在跑 1");
+    expect(stats?.textContent).toContain("等外部 1");
     expect(stats?.textContent).toContain("停滞 1");
   });
 
-  it("卡片按分组落位：等我接组在最上，停滞组沉底", async () => {
+  it("卡片按分组落位：等我接组在最上，推进中组沉底", async () => {
     await seedDispatchScenario();
     const host = await renderList();
-    // 分组同样依赖 steps 结算：等停滞组出现（steps 派生）再断言组序。
+    // 分组同样依赖 steps 结算：等推进中组出现（steps 派生）再断言组序。
     await waitForText(host, "等我接 1");
     const groups = [...host.querySelectorAll('[data-testid^="dispatch-group-"]')].map((el) =>
       el.getAttribute("data-testid"),
     );
-    expect(groups).toEqual(["dispatch-group-awaiting-me", "dispatch-group-agent-running", "dispatch-group-stalled"]);
+    expect(groups).toEqual([
+      "dispatch-group-awaiting-me",
+      "dispatch-group-agent-running",
+      "dispatch-group-wait-external",
+      "dispatch-group-in-progress",
+    ]);
 
   });
 

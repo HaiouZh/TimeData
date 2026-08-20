@@ -3,6 +3,7 @@ import { act, createElement } from "react";
 import { MemoryRouter } from "react-router";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { readTrackActionTags, setTrackActionTags } from "../../lib/settings/trackActionTagsSetting.js";
+import { readWaitExternalTags, setWaitExternalTags } from "../../lib/settings/trackWaitExternalTagsSetting.js";
 import { resetDb } from "../../test/dbReset.js";
 import { click, renderDom, unmount } from "../../test/domHarness.js";
 import { SettingsTracksPage } from "./SettingsTracksPage.js";
@@ -39,6 +40,14 @@ async function waitForTags(predicate: (tags: string[]) => boolean): Promise<void
   throw new Error("Timed out waiting for track.actionTags.v2");
 }
 
+async function waitForWaitTags(predicate: (tags: string[]) => boolean): Promise<void> {
+  for (let i = 0; i < MAX_FLUSHES; i += 1) {
+    if (predicate(await readWaitExternalTags())) return;
+    await flush();
+  }
+  throw new Error("Timed out waiting for track.waitExternalTags.v1");
+}
+
 // 元素异步渲染出来才能操作：不等就 querySelector 会拿到 null，
 // 拿 null 去 setValue.call 会撞 jsdom 的 brand check，报错像 realm 污染其实只是没等。
 async function waitForElement<T extends Element>(host: HTMLElement, selector: string): Promise<T> {
@@ -66,6 +75,24 @@ async function submitForm(host: HTMLElement): Promise<void> {
   });
 }
 
+async function fillWaitInput(host: HTMLElement, value: string): Promise<void> {
+  const input = await waitForElement<HTMLInputElement>(host, 'input[aria-label="新增等外部信号"]');
+  const setValue = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
+  await act(async () => {
+    setValue?.call(input, value);
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+}
+
+async function submitWaitForm(host: HTMLElement): Promise<void> {
+  const input = await waitForElement<HTMLInputElement>(host, 'input[aria-label="新增等外部信号"]');
+  const form = input.closest("form");
+  if (!(form instanceof HTMLFormElement)) throw new Error("Missing wait external form");
+  await act(async () => {
+    form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+  });
+}
+
 describe("SettingsTracksPage", () => {
   it("shows the default board signal tags when nothing is configured", async () => {
     const host = await renderPage();
@@ -74,6 +101,7 @@ describe("SettingsTracksPage", () => {
     expect(host.textContent).toContain("配置会进入轨道列表顶部聚合的步骤标签。");
     expect(host.textContent).toContain("待我处理");
     expect(host.textContent).toContain("agent在做");
+    expect(host.textContent).toContain("等外部");
     expect(host.textContent).not.toContain("等我");
     expect(host.textContent).not.toContain("待决策");
     expect(host.textContent).not.toContain("阵营");
@@ -105,5 +133,32 @@ describe("SettingsTracksPage", () => {
     await fillInput(host, "   ");
     await submitForm(host);
     await expect(readTrackActionTags()).resolves.toEqual(["待我处理"]);
+  });
+
+  it("adds a new wait external signal via the input form", async () => {
+    const host = await renderPage();
+    await flush();
+    await fillWaitInput(host, "等协作方");
+    await submitWaitForm(host);
+    await waitForWaitTags((tags) => tags.includes("等协作方"));
+  });
+
+  it("removes an existing wait external signal", async () => {
+    await setWaitExternalTags(["等外部", "等协作方"]);
+    const host = await renderPage();
+    await waitForWaitTags((tags) => tags.length === 2);
+    await click(host.querySelector('button[aria-label="删除等外部信号 等外部"]'));
+    await waitForWaitTags((tags) => tags.length === 1 && tags[0] === "等协作方");
+  });
+
+  it("does not add duplicate or empty wait external signals", async () => {
+    await setWaitExternalTags(["等外部"]);
+    const host = await renderPage();
+    await flush();
+    await fillWaitInput(host, " 等外部 ");
+    await submitWaitForm(host);
+    await fillWaitInput(host, "   ");
+    await submitWaitForm(host);
+    await expect(readWaitExternalTags()).resolves.toEqual(["等外部"]);
   });
 });

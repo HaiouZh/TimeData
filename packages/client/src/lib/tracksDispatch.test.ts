@@ -35,6 +35,7 @@ function makeStep(trackId: string, endedAgo: number, tags: string[] = []): Track
 
 const ACTION = ["待我处理", "需决策"];
 const EXEC = ["agent在做"];
+const WAIT = ["等外部"];
 
 function itemsOf(entries: [Track, TrackStep[]][]) {
   return dispatchItems(
@@ -42,6 +43,7 @@ function itemsOf(entries: [Track, TrackStep[]][]) {
     new Map(entries.map(([t, s]) => [t.id, s])),
     ACTION,
     EXEC,
+    WAIT,
     NOW,
   );
 }
@@ -56,12 +58,22 @@ describe("dispatchItems 分组判定", () => {
     expect(old.stalledDays).toBe(13);
   });
 
-  it("agent 信号且未停滞 → agent在跑；挂超 7 天 → 停滞", () => {
+  it("agent 信号且未停滞 → agent在跑；挂超 7 天仍为 agent在跑且标停滞天数", () => {
     const running = itemsOf([[makeTrack("a"), [makeStep("a", DAY, ["agent在做"])]]])[0];
     expect(running.group).toBe("agent-running");
+    expect(running.stalledDays).toBeNull();
     const dead = itemsOf([[makeTrack("b"), [makeStep("b", 13 * DAY, ["agent在做"])]]])[0];
-    expect(dead.group).toBe("stalled");
+    expect(dead.group).toBe("agent-running");
     expect(dead.stalledDays).toBe(13);
+  });
+
+  it("信号命中等外部 → 等外部", () => {
+    const item = itemsOf([[makeTrack("a"), [makeStep("a", DAY, ["等外部"])]]])[0];
+    expect(item.group).toBe("wait-external");
+    expect(item.stalledDays).toBeNull();
+    const staleExt = itemsOf([[makeTrack("b"), [makeStep("b", 13 * DAY, ["等外部"])]]])[0];
+    expect(staleExt.group).toBe("wait-external");
+    expect(staleExt.stalledDays).toBe(13);
   });
 
   it("信号口径=最近带信号的步：中途补无信号步不清除信号", () => {
@@ -78,17 +90,22 @@ describe("dispatchItems 分组判定", () => {
     expect(item.signal?.tag).toBe("需决策");
   });
 
-  it("无信号新鲜 → 推进中；无步轨道按 createdAt 兜底判停滞", () => {
+  it("无信号新鲜 → 推进中；无步轨道按 createdAt 兜底判停滞提醒但仍为推进中", () => {
     expect(itemsOf([[makeTrack("a"), [makeStep("a", DAY)]]])[0].group).toBe("in-progress");
     expect(itemsOf([[makeTrack("b", 2 * DAY), []]])[0].group).toBe("in-progress");
     const staleEmpty = itemsOf([[makeTrack("c", 10 * DAY), []]])[0];
-    expect(staleEmpty.group).toBe("stalled");
+    expect(staleEmpty.group).toBe("in-progress");
+    expect(staleEmpty.stalledDays).toBe(10);
     expect(staleEmpty.lastActivityAt).toBeNull();
   });
 
-  it("阈值边界：恰好 7 天不算停滞，超过才算", () => {
-    expect(itemsOf([[makeTrack("a"), [makeStep("a", STALL_THRESHOLD_MS)]]])[0].group).toBe("in-progress");
-    expect(itemsOf([[makeTrack("b"), [makeStep("b", STALL_THRESHOLD_MS + DAY)]]])[0].group).toBe("stalled");
+  it("阈值边界：恰好 7 天不算停滞，超过才算（但分组仍为推进中）", () => {
+    const atThreshold = itemsOf([[makeTrack("a"), [makeStep("a", STALL_THRESHOLD_MS)]]])[0];
+    expect(atThreshold.group).toBe("in-progress");
+    expect(atThreshold.stalledDays).toBeNull();
+    const beyond = itemsOf([[makeTrack("b"), [makeStep("b", STALL_THRESHOLD_MS + DAY)]]])[0];
+    expect(beyond.group).toBe("in-progress");
+    expect(beyond.stalledDays).toBe(8);
   });
 });
 
@@ -99,20 +116,21 @@ describe("groupDispatchItems / dispatchStats", () => {
       [makeTrack("waitOld"), [makeStep("waitOld", 2 * DAY, ["待我处理"])]],
       [makeTrack("waitNew"), [makeStep("waitNew", DAY, ["待我处理"])]],
       [makeTrack("run"), [makeStep("run", DAY, ["agent在做"])]],
+      [makeTrack("ext"), [makeStep("ext", DAY, ["等外部"])]],
     ]);
     const groups = groupDispatchItems(items);
-    expect(groups.map((g) => g.key)).toEqual(["awaiting-me", "agent-running", "stalled"]);
+    expect(groups.map((g) => g.key)).toEqual(["awaiting-me", "agent-running", "wait-external", "in-progress"]);
     expect(groups[0].items.map((i) => i.track.id)).toEqual(["waitNew", "waitOld"]);
     expect(groups[0].label).toBe("等我接");
   });
 
-  it("统计带三数", () => {
+  it("统计带四数：等我接 / agent在跑 / 等外部 / 停滞提醒计数（跨组）", () => {
     const items = itemsOf([
       [makeTrack("a"), [makeStep("a", DAY, ["待我处理"])]],
-      [makeTrack("b"), [makeStep("b", DAY, ["agent在做"])]],
-      [makeTrack("c"), [makeStep("c", 9 * DAY)]],
-      [makeTrack("d"), [makeStep("d", DAY)]],
+      [makeTrack("b"), [makeStep("b", 13 * DAY, ["agent在做"])]],
+      [makeTrack("c"), [makeStep("c", DAY, ["等外部"])]],
+      [makeTrack("d"), [makeStep("d", 9 * DAY)]],
     ]);
-    expect(dispatchStats(items)).toEqual({ awaiting: 1, agentRunning: 1, stalled: 1 });
+    expect(dispatchStats(items)).toEqual({ awaiting: 1, agentRunning: 1, waitingExternal: 1, stalled: 2 });
   });
 });

@@ -4,7 +4,7 @@
 // **判定逻辑不在此收口**：调度台的 tone 走 tracksDispatch.classify() 产出的 DispatchGroupKey，
 // 再经 TracksBoard 的 GROUP_BADGE_TONES 静态表转换，从不调用本文件的 badgeToneForSignal。
 // 两份实现靠约定对齐——「actionTags[0]（待我处理约定位）先于 agentExecTags」这条顺序改一边要记得改另一边。
-// 另：本 tone 只有三档，不含 classify 的第四组 stalled（调度台把它也映射成 default）。
+// 另：本 tone 只有三档，不含 wait-external 组（调度台把它也映射成 default）。
 export type TrackBadgeTone = "warn" | "agent" | "default";
 
 export const BADGE_TONE_CLASSES: Record<TrackBadgeTone, string> = {

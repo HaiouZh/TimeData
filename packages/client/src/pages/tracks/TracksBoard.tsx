@@ -3,6 +3,7 @@ import { useMemo } from "react";
 import { useMatch, useNavigate } from "react-router";
 import { useTrackActionTags } from "../../lib/settings/trackActionTagsSetting.js";
 import { useAgentExecTags } from "../../lib/settings/trackAgentExecTagsSetting.js";
+import { useWaitExternalTags } from "../../lib/settings/trackWaitExternalTagsSetting.js";
 import { addTrack, appendUserStep, listAllTrackSteps, listTracks } from "../../lib/tracks.js";
 import { type DispatchGroupKey, dispatchItems, dispatchStats, groupDispatchItems } from "../../lib/tracksDispatch.js";
 import { groupStepsByTrack, partitionTracks } from "../../lib/tracksView.js";
@@ -16,32 +17,33 @@ import { type TrackBadgeTone, TrackListItem } from "./TrackListItem.js";
 const GROUP_HEADER_CLASSES: Record<DispatchGroupKey, string> = {
   "awaiting-me": "text-warn",
   "agent-running": "text-track-agent",
+  "wait-external": "text-ink-2",
   "in-progress": "text-ink-2",
-  stalled: "text-ink-3",
 };
 
 const GROUP_BADGE_TONES: Record<DispatchGroupKey, TrackBadgeTone> = {
   "awaiting-me": "warn",
   "agent-running": "agent",
+  "wait-external": "default",
   "in-progress": "default",
-  stalled: "default",
 };
 
-// 调度台：一线一卡，按 等我接/agent在跑/推进中/停滞 分组；顶部统计带答「此刻几条在并发」。
+// 调度台：一线一卡，按 等我接/agent在跑/等外部/推进中 分组；顶部统计带答「此刻几条在并发」。
 // 同时服务窄屏路由页与宽屏壳左列（TracksShell）。
 export function TracksBoard() {
   const tracks = useLiveQuery(() => listTracks(), [], []);
   const allSteps = useLiveQuery(() => listAllTrackSteps(), [], []);
   const actionTags = useTrackActionTags();
   const agentExecTags = useAgentExecTags();
+  const waitExternalTags = useWaitExternalTags();
   const navigate = useNavigate();
   const selectedTrackId = useMatch("/tracks/:id")?.params.id ?? null;
 
   const { active, archived } = partitionTracks(tracks);
   const byTrack = useMemo(() => groupStepsByTrack(allSteps), [allSteps]);
   const items = useMemo(
-    () => dispatchItems(active, byTrack, actionTags, agentExecTags, new Date()),
-    [active, byTrack, actionTags, agentExecTags],
+    () => dispatchItems(active, byTrack, actionTags, agentExecTags, waitExternalTags, new Date()),
+    [active, byTrack, actionTags, agentExecTags, waitExternalTags],
   );
   const groups = useMemo(() => groupDispatchItems(items), [items]);
   const stats = useMemo(() => dispatchStats(items), [items]);
@@ -61,7 +63,7 @@ export function TracksBoard() {
       <div className="mx-auto w-full max-w-2xl px-4 py-4 pb-24">
         <NewTrackComposer onCreate={(title) => create(title)} />
         <p data-testid="dispatch-stats" className="td-num mb-3 td-text-caption text-ink-2">
-          等我接 {stats.awaiting} · agent 在跑 {stats.agentRunning} · 停滞 {stats.stalled}
+          等我接 {stats.awaiting} · agent 在跑 {stats.agentRunning} · 等外部 {stats.waitingExternal} · 停滞 {stats.stalled}
         </p>
         {items.length === 0 ? (
           <EmptyState variant="card" title="还没有进行中的轨道" />
