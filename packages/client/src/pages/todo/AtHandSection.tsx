@@ -30,6 +30,7 @@ export interface AtHandSectionProps {
   indentTargetId?: string | null;
   /** 收纳后要展开的父行 id（透传 TaskRow，落点反馈）。只作用于未完成区。 */
   revealChildren?: { id: string; nonce: number } | null;
+  handTracks?: ReactNode;
 }
 
 function sessionDateLabel(iso: string): string {
@@ -128,6 +129,7 @@ export function AtHandSection({
   pendingTotal,
   indentTargetId,
   revealChildren,
+  handTracks,
 }: AtHandSectionProps) {
   if (session === null && resumable.length === 0) return null;
 
@@ -195,9 +197,10 @@ export function AtHandSection({
           </button>
         }
       />
-      {pending.length === 0 ? (
+      {handTracks}
+      {pending.length === 0 && !handTracks ? (
         <p className="rounded-card bg-surface px-3 py-6 text-center td-text-label text-ink-3">手头空了，抓点活或散场</p>
-      ) : (
+      ) : pending.length > 0 ? (
         <AtHandRowsSurface>
           <SortableContext items={pending.map((t) => t.id)} strategy={verticalListSortingStrategy}>
             {pending.map((task) => (
@@ -223,7 +226,7 @@ export function AtHandSection({
             ))}
           </SortableContext>
         </AtHandRowsSurface>
-      )}
+      ) : null}
       {doneCount > 0 && (
         <div className="mt-2">
           <CollapsibleSection title="本场已完成" count={doneCount} defaultOpen={false}>

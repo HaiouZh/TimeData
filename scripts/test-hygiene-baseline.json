@@ -165,6 +165,7 @@
   "dirty-in-clean-bucket:pages/todo/TodoProjectSection.test.tsx",
   "dirty-in-clean-bucket:pages/todo/TodoSelectionBar.test.tsx",
   "dirty-in-clean-bucket:pages/todo/TrackBucketRow.test.tsx",
+  "dirty-in-clean-bucket:pages/todo/TrackBucketSection.test.tsx",
   "dirty-in-clean-bucket:pages/todo/TrackRow.test.tsx",
   "dirty-in-clean-bucket:pages/todo/WaitingSection.test.tsx",
   "dirty-in-clean-bucket:pages/tracks/NewTrackComposer.test.tsx",

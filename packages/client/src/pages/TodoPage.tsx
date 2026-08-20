@@ -122,6 +122,7 @@ import {
 } from "./todo/todoDnd.js";
 import { applyTodoDockDrop } from "./todo/todoDockDrop.js";
 import { useTaskTrackIndex } from "./todo/useTaskTrackIndex.js";
+import { HandTrackRows, TrackBucketSection } from "./todo/TrackBucketSection.js";
 import { WaitingSection } from "./todo/WaitingSection.js";
 
 const EMPTY: TodoBuckets = {
@@ -166,9 +167,8 @@ export function TodoPage() {
       return next;
     });
   }, []);
-  // 临时压 unused，下一单轨道桶接线时删
-  void expandedTrackIds;
-  void toggleTrackExpand;
+  const handTrackIds = buckets.handSession?.trackIds ?? [];
+  const handTracks = trackData.tracks.filter((t) => handTrackIds.includes(t.id));
   const resumable = useLiveQuery(() => listResumableSessions(), []) ?? [];
   // biome-ignore lint/correctness/useExhaustiveDependencies: handSession.id 是触发器而非读取项——换了手头会话才重新自愈一次。删掉它，自愈就只在挂载时跑一次。
   useEffect(() => {
@@ -1239,6 +1239,17 @@ export function TodoPage() {
       pendingTotal={buckets.atHandPendingTotal}
       indentTargetId={indentTargetId}
       revealChildren={revealChildren}
+      handTracks={
+        handTracks.length > 0 ? (
+          <HandTrackRows
+            tracks={handTracks}
+            stepsByTrack={trackData.stepsByTrack}
+            expandedTrackIds={expandedTrackIds}
+            onToggleExpand={toggleTrackExpand}
+            onError={(message) => showActionToast({ message })}
+          />
+        ) : null
+      }
     />
   );
 
@@ -1534,6 +1545,17 @@ export function TodoPage() {
     </CollapsibleSection>
   );
 
+  const trackBucketBlock = (
+    <TrackBucketSection
+      tracks={trackData.tracks}
+      stepsByTrack={trackData.stepsByTrack}
+      sessionTrackIds={handTrackIds}
+      expandedTrackIds={expandedTrackIds}
+      onToggleExpand={toggleTrackExpand}
+      onError={(message) => showActionToast({ message })}
+    />
+  );
+
   return (
     <DndContext
       sensors={sensors}
@@ -1591,6 +1613,7 @@ export function TodoPage() {
               right={
                 <>
                   {dimWhenSelecting(scheduledBlock)}
+                  {dimWhenSelecting(trackBucketBlock)}
                   {dimWhenSelecting(projectsBlock)}
                   {inboxBlock}
                 </>
@@ -1604,6 +1627,7 @@ export function TodoPage() {
               {gravityReviewBlock}
               {dimWhenSelecting(completedBlock)}
               {dimWhenSelecting(scheduledBlock)}
+              {dimWhenSelecting(trackBucketBlock)}
               {dimWhenSelecting(projectsBlock)}
               {inboxBlock}
             </div>

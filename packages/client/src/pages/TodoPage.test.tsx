@@ -23,6 +23,8 @@ import {
 } from "../lib/tasks.js";
 import { promoteTaskToTrack, toggleTaskDoneWithTrackConclude } from "../lib/taskTrackPromote.js";
 import { setTrackStatus } from "../lib/tracks.js";
+import { addTrack } from "../lib/tracks.js";
+import { endActiveSession, grabTrackToHand } from "../lib/sessions.js";
 import { click, renderDom, unmount } from "../test/domHarness.js";
 import { TodoPage } from "./TodoPage.js";
 
@@ -3385,6 +3387,113 @@ describe("TodoPage 悬停删除二次确认", () => {
     expect(host.textContent).not.toContain("删除任务？");
     await waitForCondition(() => !(host.textContent?.includes("叶子") ?? false), "叶子 to leave the list");
     expect(await db.tasks.get(t.id)).toBeUndefined();
+    await unmount(root);
+  });
+});
+
+describe("TodoPage 轨道桶分区 + 手头抓轨道接线", () => {
+  it("有 active 轨道时右列出现轨道桶分区与轨道标题", async () => {
+    await db.tracks.clear();
+    await db.trackSteps.clear();
+    await db.trackMilestones.clear();
+    await db.goals.clear();
+    await db.sessions.clear();
+    const track = await addTrack({ title: "桶轨道A" });
+    const { host, root } = await renderPage();
+    await waitForCondition(
+      () => host.querySelector('[data-section="todo-track-bucket"]') !== null,
+      "track bucket section",
+      settle,
+    );
+    expect(host.querySelector('[data-section="todo-track-bucket"]')).not.toBeNull();
+    expect(host.textContent).toContain("轨道");
+    expect(host.textContent).toContain("桶轨道A");
+    // count 徽章
+    expect(host.querySelector('[data-section="todo-track-bucket"]')?.textContent).toContain("1");
+    expect(track).toBeTruthy();
+    await unmount(root);
+  });
+
+  it("抓到手头后桶里该轨道消失、手头区出现该轨道行", async () => {
+    await db.tracks.clear();
+    await db.trackSteps.clear();
+    await db.trackMilestones.clear();
+    await db.goals.clear();
+    await db.sessions.clear();
+    const track = await addTrack({ title: "抓取轨道" });
+    const { host, root } = await renderPage();
+    await waitForCondition(
+      () => host.querySelector('[data-section="todo-track-bucket"]') !== null,
+      "bucket before grab",
+      settle,
+    );
+    expect(host.textContent).toContain("抓取轨道");
+    await grabTrackToHand(track.id);
+    await waitForCondition(
+      () => host.querySelector('[data-section="todo-track-bucket"]') === null || !host.textContent?.includes("抓取轨道") || host.querySelector('[data-section="todo-at-hand"]')?.textContent?.includes("抓取轨道") === true,
+      "bucket excludes grabbed",
+      settle,
+    );
+    // 手头区出现轨道行（inHand）
+    const atHand = host.querySelector('[data-section="todo-at-hand"]') as HTMLElement | null;
+    expect(atHand).not.toBeNull();
+    expect(atHand?.textContent).toContain("抓取轨道");
+    // 桶区应不含该轨道（若桶还有其他轨道则仍渲染但不含此标题；当前仅一条故整区消失或标题消失）
+    const bucket = host.querySelector('[data-section="todo-track-bucket"]');
+    if (bucket) {
+      expect(bucket.textContent).not.toContain("抓取轨道");
+    } else {
+      expect(bucket).toBeNull();
+    }
+    await unmount(root);
+  });
+
+  it("散场后轨道回桶", async () => {
+    await db.tracks.clear();
+    await db.trackSteps.clear();
+    await db.trackMilestones.clear();
+    await db.goals.clear();
+    await db.sessions.clear();
+    const track = await addTrack({ title: "回桶轨道" });
+    await grabTrackToHand(track.id);
+    const { host, root } = await renderPage();
+    await waitForCondition(
+      () => host.querySelector('[data-section="todo-at-hand"]')?.textContent?.includes("回桶轨道") === true,
+      "hand contains track",
+      settle,
+    );
+    // 此时桶应不含
+    expect(host.querySelector('[data-section="todo-track-bucket"]')).toBeNull();
+    await endActiveSession();
+    await waitForCondition(
+      () => host.querySelector('[data-section="todo-track-bucket"]') !== null,
+      "bucket reappears after end",
+      settle,
+    );
+    expect(host.querySelector('[data-section="todo-track-bucket"]')?.textContent).toContain("回桶轨道");
+    // 手头区散场后应不显示该轨道（无活跃场且无可续场时整区隐藏，或显示散场空态）
+    // 散场后手头区若显示 resumable 需确保不是活跃态的移出手头行
+    await unmount(root);
+  });
+
+  it("新增轨道后桶里立即可见", async () => {
+    await db.tracks.clear();
+    await db.trackSteps.clear();
+    await db.trackMilestones.clear();
+    await db.goals.clear();
+    await db.sessions.clear();
+    const { host, root } = await renderPage();
+    // 初始无轨道，桶不应渲染
+    await settle();
+    expect(host.querySelector('[data-section="todo-track-bucket"]')).toBeNull();
+    const track = await addTrack({ title: "新增轨道" });
+    await waitForCondition(
+      () => host.querySelector('[data-section="todo-track-bucket"]') !== null,
+      "bucket appears after addTrack",
+      settle,
+    );
+    expect(host.textContent).toContain("新增轨道");
+    expect(track.title).toBe("新增轨道");
     await unmount(root);
   });
 });

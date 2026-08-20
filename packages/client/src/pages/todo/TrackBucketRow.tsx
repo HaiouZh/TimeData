@@ -27,6 +27,7 @@ const GROUP_BADGE_TONES: Record<DispatchItem["group"], TrackBadgeTone> = {
 
 export function TrackBucketRow(props: {
   item: DispatchItem;
+  steps: readonly TrackStep[];
   milestones: readonly TrackMilestone[];
   project: { goalId: string; name: string } | null;
   expanded: boolean;
@@ -34,12 +35,9 @@ export function TrackBucketRow(props: {
   inHand?: boolean;
   onError: (message: string) => void;
 }): ReactElement {
-  const { item, milestones, project, expanded, onToggleExpand, inHand = false, onError } = props;
+  const { item, steps, milestones, project, expanded, onToggleExpand, inHand = false, onError } = props;
   const navigate = useNavigate();
   const href = `/tracks/${encodeURIComponent(item.track.id)}`;
-
-  const rawSteps = (item as unknown as { steps?: readonly TrackStep[] }).steps;
-  const steps: readonly TrackStep[] = rawSteps !== undefined ? rawSteps : item.latest ? [item.latest] : [];
 
   const latest = latestStep([...steps] as TrackStep[]) ?? item.latest ?? null;
   const latestText = latest?.content ?? null;

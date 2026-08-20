@@ -85,8 +85,11 @@ function baseItem() {
     lastActivityAt: step.startedAt,
     stalledDays: null as number | null,
     group: "in-progress" as const,
-    steps: [step] as readonly TrackStep[],
   };
+}
+
+function baseSteps(): readonly TrackStep[] {
+  return [stepFactory({ id: "s1", seq: 0, content: "最新一步的内容很长需要截断显示" })];
 }
 
 function widen(el: HTMLElement): void {
@@ -114,6 +117,10 @@ async function renderBucket(
   overrides: Partial<Parameters<typeof TrackBucketRow>[0]> = {},
 ): Promise<ReturnType<typeof renderDom>> {
   const item = overrides.item ?? baseItem();
+  const fallbackSteps =
+    (item as unknown as { steps?: readonly TrackStep[] }).steps ??
+    (item.latest ? [(item.latest as TrackStep)] : ([] as readonly TrackStep[]));
+  const steps = overrides.steps ?? (fallbackSteps as readonly TrackStep[]) ?? baseSteps();
   const milestones = overrides.milestones ?? [];
   const project = overrides.project ?? null;
   const expanded = overrides.expanded ?? false;
@@ -128,6 +135,7 @@ async function renderBucket(
           element={
             <TrackBucketRow
               item={item as unknown as Parameters<typeof TrackBucketRow>[0]["item"]}
+              steps={steps}
               milestones={milestones}
               project={project}
               expanded={expanded}
@@ -158,14 +166,13 @@ describe("TrackBucketRow 收起行", () => {
       lastActivityAt: step.startedAt,
       stalledDays: null,
       group: "awaiting-me" as const,
-      steps: [step],
     };
     const project = { goalId: "g1", name: "项目 Alpha" };
     const milestones: TrackMilestone[] = [
       milestoneFactory({ id: "m1", status: "pending", position: 0 }),
       milestoneFactory({ id: "m2", status: "done", position: 1 }),
     ];
-    const { host, root } = await renderBucket({ item: item as never, project, milestones });
+    const { host, root } = await renderBucket({ item: item as never, steps: [step], project, milestones });
     expect(host.textContent).toContain(DISPATCH_GROUP_LABELS["awaiting-me"]);
     expect(host.textContent).toContain("推进轴");
     const chip = host.querySelector('[data-testid="track-project-chip"]') as HTMLAnchorElement | null;
@@ -191,9 +198,8 @@ describe("TrackBucketRow 收起行", () => {
       lastActivityAt: null,
       stalledDays: null,
       group: "in-progress" as const,
-      steps: [] as TrackStep[],
     };
-    const { host, root } = await renderBucket({ item: item as never });
+    const { host, root } = await renderBucket({ item: item as never, steps: [] });
     expect(host.textContent).toContain("尚无步骤");
     await unmount(root);
     mounted = null;
@@ -268,10 +274,10 @@ describe("TrackBucketRow 展开态", () => {
       lastActivityAt: null,
       stalledDays: null,
       group: "in-progress" as const,
-      steps: [] as TrackStep[],
     };
     const { host, root } = await renderBucket({
       item: item as never,
+      steps: [],
       milestones: [milestone],
       expanded: true,
     });
@@ -305,9 +311,8 @@ describe("TrackBucketRow 展开态", () => {
       lastActivityAt: null,
       stalledDays: null,
       group: "in-progress" as const,
-      steps: [] as TrackStep[],
     };
-    const { host, root } = await renderBucket({ item: item as never, expanded: true });
+    const { host, root } = await renderBucket({ item: item as never, steps: [], expanded: true });
     const input = host.querySelector('input[aria-label="新步骤内容"]') as HTMLInputElement | null;
     expect(input).not.toBeNull();
     function setInputValue(el: HTMLInputElement, value: string): void {
@@ -347,10 +352,9 @@ describe("TrackBucketRow 展开态", () => {
       lastActivityAt: null,
       stalledDays: null,
       group: "in-progress" as const,
-      steps: [] as TrackStep[],
     };
     const spy = vi.spyOn(tracksModule, "appendUserStep");
-    const { host, root } = await renderBucket({ item: item as never, expanded: true });
+    const { host, root } = await renderBucket({ item: item as never, steps: [], expanded: true });
     const input = host.querySelector('input[aria-label="新步骤内容"]') as HTMLInputElement;
     await act(async () => {
       const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value")?.set;
@@ -376,10 +380,9 @@ describe("TrackBucketRow 展开态", () => {
       lastActivityAt: null,
       stalledDays: null,
       group: "in-progress" as const,
-      steps: [] as TrackStep[],
     };
     // inHand false -> shows 抓到手头
-    const first = await renderBucket({ item: item as never, expanded: true, inHand: false });
+    const first = await renderBucket({ item: item as never, steps: [], expanded: true, inHand: false });
     let btn = first.host.querySelector('button[aria-label="抓到手头"]') as HTMLButtonElement | null;
     expect(btn).not.toBeNull();
     expect(btn?.textContent).toContain("抓到手头");
@@ -396,7 +399,7 @@ describe("TrackBucketRow 展开态", () => {
     mounted = null;
 
     // inHand true -> shows 移出手头
-    const second = await renderBucket({ item: item as never, expanded: true, inHand: true });
+    const second = await renderBucket({ item: item as never, steps: [], expanded: true, inHand: true });
     btn = second.host.querySelector('button[aria-label="移出手头"]') as HTMLButtonElement | null;
     expect(btn).not.toBeNull();
     expect(btn?.textContent).toContain("移出手头");
@@ -422,11 +425,10 @@ describe("TrackBucketRow 展开态", () => {
       lastActivityAt: null,
       stalledDays: null,
       group: "in-progress" as const,
-      steps: [] as TrackStep[],
     };
     const onError = vi.fn();
     vi.spyOn(tracksModule, "appendUserStep").mockRejectedValue(new Error("写入失败"));
-    const { host, root } = await renderBucket({ item: item as never, expanded: true, onError });
+    const { host, root } = await renderBucket({ item: item as never, steps: [], expanded: true, onError });
     const input = host.querySelector('input[aria-label="新步骤内容"]') as HTMLInputElement;
     await act(async () => {
       const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value")?.set;
@@ -457,12 +459,12 @@ describe("TrackBucketRow 展开态", () => {
       lastActivityAt: null,
       stalledDays: null,
       group: "in-progress" as const,
-      steps: [] as TrackStep[],
     };
     const onError = vi.fn();
     vi.spyOn(trackMilestonesModule, "setMilestoneStatus").mockRejectedValue(new Error("里程碑失败"));
     const { host, root } = await renderBucket({
       item: item as never,
+      steps: [],
       milestones: [milestone],
       expanded: true,
       onError,
@@ -486,11 +488,10 @@ describe("TrackBucketRow 展开态", () => {
       lastActivityAt: null,
       stalledDays: null,
       group: "in-progress" as const,
-      steps: [] as TrackStep[],
     };
     const onError = vi.fn();
     vi.spyOn(sessionsModule, "grabTrackToHand").mockRejectedValue(new Error("手头失败"));
-    const { host, root } = await renderBucket({ item: item as never, expanded: true, onError, inHand: false });
+    const { host, root } = await renderBucket({ item: item as never, steps: [], expanded: true, onError, inHand: false });
     const btn = host.querySelector('button[aria-label="抓到手头"]') as HTMLButtonElement;
     await act(async () => {
       btn.dispatchEvent(new MouseEvent("click", { bubbles: true }));
@@ -511,7 +512,6 @@ describe("TrackBucketRow 展开态", () => {
       lastActivityAt: null,
       stalledDays: null,
       group: "in-progress" as const,
-      steps: [] as TrackStep[],
     };
     let resolve!: () => void;
     const _pending = new Promise<never>((_, __) => {});
@@ -521,7 +521,7 @@ describe("TrackBucketRow 展开态", () => {
       .mockImplementation(
         () => new Promise((res) => (resolve = res as unknown as () => void)) as unknown as Promise<never>,
       );
-    const { host, root } = await renderBucket({ item: item as never, expanded: true });
+    const { host, root } = await renderBucket({ item: item as never, steps: [], expanded: true });
     const input = host.querySelector('input[aria-label="新步骤内容"]') as HTMLInputElement;
     const button = host.querySelector('button[aria-label="提交新步骤"]') as HTMLButtonElement;
     await act(async () => {

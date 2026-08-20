@@ -463,3 +463,45 @@ describe("手头区「本场已完成」子任务可操作性（A2）", () => {
     await unmount(root);
   });
 });
+
+describe("AtHandSection handTracks 插槽", () => {
+  it("抓了轨道无任务时不显『手头空了』且 handTracks 在任务之上", async () => {
+    const { host, root } = await renderSection(
+      <AtHandSection
+        atHand={[]}
+        session={session({})}
+        resumable={[]}
+        {...handlers}
+        handTracks={<div data-testid="hand-tracks-mock">手头轨道mock</div>}
+      />,
+    );
+    expect(host.textContent).not.toContain("手头空了");
+    expect(host.querySelector('[data-testid="hand-tracks-mock"]')).not.toBeNull();
+    expect(host.textContent).toContain("手头轨道mock");
+    // handTracks 应在 AtHandHeading 之后、任务面之前：验证 DOM 顺序为 heading -> handTracks -> 空态/任务面
+    const section = host.querySelector('[data-section="todo-at-hand"]') as HTMLElement;
+    const heading = section.querySelector("h2");
+    const mock = section.querySelector('[data-testid="hand-tracks-mock"]');
+    expect(heading).not.toBeNull();
+    expect(mock).not.toBeNull();
+    // heading 在 mock 之前
+    expect(heading!.compareDocumentPosition(mock!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    await unmount(root);
+  });
+
+  it("无 handTracks 且无任务时显示『手头空了』", async () => {
+    const { host, root } = await renderSection(
+      <AtHandSection atHand={[]} session={session({})} resumable={[]} {...handlers} />,
+    );
+    expect(host.textContent).toContain("手头空了，抓点活或散场");
+    await unmount(root);
+  });
+
+  it("handTracks 为 null 时空态仍显示", async () => {
+    const { host, root } = await renderSection(
+      <AtHandSection atHand={[]} session={session({})} resumable={[]} {...handlers} handTracks={null} />,
+    );
+    expect(host.textContent).toContain("手头空了，抓点活或散场");
+    await unmount(root);
+  });
+});

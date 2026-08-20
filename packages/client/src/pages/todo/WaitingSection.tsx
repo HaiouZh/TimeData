@@ -3,15 +3,15 @@ import { useIsCoarsePointer } from "../../lib/useIsCoarsePointer.js";
 import { META_CHIP_CLASS, TaskRow } from "./TaskRow.js";
 
 /**
- * 「在等」区：停滞轨道 + 被未完成前置挡住的任务。
+ * 「在等」区：被未完成前置挡住的任务。
  *
  * 任务准入由 `listTasks` 的 waiting 桶保证——与「已归 active project 的根任务不进收件箱」
  * 同一层的排他分流：被挡任务不再进 today/inbox/scheduled，只落这里，因此同一条任务不会两处出现。
  * 阶段2 曾拍板「不收任务」（怕排期过期/重力沉降的任务两处双显、两套口径各调各的），
  * 该担心已由分流消解，本区自 waiting 桶落地起收任务行。
  *
- * 本区**不套折叠组**（今天区的轨道才套）：整区即轨道，再套一层折叠是多余嵌套。
- * 空区整块不渲染——没有停滞轨道也没有被挡任务时不留一个空标题在那儿。
+ * 本区**不套折叠组**：整区即任务列表，再套一层折叠是多余嵌套。
+ * 空区整块不渲染——没有被挡任务时不留一个空标题在那儿。
  */
 export interface WaitingSectionProps {
   /** 被挡任务行（listTasks 的 waiting 桶）。 */
