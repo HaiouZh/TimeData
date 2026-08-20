@@ -37,6 +37,10 @@ last-reviewed: 2026-08-14
 
 **syncLog 卫生**：未同步查询统一走索引（`where("synced").equals(0)` 或 `[tableName+synced]`），不做全表 `.filter()` 扫描。`synced` 用数字（`0|1|2`）正是为可索引而设。`synced=1/2` 历史行由每轮成功同步收尾的 `pruneSyncedLogs()` 按 7 天窗口清理；no-op 早退分支不清理，保持零写入。清理失败不算整轮同步失败，也不占同步窗口。
 
+**「待同步 0 条」不等于本地写入都已到达服务端**：`synced=1`（已放弃本地主张）与 `synced=2`（死信隔离）都已移出上传队列，两者都不计入 `unsyncedCount`。被[隐式删除守卫](../sync.md#sync-unseen-delete-guard)拦下的写入属这一类——它的内容快照落在 Dexie `pendingArbitrations`（`listPendingArbitrations()` 读取），`disposition` 区分两种归宿：`pending` 对应 `synced=2`、等用户裁决，`discarded` 对应 `synced=1`、主张已放弃而仅留内容备查。字段契约见 [data-model](../data-model.md) §Dexie schema。**`syncLog` 的 `synced=1/2` 行走 7 天回收窗口，而 `pendingArbitrations` 不参与该回收**：日志被回收之后，快照是唯一还留着原始 payload 的地方。
+
+**`requeueQuarantinedSyncLogs()` 的边界**：它把 `synced=2` 一律翻回 `0`，不区分死信成因。隐式删除守卫拦下的那类不适用这个出口——拒收当轮必然触发一次回声 pull（`canSkipEchoPull()` 遇到任何 issue 即返回 false），游标随之推进；此后重推同一载荷时判据不再命中，服务端放行。该判据只能由用户裁决解开，不能由重新入队解开。
+
 ## 2. 分段耗时观测
 
 `useSync.sync()` 每轮用 `createPhaseRecorder()`（`packages/client/src/sync/phaseTimings.ts`）给 status / push / pull / bumpApply 阶段计时。写后路径只有 push/pull；补差路径只有 status/pull；SSE bump payload 就地应用只有 bumpApply。无论成功还是失败，收尾都会落一条 `SyncTimingEntry` 到 localStorage `timedata_sync_phase_timings` 环形缓冲（最多 20 条，最新在前）。
