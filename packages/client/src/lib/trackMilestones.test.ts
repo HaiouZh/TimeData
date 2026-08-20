@@ -1,7 +1,7 @@
 import type { TrackMilestone } from "@timedata/shared";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { db } from "../test/dbReset.js";
-import { addTrack, addTrackStep } from "./tracks.js";
+import { addTrack } from "./tracks.js";
 import {
   addMilestones,
   buildMilestoneTaskIndex,
