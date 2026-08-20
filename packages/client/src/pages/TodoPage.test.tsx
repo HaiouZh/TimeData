@@ -20,8 +20,10 @@ import {
   scheduleTask,
   setTaskTags,
   toggleTaskDone,
+  updateTask,
 } from "../lib/tasks.js";
 import { promoteTaskToTrack, toggleTaskDoneWithTrackConclude } from "../lib/taskTrackPromote.js";
+import { addTaskRelation } from "../lib/taskRelations.js";
 import { setTrackStatus } from "../lib/tracks.js";
 import { addTrack } from "../lib/tracks.js";
 import { endActiveSession, grabTrackToHand } from "../lib/sessions.js";
@@ -3548,6 +3550,196 @@ describe("TodoPage 轨道桶分区 + 手头抓轨道接线", () => {
       settle,
     );
     expect(host.textContent).toContain("待升格任务");
+    await unmount(root);
+  });
+});
+
+describe("TodoPage y3-wire 接线集成", () => {
+  it("① 项目内轨道行与轨道桶双出现（同一轨道标题两处）", async () => {
+    await db.tracks.clear();
+    await db.trackSteps.clear();
+    await db.trackMilestones.clear();
+    await db.goals.clear();
+    await db.sessions.clear();
+    await db.taskRelations.clear();
+    const track = await addTrack({ title: "共享轨道A" });
+    const member = await addTask({ title: "项目成员A", toInbox: true });
+    const old = "2026-07-01T00:00:00.000Z";
+    await db.goals.add({
+      id: "g1",
+      title: "测试项目",
+      kind: "project",
+      status: "active",
+      members: [
+        { kind: "task", id: member.id },
+        { kind: "track", id: track.id },
+      ],
+      prerequisites: [],
+      createdAt: old,
+      updatedAt: old,
+    });
+    const { host, root } = await renderPage();
+    await waitForCondition(() => host.querySelector('[data-testid="project-group"]') !== null, "project group");
+    await click(host.querySelector('[data-testid="project-group-toggle"]') as HTMLElement);
+    await waitForCondition(() => host.textContent?.includes("在飞的线") ?? false, "在飞的线");
+    const projectsSection = host.querySelector('[data-section="todo-projects"]') as HTMLElement;
+    const bucketSection = host.querySelector('[data-section="todo-track-bucket"]') as HTMLElement;
+    expect(projectsSection).not.toBeNull();
+    expect(bucketSection).not.toBeNull();
+    expect(projectsSection.textContent).toContain("共享轨道A");
+    expect(bucketSection.textContent).toContain("共享轨道A");
+    await unmount(root);
+  });
+
+  it("② 升格任务后项目切片头段与桶都出现该轨道（点升格按钮）", async () => {
+    await db.tracks.clear();
+    await db.trackSteps.clear();
+    await db.trackMilestones.clear();
+    await db.goals.clear();
+    await db.sessions.clear();
+    await db.taskRelations.clear();
+    const member = await addTask({ title: "待升格任务", toInbox: true });
+    await db.goals.add({
+      id: "g1",
+      title: "升格项目",
+      kind: "project",
+      status: "active",
+      members: [{ kind: "task", id: member.id }],
+      prerequisites: [],
+      createdAt: "2026-07-01T00:00:00.000Z",
+      updatedAt: "2026-07-01T00:00:00.000Z",
+    });
+    const { host, root } = await renderPage();
+    await waitForCondition(() => host.querySelector('[data-testid="project-group"]') !== null, "project group");
+    await click(host.querySelector('[data-testid="project-group-toggle"]') as HTMLElement);
+    const promoteBtn = host.querySelector('[aria-label="升格为轨道 待升格任务"]') as HTMLElement | null;
+    expect(promoteBtn).not.toBeNull();
+    await act(async () => {
+      promoteBtn!.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+    });
+    await waitForCondition(() => host.textContent?.includes("已升格，轨道在桶里") ?? false, "toast", settle);
+    await waitForCondition(
+      () => host.querySelector('[data-section="todo-track-bucket"]')?.textContent?.includes("待升格任务") ?? false,
+      "bucket contains promoted track",
+      settle,
+    );
+    await waitForCondition(() => host.querySelector('[data-testid="task-track-chip"]') !== null, "chip appears", settle);
+    expect(host.querySelector('[data-section="todo-projects"]')?.textContent).toContain("待升格任务");
+    expect(host.querySelector('[data-section="todo-track-bucket"]')?.textContent).toContain("待升格任务");
+    await unmount(root);
+  });
+
+  it("③ 沉睡组：老旧无轨道项目进沉睡段；touch 后回主列表", async () => {
+    await db.tracks.clear();
+    await db.trackSteps.clear();
+    await db.trackMilestones.clear();
+    await db.goals.clear();
+    await db.sessions.clear();
+    await db.taskRelations.clear();
+    const oldDate = new Date("2026-05-01T00:00:00.000Z");
+    const t1 = await addTask({ title: "陈年老任务1", toInbox: true, now: oldDate });
+    const t2 = await addTask({ title: "陈年老任务2", toInbox: true, now: oldDate });
+    await db.goals.add({
+      id: "g1",
+      title: "沉睡项目",
+      kind: "project",
+      status: "active",
+      members: [
+        { kind: "task", id: t1.id },
+        { kind: "task", id: t2.id },
+      ],
+      prerequisites: [],
+      createdAt: oldDate.toISOString(),
+      updatedAt: oldDate.toISOString(),
+    });
+    const { host, root } = await renderPage();
+    await waitForCondition(() => host.querySelector('[data-testid="dormant-projects-toggle"]') !== null, "dormant toggle");
+    expect(host.querySelector('[data-section="todo-projects"]')?.textContent).toContain("沉睡项目 · 1");
+    // 主列表展开前不应直接显示该组任务（折叠在沉睡段内）
+    expect(host.querySelector('[data-testid="dormant-projects-section"]')).not.toBeNull();
+    // 点开沉睡段应可见该组
+    await click(host.querySelector('[data-testid="dormant-projects-toggle"]') as HTMLElement);
+    await waitForCondition(
+      () => host.querySelector('[data-testid="dormant-projects-section"]')?.textContent?.includes("沉睡项目") ?? false,
+      "dormant expanded shows group",
+      settle,
+    );
+    expect(host.querySelector('[data-testid="dormant-projects-section"]')?.textContent).toContain("沉睡项目");
+    // touch 成员：改标题刷 updatedAt
+    await updateTask(t1.id, { title: "新鲜任务" });
+    await waitForCondition(
+      () => host.querySelector('[data-testid="dormant-projects-toggle"]') === null,
+      "dormant cleared after touch",
+      settle,
+    );
+    expect(host.querySelector('[data-section="todo-projects"]')?.textContent).toContain("沉睡项目");
+    // 主列表展开后应可见新标题
+    await waitForCondition(() => host.querySelector('[data-testid="project-group"]') !== null, "project group back to main");
+    await click(host.querySelector('[data-testid="project-group-toggle"]') as HTMLElement);
+    await waitForCondition(() => host.textContent?.includes("新鲜任务") ?? false, "fresh task visible");
+    await unmount(root);
+  });
+
+  it("④ 在等区默认收起、点开可见", async () => {
+    await db.tracks.clear();
+    await db.trackSteps.clear();
+    await db.trackMilestones.clear();
+    await db.goals.clear();
+    await db.sessions.clear();
+    await db.taskRelations.clear();
+    const blocker = await addTask({ title: "前置任务", toInbox: true });
+    const blocked = await addTask({ title: "被挡任务", toInbox: true });
+    await addTaskRelation({ blocker: { kind: "task", id: blocker.id }, blocked: { kind: "task", id: blocked.id } });
+    const { host, root } = await renderPage();
+    await waitForCondition(() => host.querySelector('[data-testid="todo-section-waiting"]') !== null, "waiting section");
+    const details = host.querySelector('[data-testid="todo-section-waiting"] details') as HTMLDetailsElement | null;
+    expect(details).not.toBeNull();
+    expect(details!.open).toBe(false);
+    // 被挡任务在收起态不应通过 summary 直接可见？但 DOM 仍含，改用 details.open 判定
+    // 点开后应可见
+    const summary = details!.querySelector("summary") as HTMLElement;
+    await act(async () => {
+      summary.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+      // jsdom 不自动切换，手动模拟
+      details!.open = true;
+      details!.dispatchEvent(new Event("toggle", { bubbles: true }));
+    });
+    await flushAsync();
+    expect(details!.open).toBe(true);
+    expect(host.querySelector('[data-testid="todo-section-waiting"]')?.textContent).toContain("被挡任务");
+    await unmount(root);
+  });
+
+  it("⑤ 有 active 轨道的老项目不沉睡", async () => {
+    await db.tracks.clear();
+    await db.trackSteps.clear();
+    await db.trackMilestones.clear();
+    await db.goals.clear();
+    await db.sessions.clear();
+    await db.taskRelations.clear();
+    const oldDate = new Date("2026-05-01T00:00:00.000Z");
+    const t1 = await addTask({ title: "陈年老任务", toInbox: true, now: oldDate });
+    const track = await addTrack({ title: "活跃轨道" });
+    await db.goals.add({
+      id: "g1",
+      title: "老项目有轨道",
+      kind: "project",
+      status: "active",
+      members: [
+        { kind: "task", id: t1.id },
+        { kind: "track", id: track.id },
+      ],
+      prerequisites: [],
+      createdAt: oldDate.toISOString(),
+      updatedAt: oldDate.toISOString(),
+    });
+    const { host, root } = await renderPage();
+    await waitForCondition(() => host.querySelector('[data-section="todo-projects"]') !== null, "project section");
+    expect(host.querySelector('[data-testid="dormant-projects-toggle"]')).toBeNull();
+    expect(host.querySelector('[data-section="todo-projects"]')?.textContent).toContain("老项目有轨道");
+    await click(host.querySelector('[data-testid="project-group-toggle"]') as HTMLElement);
+    await waitForCondition(() => host.textContent?.includes("水下") ?? false, "old task sunken indicator visible");
+    expect(host.textContent).toContain("水下");
     await unmount(root);
   });
 });

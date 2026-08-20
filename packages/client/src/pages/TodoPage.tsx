@@ -12,7 +12,7 @@ import {
   useSensors,
 } from "@dnd-kit/core";
 import { arrayMove, sortableKeyboardCoordinates } from "@dnd-kit/sortable";
-import type { Task } from "@timedata/shared";
+import type { Goal, Task } from "@timedata/shared";
 import { useLiveQuery } from "dexie-react-hooks";
 import {
   type CSSProperties,
@@ -63,7 +63,13 @@ import { currentGravityDate, msUntilNextLocalDay } from "../lib/tasks/gravityClo
 import { markGravityTasksSurfaced, useGravitySurfacedMap } from "../lib/tasks/gravityReviewStorage.js";
 import { groupCompletedByDay, groupInboxByDay } from "../lib/tasks/inboxGrouping.js";
 import { localDateString, placementForTask } from "../lib/tasks/placement.js";
-import { goalBarTaskIds, landsInCollapsedProjectGroup, projectChipIndex } from "../lib/tasks/projectZone.js";
+import {
+  goalBarTaskIds,
+  isProjectDormant,
+  landsInCollapsedProjectGroup,
+  projectChipIndex,
+} from "../lib/tasks/projectZone.js";
+import { buildTrackProjectIndex, groupTracksByProject } from "../lib/tasks/trackProjectIndex.js";
 import { applyOptimisticOrder } from "../lib/tasks/reorderDisplay.js";
 import { allTags, filterTasks } from "../lib/tasks/turnTags.js";
 import {
@@ -88,7 +94,7 @@ import {
   type TodoBuckets,
   unscheduleTask,
 } from "../lib/tasks.js";
-import { buildTrackConcludeUndo, toggleTaskDoneWithTrackConclude } from "../lib/taskTrackPromote.js";
+import { buildTrackConcludeUndo, promoteTaskToTrack, toggleTaskDoneWithTrackConclude } from "../lib/taskTrackPromote.js";
 import { useIsWideScreen } from "../lib/useIsWideScreen.js";
 import { AtHandSection } from "./todo/AtHandSection.js";
 import { CollapsibleSection } from "./todo/CollapsibleSection.js";
@@ -122,7 +128,7 @@ import {
 } from "./todo/todoDnd.js";
 import { applyTodoDockDrop } from "./todo/todoDockDrop.js";
 import { useTaskTrackIndex } from "./todo/useTaskTrackIndex.js";
-import { HandTrackRows, TrackBucketSection } from "./todo/TrackBucketSection.js";
+import { HandTrackRows, ProjectTrackRows, TrackBucketSection } from "./todo/TrackBucketSection.js";
 import { WaitingSection } from "./todo/WaitingSection.js";
 
 const EMPTY: TodoBuckets = {
@@ -157,6 +163,9 @@ export function TodoPage() {
   const goalLinkedIds = goalBarTaskIds(buckets.goalLinkedIds, projectChips);
   const trackData = useTaskTrackIndex();
   const taskTrackIndex = trackData.index;
+  const projectGoals = useLiveQuery(() => db.goals.toArray(), [], []) as Goal[];
+  const tracksByGoal = useMemo(() => groupTracksByProject(buildTrackProjectIndex(projectGoals)), [projectGoals]);
+  const activeTrackIdSet = useMemo(() => new Set(trackData.tracks.map((t) => t.id)), [trackData.tracks]);
   // 轨道展开态由页面持有，跨分区重挂不丢——轨道桶行（下一单接线）复用
   const [expandedTrackIds, setExpandedTrackIds] = useState<ReadonlySet<string>>(() => new Set<string>());
   const toggleTrackExpand = useCallback((trackId: string) => {
@@ -493,6 +502,16 @@ export function TodoPage() {
 
   const gravitySettings = useTodoGravitySettings();
   const surfacedMap = useGravitySurfacedMap();
+  const dormantGoalIds = useMemo(() => {
+    const s = new Set<string>();
+    for (const group of buckets.projects) {
+      const ids = tracksByGoal.get(group.goalId) ?? [];
+      const hasActiveTrack = ids.some((id) => activeTrackIdSet.has(id));
+      if (isProjectDormant({ pendingTasks: group.tasks, hasActiveTrack, settings: gravitySettings, now: gravityNow }))
+        s.add(group.goalId);
+    }
+    return s;
+  }, [buckets.projects, tracksByGoal, activeTrackIdSet, gravitySettings, gravityNow]);
   useEffect(() => {
     let timer: number | undefined;
     const refreshGravityNow = () => {
@@ -1215,6 +1234,30 @@ export function TodoPage() {
       trackChipFor={trackChipFor}
       indentTargetId={indentTargetId}
       revealChildren={revealChildren}
+      gravitySettings={gravitySettings}
+      onPromoteToTrack={async (task) => {
+        try {
+          await promoteTaskToTrack(task);
+          showActionToast({ message: "已升格，轨道在桶里" });
+        } catch (e) {
+          showActionToast({ message: e instanceof Error ? e.message : String(e) });
+        }
+      }}
+      projectTrackRows={(goalId) => {
+        const ids = (tracksByGoal.get(goalId) ?? []).filter((id) => activeTrackIdSet.has(id));
+        return ids.length === 0 ? null : (
+          <ProjectTrackRows
+            trackIds={ids}
+            tracks={trackData.tracks}
+            stepsByTrack={trackData.stepsByTrack}
+            expandedTrackIds={expandedTrackIds}
+            onToggleExpand={toggleTrackExpand}
+            onError={(m) => showActionToast({ message: m })}
+          />
+        );
+      }}
+      dormantGoalIds={dormantGoalIds}
+      onBumpTask={bumpWeight}
       {...rowHandlers}
     />
   );

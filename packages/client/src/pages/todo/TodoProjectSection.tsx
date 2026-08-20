@@ -82,6 +82,7 @@ export interface TodoProjectSectionProps {
   gravitySettings?: TodoGravitySettings;
   onPromoteToTrack?: (task: Task) => void;
   onBumpTask?: (task: Task) => void;
+  dormantGoalIds?: ReadonlySet<string>;
   onToggle: (task: Task) => void;
   onEdit: (task: Task) => void;
   onDelete: (task: Task) => void;
@@ -575,11 +576,13 @@ export function TodoProjectSection({
   gravitySettings,
   onPromoteToTrack,
   onBumpTask,
+  dormantGoalIds,
   ...rowHandlers
 }: TodoProjectSectionProps) {
   const [overrides, setOverrides] = useState<Map<string, boolean>>(() => new Map());
   const [recentTaskIds, setRecentTaskIds] = useState<Map<string, readonly string[]>>(() => new Map());
   const rowRefs = useRef(new Map<string, HTMLElement | null>());
+  const [dormantExpanded, setDormantExpanded] = useState(false);
 
   // 默认折叠。筛选激活时强制展开匹配组，但不写入 overrides，清除筛选即可恢复用户偏好。
   const isExpanded = (goalId: string): boolean => filterActive || (overrides.get(goalId) ?? false);
@@ -610,6 +613,10 @@ export function TodoProjectSection({
     onRevealConsumed(consumed);
   }, [revealGoals, groups, onRevealConsumed, filterActive]);
 
+  const dormantSet = dormantGoalIds ?? new Set<string>();
+  const activeGroups = dormantSet.size === 0 ? groups : groups.filter((g) => !dormantSet.has(g.goalId));
+  const dormantGroups = dormantSet.size === 0 ? [] : groups.filter((g) => dormantSet.has(g.goalId));
+
   if (groups.length === 0) {
     if (filterActive && hasActiveProjects) {
       return (
@@ -631,10 +638,10 @@ export function TodoProjectSection({
     <section data-section="todo-projects">
       <div className="mb-2 flex items-baseline justify-between px-2">
         <h2 className="td-text-label font-medium text-ink">项目</h2>
-        <span className="td-text-caption text-ink-3">{groups.length}</span>
+        <span className="td-text-caption text-ink-3">{activeGroups.length}</span>
       </div>
       <div className="space-y-1">
-        {groups.map((group) => {
+        {activeGroups.map((group) => {
           const visibleTasks = displayProjectTasks(group, recentTaskIds.get(group.goalId) ?? [], handSessionId, now);
           const blocked = group.blockedByMember;
           const effectiveGravity = gravitySettings ?? { ...DEFAULT_TODO_GRAVITY_SETTINGS, enabled: false };
@@ -757,6 +764,136 @@ export function TodoProjectSection({
           );
         })}
       </div>
+      {dormantGroups.length > 0 && (
+        <div data-testid="dormant-projects-section" className="mt-2">
+          <button
+            type="button"
+            data-testid="dormant-projects-toggle"
+            onClick={() => setDormantExpanded((v) => !v)}
+            className="w-full rounded-ctl px-2 py-1.5 td-text-caption text-ink-3 hover:bg-surface-hover"
+          >
+            {dormantExpanded ? `收起沉睡项目 ${dormantGroups.length} 个` : `沉睡项目 · ${dormantGroups.length}`}
+          </button>
+          {dormantExpanded && (
+            <div className="mt-1 space-y-1">
+              {dormantGroups.map((group) => {
+                const visibleTasks = displayProjectTasks(group, recentTaskIds.get(group.goalId) ?? [], handSessionId, now);
+                const blocked = group.blockedByMember;
+                const effectiveGravity = gravitySettings ?? { ...DEFAULT_TODO_GRAVITY_SETTINGS, enabled: false };
+                const sunkenSet = new Set(
+                  splitInboxByGravity(
+                    visibleTasks.filter((t) => !blocked.has(t.id)),
+                    effectiveGravity,
+                    now,
+                  ).sunken.map((t) => t.id),
+                );
+                const aboveWater = visibleTasks.filter((t) => !sunkenSet.has(t.id));
+                const sunkenTasks = visibleTasks.filter((t) => sunkenSet.has(t.id));
+                const trackRows = projectTrackRows?.(group.goalId) ?? null;
+                const firstBlocked = aboveWater.find((t) => blocked.has(t.id));
+                const blockedBoundaryId =
+                  firstBlocked !== undefined && firstBlocked.id !== aboveWater[0]?.id ? firstBlocked.id : null;
+                const rowActions = new Map(
+                  aboveWater.map((task) => [task.id, projectMemberRowActions(task, { handSessionId, now })]),
+                );
+                return (
+                  <ProjectGroupCard
+                    key={group.goalId}
+                    group={group}
+                    tint={projectTints.get(group.goalId) ?? ""}
+                    expanded={isExpanded(group.goalId)}
+                    filterActive={filterActive}
+                    matchCount={aboveWater.length}
+                    dropBlocked={dropBlocked}
+                    onToggleExpand={() => toggleExpanded(group.goalId)}
+                    onCreateTask={onCreateTask}
+                    onTaskCreated={(goalId, taskId) => {
+                      setRecentTaskIds((prev) => {
+                        const next = new Map(prev);
+                        next.set(goalId, [taskId, ...(prev.get(goalId) ?? []).filter((id) => id !== taskId)]);
+                        return next;
+                      });
+                    }}
+                    onRenameGoal={onRenameGoal}
+                    onOpenGoal={onOpenGoal}
+                    registerRef={(el) => {
+                      rowRefs.current.set(group.goalId, el);
+                    }}
+                    trackRows={trackRows}
+                    sunkenTasks={sunkenTasks}
+                    onBumpTask={onBumpTask}
+                    sunkenRowHandlers={rowHandlers}
+                  >
+                    {aboveWater.length > 0 && (
+                      <TaskList
+                        pool="inbox"
+                        rowPool={(task) => rowActions.get(task.id)?.pool ?? "inbox"}
+                        atHandIds={new Set([...rowActions].filter(([, a]) => a.atHand).map(([id]) => id))}
+                        tasks={aboveWater}
+                        sortable
+                        containerId={projectContainerId(group.goalId)}
+                        dndIdPrefix={todoProjectRowIdPrefix(group.goalId)}
+                        indentTargetId={indentTargetId}
+                        revealChildren={revealChildren}
+                        childrenModeOverride="draggable"
+                        blockedBoundaryId={blockedBoundaryId}
+                        metaChip={(task) => {
+                          const blockerTitles = blocked.get(task.id);
+                          const blockerChip =
+                            blockerTitles !== undefined && blockerTitles.length > 0 ? (
+                              <span data-testid="project-blocker-chip" className={`${META_CHIP_CLASS} text-ink-2`}>
+                                等 {blockerTitles.join("、")}
+                              </span>
+                            ) : null;
+                          const stateChip = memberStateChip(task, handSessionId, now);
+                          const trackChip = trackChipFor?.(task) ?? null;
+                          if (blockerChip === null && stateChip === null && trackChip === null) return null;
+                          return (
+                            <>
+                              {blockerChip}
+                              {stateChip}
+                              {trackChip}
+                            </>
+                          );
+                        }}
+                        extraAction={(task) => (
+                          <>
+                            {onPromoteToTrack ? (
+                              <button
+                                type="button"
+                                aria-label={`升格为轨道 ${task.title}`}
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  onPromoteToTrack(task);
+                                }}
+                                className="flex h-6 w-6 items-center justify-center rounded-ctl text-ink-3 hover:bg-surface-elevated hover:text-ink"
+                              >
+                                <Icon icon={ArrowUp} size={16} />
+                              </button>
+                            ) : null}
+                            <button
+                              type="button"
+                              aria-label={`退出项目 ${task.title}`}
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                onExitProject(group.goalId, task);
+                              }}
+                              className="flex h-6 w-6 items-center justify-center rounded-ctl text-ink-3 hover:bg-surface-elevated hover:text-ink"
+                            >
+                              <Icon icon={SignOut} size={16} />
+                            </button>
+                          </>
+                        )}
+                        {...rowHandlers}
+                      />
+                    )}
+                  </ProjectGroupCard>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
     </section>
   );
 }

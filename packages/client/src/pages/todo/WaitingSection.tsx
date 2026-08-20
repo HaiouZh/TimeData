@@ -1,6 +1,7 @@
 import type { Task } from "@timedata/shared";
 import { useIsCoarsePointer } from "../../lib/useIsCoarsePointer.js";
 import { META_CHIP_CLASS, TaskRow } from "./TaskRow.js";
+import { CollapsibleSection } from "./CollapsibleSection.js";
 
 /**
  * 「在等」区：被未完成前置挡住的任务。
@@ -52,11 +53,8 @@ export function WaitingSection({
   if (tasks.length === 0) return null;
   return (
     <section data-testid="todo-section-waiting" data-section="waiting">
-      <div className="mb-2 flex items-baseline justify-between px-2">
-        <h2 className="td-text-label font-medium text-ink">在等</h2>
-        <span className="td-text-caption text-ink-3">{tasks.length}</span>
-      </div>
-      <div className="rounded-card p-1.5">
+      <CollapsibleSection title="在等" count={tasks.length} defaultOpen={false}>
+        <div className="rounded-card p-1.5">
         {tasks.map((task) => {
           const label = blockerLabel(blockerTitles[task.id] ?? []);
           return (
@@ -84,7 +82,8 @@ export function WaitingSection({
             </div>
           );
         })}
-      </div>
+        </div>
+      </CollapsibleSection>
     </section>
   );
 }
