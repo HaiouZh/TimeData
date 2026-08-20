@@ -168,6 +168,7 @@
   "dirty-in-clean-bucket:pages/todo/TrackBucketSection.test.tsx",
   "dirty-in-clean-bucket:pages/todo/TrackRow.test.tsx",
   "dirty-in-clean-bucket:pages/todo/WaitingSection.test.tsx",
+  "dirty-in-clean-bucket:pages/todo/useTaskTrackIndex.test.ts",
   "dirty-in-clean-bucket:pages/tracks/NewTrackComposer.test.tsx",
   "dirty-in-clean-bucket:pages/tracks/RefChip.test.tsx",
   "dirty-in-clean-bucket:pages/tracks/StepComposer.test.tsx",
