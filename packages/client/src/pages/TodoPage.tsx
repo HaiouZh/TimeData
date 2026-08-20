@@ -14,7 +14,16 @@ import {
 import { arrayMove, sortableKeyboardCoordinates } from "@dnd-kit/sortable";
 import type { Task } from "@timedata/shared";
 import { useLiveQuery } from "dexie-react-hooks";
-import { type CSSProperties, type ReactNode, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import {
+  type CSSProperties,
+  type ReactNode,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { useNavigate, useSearchParams } from "react-router";
 import { ActionToastBar } from "../components/ui/ActionToastBar.js";
 import { BOTTOM_NAV_HEIGHT_PX, useBottomNav } from "../contexts/BottomNavContext.tsx";
@@ -23,10 +32,39 @@ import { useActionToast } from "../hooks/useActionToast.js";
 import { useConfirm } from "../hooks/useConfirm.tsx";
 import { useKeyboardHeight, useKeyboardVisible } from "../hooks/useKeyboardHeight.ts";
 import { composeBottomInset } from "../lib/bottomInset.ts";
+import {
+  assignTasksToProject,
+  assignTaskToProject,
+  createProjectWithMembers,
+  createTaskForProject,
+  findActiveProjectGoalIdForTask,
+  ProjectAssignError,
+  prerequisiteLossOnAssign,
+  prerequisiteLossOnAssignMany,
+  removeGoalMember,
+  updateGoal,
+} from "../lib/goals.js";
 import { hapticDestructive, hapticDrop, hapticGrab, hapticToggle } from "../lib/haptics.ts";
+import {
+  endActiveSession,
+  grabTaskToHand,
+  healActiveSessions,
+  listResumableSessions,
+  releaseTaskFromHand,
+  resumeSession,
+  updateSessionNote,
+} from "../lib/sessions.js";
+import { useTodoGravitySettings } from "../lib/settings/todoGravitySetting.ts";
+import { nestTaskUnderParent, promoteTaskToHand, promoteTaskToProject } from "../lib/taskNesting.js";
 import { projectAssignBlock, projectAssignBlockMessage } from "../lib/tasks/goalMembership.js";
+import type { GravitySurfacedMap } from "../lib/tasks/gravity.js";
+import { splitInboxByGravity } from "../lib/tasks/gravity.js";
+import { currentGravityDate, msUntilNextLocalDay } from "../lib/tasks/gravityClock.js";
+import { markGravityTasksSurfaced, useGravitySurfacedMap } from "../lib/tasks/gravityReviewStorage.js";
 import { groupCompletedByDay, groupInboxByDay } from "../lib/tasks/inboxGrouping.js";
 import { localDateString, placementForTask } from "../lib/tasks/placement.js";
+import { goalBarTaskIds, landsInCollapsedProjectGroup, projectChipIndex } from "../lib/tasks/projectZone.js";
+import { applyOptimisticOrder } from "../lib/tasks/reorderDisplay.js";
 import { allTags, filterTasks } from "../lib/tasks/turnTags.js";
 import {
   getDoneCollapsed,
@@ -51,71 +89,40 @@ import {
   unscheduleTask,
 } from "../lib/tasks.js";
 import { buildTrackConcludeUndo, toggleTaskDoneWithTrackConclude } from "../lib/taskTrackPromote.js";
-import { nestTaskUnderParent, promoteTaskToHand, promoteTaskToProject } from "../lib/taskNesting.js";
-import { goalBarTaskIds, landsInCollapsedProjectGroup, projectChipIndex } from "../lib/tasks/projectZone.js";
-import { applyOptimisticOrder } from "../lib/tasks/reorderDisplay.js";
-import { splitInboxByGravity } from "../lib/tasks/gravity.js";
-import type { GravitySurfacedMap } from "../lib/tasks/gravity.js";
-import { markGravityTasksSurfaced, useGravitySurfacedMap } from "../lib/tasks/gravityReviewStorage.js";
-import { currentGravityDate, msUntilNextLocalDay } from "../lib/tasks/gravityClock.js";
-import { todoTrackRows } from "../lib/tasks/todoTrackRows.js";
-import { useTodoGravitySettings } from "../lib/settings/todoGravitySetting.ts";
-import {
-  endActiveSession,
-  grabTaskToHand,
-  healActiveSessions,
-  listResumableSessions,
-  releaseTaskFromHand,
-  resumeSession,
-  updateSessionNote,
-} from "../lib/sessions.js";
-import {
-  assignTasksToProject,
-  assignTaskToProject,
-  createProjectWithMembers,
-  createTaskForProject,
-  findActiveProjectGoalIdForTask,
-  prerequisiteLossOnAssign,
-  prerequisiteLossOnAssignMany,
-  ProjectAssignError,
-  removeGoalMember,
-  updateGoal,
-} from "../lib/goals.js";
 import { useIsWideScreen } from "../lib/useIsWideScreen.js";
 import { AtHandSection } from "./todo/AtHandSection.js";
-import { TodoDragDock } from "./todo/TodoDragDock.js";
-import { applyTodoDockDrop } from "./todo/todoDockDrop.js";
 import { CollapsibleSection } from "./todo/CollapsibleSection.js";
 import { DayGroupedList } from "./todo/DayGroupedList.js";
 import { GravityReviewSection } from "./todo/GravityReviewSection.js";
-import { SunkenInboxTail, makeSunkenExtraAction } from "./todo/SunkenInboxTail.js";
-import { SunkenScheduledTail } from "./todo/SunkenScheduledTail.js";
 import { ResizableSplit } from "./todo/ResizableSplit.js";
+import { makeSunkenExtraAction, SunkenInboxTail } from "./todo/SunkenInboxTail.js";
+import { SunkenScheduledTail } from "./todo/SunkenScheduledTail.js";
 import { TaskColumn } from "./todo/TaskColumn.js";
 import { TaskDetailSheet } from "./todo/TaskDetailSheet.js";
 import { TaskList } from "./todo/TaskList.js";
 import { TaskTrackChip } from "./todo/TaskTrackChip.js";
-import { TrackRowGroup } from "./todo/TrackRowGroup.js";
-import { WaitingSection } from "./todo/WaitingSection.js";
-import { useTaskTrackIndex } from "./todo/useTaskTrackIndex.js";
 import { TodoComposer } from "./todo/TodoComposer.js";
-import { TodoSelectionBar } from "./todo/TodoSelectionBar.js";
+import { TodoDragDock } from "./todo/TodoDragDock.js";
 import { ProjectNameChip, TodoProjectSection } from "./todo/TodoProjectSection.js";
+import { TodoSelectionBar } from "./todo/TodoSelectionBar.js";
 import {
   clampTodoIndentPreview,
   hoveredRootIdFromOver,
+  laneToIndentLevel,
   parseTodoContainerId,
   preferProjectCollisions,
-  laneToIndentLevel,
+  resetTodoDragRefs,
   resolveTodoDockDrop,
   resolveTodoDragLaneAtPointer,
   resolveTodoDragWithIndent,
   resolveTodoDropTarget,
-  resetTodoDragRefs,
   type TodoContainer,
   type TodoDragLane,
   type TodoIndentLevel,
 } from "./todo/todoDnd.js";
+import { applyTodoDockDrop } from "./todo/todoDockDrop.js";
+import { useTaskTrackIndex } from "./todo/useTaskTrackIndex.js";
+import { WaitingSection } from "./todo/WaitingSection.js";
 
 const EMPTY: TodoBuckets = {
   today: [],
@@ -149,12 +156,7 @@ export function TodoPage() {
   const goalLinkedIds = goalBarTaskIds(buckets.goalLinkedIds, projectChips);
   const trackData = useTaskTrackIndex();
   const taskTrackIndex = trackData.index;
-  const trackRows = useMemo(
-    () => todoTrackRows(trackData.tracks, trackData.stepsByTrack, trackData.claimedTrackIds, gravityNow),
-    [trackData, gravityNow],
-  );
-  // 轨道展开态由页面持有：记一步会让停滞轨道当场从「在等」跳到「今天」，
-  // 两个区是不同父容器、行组件必然重挂，state 放行里会随之丢失（见 TrackRow 的注释）。
+  // 轨道展开态由页面持有，跨分区重挂不丢——轨道桶行（下一单接线）复用
   const [expandedTrackIds, setExpandedTrackIds] = useState<ReadonlySet<string>>(() => new Set<string>());
   const toggleTrackExpand = useCallback((trackId: string) => {
     setExpandedTrackIds((prev) => {
@@ -164,8 +166,9 @@ export function TodoPage() {
       return next;
     });
   }, []);
-  const todayTrackRows = trackRows.filter((row) => row.zone === "today");
-  const waitingTrackRows = trackRows.filter((row) => row.zone === "waiting");
+  // 临时压 unused，下一单轨道桶接线时删
+  void expandedTrackIds;
+  void toggleTrackExpand;
   const resumable = useLiveQuery(() => listResumableSessions(), []) ?? [];
   // biome-ignore lint/correctness/useExhaustiveDependencies: handSession.id 是触发器而非读取项——换了手头会话才重新自愈一次。删掉它，自愈就只在挂载时跑一次。
   useEffect(() => {
@@ -422,8 +425,7 @@ export function TodoPage() {
       { replace: true },
     );
   };
-  const openProject = (goalId: string) =>
-    setRevealGoals((prev) => (prev.includes(goalId) ? prev : [...prev, goalId]));
+  const openProject = (goalId: string) => setRevealGoals((prev) => (prev.includes(goalId) ? prev : [...prev, goalId]));
   const consumeReveal = useCallback((goalIds: readonly string[]) => {
     setRevealGoals((prev) => prev.filter((id) => !goalIds.includes(id)));
   }, []);
@@ -683,7 +685,10 @@ export function TodoPage() {
   const displayAtHand =
     optimisticOrder?.containerId === "hand"
       ? [
-          ...applyOptimisticOrder(buckets.atHand.filter((t) => !t.done), optimisticOrder.orderedIds),
+          ...applyOptimisticOrder(
+            buckets.atHand.filter((t) => !t.done),
+            optimisticOrder.orderedIds,
+          ),
           ...buckets.atHand.filter((t) => t.done),
         ]
       : buckets.atHand;
@@ -1042,9 +1047,9 @@ export function TodoPage() {
               : op.containerId === "pool:inbox"
                 ? f(floatingInbox)
                 : op.containerId === "hand"
-                  // 必须与 AtHandSection 的 pending 渲染序同源（同一 buckets.atHand、同 filter 保序），
-                  // arrayMove 下标才对得上渲染序；改了渲染排序必须同步改这里。
-                  ? buckets.atHand.filter((t) => !t.done)
+                  ? // 必须与 AtHandSection 的 pending 渲染序同源（同一 buckets.atHand、同 filter 保序），
+                    // arrayMove 下标才对得上渲染序；改了渲染排序必须同步改这里。
+                    buckets.atHand.filter((t) => !t.done)
                   : [];
           if (containerTasks.length === 0) return;
           const ids = containerTasks.map((t) => t.id);
@@ -1109,8 +1114,7 @@ export function TodoPage() {
         case "promote-to-project": {
           // 落位到组内「躺着」段末尾：段内按全局 sortOrder，取本组现有成员的 max+1。
           const group = buckets.projects.find((g) => g.goalId === op.goalId);
-          const sortOrder =
-            group && group.tasks.length > 0 ? Math.max(...group.tasks.map((t) => t.sortOrder)) + 1 : 0;
+          const sortOrder = group && group.tasks.length > 0 ? Math.max(...group.tasks.map((t) => t.sortOrder)) + 1 : 0;
           try {
             await promoteTaskToProject(activeId, op.goalId, sortOrder);
           } catch (error) {
@@ -1252,37 +1256,24 @@ export function TodoPage() {
       indentTargetId={indentTargetId}
       revealChildren={revealChildren}
       {...rowHandlers}
-      extra={todayTrackRows.length > 0 ? (
-        <TrackRowGroup
-          rows={todayTrackRows}
-          expandedTrackIds={expandedTrackIds}
-          onToggleTrackExpand={toggleTrackExpand}
-          now={gravityNow}
-        />
-      ) : null}
     />
   );
 
   // 空区整块不渲染——写法与下方 completedBlock 同形（`length > 0 &&`）。
-  const waitingBlock =
-    (buckets.waiting.length > 0 || waitingTrackRows.length > 0) && (
-      <WaitingSection
-        rows={waitingTrackRows}
-        tasks={buckets.waiting}
-        blockerTitles={buckets.waitingBlockerTitles}
-        onToggle={rowHandlers.onToggle}
-        onEdit={rowHandlers.onEdit}
-        onDelete={rowHandlers.onDelete}
-        onToToday={rowHandlers.onToToday}
-        onToInbox={rowHandlers.onToInbox}
-        onToHand={rowHandlers.onToHand}
-        onCopyTitle={rowHandlers.onCopyTitle}
-        goalLinkedIds={goalLinkedIds}
-        expandedTrackIds={expandedTrackIds}
-        onToggleTrackExpand={toggleTrackExpand}
-        now={gravityNow}
-      />
-    );
+  const waitingBlock = buckets.waiting.length > 0 && (
+    <WaitingSection
+      tasks={buckets.waiting}
+      blockerTitles={buckets.waitingBlockerTitles}
+      onToggle={rowHandlers.onToggle}
+      onEdit={rowHandlers.onEdit}
+      onDelete={rowHandlers.onDelete}
+      onToToday={rowHandlers.onToToday}
+      onToInbox={rowHandlers.onToInbox}
+      onToHand={rowHandlers.onToHand}
+      onCopyTitle={rowHandlers.onCopyTitle}
+      goalLinkedIds={goalLinkedIds}
+    />
+  );
 
   const completedFiltered = f(buckets.completed);
   // 已完成区只挂轨道徽章、不挂项目 chip（项目 chip 按 project-zone 契约只出现在手头/今天/已排期）：
@@ -1298,9 +1289,7 @@ export function TodoPage() {
       <DayGroupedList
         segments={groupCompletedByDay(completedFiltered)}
         stickyBottomOffsetPx={composerAvoidancePx}
-        renderTasks={(tasks) => (
-          <TaskList pool="completed" tasks={tasks} metaChip={trackChipFor} {...rowHandlers} />
-        )}
+        renderTasks={(tasks) => <TaskList pool="completed" tasks={tasks} metaChip={trackChipFor} {...rowHandlers} />}
       />
     </CollapsibleSection>
   );

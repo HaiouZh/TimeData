@@ -10,10 +10,17 @@ import { db } from "../db/index.js";
 import { grabTaskToHand } from "../lib/sessions.js";
 import { getSetting } from "../lib/settings/index.js";
 import { setTodoDefaultDestination } from "../lib/settings/todoDefaultDestinationSetting.js";
-import { addTask, createChildTask, deleteTaskCascade, scheduleTask, setTaskTags, toggleTaskDone } from "../lib/tasks.js";
-import * as tasksLib from "../lib/tasks.js";
 import { normalizeScheduledDate } from "../lib/tasks/placement.js";
 import { setInboxCollapsed } from "../lib/tasks/workbenchPrefs.js";
+import * as tasksLib from "../lib/tasks.js";
+import {
+  addTask,
+  createChildTask,
+  deleteTaskCascade,
+  scheduleTask,
+  setTaskTags,
+  toggleTaskDone,
+} from "../lib/tasks.js";
 import { promoteTaskToTrack, toggleTaskDoneWithTrackConclude } from "../lib/taskTrackPromote.js";
 import { setTrackStatus } from "../lib/tracks.js";
 import { click, renderDom, unmount } from "../test/domHarness.js";
@@ -293,9 +300,8 @@ function stubWideScreen(): void {
 }
 
 describe("TodoPage", () => {
-  it("今天区没有任务也没有轨道时，显示空态文案而不是空白卡片", async () => {
-    // 回归闸：轨道组以 extra 传进 TaskColumn，而 JSX 元素恒为 truthy——
-    // 调用点必须在无轨道时传 null，否则 TaskColumn 的空态判据被恒真的 extra 顶掉。
+  it("今天区没有任务时，显示空态文案而不是空白卡片", async () => {
+    // TaskColumn 的空态判据 `tasks.length === 0 && !extra`——今天区已不再传 extra
     const { host, root } = await renderPage();
     await flushAsync();
     const today = host.querySelector('[data-section="today"]');
@@ -661,7 +667,10 @@ describe("TodoPage", () => {
     });
 
     const { host, root } = await renderPage();
-    await waitForCondition(() => host.querySelector('button[aria-label="在项目 装修中创建任务"]') !== null, "project add button");
+    await waitForCondition(
+      () => host.querySelector('button[aria-label="在项目 装修中创建任务"]') !== null,
+      "project add button",
+    );
     await click(host.querySelector('[aria-label="展开标签筛选"]'));
     await click(host.querySelector('[aria-label="筛选 工作"]'));
     await click(host.querySelector('[aria-label="收起标签筛选"]'));
@@ -996,9 +1005,14 @@ describe("TodoPage", () => {
     });
 
     const { host, root } = await renderPage();
-    await waitForCondition(() => host.querySelector('button[aria-label="在项目 装修中创建任务"]') !== null, "project add button");
+    await waitForCondition(
+      () => host.querySelector('button[aria-label="在项目 装修中创建任务"]') !== null,
+      "project add button",
+    );
     await act(async () => {
-      host.querySelector('button[aria-label="在项目 装修中创建任务"]')?.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+      host
+        .querySelector('button[aria-label="在项目 装修中创建任务"]')
+        ?.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
     });
     const input = host.querySelector('input[aria-label="在项目 装修中新建任务"]') as HTMLInputElement;
     await setInputValue(input, "补漆");
@@ -1008,7 +1022,7 @@ describe("TodoPage", () => {
     const created = (await db.tasks.toArray()).find((task) => task.title === "补漆");
     expect(created?.scheduledAt).toBeNull();
     expect((await db.goals.get("g1"))?.members).toContainEqual({ kind: "task", id: created?.id });
-    expect((host.querySelector('[data-section="inbox"]')?.textContent ?? "")).not.toContain("补漆");
+    expect(host.querySelector('[data-section="inbox"]')?.textContent ?? "").not.toContain("补漆");
     expect(host.querySelector('[aria-label="待办操作反馈"]')).toBeNull();
     await unmount(root);
   });
@@ -1021,16 +1035,24 @@ describe("TodoPage", () => {
       title: "装修",
       kind: "project",
       status: "active",
-      members: [{ kind: "task", id: member.id }, ...Array.from({ length: 499 }, (_, i) => ({ kind: "task" as const, id: `ghost-${i}` }))],
+      members: [
+        { kind: "task", id: member.id },
+        ...Array.from({ length: 499 }, (_, i) => ({ kind: "task" as const, id: `ghost-${i}` })),
+      ],
       prerequisites: [],
       createdAt: now,
       updatedAt: now,
     });
 
     const { host, root } = await renderPage();
-    await waitForCondition(() => host.querySelector('button[aria-label="在项目 装修中创建任务"]') !== null, "project add button");
+    await waitForCondition(
+      () => host.querySelector('button[aria-label="在项目 装修中创建任务"]') !== null,
+      "project add button",
+    );
     await act(async () => {
-      host.querySelector('button[aria-label="在项目 装修中创建任务"]')?.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+      host
+        .querySelector('button[aria-label="在项目 装修中创建任务"]')
+        ?.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
     });
     const input = host.querySelector('input[aria-label="在项目 装修中新建任务"]') as HTMLInputElement;
     await setInputValue(input, "超额任务");
@@ -1057,12 +1079,19 @@ describe("TodoPage", () => {
     });
 
     const { host, root } = await renderPage();
-    await waitForCondition(() => host.querySelector('button[aria-label="项目 装修 更多操作"]') !== null, "project menu button");
+    await waitForCondition(
+      () => host.querySelector('button[aria-label="项目 装修 更多操作"]') !== null,
+      "project menu button",
+    );
     await act(async () => {
-      host.querySelector('button[aria-label="项目 装修 更多操作"]')?.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+      host
+        .querySelector('button[aria-label="项目 装修 更多操作"]')
+        ?.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
     });
     await act(async () => {
-      host.querySelector('[role="menuitem"]')?.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+      host
+        .querySelector('[role="menuitem"]')
+        ?.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
     });
     const renameInput = host.querySelector('input[aria-label="重命名项目 装修"]') as HTMLInputElement;
     await setInputValue(renameInput, "新装修");
@@ -1071,10 +1100,14 @@ describe("TodoPage", () => {
     expect((await db.goals.get("g1"))?.title).toBe("新装修");
 
     await act(async () => {
-      host.querySelector('button[aria-label="项目 装修 更多操作"], button[aria-label="项目 新装修 更多操作"]')?.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+      host
+        .querySelector('button[aria-label="项目 装修 更多操作"], button[aria-label="项目 新装修 更多操作"]')
+        ?.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
     });
     await act(async () => {
-      host.querySelectorAll('[role="menuitem"]')[1]?.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+      host
+        .querySelectorAll('[role="menuitem"]')[1]
+        ?.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
     });
     await waitForCondition(() => currentPathname === "/goals/g1", "navigate to goal detail", settle);
     await unmount(root);
@@ -1182,8 +1215,6 @@ describe("TodoPage", () => {
     });
     await unmount(root);
   });
-
-
 
   it("拖进项目组成功后弹一条「已归入」：组间排序键被刷新，目标组会跳到项目区第一位", async () => {
     // 成功路径刻意不展开组，但归入刷新成员 updatedAt、而组间排序键正是成员的 max(updatedAt)——
@@ -1330,9 +1361,7 @@ describe("TodoPage", () => {
     await keyboardDrag(grab());
     await waitForCondition(() => dialogText().includes("移动会删掉依赖关系"), "confirm dialog", settle);
     // 整句匹配而不是片段：单组这句是唯一可以点名的那句，措辞漂了（或被多组那句顶掉）必须当场红。
-    expect(dialogText()).toContain(
-      "这条任务在「老项目」里有 1 条前置依赖关系。移到别的项目会一并删除，且无法撤销。",
-    );
+    expect(dialogText()).toContain("这条任务在「老项目」里有 1 条前置依赖关系。移到别的项目会一并删除，且无法撤销。");
     await act(async () => {
       [...host.querySelectorAll('[role="dialog"] button')]
         .find((b) => b.textContent === "取消")
@@ -1559,10 +1588,7 @@ describe("TodoPage", () => {
 
     // 摘掉「下一步」徽章再等：徽章在折叠态就会显示首条未完成成员的标题，
     // 不摘的话这个条件一开始就成立，等不到「归属组真的展开并列出成员」。
-    await waitForCondition(
-      () => zoneText(host).includes("刷墙"),
-      "项目区展开归属组并列出该成员",
-    );
+    await waitForCondition(() => zoneText(host).includes("刷墙"), "项目区展开归属组并列出该成员");
 
     expect((host.querySelector('[data-section="today"]') as HTMLElement).textContent ?? "").not.toContain("刷墙");
     expect((host.querySelector('[data-section="inbox"]') as HTMLElement).textContent ?? "").not.toContain("刷墙");
@@ -2667,7 +2693,9 @@ describe("TodoPage 多选提交", () => {
     await waitForToast(host, "已建「装修」· 1 条");
 
     const created = (await db.goals.toArray()).find((g) => g.title === "装修");
-    expect(created?.members).toEqual([{ kind: "task", id: (await db.tasks.toArray()).find((t) => t.title === "买灯")?.id }]);
+    expect(created?.members).toEqual([
+      { kind: "task", id: (await db.tasks.toArray()).find((t) => t.title === "买灯")?.id },
+    ]);
     // 「旧组」既没被摘成员也没被改：它从头到尾不该参与这次提交。
     expect((await db.goals.get("gA"))?.members).toEqual([{ kind: "task", id: t2.id }]);
     await unmount(root);
@@ -2899,9 +2927,12 @@ describe("TodoPage 多选提交", () => {
     // 本用例在 resolve 前断言 DOM 会拿到旧序而红——这是本功能的核心行为。
     const now = "2026-06-28T09:00:00.000Z";
     let resolvePersist: (() => void) | null = null;
-    const persistSpy = vi
-      .spyOn(tasksLib, "persistTaskOrder")
-      .mockImplementationOnce((_orderedIds: string[]) => new Promise<void>((resolve) => { resolvePersist = resolve; }));
+    const persistSpy = vi.spyOn(tasksLib, "persistTaskOrder").mockImplementationOnce(
+      (_orderedIds: string[]) =>
+        new Promise<void>((resolve) => {
+          resolvePersist = resolve;
+        }),
+    );
 
     const a = await addTask({ title: "买菜", toInbox: true });
     const b = await addTask({ title: "洗碗", toInbox: true });
@@ -3199,9 +3230,7 @@ describe("拖拽投递坞", () => {
         settle,
       );
 
-      const memberHandle = host.querySelector(
-        '[data-section="todo-projects"] [aria-label="移动 刷墙"]',
-      ) as HTMLElement;
+      const memberHandle = host.querySelector('[data-section="todo-projects"] [aria-label="移动 刷墙"]') as HTMLElement;
       await act(async () => {
         memberHandle.dispatchEvent(new KeyboardEvent("keydown", { code: "Space", bubbles: true, cancelable: true }));
       });

@@ -1,8 +1,6 @@
 import type { Task } from "@timedata/shared";
-import type { TodoTrackRow } from "../../lib/tasks/todoTrackRows.js";
 import { useIsCoarsePointer } from "../../lib/useIsCoarsePointer.js";
 import { META_CHIP_CLASS, TaskRow } from "./TaskRow.js";
-import { TrackRow } from "./TrackRow.js";
 
 /**
  * 「在等」区：停滞轨道 + 被未完成前置挡住的任务。
@@ -16,12 +14,6 @@ import { TrackRow } from "./TrackRow.js";
  * 空区整块不渲染——没有停滞轨道也没有被挡任务时不留一个空标题在那儿。
  */
 export interface WaitingSectionProps {
-  rows: TodoTrackRow[];
-  /** 展开的轨道 id（页面持有，见 TrackRow 的注释）。 */
-  expandedTrackIds: ReadonlySet<string>;
-  onToggleTrackExpand: (trackId: string) => void;
-  /** 页面单一时钟，透传给轨道行算相对时间。 */
-  now: Date;
   /** 被挡任务行（listTasks 的 waiting 桶）。 */
   tasks?: Task[];
   /** taskId → 挡着它的那些东西的标题，只含 `tasks` 里的任务。 */
@@ -45,10 +37,6 @@ function blockerLabel(titles: readonly string[]): string {
 }
 
 export function WaitingSection({
-  rows,
-  expandedTrackIds,
-  onToggleTrackExpand,
-  now,
   tasks = [],
   blockerTitles = {},
   onToggle = noop,
@@ -61,12 +49,12 @@ export function WaitingSection({
   onCopyTitle,
 }: WaitingSectionProps) {
   const coarsePointer = useIsCoarsePointer();
-  if (rows.length === 0 && tasks.length === 0) return null;
+  if (tasks.length === 0) return null;
   return (
     <section data-testid="todo-section-waiting" data-section="waiting">
       <div className="mb-2 flex items-baseline justify-between px-2">
         <h2 className="td-text-label font-medium text-ink">在等</h2>
-        <span className="td-text-caption text-ink-3">{rows.length + tasks.length}</span>
+        <span className="td-text-caption text-ink-3">{tasks.length}</span>
       </div>
       <div className="rounded-card p-1.5">
         {tasks.map((task) => {
@@ -96,15 +84,6 @@ export function WaitingSection({
             </div>
           );
         })}
-        {rows.map((row) => (
-          <TrackRow
-            key={row.track.id}
-            row={row}
-            expanded={expandedTrackIds.has(row.track.id)}
-            onToggleExpand={() => onToggleTrackExpand(row.track.id)}
-            now={now}
-          />
-        ))}
       </div>
     </section>
   );
