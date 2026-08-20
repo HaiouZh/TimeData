@@ -25,7 +25,7 @@ contracts:
   - packages/shared/src/constants.ts
   - packages/server/src/db/schema.ts
   - packages/client/src/db/index.ts
-last-reviewed: 2026-08-20
+last-reviewed: 2026-08-21
 ---
 
 # 数据模型与契约
@@ -85,7 +85,7 @@ last-reviewed: 2026-08-20
 | `stats.todo.layout.v1` | [stats-insights](stats-insights.md) |
 | `todo.defaultDestination.v1` | [todo](todo.md) |
 | `todo.gravity.v1`、`todo.gravity.review.v1` | [todo](todo.md) |
-| `track.actionTags.v2`、`track.agentExecTags.v1`、`track.waitExternalTags.v1` | [categories-settings/settings-catalog](categories-settings/settings-catalog.md) |
+| `track.actionTags.v2`、`track.agentExecTags.v1`、`track.waitExternalTags.v1`、`track.resumeTags.v1` | [categories-settings/settings-catalog](categories-settings/settings-catalog.md) |
 
 ## 3. SyncLogEntry
 
