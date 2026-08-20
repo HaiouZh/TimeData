@@ -10,7 +10,7 @@ contracts:
   - packages/server/src/sync/domains.ts
   - packages/server/src/db/reset.ts
   - packages/server/src/routes/data.ts
-last-reviewed: 2026-08-10
+last-reviewed: 2026-08-20
 ---
 
 # 同步 · 推拉协议详解

@@ -25,7 +25,7 @@ contracts:
   - packages/shared/src/constants.ts
   - packages/server/src/db/schema.ts
   - packages/client/src/db/index.ts
-last-reviewed: 2026-08-14
+last-reviewed: 2026-08-20
 ---
 
 # 数据模型与契约
@@ -104,11 +104,11 @@ type SyncLogEntry = {
 };
 ```
 
-`tableName` 来自 `packages/shared/src/syncDomains.ts` 的封闭登记簿，当前包括 `categories`、`time_entries`、`settings`、`quick_notes`、`tasks`、`tracks`、`track_steps`、`goals`、`goal_layout_pins` 与 `sessions`。Dexie 使用 `[tableName+synced]` 复合索引；`op` 与 `deleteReason` 都不是索引字段，加入后无需升 Dexie 版本。同步实体写入与对应 `syncLog` 追写必须在同一个 transaction 内完成；轨道父子删除由客户端数据层显式写每条 `track_steps/delete`，不能依赖数据库级联。`tasks` 完成语义和 `tracks.status` 都用可选 `op` 授权守卫列更新。
+`tableName` 来自 `packages/shared/src/syncDomains.ts` 的封闭登记簿，当前包括 `categories`、`time_entries`、`settings`、`quick_notes`、`tasks`、`tracks`、`track_steps`、`track_milestones`、`goals`、`goal_layout_pins`、`sessions` 与 `task_relations`。Dexie 使用 `[tableName+synced]` 复合索引；`op` 与 `deleteReason` 都不是索引字段，加入后无需升 Dexie 版本。同步实体写入与对应 `syncLog` 追写必须在同一个 transaction 内完成；轨道父子删除由客户端数据层显式写每条 `track_steps/delete`，不能依赖数据库级联。`tasks` 完成语义和 `tracks.status` 都用可选 `op` 授权守卫列更新。
 
 ## 4. SyncChange / SyncPushOutcome
 
-`SyncChange` 是按 table/action 区分的判别联合；运行时 schema 由 `packages/shared/src/syncDomains.ts` 的登记簿生成，静态类型在 `packages/shared/src/types.ts` 手工维护。新增同步域必须同时改共享登记簿、服务端登记簿、类型、测试和文档。当前静态联合已覆盖 `tracks`、`track_steps`、`goals`、`goal_layout_pins` 与 `sessions`；运行时登记簿与手工类型必须保持一致，不得分叉。
+`SyncChange` 是按 table/action 区分的判别联合；运行时 schema 由 `packages/shared/src/syncDomains.ts` 的登记簿生成，静态类型在 `packages/shared/src/types.ts` 手工维护。新增同步域必须同时改共享登记簿、服务端登记簿、类型、测试和文档。当前静态联合已覆盖 `tracks`、`track_steps`、`track_milestones`、`goals`、`goal_layout_pins`、`sessions` 与 `task_relations`；运行时登记簿与手工类型必须保持一致，不得分叉。
 
 ```ts
 type SyncChange =
@@ -150,6 +150,7 @@ type SyncChange =
 | `overlap` | 时间段重叠 |
 | `stale_change_rejected` | `baseSeq` 重叠或 unknown-base 路径上，来包时间戳不晚于服务器现存行 / tombstone，服务端拒收过期变更 |
 | `orphan_step_rejected` | `track_steps` create/update 找不到宿主 `tracks` 行，服务端拒收孤儿步骤 |
+| `orphan_milestone_rejected` | `track_milestones` create/update 找不到宿主 `tracks` 行，服务端拒收孤儿里程碑 |
 | `server_version_newer_or_same` | 兼容保留码 |
 | `foreign_key_failed` | 外键约束失败 |
 

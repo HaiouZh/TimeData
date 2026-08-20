@@ -53,7 +53,7 @@ contracts:
   - packages/server/src/db/utcReset.ts
   - packages/server/src/routes/data.ts
   - packages/server/src/sync/domains.ts
-last-reviewed: 2026-08-05
+last-reviewed: 2026-08-20
 ---
 
 # 同步机制
@@ -71,7 +71,7 @@ last-reviewed: 2026-08-05
 - 每台设备只持有一个读数：`localStorage.timedata_last_synced_seq`。追数据只有一种问法："`sinceSeq` 之后给我"。
 - `updated_at` / `deleted_at` 由服务器在记账时分配（`resolver.ts` 的 `serverNow`）；排序权威是账本编号。客户端提交的 `change.timestamp` 不落库，但在 `baseSeq` 冲突记录上用于 staleGuard 时间戳线性化；设备时钟偏差超过 60 秒会在设置页提示用户校准。
 
-**域登记簿**决定系统认识哪些数据类型：shared `SYNC_DOMAINS` 负责运行时 schema、优先级、冲突策略和计数语义；server `SERVER_SYNC_DOMAINS` 负责校验 / 写入 / pull 读回；client `CLIENT_SYNC_DOMAINS` 负责 Dexie store、pull 应用与备份角色。登记簿细节、当前 16 个运行时域、新增普通 LWW 域与复合键域的完整 checklist，见子文档 [sync/domain-registry](sync/domain-registry.md)。
+**域登记簿**决定系统认识哪些数据类型：shared `SYNC_DOMAINS` 负责运行时 schema、优先级、冲突策略和计数语义；server `SERVER_SYNC_DOMAINS` 负责校验 / 写入 / pull 读回；client `CLIENT_SYNC_DOMAINS` 负责 Dexie store、pull 应用与备份角色。登记簿细节、当前 12 个运行时域、新增普通 LWW 域与复合键域的完整 checklist，见子文档 [sync/domain-registry](sync/domain-registry.md)。
 
 **登记簿是封闭契约**：新增域必须同步 shared 配置、server 钩子/映射、客户端 Dexie 表与 pull 分支、静态 `SyncChange` 类型、backup 角色和文档，不能让运行时登记簿、静态判别联合、客户端登记簿三者分叉。
 
