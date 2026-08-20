@@ -5,7 +5,7 @@ covers:
   - packages/client/src/lib/progressAxis.ts
 contracts:
   - packages/client/src/lib/progressAxis.ts
-last-reviewed: 2026-08-16
+last-reviewed: 2026-08-21
 ---
 
 # 待办 · 推进轴
@@ -19,9 +19,9 @@ last-reviewed: 2026-08-16
 
 **推进轴是第四根轴**，与既有的归属 / 焦点 / 时间三轴（[project-zone](../project-zone.md) §1）**正交**：它不排他、不替代四分区、不改变任何既有投影的输出。一条任务同时出现在待办的今天区和推进面板的「在做」桶里，是正常的。
 
-**`bucketForTrack` 有两个消费者**：本文件内部的 `buildProgressItems`，以及待办页的 `tasks/todoTrackRows.ts`（轨道落进「今天」/「在等」两区）。**停滞阈值与开口步口径共用这一份，落区方不自行判定。** 但两者的**去重口径刻意不同**：`todoTrackRows` 只认 `useTaskTrackIndex` 的 `claimedTrackIds`，不复用 `buildProgressItems` 的 `consumedTrackIds`——后者多一道「被认领的任务本身要进面板」的条件，轨道挂在子任务上时两处判定相反，同一条轨道会既有徽章又独立成行。
+**`bucketForTrack` 只剩一个消费者**：本文件内部的 `buildProgressItems`。待办页的轨道呈现是独立的「轨道桶」分区（`TrackBucketSection`，复用 `/tracks` 调度台的 `dispatchItems` 口径，见 [todo](../todo.md) 深水细节），不经本函数、不用 `bucketForTrack` 分桶。
 
-**`buildProgressItems` 没有 UI 消费方**：待办页的轨道行走 `todoTrackRows`，不经本函数。
+**`buildProgressItems` 没有 UI 消费方**；它与 `bucketForTrack` 的去留在 track-workbench 真机验证期后一并清算。
 
 ## 2. 五个桶
 

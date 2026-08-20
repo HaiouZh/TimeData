@@ -45,7 +45,7 @@ last-reviewed: 2026-08-21
 | 任务轨道 / `Track`、`TrackStep` | `tracks` / `track_steps` | `tracks` / `trackSteps` | [tracks](tracks.md) §Schema |
 | 目标 / `Goal` | `goals` | `goals` | [goals](goals.md) §Schema |
 | 目标布局钉点 / `GoalLayoutPin` | `goal_layout_pins` | `goalLayoutPins` | [goals](goals.md) §存储与同步 |
-| 手头软会话 / `Session` | `sessions` | `sessions` | [todo/at-hand](todo/at-hand.md) §Schema |
+| 手头软会话 / `Session`（含 `trackIds`→SQL JSON 文本列 `track_ids`，幂等补列） | `sessions` | `sessions` | [todo/at-hand](todo/at-hand.md) §Schema |
 | 同步设置 / `Setting` | `settings` | `settings` | 本文 §2；具体 key 见对应域 |
 | 客户端同步日志 / `SyncLogEntry` | 无 | `syncLog` | 本文 §3 |
 | 待裁决冲突 / `PendingArbitration` | 无（纯本地） | `pendingArbitrations` | [sync](sync.md#sync-unseen-delete-guard) §隐式删除守卫 |

@@ -12,7 +12,7 @@ last-reviewed: 2026-08-21
 
 # 待办 · 手头
 
-> [todo](../todo.md) 的子文档。手头 = **软会话**（`Session` 实体，存 `{id, startedAt, endedAt, note, trackIds, createdAt, updatedAt}` 元数据）+ 两种成员挂法：任务经 `Task.sessionId` **反挂**指针，轨道经场自身的 `trackIds` 数组**正挂**。用户"抓"几条 root 任务或几条轨道放进当前场，做完/散场后场行归档但不删除，归属保留作历史。手头不是新的任务分类，是运行在既有 `tasks`/`tracks` 表之上的一层"当前在忙什么"投影。
+> [todo](../todo.md) 的子文档。手头 = **软会话**（`Session` 实体，存 `{id, startedAt, endedAt, note, trackIds, createdAt, updatedAt}` 元数据）+ 两种成员挂法：任务经 `Task.sessionId` **反挂**指针，轨道经场自身的 `trackIds` 数组**正挂**。用户"抓"几条任务或几条轨道放进当前场，做完/散场后场行归档但不删除，归属保留作历史。手头不是新的任务分类，是运行在既有 `tasks`/`tracks` 表之上的一层"当前在忙什么"投影。
 > 本文讲：单活跃场判定、抓/移/散/续四个动作 + 抓/放轨道两个动作的事务与 syncLog、`sessions` 域登记、`listTasks` 里的排他投影规则、轨道桶排他、续场的场迁移语义、读纯写显式自愈规则、关键不变量与测试清单。
 > 不讲：Task 字段全貌与四分区落点（见母文档 [todo](../todo.md)）、同步账本与域登记簿机制（见 [sync](../sync.md) / [sync/domain-registry](../sync/domain-registry.md)）。
 
@@ -37,7 +37,7 @@ last-reviewed: 2026-08-21
 
 ```text
 抓活 grabTaskToHand(taskId)
-  → 校验：root 且非重复模板且非 skipped occurrence（否则 throw，见 §7.1）
+  → 校验：非重复模板且非 skipped occurrence（否则 throw，见 §7.1；子任务可直接抓）
   → 无活跃场 → 零仪式新建 Session（create + syncLog）
   → putTaskSessionId(taskId, active.id)（tasks update + syncLog）
 
@@ -61,7 +61,7 @@ last-reviewed: 2026-08-21
   → 见 §5
 ```
 
-抓取的三道校验（`parentId !== null` 拒 / `recurrence !== null` 拒 / `skipped` 拒）都在 `grabTaskToHand` 内部执行，与三处 UI 入口的按钮可见性判定（§7.2）各自独立、互为纵深防御——UI 判定放宽或漏判，`grabTaskToHand` 仍会 throw，不会写出非法状态。
+抓取的两道校验（`recurrence !== null` 拒重复模板本体 / `skipped` 拒已跳过的发）都在 `grabTaskToHand` 内部执行，与三处 UI 入口的按钮可见性判定（§7.2）各自独立、互为纵深防御——UI 判定放宽或漏判，`grabTaskToHand` 仍会 throw，不会写出非法状态。子任务可直接抓（保持子身份，五把解锁之一，见 [todo](../todo.md#todo-s2-2)）；拖拽路径另有 `promoteTaskToHand`（升根再抓，语义是「把它提成独立的活」），两条路径并存、动词不同。
 
 ## 3. Session schema 与 sessions 域登记
 
@@ -97,7 +97,7 @@ if (handSessionId !== null && t.recurrence === null && (t.sessionId ?? null) ===
 
 规则拆开讲：
 
-1. **排他**：root 且 `sessionId === 活跃场id` 的未完任务只出现在 `atHand`，不再进 `today`/`inbox`/`scheduled`——`continue` 短路了后续的 placement/scheduled 分支。
+1. **排他**：`sessionId === 活跃场id` 的未完任务（root 或被直接抓的子任务）只出现在 `atHand`，不再进 `today`/`inbox`/`scheduled`——`continue` 短路了后续的 placement/scheduled 分支。
 2. **done 双显**：本场已完成的任务不 `continue`，会继续走原有 placement 落进 `completed`——因此它同时出现在 `AtHandSection`「本场已完成」折叠区和主列表「已完成」区，两处显示的是同一行数据，不是两份状态。
 3. **skipped/模板排除**：`t.recurrence !== null`（重复模板本体）与 `t.ruleId !== null && t.skipped`（已删·跳的发）在这段判定之前就被上层循环过滤/绕开，不会进入手头分桶。occurrence（`ruleId!==null && recurrence===null`）本身是普通 root 语义，可以被抓；模板本体不行（见 §7.1）。
 4. **散场自然回桶**：`endActiveSession()` 不改任务的 `sessionId`，只是活跃场从此换成别的/none；下次 `listTasks()` 算出的 `handSessionId` 不再等于该任务的 `sessionId`，判定自然为假，任务落回原有 placement 分区。**这不是一次迁移操作，是投影结果**——没有代码"把任务搬回收件箱"，只是排他条件不再成立，零写零迁移。
@@ -142,8 +142,8 @@ if (handSessionId !== null && t.recurrence === null && (t.sessionId ?? null) ===
 ## 7. 关键不变量 / 坑 / 红线
 
 1. **`sessionId` 是历史归属指针，不是"当前状态"标记**：一个任务的 `sessionId` 只表示"它曾被抓进哪一场"；判断"是否在手头"永远要结合"该 `sessionId` 是否等于*当前*活跃场 id"，不能只看 `sessionId !== null`。散场/续场都不清空它；**清空只发生在两处**：**移出手头**（`releaseTaskFromHand(taskId)` 只把 `Task.sessionId` 置 `null`，见 §2）与**降级为子任务**（`moveTaskToParentInCurrentTransaction` 写回时置 `null`）——子任务不持有任何归属指针（见母文 [todo](../todo.md#todo-s2-2)）。后者这条清理是必需的：`listResumableSessions` 按 `sessionId` 直查且不排除子任务，指针留着的话，一条已成为子步骤的活会继续被算进「这个场还有 N 条未完」，续场时还会被批量迁到新场。occurrence 完成后物化出的下一发**不继承** `sessionId`——手头是"这一发在忙"的标记，不随重复规则引擎滚动到下一发。
-2. <a id="at-hand-grab-hard-reject"></a>**模板与 child 不可抓，occurrence 可抓**：`grabTaskToHand` 拒绝 `parentId !== null`（子任务）、`recurrence !== null`（重复模板本体）与 `skipped` 的 occurrence；重复规则物化出来的 occurrence（`ruleId!==null && recurrence===null`）是普通 root 语义，可以被抓。子任务进手头**不是绕过这条硬拒**，而是 `promoteTaskToHand` 先升根再抓——进 `grabTaskToHand` 时它已是 root，硬拒依然成立，只是不被这条路径触发。
-3. **三处入口的可见性判定各自独立、不完全相同**：`TaskRow` overlay 与 `TaskList` 滑出菜单都用 `recurrence===null && pool!=="completed"`；`TaskDetailSheet` 抽屉按钮用 `parentId===null && recurrence===null && !task.done`。UI 判定只影响按钮是否渲染，真正的红线在 `grabTaskToHand` 内部三道校验（§2），两层判定不同步不会破坏数据，只可能出现"按钮该出现没出现"的体验问题。翻牌复查区与水下找回尾部经同一份 `rowHandlers.onToHand` 透传同样具备抓取入口——**这是有意为之**：想法重力的翻牌/水下找回本身是收件箱任务的替代视图，理应享有同样的操作面，不是遗漏未收窄。
+2. <a id="at-hand-grab-hard-reject"></a>**模板不可抓，occurrence 与子任务可抓**：`grabTaskToHand` 拒绝 `recurrence !== null`（重复模板本体）与 `skipped` 的 occurrence 两道硬拒；重复规则物化出来的 occurrence（`ruleId!==null && recurrence===null`）是普通语义，可以被抓。子任务可**直接抓**（保持子身份、`sessionId` 挂场，随 §4 排他进 `atHand` 桶）——这是「子任务解锁五把」之一；拖拽进 `hand` 容器/投手头坞走的仍是 `promoteTaskToHand` 升根路径（§4「子任务回手头」），两条路径动词不同、并存不冲突。
+3. **三处入口的可见性判定各自独立、不完全相同**：`TaskRow` overlay 与 `TaskList` 滑出菜单都用 `recurrence===null && pool!=="completed" && !atHand`；`TaskDetailSheet` 抽屉按钮用 `recurrence===null && !task.done`。UI 判定只影响按钮是否渲染，真正的红线在 `grabTaskToHand` 内部两道校验（§2），两层判定不同步不会破坏数据，只可能出现"按钮该出现没出现"的体验问题。翻牌复查区与水下找回尾部经同一份 `rowHandlers.onToHand` 透传同样具备抓取入口——**这是有意为之**：想法重力的翻牌/水下找回本身是收件箱任务的替代视图，理应享有同样的操作面，不是遗漏未收窄。
 4. **手头不是新写入路径**：抓/移/散/续全部经既有 `tasks`/`sessions` 两个 LWW 域的普通 create/update，不新增写入通道，也不改变 `tasks` 的 force-push 契约。`sessions` 域本身不在 force-push 五域兜底范围内，但 `sessionId` 作为 `tasks` 字段仍随 `tasks` force-push 一起搬运——极端场景下可能在对端留下一个指向"尚未同步过来的 session"的悬空 `sessionId`；这只是历史归属指针失效，不影响任务本身，也不会被误判成活跃场（`getActiveSession()` 只从 `sessions` 表本身取活跃场，不会凭空对上一个不存在的 id）。
 5. **演化口子（本期均不做，仅记录方向、不构成设计承诺）**：时间轴联动（拿 `startedAt`/`endedAt` 在 timeline 上画出手头区间）、战役常驻卡（把 `Session` 历史做成可回看的"战役"卡片，历史场的 `note` 便签可复用为卡片标签）、战报（按 `sessionId` 聚合一场做了什么生成摘要）。这三个方向都只需读现有 `Session`/`Task.sessionId` 数据，不需要现在改 schema。
 
