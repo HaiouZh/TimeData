@@ -2,6 +2,7 @@ import type { SyncLogEntry, TrackStep } from "@timedata/shared";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { db } from "../test/dbReset.js";
 import { addTaskRelation } from "./taskRelations.js";
+import { addMilestones } from "./trackMilestones.js";
 import {
   addTrack,
   addTrackStep,
@@ -837,5 +838,35 @@ describe("删除轨道连带清关系边", () => {
     expect(await db.taskRelations.count()).toBe(1);
     const remaining = await db.taskRelations.toArray();
     expect(remaining[0]).toMatchObject({ blockerId: keep.id, blockedId: "t-1" });
+  });
+});
+
+describe("deleteTrack 级联里程碑", () => {
+  beforeEach(async () => {
+    await db.trackMilestones.clear();
+  });
+
+  it("deleteTrack 时轨道有 2 里程碑 + 1 步骤 → trackMilestones 表清空、syncLog 含 2 条 track_milestones 的 delete", async () => {
+    const track = await addTrack({ title: "待删轨道", now });
+    const milestones = await addMilestones(track.id, ["阶段一", "阶段二"]);
+    await addTrackStep({
+      trackId: track.id,
+      source: "user",
+      content: "步骤",
+      startedAt: now.toISOString(),
+      now,
+    });
+    await db.syncLog.clear();
+
+    await deleteTrack(track.id);
+
+    await expect(db.trackMilestones.where("trackId").equals(track.id).count()).resolves.toBe(0);
+    await expect(db.trackMilestones.count()).resolves.toBe(0);
+    const logs = await db.syncLog.toArray();
+    const milestoneDeletes = logs.filter((l) => l.tableName === "track_milestones" && l.action === "delete");
+    expect(milestoneDeletes).toHaveLength(2);
+    expect(milestoneDeletes.map((l) => l.recordId).sort()).toEqual(milestones.map((m) => m.id).sort());
+    // 同时步骤也已删
+    await expect(db.trackSteps.where("trackId").equals(track.id).count()).resolves.toBe(0);
   });
 });

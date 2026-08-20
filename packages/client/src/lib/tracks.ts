@@ -422,11 +422,16 @@ export async function listAllTrackSteps(): Promise<TrackStep[]> {
 }
 
 export async function deleteTrack(id: string): Promise<void> {
-  await db.transaction("rw", db.tracks, db.trackSteps, db.taskRelations, db.syncLog, async () => {
+  await db.transaction("rw", db.tracks, db.trackSteps, db.trackMilestones, db.taskRelations, db.syncLog, async () => {
     const steps = (await db.trackSteps.where("trackId").equals(id).toArray()).sort(compareTrackStepsBySemanticTime);
     await db.trackSteps.bulkDelete(steps.map((step) => step.id));
     for (const step of steps) {
       await recordSyncLog("track_steps", step.id, "delete");
+    }
+    const milestones = await db.trackMilestones.where("trackId").equals(id).toArray();
+    await db.trackMilestones.bulkDelete(milestones.map((m) => m.id));
+    for (const m of milestones) {
+      await recordSyncLog("track_milestones", m.id, "delete");
     }
     await removeTaskRelationsForInCurrentTransaction({ kind: "track", id });
     await db.tracks.delete(id);
