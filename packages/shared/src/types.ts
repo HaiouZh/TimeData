@@ -9,6 +9,7 @@ import type {
   GoalSchema,
   QuickNoteSchema,
   RecurrenceSchema,
+  RefSchema,
   SessionSchema,
   SettingSchema,
   SyncForcePushPrepareRequestSchema,
@@ -24,7 +25,6 @@ import type {
   TimeEntrySchema,
   TrackSchema,
   TrackStepSchema,
-  RefSchema,
 } from "./schemas.js";
 import type { TASK_DELETE_REASONS } from "./syncDomains.js";
 
@@ -52,7 +52,7 @@ export type Recurrence = z.infer<typeof RecurrenceSchema>;
 
 export type Task = z.infer<typeof TaskSchema>;
 
-export type Session = z.infer<typeof SessionSchema>;
+export type Session = z.infer<typeof SessionSchema>; // Session.trackIds: string[] — 见 SessionSchema
 
 export type TimeEntry = z.infer<typeof TimeEntrySchema>;
 
@@ -238,9 +238,9 @@ export type {
   AdminAnalyticsBucket,
   AdminAnalyticsCategoryBucket,
   AdminAnalyticsResponse,
+  AdminBackupConfigResponse,
   AdminBackupRow,
   AdminBackupsResponse,
-  AdminBackupConfigResponse,
   AdminCategoriesResponse,
   AdminCategoryRow,
   AdminEntriesResponse,
@@ -266,6 +266,6 @@ export type SyncReasonCategory =
   | "user_actionable" // archived_category / missing_category / overlap / invalid_time_range — 用户处理
   | "stale_rejected" // stale_change_rejected / orphan_step_rejected — 服务端拒收过期或孤儿变更，客户端放弃本地主张、标 synced
   | "needs_arbitration" // unseen_record_deletion_rejected — 服务端拦下"会删掉本设备没见过的记录"的写入；
-                        // 客户端放弃本地主张（隔离）+ 保住内容 + 等人裁决
+  // 客户端放弃本地主张（隔离）+ 保住内容 + 等人裁决
   | "conflict" // server_version_newer_or_same — 进入冲突流程
   | "unknown";

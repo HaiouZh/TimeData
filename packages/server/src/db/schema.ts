@@ -5,75 +5,109 @@ import { getDb } from "./connection.js";
 import { insertDefaultCategories } from "./reset.js";
 
 export function ensureQuickNoteSourceColumns(db: Database): void {
-  const names = new Set((db.prepare("PRAGMA table_info(quick_notes)").all() as Array<{ name: string }>).map((column) => column.name));
+  const names = new Set(
+    (db.prepare("PRAGMA table_info(quick_notes)").all() as Array<{ name: string }>).map((column) => column.name),
+  );
   if (!names.has("source")) db.exec("ALTER TABLE quick_notes ADD COLUMN source TEXT");
   if (!names.has("source_label")) db.exec("ALTER TABLE quick_notes ADD COLUMN source_label TEXT");
 }
 
 export function ensureQuickNotePinnedColumn(db: Database): void {
-  const names = new Set((db.prepare("PRAGMA table_info(quick_notes)").all() as Array<{ name: string }>).map((column) => column.name));
+  const names = new Set(
+    (db.prepare("PRAGMA table_info(quick_notes)").all() as Array<{ name: string }>).map((column) => column.name),
+  );
   if (!names.has("pinned")) db.exec("ALTER TABLE quick_notes ADD COLUMN pinned INTEGER NOT NULL DEFAULT 0");
 }
 
 export function ensureTaskScheduledColumns(db: Database): void {
-  const names = new Set((db.prepare("PRAGMA table_info(tasks)").all() as Array<{ name: string }>).map((column) => column.name));
+  const names = new Set(
+    (db.prepare("PRAGMA table_info(tasks)").all() as Array<{ name: string }>).map((column) => column.name),
+  );
   if (!names.has("scheduled_at")) db.exec("ALTER TABLE tasks ADD COLUMN scheduled_at TEXT");
   // Index must be created after the column exists; legacy DBs only get the column here.
   db.exec("CREATE INDEX IF NOT EXISTS idx_tasks_scheduled_at ON tasks(scheduled_at)");
 }
 
 export function ensureTaskParentIdColumn(db: Database): void {
-  const names = new Set((db.prepare("PRAGMA table_info(tasks)").all() as Array<{ name: string }>).map((column) => column.name));
+  const names = new Set(
+    (db.prepare("PRAGMA table_info(tasks)").all() as Array<{ name: string }>).map((column) => column.name),
+  );
   if (!names.has("parent_id")) db.exec("ALTER TABLE tasks ADD COLUMN parent_id TEXT");
   db.exec("CREATE INDEX IF NOT EXISTS idx_tasks_parent_id ON tasks(parent_id)");
 }
 
 export function ensureTaskCompletedCountColumn(db: Database): void {
-  const names = new Set((db.prepare("PRAGMA table_info(tasks)").all() as Array<{ name: string }>).map((column) => column.name));
+  const names = new Set(
+    (db.prepare("PRAGMA table_info(tasks)").all() as Array<{ name: string }>).map((column) => column.name),
+  );
   if (!names.has("completed_count")) db.exec("ALTER TABLE tasks ADD COLUMN completed_count INTEGER NOT NULL DEFAULT 0");
 }
 
 export function ensureTaskWeightColumn(db: Database): void {
-  const names = new Set((db.prepare("PRAGMA table_info(tasks)").all() as Array<{ name: string }>).map((column) => column.name));
+  const names = new Set(
+    (db.prepare("PRAGMA table_info(tasks)").all() as Array<{ name: string }>).map((column) => column.name),
+  );
   if (!names.has("weight")) db.exec("ALTER TABLE tasks ADD COLUMN weight INTEGER NOT NULL DEFAULT 0");
 }
 
 export function ensureTaskRuleIdColumn(db: Database): void {
-  const names = new Set((db.prepare("PRAGMA table_info(tasks)").all() as Array<{ name: string }>).map((column) => column.name));
+  const names = new Set(
+    (db.prepare("PRAGMA table_info(tasks)").all() as Array<{ name: string }>).map((column) => column.name),
+  );
   if (!names.has("rule_id")) db.exec("ALTER TABLE tasks ADD COLUMN rule_id TEXT");
   db.exec("CREATE INDEX IF NOT EXISTS idx_tasks_rule_id ON tasks(rule_id)");
 }
 
 export function ensureTaskSkippedColumn(db: Database): void {
-  const names = new Set((db.prepare("PRAGMA table_info(tasks)").all() as Array<{ name: string }>).map((column) => column.name));
+  const names = new Set(
+    (db.prepare("PRAGMA table_info(tasks)").all() as Array<{ name: string }>).map((column) => column.name),
+  );
   if (!names.has("skipped")) db.exec("ALTER TABLE tasks ADD COLUMN skipped INTEGER NOT NULL DEFAULT 0");
 }
 
 export function ensureTaskCompletionMetadataColumns(db: Database): void {
-  const names = new Set((db.prepare("PRAGMA table_info(tasks)").all() as Array<{ name: string }>).map((column) => column.name));
+  const names = new Set(
+    (db.prepare("PRAGMA table_info(tasks)").all() as Array<{ name: string }>).map((column) => column.name),
+  );
   if (!names.has("completed_at")) db.exec("ALTER TABLE tasks ADD COLUMN completed_at TEXT");
   if (!names.has("tags")) db.exec("ALTER TABLE tasks ADD COLUMN tags TEXT NOT NULL DEFAULT '[]'");
 }
 
 export function ensureGoalMembersColumn(db: Database): void {
-  const names = new Set((db.prepare("PRAGMA table_info(goals)").all() as Array<{ name: string }>).map((column) => column.name));
+  const names = new Set(
+    (db.prepare("PRAGMA table_info(goals)").all() as Array<{ name: string }>).map((column) => column.name),
+  );
   if (!names.has("members")) db.exec("ALTER TABLE goals ADD COLUMN members TEXT NOT NULL DEFAULT '[]'");
 }
 
 export function ensureTrackStepEditedAtColumn(db: Database): void {
-  const names = new Set((db.prepare("PRAGMA table_info(track_steps)").all() as Array<{ name: string }>).map((column) => column.name));
+  const names = new Set(
+    (db.prepare("PRAGMA table_info(track_steps)").all() as Array<{ name: string }>).map((column) => column.name),
+  );
   if (!names.has("edited_at")) db.exec("ALTER TABLE track_steps ADD COLUMN edited_at TEXT");
 }
 
 export function ensureApiRequestLogIsNewIpColumn(db: Database): void {
-  const names = new Set((db.prepare("PRAGMA table_info(api_request_logs)").all() as Array<{ name: string }>).map((column) => column.name));
+  const names = new Set(
+    (db.prepare("PRAGMA table_info(api_request_logs)").all() as Array<{ name: string }>).map((column) => column.name),
+  );
   if (!names.has("is_new_ip")) db.exec("ALTER TABLE api_request_logs ADD COLUMN is_new_ip INTEGER NOT NULL DEFAULT 0");
 }
 
 export function ensureTaskSessionIdColumn(db: Database): void {
-  const names = new Set((db.prepare("PRAGMA table_info(tasks)").all() as Array<{ name: string }>).map((column) => column.name));
+  const names = new Set(
+    (db.prepare("PRAGMA table_info(tasks)").all() as Array<{ name: string }>).map((column) => column.name),
+  );
   if (!names.has("session_id")) db.exec("ALTER TABLE tasks ADD COLUMN session_id TEXT");
   db.exec("CREATE INDEX IF NOT EXISTS idx_tasks_session_id ON tasks(session_id)");
+}
+
+// Session.trackIds：抓轨道到手头，存 JSON 文本数组（先例 Goal.members）
+export function ensureSessionTrackIdsColumn(db: Database): void {
+  const names = new Set(
+    (db.prepare("PRAGMA table_info(sessions)").all() as Array<{ name: string }>).map((column) => column.name),
+  );
+  if (!names.has("track_ids")) db.exec("ALTER TABLE sessions ADD COLUMN track_ids TEXT NOT NULL DEFAULT '[]'");
 }
 
 function quoteIdentifier(identifier: string): string {
@@ -87,12 +121,7 @@ function quoteIdentifier(identifier: string): string {
  * 对称于 ensureXxxColumns 的幂等删列：列不存在则跳过（SQLite 无原生 DROP COLUMN IF EXISTS）。
  * SQLite 拒删带索引的列，故先按 indexNames DROP INDEX。不支持删 PK/UNIQUE 约束内的列。
  */
-export function dropColumnsIfExist(
-  db: Database,
-  table: string,
-  columns: string[],
-  indexNames: string[] = [],
-): void {
+export function dropColumnsIfExist(db: Database, table: string, columns: string[], indexNames: string[] = []): void {
   for (const indexName of indexNames) db.exec(`DROP INDEX IF EXISTS ${quoteIdentifier(indexName)}`);
   const tableName = quoteIdentifier(table);
   const present = new Set(
@@ -186,6 +215,7 @@ export function initializeDatabase(): void {
       started_at TEXT NOT NULL,
       ended_at TEXT,
       note TEXT,
+      track_ids TEXT NOT NULL DEFAULT '[]',
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL
     );
@@ -405,6 +435,7 @@ export function initializeDatabase(): void {
   ensureGoalMembersColumn(db);
   ensureTrackStepEditedAtColumn(db);
   ensureTaskSessionIdColumn(db);
+  ensureSessionTrackIdsColumn(db);
   ensureApiRequestLogIsNewIpColumn(db);
   dropColumnsIfExist(db, "tasks", ["goal_id"], ["idx_tasks_goal_id"]);
   dropColumnsIfExist(db, "tracks", ["goal_id"], ["idx_tracks_goal_id"]);

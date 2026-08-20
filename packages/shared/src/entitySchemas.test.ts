@@ -1,5 +1,13 @@
-import { describe, it, expect } from "vitest";
-import { GoalLayoutPinSchema, GoalSchema, RecurrenceSchema, SessionSchema, TaskSchema, TrackMilestoneSchema, TrackSchema } from "./entitySchemas.js";
+import { describe, expect, it } from "vitest";
+import {
+  GoalLayoutPinSchema,
+  GoalSchema,
+  RecurrenceSchema,
+  SessionSchema,
+  TaskSchema,
+  TrackMilestoneSchema,
+  TrackSchema,
+} from "./entitySchemas.js";
 
 describe("RecurrenceSchema", () => {
   const base = { interval: 1, basis: "due" as const };
@@ -24,8 +32,12 @@ describe("RecurrenceSchema", () => {
     expect(RecurrenceSchema.safeParse({ ...base, freq: "monthly", byMonthday: [0] }).success).toBe(false);
   });
   it("rejects mismatched freq/by-field combinations", () => {
-    expect(RecurrenceSchema.safeParse({ ...base, freq: "weekly", byWeekday: [1], byMonthday: [15] }).success).toBe(false);
-    expect(RecurrenceSchema.safeParse({ ...base, freq: "monthly", byMonthday: [1], byWeekday: [1] }).success).toBe(false);
+    expect(RecurrenceSchema.safeParse({ ...base, freq: "weekly", byWeekday: [1], byMonthday: [15] }).success).toBe(
+      false,
+    );
+    expect(RecurrenceSchema.safeParse({ ...base, freq: "monthly", byMonthday: [1], byWeekday: [1] }).success).toBe(
+      false,
+    );
   });
   it("rejects non-positive interval", () => {
     expect(RecurrenceSchema.safeParse({ ...base, freq: "daily", interval: 0 }).success).toBe(false);
@@ -39,10 +51,16 @@ describe("RecurrenceSchema", () => {
 
 describe("TaskSchema", () => {
   const t = {
-    id: "t1", title: "跑步", done: false, recurrence: null,
-    lastDoneAt: null, startAt: null, scheduledAt: null,
+    id: "t1",
+    title: "跑步",
+    done: false,
+    recurrence: null,
+    lastDoneAt: null,
+    startAt: null,
+    scheduledAt: null,
     sortOrder: 0,
-    createdAt: "2026-06-14T00:00:00.000Z", updatedAt: "2026-06-14T00:00:00.000Z",
+    createdAt: "2026-06-14T00:00:00.000Z",
+    updatedAt: "2026-06-14T00:00:00.000Z",
   };
   it("accepts a pool task", () => {
     expect(TaskSchema.safeParse(t).success).toBe(true);
@@ -51,17 +69,27 @@ describe("TaskSchema", () => {
     expect(TaskSchema.safeParse({ ...t, title: "  " }).success).toBe(false);
   });
   it("accepts a recurring task", () => {
-    expect(TaskSchema.safeParse({
-      ...t, recurrence: { freq: "weekly", interval: 1, byWeekday: [1], basis: "due", time: "06:00" },
-    }).success).toBe(true);
+    expect(
+      TaskSchema.safeParse({
+        ...t,
+        recurrence: { freq: "weekly", interval: 1, byWeekday: [1], basis: "due", time: "06:00" },
+      }).success,
+    ).toBe(true);
   });
 });
 
 describe("TaskSchema scheduledAt", () => {
   const baseTask = {
-    id: "t1", title: "刮胡子", done: false, recurrence: null,
-    lastDoneAt: null, startAt: null, scheduledAt: null,
-    sortOrder: 0, createdAt: "2026-06-14T00:00:00.000Z", updatedAt: "2026-06-14T00:00:00.000Z",
+    id: "t1",
+    title: "刮胡子",
+    done: false,
+    recurrence: null,
+    lastDoneAt: null,
+    startAt: null,
+    scheduledAt: null,
+    sortOrder: 0,
+    createdAt: "2026-06-14T00:00:00.000Z",
+    updatedAt: "2026-06-14T00:00:00.000Z",
   };
   it("接受 null scheduledAt", () => {
     expect(TaskSchema.parse(baseTask).scheduledAt).toBeNull();
@@ -320,7 +348,10 @@ describe("GoalSchema", () => {
       { kind: "track" as const, id: "track-1" },
     ];
 
-    expect(GoalSchema.safeParse({ ...baseGoal, members, prerequisites: [{ blocker: members[0], blocked: members[0] }] }).success).toBe(false);
+    expect(
+      GoalSchema.safeParse({ ...baseGoal, members, prerequisites: [{ blocker: members[0], blocked: members[0] }] })
+        .success,
+    ).toBe(false);
     expect(
       GoalSchema.safeParse({
         ...baseGoal,
@@ -387,10 +418,20 @@ describe("TaskSchema weight", () => {
 
 describe("TaskSchema ruleId/skipped", () => {
   const baseTask = {
-    id: "t1", title: "占位", done: false, recurrence: null,
-    lastDoneAt: null, startAt: null, scheduledAt: null, completedCount: 0,
-    completedAt: null, tags: [], weight: 0, sortOrder: 0,
-    createdAt: "2026-06-30T00:00:00.000Z", updatedAt: "2026-06-30T00:00:00.000Z",
+    id: "t1",
+    title: "占位",
+    done: false,
+    recurrence: null,
+    lastDoneAt: null,
+    startAt: null,
+    scheduledAt: null,
+    completedCount: 0,
+    completedAt: null,
+    tags: [],
+    weight: 0,
+    sortOrder: 0,
+    createdAt: "2026-06-30T00:00:00.000Z",
+    updatedAt: "2026-06-30T00:00:00.000Z",
   };
   it("legacy payload 缺 ruleId/skipped → 默认 null/false", () => {
     const t = TaskSchema.parse(baseTask);
@@ -479,11 +520,39 @@ describe("SessionSchema", () => {
   });
 });
 
+describe("SessionSchema trackIds", () => {
+  const base = {
+    id: "s1",
+    startedAt: "2026-07-24T01:00:00.000Z",
+    createdAt: "2026-07-24T01:00:00.000Z",
+    updatedAt: "2026-07-24T01:00:00.000Z",
+  };
+  it("无字段 parse 出 []", () => {
+    const s = SessionSchema.parse(base);
+    expect(s.trackIds).toEqual([]);
+  });
+  it("显式数组通过", () => {
+    const s = SessionSchema.parse({ ...base, trackIds: ["track-1", "track-2"] });
+    expect(s.trackIds).toEqual(["track-1", "track-2"]);
+  });
+  it("空串项被拒", () => {
+    expect(SessionSchema.safeParse({ ...base, trackIds: [""] }).success).toBe(false);
+    expect(SessionSchema.safeParse({ ...base, trackIds: ["  "] }).success).toBe(false);
+  });
+});
+
 describe("TaskSchema sessionId", () => {
   const baseTask = {
-    id: "t1", title: "占位", done: false, recurrence: null,
-    lastDoneAt: null, startAt: null, scheduledAt: null, sortOrder: 0,
-    createdAt: "2026-07-24T00:00:00.000Z", updatedAt: "2026-07-24T00:00:00.000Z",
+    id: "t1",
+    title: "占位",
+    done: false,
+    recurrence: null,
+    lastDoneAt: null,
+    startAt: null,
+    scheduledAt: null,
+    sortOrder: 0,
+    createdAt: "2026-07-24T00:00:00.000Z",
+    updatedAt: "2026-07-24T00:00:00.000Z",
   };
   it("legacy payload 缺 sessionId → 默认 null", () => {
     expect(TaskSchema.parse(baseTask).sessionId).toBeNull();
