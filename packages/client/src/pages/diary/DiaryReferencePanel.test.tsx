@@ -142,7 +142,14 @@ describe("参考栏 · 打点块", () => {
     ] as never[]);
 
     const { host } = await renderPanel("2026-07-25");
-    await waitFor(() => host.querySelectorAll('[data-testid="diary-ref-punch-list"] li').length === 3, "三条打点");
+    // 行数到位 ≠ 分类 join 到位：categories 的 liveQuery 晚一拍发射时，行先以无名态渲染，
+    // 只等行数就会在名字上屏前断言（凌晨全量跑实红过——flaky）。等到分类名真的出现。
+    await waitFor(
+      () =>
+        host.querySelectorAll('[data-testid="diary-ref-punch-list"] li').length === 3 &&
+        (host.textContent ?? "").includes("写作"),
+      "三条打点带分类名",
+    );
 
     const rows = Array.from(host.querySelectorAll('[data-testid="diary-ref-punch-list"] li'));
     const paint = rows.map((li) => (li as HTMLElement).getAttribute("style") ?? "");
