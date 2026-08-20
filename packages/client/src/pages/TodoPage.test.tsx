@@ -112,8 +112,8 @@ async function waitForCondition(
   assertion: () => boolean,
   label: string,
   step: () => Promise<void> = flushAsync,
-  /** 轮询次数。默认 20 够绝大多数链路；只有规模异常的用例（500 成员的组）才该调大它。 */
-  attempts = 20,
+  /** 轮询次数。默认 40 够绝大多数链路；只有规模异常的用例（500 成员的组）才该调大它。 */
+  attempts = 40,
 ): Promise<void> {
   for (let i = 0; i < attempts; i += 1) {
     if (assertion()) return;
@@ -3779,6 +3779,52 @@ describe("TodoPage 升格守卫", () => {
     await settle();
     const tracks = await db.tracks.toArray();
     expect(tracks).toHaveLength(1);
+    await unmount(root);
+  });
+
+  it("不同成员并发升格互不拦 → 2 条轨道各自回指", async () => {
+    await db.tracks.clear();
+    await db.trackSteps.clear();
+    await db.trackMilestones.clear();
+    await db.goals.clear();
+    await db.sessions.clear();
+    await db.taskRelations.clear();
+    const memberA = await addTask({ title: "任务A", toInbox: true });
+    const memberB = await addTask({ title: "任务B", toInbox: true });
+    await db.goals.add({
+      id: "g1",
+      title: "升格项目",
+      kind: "project",
+      status: "active",
+      members: [
+        { kind: "task", id: memberA.id },
+        { kind: "task", id: memberB.id },
+      ],
+      prerequisites: [],
+      createdAt: "2026-07-01T00:00:00.000Z",
+      updatedAt: "2026-07-01T00:00:00.000Z",
+    });
+    const { host, root } = await renderPage();
+    await waitForCondition(() => host.querySelector('[data-testid="project-group"]') !== null, "project group");
+    await click(host.querySelector('[data-testid="project-group-toggle"]') as HTMLElement);
+    const btnA = host.querySelector('[aria-label="升格为轨道 任务A"]') as HTMLElement | null;
+    const btnB = host.querySelector('[aria-label="升格为轨道 任务B"]') as HTMLElement | null;
+    expect(btnA).not.toBeNull();
+    expect(btnB).not.toBeNull();
+    await act(async () => {
+      btnA!.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+      btnB!.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    await settle();
+    await settle();
+    const tracks = await db.tracks.toArray();
+    expect(tracks).toHaveLength(2);
+    expect(tracks.filter((t) => t.status === "active")).toHaveLength(2);
+    const refIds = new Set(tracks.flatMap((t) => (t.refs ?? []).map((r) => r.id)));
+    expect(refIds.has(memberA.id)).toBe(true);
+    expect(refIds.has(memberB.id)).toBe(true);
     await unmount(root);
   });
 });

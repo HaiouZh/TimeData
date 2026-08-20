@@ -423,6 +423,20 @@ describe("isProjectDormant", () => {
     ).toBe(false);
   });
 
+  it("非首位被挡也豁免：首位沉但不被挡、次位沉且被挡 → false（逐成员豁免）", () => {
+    const sunkenNotBlocked = task({ id: "s1", updatedAt: "2026-05-01T00:00:00.000Z", createdAt: "2026-05-01T00:00:00.000Z" });
+    const sunkenBlocked = task({ id: "s2", updatedAt: "2026-05-10T00:00:00.000Z", createdAt: "2026-05-01T00:00:00.000Z" });
+    expect(
+      isProjectDormant({
+        pendingTasks: [sunkenNotBlocked, sunkenBlocked],
+        hasActiveTrack: false,
+        settings,
+        now,
+        blockedTaskIds: new Set(["s2"]),
+      }),
+    ).toBe(false);
+  });
+
   it("混合：一老被挡 + 一老不被挡 → false", () => {
     const sunken1 = task({ id: "s1", updatedAt: "2026-05-01T00:00:00.000Z", createdAt: "2026-05-01T00:00:00.000Z" });
     const sunken2 = task({ id: "s2", updatedAt: "2026-05-10T00:00:00.000Z", createdAt: "2026-05-01T00:00:00.000Z" });
