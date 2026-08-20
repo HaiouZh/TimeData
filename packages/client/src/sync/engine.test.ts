@@ -71,6 +71,7 @@ beforeEach(async () => {
   await db.syncLog.clear();
   await db.categories.clear();
   await db.settings.clear();
+  if ("pendingArbitrations" in db) await db.pendingArbitrations.clear();
   localStorage.clear();
   apiFetchMock.mockReset();
 });
@@ -1284,6 +1285,194 @@ describe("syncPush", () => {
     expect(result.issues).toHaveLength(1);
     expect(result.issues[0]).toMatchObject({ reasonCode: "stale_change_rejected" });
     await expect(db.syncLog.get("setting-stale-log")).resolves.toMatchObject({ synced: 1 });
+  });
+
+  it("stale_rejected for time_entries upsert stores a discarded snapshot", async () => {
+    await db.pendingArbitrations.clear();
+    await db.categories.add({
+      id: "cat-1",
+      name: "Work",
+      parentId: null,
+      color: "#3366ff",
+      icon: null,
+      sortOrder: 1,
+      isArchived: false,
+      createdAt: "2026-08-19T12:00:00.000Z",
+      updatedAt: "2026-08-19T12:00:00.000Z",
+    });
+    await db.timeEntries.add({
+      id: "entry-offline",
+      categoryId: "cat-1",
+      startTime: "2026-08-19T11:58:00.000Z",
+      endTime: "2026-08-19T12:42:00.000Z",
+      note: "offline",
+      createdAt: "2026-08-19T12:00:00.000Z",
+      updatedAt: "2026-08-19T12:00:00.000Z",
+    });
+    await db.syncLog.add({
+      id: "log-entry-offline",
+      tableName: "time_entries",
+      recordId: "entry-offline",
+      action: "create",
+      timestamp: "2026-08-19T12:00:00.000Z",
+      synced: 0,
+    });
+
+    apiFetchMock.mockResolvedValue({
+      outcomes: [{
+        tableName: "time_entries",
+        recordId: "entry-offline",
+        action: "create",
+        status: "rejected",
+        reasonCode: "stale_change_rejected",
+        message: "stale change rejected",
+        incomingTimestamp: "2026-08-19T12:00:00.000Z",
+        serverUpdatedAt: "2026-08-19T13:00:00.000Z",
+      }],
+      accepted: 0,
+      rejected: 0,
+      conflicts: 1,
+      backupId: null,
+      serverTime: "2026-08-19T12:01:00.000Z",
+      latestSeq: 9,
+      appliedCount: 0,
+    });
+
+    const result = await syncPush();
+
+    expect(result.issues).toHaveLength(1);
+    expect(result.issues[0]).toMatchObject({ reasonCode: "stale_change_rejected" });
+    await expect(db.syncLog.get("log-entry-offline")).resolves.toMatchObject({ synced: 1 });
+    const rows = await listPendingArbitrations();
+    expect(rows).toHaveLength(1);
+    expect(rows[0].disposition).toBe("discarded");
+    expect(rows[0].recordId).toBe("entry-offline");
+    expect(JSON.parse(rows[0].payloadJson)).toMatchObject({
+      id: "entry-offline",
+      startTime: "2026-08-19T11:58:00.000Z",
+      endTime: "2026-08-19T12:42:00.000Z",
+    });
+  });
+
+  it("stale_rejected for quick_notes does not store a snapshot", async () => {
+    await db.pendingArbitrations.clear();
+    await db.quickNotes.add({
+      id: "note-quick",
+      text: "hello",
+      occurredAt: "2026-08-19T12:00:00.000Z",
+      createdAt: "2026-08-19T12:00:00.000Z",
+      updatedAt: "2026-08-19T12:00:00.000Z",
+    });
+    await db.syncLog.add({
+      id: "log-note-quick",
+      tableName: "quick_notes",
+      recordId: "note-quick",
+      action: "create",
+      timestamp: "2026-08-19T12:00:00.000Z",
+      synced: 0,
+    });
+
+    apiFetchMock.mockResolvedValue({
+      outcomes: [{
+        tableName: "quick_notes",
+        recordId: "note-quick",
+        action: "create",
+        status: "rejected",
+        reasonCode: "stale_change_rejected",
+        message: "stale change rejected",
+        incomingTimestamp: "2026-08-19T12:00:00.000Z",
+        serverUpdatedAt: "2026-08-19T13:00:00.000Z",
+      }],
+      accepted: 0,
+      rejected: 0,
+      conflicts: 1,
+      backupId: null,
+      serverTime: "2026-08-19T12:01:00.000Z",
+      latestSeq: 10,
+      appliedCount: 0,
+    });
+
+    const result = await syncPush();
+
+    expect(result.issues).toHaveLength(1);
+    expect(result.issues[0]).toMatchObject({ reasonCode: "stale_change_rejected" });
+    await expect(db.syncLog.get("log-note-quick")).resolves.toMatchObject({ synced: 1 });
+    const rows = await listPendingArbitrations();
+    expect(rows).toHaveLength(0);
+  });
+
+  it("409 stale_rejected for time_entries also stores a discarded snapshot", async () => {
+    await db.pendingArbitrations.clear();
+    await db.categories.add({
+      id: "cat-409",
+      name: "Work",
+      parentId: null,
+      color: "#3366ff",
+      icon: null,
+      sortOrder: 1,
+      isArchived: false,
+      createdAt: "2026-08-19T12:00:00.000Z",
+      updatedAt: "2026-08-19T12:00:00.000Z",
+    });
+    await db.timeEntries.add({
+      id: "entry-409",
+      categoryId: "cat-409",
+      startTime: "2026-08-19T11:58:00.000Z",
+      endTime: "2026-08-19T12:42:00.000Z",
+      note: "offline 409",
+      createdAt: "2026-08-19T12:00:00.000Z",
+      updatedAt: "2026-08-19T12:00:00.000Z",
+    });
+    await db.syncLog.add({
+      id: "log-409",
+      tableName: "time_entries",
+      recordId: "entry-409",
+      action: "create",
+      timestamp: "2026-08-19T12:00:00.000Z",
+      synced: 0,
+    });
+
+    const push409Body = {
+      outcomes: [
+        {
+          tableName: "time_entries",
+          recordId: "entry-409",
+          action: "create",
+          status: "rejected",
+          reasonCode: "stale_change_rejected",
+          message: "stale change rejected",
+          incomingTimestamp: "2026-08-19T12:00:00.000Z",
+        } as const,
+      ],
+      accepted: 0,
+      rejected: 0,
+      conflicts: 1,
+      backupId: null,
+      serverTime: "2026-08-19T12:01:00.000Z",
+    };
+
+    apiFetchMock
+      .mockRejectedValueOnce(new ApiErrorMock(409, "Conflict", "", push409Body))
+      .mockResolvedValueOnce({
+        outcomes: [],
+        accepted: 0,
+        rejected: 0,
+        conflicts: 0,
+        backupId: null,
+        serverTime: "2026-08-19T12:02:00.000Z",
+        latestSeq: 12,
+        appliedCount: 0,
+      });
+
+    const result = await syncPush();
+
+    expect(result.issues.some((outcome) => outcome.reasonCode === "stale_change_rejected")).toBe(true);
+    await expect(db.syncLog.get("log-409")).resolves.toMatchObject({ synced: 1 });
+    const rows = await listPendingArbitrations();
+    const discarded = rows.find((row) => row.recordId === "entry-409");
+    expect(discarded).toBeDefined();
+    expect(discarded?.disposition).toBe("discarded");
+    expect(JSON.parse(discarded!.payloadJson)).toMatchObject({ id: "entry-409" });
   });
 });
 
@@ -3905,6 +4094,28 @@ describe("syncForceReplace", () => {
     expect(await db.syncLog.count()).toBe(0);
     expect(getLastSyncedSeq()).toBe(42);
   });
+
+  it("clears pending arbitrations when replacing local data with server data", async () => {
+    await db.pendingArbitrations.put({
+      recordId: "entry-offline",
+      tableName: "time_entries",
+      action: "create",
+      payloadJson: JSON.stringify({ id: "entry-offline" }),
+      syncLogIds: ["log-1"],
+      rejectedAt: "2026-08-19T12:00:00.000Z",
+      disposition: "pending",
+    });
+
+    apiFetchMock.mockResolvedValue({
+      serverTime: "2026-05-07T13:00:00.000Z",
+      latestSeq: 42,
+      changes: [],
+    });
+
+    await syncForceReplace();
+
+    expect(await db.pendingArbitrations.count()).toBe(0);
+  });
 });
 
 describe("compactSyncLogs", () => {
@@ -4214,6 +4425,79 @@ describe("needs_arbitration 拒收", () => {
       startTime: "2026-08-19T11:58:00.000Z",
       endTime: "2026-08-19T12:42:00.000Z",
     });
+  });
+
+  // 下面两条锁的是「隔离 / 放弃」与「存档」必须同生共死。成功路径上拆不拆事务终态一样，
+  // 只有失败路径才分叉：存档没写成而标记已提交 = 日志移出上传队列且内容无处可寻，
+  // 7 天后 pruneSyncedLogs 清掉日志即彻底丢失。没有这两条，谁把事务拆开都是全绿。
+  const arbitrationOutcome = (recordId: string, timestamp: string) => ({
+    outcomes: [
+      {
+        tableName: "time_entries",
+        recordId,
+        action: "create",
+        status: "conflict",
+        reasonCode: "unseen_record_deletion_rejected",
+        message: "unseen record deletion rejected",
+        incomingTimestamp: timestamp,
+      },
+    ],
+    accepted: 0,
+    rejected: 0,
+    conflicts: 1,
+    backupId: null,
+    serverTime: "2026-08-19T15:31:28.000Z",
+    latestSeq: 15840,
+    appliedCount: 0,
+  });
+
+  const seedRejectedEntry = async (recordId: string) => {
+    await db.pendingArbitrations.clear();
+    await db.timeEntries.put({
+      id: recordId,
+      categoryId: "cat-wash",
+      startTime: "2026-08-19T11:58:00.000Z",
+      endTime: "2026-08-19T12:42:00.000Z",
+      note: null,
+      createdAt: "2026-08-19T15:31:00.000Z",
+      updatedAt: "2026-08-19T15:31:00.000Z",
+    });
+    await recordSyncLog("time_entries", recordId, "create");
+    return (await db.syncLog.where("recordId").equals(recordId).toArray())[0];
+  };
+
+  it("200 路径：存档写入失败时整条事务回滚，日志留在队列而不是变成无存档的死信", async () => {
+    const log = await seedRejectedEntry("entry-atomic-200");
+    apiFetchMock.mockResolvedValue(arbitrationOutcome("entry-atomic-200", log.timestamp));
+    const putSpy = vi
+      .spyOn(db.pendingArbitrations, "put")
+      .mockRejectedValueOnce(new Error("QuotaExceededError"));
+
+    await expect(syncPush()).rejects.toThrow();
+    putSpy.mockRestore();
+
+    // 支点断言：存档没写成，日志就必须还是 synced=0（下一轮会重推、被再次拦下、幂等覆盖存档）。
+    // 拆开事务后这里会读到 SYNC_LOG_QUARANTINED —— 那就是「隔离了没存档」。
+    const after = await db.syncLog.get(log.id);
+    expect(after?.synced).toBe(0);
+    expect(await listPendingArbitrations()).toHaveLength(0);
+  });
+
+  it("409 原子拒收路径：存档写入失败时同样整条回滚", async () => {
+    const log = await seedRejectedEntry("entry-atomic-409");
+    apiFetchMock.mockRejectedValueOnce(
+      new ApiErrorMock(409, "Conflict", "", arbitrationOutcome("entry-atomic-409", log.timestamp)),
+    );
+    const putSpy = vi
+      .spyOn(db.pendingArbitrations, "put")
+      .mockRejectedValueOnce(new Error("QuotaExceededError"));
+
+    await expect(syncPush()).rejects.toThrow();
+    putSpy.mockRestore();
+
+    const after = await db.syncLog.get(log.id);
+    expect(after?.synced).toBe(0);
+    expect(await listPendingArbitrations()).toHaveLength(0);
   });
 });
 

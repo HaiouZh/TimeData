@@ -5,7 +5,7 @@ import { STORAGE_KEYS } from "../lib/storageKeys.ts";
 import { callWithTotp, TotpCancelledError } from "../lib/totpChallenge.ts";
 import { safeGetItem, safeSetItem, safeRemoveItem } from "../lib/safeStorage.js";
 import type { Table } from "dexie";
-import { recordPendingArbitration } from "./arbitration.ts";
+import { isImplicitDeleteChange, recordPendingArbitration } from "./arbitration.ts";
 import { classifyReasonCode } from "./reason.ts";
 import { CLIENT_SYNC_DOMAINS, parseRemoteRecord, type ClientDomainConfig } from "./clientDomains.ts";
 import { mergeSyncTimingTransport, type PhaseRecorder } from "./phaseTimings.ts";
@@ -398,6 +398,7 @@ async function applyPushResponse(
   const issues: SyncPushOutcome[] = [];
   const arbitrationLogIds: string[] = [];
   const arbitrationChanges: SyncChange[] = [];
+  const discardedChanges: SyncChange[] = [];
   const changeByKey = new Map(
     changes.map((change) => [changeKey(change.tableName, change.recordId, change.action), change]),
   );
@@ -418,10 +419,15 @@ async function applyPushResponse(
         userActionableIssues.push(outcome);
         issues.push(outcome);
         break;
-      case "stale_rejected":
+      case "stale_rejected": {
         acceptedLogIds.push(...logIds);
+        // 本地主张即将被丢弃。会隐式删除别人记录的那类 change，内容一旦丢就没有找回入口——
+        // 先留一份快照（不隔离、不重推，只是留底）。
+        const rejected = changeByKey.get(changeKey(outcome.tableName, outcome.recordId, outcome.action));
+        if (rejected && isImplicitDeleteChange(rejected)) discardedChanges.push(rejected);
         issues.push(outcome);
         break;
+      }
       case "needs_arbitration": {
         // 绝不能像 user_actionable 那样把 pending 留在队列里：echo pull 会推进 baseSeq，
         // 下一轮 push 判据就不再命中，等于延迟一轮的静默删除。
@@ -439,18 +445,35 @@ async function applyPushResponse(
   }
 
   const logIdsToMarkSynced = [...new Set([...acceptedLogIds, ...clientBugLogIds])];
-  if (logIdsToMarkSynced.length > 0) {
-    await db.syncLog.bulkUpdate(logIdsToMarkSynced.map((id) => ({ key: id, changes: { synced: 1 } })));
-  }
 
-  if (arbitrationLogIds.length > 0) {
-    await db.syncLog.bulkUpdate(
-      arbitrationLogIds.map((id) => ({ key: id, changes: { synced: SYNC_LOG_QUARANTINED } })),
-    );
-  }
-  for (const change of arbitrationChanges) {
-    const key = changeKey(change.tableName, change.recordId, change.action);
-    await recordPendingArbitration(change, sourceLogIdsByChangeKey.get(key) ?? []);
+  if (
+    logIdsToMarkSynced.length > 0
+    || arbitrationLogIds.length > 0
+    || arbitrationChanges.length > 0
+    || discardedChanges.length > 0
+  ) {
+    await db.transaction("rw", [db.syncLog, db.pendingArbitrations], async () => {
+      // 顺序不是随意的：存档一律排在任何「放弃主张 / 移出队列」的标记之前。若将来被拆开，
+      // 失败时留下的是「有存档没标记」（安全的一侧：内容还在、下轮会重推被再次拦下，put 幂等覆盖），
+      // 而不是「标记了没存档」（危险：本地主张已放弃且内容无处找回）。
+      // stale_rejected 的 synced=1 同样在这条线里——它也是一次「放弃本地主张」。
+      for (const change of arbitrationChanges) {
+        const key = changeKey(change.tableName, change.recordId, change.action);
+        await recordPendingArbitration(change, sourceLogIdsByChangeKey.get(key) ?? [], "pending");
+      }
+      for (const change of discardedChanges) {
+        const key = changeKey(change.tableName, change.recordId, change.action);
+        await recordPendingArbitration(change, sourceLogIdsByChangeKey.get(key) ?? [], "discarded");
+      }
+      if (logIdsToMarkSynced.length > 0) {
+        await db.syncLog.bulkUpdate(logIdsToMarkSynced.map((id) => ({ key: id, changes: { synced: 1 } })));
+      }
+      if (arbitrationLogIds.length > 0) {
+        await db.syncLog.bulkUpdate(
+          arbitrationLogIds.map((id) => ({ key: id, changes: { synced: SYNC_LOG_QUARANTINED } })),
+        );
+      }
+    });
   }
 
   return {
@@ -483,6 +506,7 @@ async function applyAtomicRejectedPushResponse(
   const userActionableIssues: SyncPushOutcome[] = [];
   const issues: SyncPushOutcome[] = [];
   const arbitrationChanges: SyncChange[] = [];
+  const discardedChanges: SyncChange[] = [];
   const changeByKey = new Map(
     changes.map((change) => [changeKey(change.tableName, change.recordId, change.action), change]),
   );
@@ -501,7 +525,11 @@ async function applyAtomicRejectedPushResponse(
       clientBugIssues.push(outcome);
     } else if (category === "stale_rejected") {
       // 服务端拒收过期/孤儿主张：放弃本地主张，与 200 路径同语义。
+      // 本地主张即将被丢弃。会隐式删除别人记录的那类 change，内容一旦丢就没有找回入口——
+      // 先留一份快照（不隔离、不重推，只是留底）。
       staleRejectedLogIds.push(...logIds);
+      const rejected = changeByKey.get(key);
+      if (rejected && isImplicitDeleteChange(rejected)) discardedChanges.push(rejected);
       issues.push(outcome);
     } else if (category === "needs_arbitration") {
       // 与 200 路径同语义：隔离本地主张 + 留住内容
@@ -519,19 +547,39 @@ async function applyAtomicRejectedPushResponse(
   }
 
   const markSynced = [...new Set([...clientBugLogIds, ...staleRejectedLogIds])];
-  if (markSynced.length > 0) {
-    await db.syncLog.bulkUpdate(markSynced.map((id) => ({ key: id, changes: { synced: 1 } })));
-  }
   const markQuarantined = [...new Set(quarantineLogIds)].filter((id) => !markSynced.includes(id));
-  if (markQuarantined.length > 0) {
-    await db.syncLog.bulkUpdate(markQuarantined.map((id) => ({ key: id, changes: { synced: SYNC_LOG_QUARANTINED } })));
-  }
-
-  for (const change of arbitrationChanges) {
-    await recordPendingArbitration(
-      change,
-      sourceLogIdsByChangeKey.get(changeKey(change.tableName, change.recordId, change.action)) ?? [],
-    );
+  if (
+    markSynced.length > 0
+    || markQuarantined.length > 0
+    || arbitrationChanges.length > 0
+    || discardedChanges.length > 0
+  ) {
+    await db.transaction("rw", [db.syncLog, db.pendingArbitrations], async () => {
+      // 顺序不是随意的：存档一律排在任何「放弃主张 / 移出队列」的标记之前。若将来被拆开，
+      // 失败时留下的是「有存档没标记」（安全的一侧：内容还在、下轮会重推被再次拦下，put 幂等覆盖），
+      // 而不是「标记了没存档」（危险：本地主张已放弃且内容无处找回）。
+      // staleRejectedLogIds 的 synced=1 同样在这条线里——它也是一次「放弃本地主张」。
+      for (const change of arbitrationChanges) {
+        await recordPendingArbitration(
+          change,
+          sourceLogIdsByChangeKey.get(changeKey(change.tableName, change.recordId, change.action)) ?? [],
+          "pending",
+        );
+      }
+      for (const change of discardedChanges) {
+        await recordPendingArbitration(
+          change,
+          sourceLogIdsByChangeKey.get(changeKey(change.tableName, change.recordId, change.action)) ?? [],
+          "discarded",
+        );
+      }
+      if (markSynced.length > 0) {
+        await db.syncLog.bulkUpdate(markSynced.map((id) => ({ key: id, changes: { synced: 1 } })));
+      }
+      if (markQuarantined.length > 0) {
+        await db.syncLog.bulkUpdate(markQuarantined.map((id) => ({ key: id, changes: { synced: SYNC_LOG_QUARANTINED } })));
+      }
+    });
   }
 
   const retryChanges = changes.filter((change) => retryKeys.has(changeKey(change.tableName, change.recordId, change.action)));
@@ -843,12 +891,13 @@ export async function syncForceReplace(): Promise<number> {
 
   await db.transaction(
     "rw",
-    [...Object.values(CLIENT_SYNC_DOMAINS).map((d) => db.table(d.storeName)), db.syncLog],
+    [...Object.values(CLIENT_SYNC_DOMAINS).map((d) => db.table(d.storeName)), db.syncLog, db.pendingArbitrations],
     async () => {
       for (const domain of Object.values(CLIENT_SYNC_DOMAINS)) {
         await db.table(domain.storeName).clear();
       }
       await db.syncLog.clear();
+      await db.pendingArbitrations.clear();
 
       for (const change of response.changes) {
         if (change.action === "delete" || !change.data) continue;

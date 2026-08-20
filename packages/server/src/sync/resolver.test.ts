@@ -891,7 +891,7 @@ describe("applyChange", () => {
         "2026-07-04T10:00:00.000Z",
       );
 
-      const result = applyChange(settingChange("light", "2026-07-04T09:00:00.000Z"), { staleGuard: true });
+      const result = applyChange(settingChange("light", "2026-07-04T09:00:00.000Z"), { staleGuard: true, unseenImpactRecords: [] });
 
       expect(result).toMatchObject({ status: "skipped", skipReason: "stale_change_rejected" });
       expect(result.serverUpdatedAt).toBe("2026-07-04T10:00:00.000Z");
@@ -905,7 +905,7 @@ describe("applyChange", () => {
         "2026-07-04T10:00:00.000Z",
       );
 
-      const result = applyChange(settingChange("light", "2026-07-04T10:00:00.000Z"), { staleGuard: true });
+      const result = applyChange(settingChange("light", "2026-07-04T10:00:00.000Z"), { staleGuard: true, unseenImpactRecords: [] });
 
       expect(result).toMatchObject({ status: "skipped", skipReason: "stale_change_rejected" });
     });
@@ -917,7 +917,7 @@ describe("applyChange", () => {
         "2026-07-04T10:00:00.000Z",
       );
 
-      const result = applyChange(settingChange("light", "2026-07-04T11:00:00.000Z"), { staleGuard: true });
+      const result = applyChange(settingChange("light", "2026-07-04T11:00:00.000Z"), { staleGuard: true, unseenImpactRecords: [] });
 
       expect(result.status).toBe("applied");
       expect(db.prepare("SELECT value FROM settings WHERE key = ?").get("theme")).toMatchObject({ value: "light" });
@@ -930,7 +930,7 @@ describe("applyChange", () => {
         "2026-07-04T10:00:00.000Z",
       );
 
-      const result = applyChange(settingChange("light", "2026-07-04T09:00:00.000Z"), { staleGuard: true });
+      const result = applyChange(settingChange("light", "2026-07-04T09:00:00.000Z"), { staleGuard: true, unseenImpactRecords: [] });
 
       expect(result).toMatchObject({ status: "skipped", skipReason: "stale_change_rejected" });
       expect(
@@ -948,7 +948,7 @@ describe("applyChange", () => {
 
       const result = applyChange(
         { tableName: "settings", recordId: "theme", action: "delete", data: null, timestamp: "2026-07-04T09:00:00.000Z" } as SyncChange,
-        { staleGuard: true },
+        { staleGuard: true, unseenImpactRecords: [] },
       );
 
       expect(result).toMatchObject({ status: "skipped", skipReason: "stale_change_rejected" });
@@ -995,6 +995,7 @@ describe("applyChange", () => {
         {
           staleGuard: true,
           staleAgainst: [{ tableName: "time_entries", recordId: "remote-overlap" }],
+          unseenImpactRecords: [],
         },
       );
 
@@ -1014,7 +1015,7 @@ describe("applyChange", () => {
     it("allows the guard when the target has neither row nor tombstone", () => {
       const result = applyChange(
         { tableName: "settings", recordId: "theme", action: "delete", data: null, timestamp: "2026-07-04T09:00:00.000Z" } as SyncChange,
-        { staleGuard: true },
+        { staleGuard: true, unseenImpactRecords: [] },
       );
 
       expect(result.status).toBe("applied");

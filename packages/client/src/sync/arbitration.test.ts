@@ -25,7 +25,7 @@ describe("pending arbitration", () => {
   });
 
   it("stores the full payload so it survives without the sync log", async () => {
-    await recordPendingArbitration(change, ["log-1"], new Date("2026-08-19T15:31:30.000Z"));
+    await recordPendingArbitration(change, ["log-1"], "pending", new Date("2026-08-19T15:31:30.000Z"));
 
     const rows = await listPendingArbitrations();
     expect(rows).toHaveLength(1);
@@ -39,8 +39,8 @@ describe("pending arbitration", () => {
   });
 
   it("keeps one row per record instead of piling duplicates", async () => {
-    await recordPendingArbitration(change, ["log-1"], new Date("2026-08-19T15:31:30.000Z"));
-    await recordPendingArbitration(change, ["log-2"], new Date("2026-08-19T15:40:00.000Z"));
+    await recordPendingArbitration(change, ["log-1"], "pending", new Date("2026-08-19T15:31:30.000Z"));
+    await recordPendingArbitration(change, ["log-2"], "pending", new Date("2026-08-19T15:40:00.000Z"));
 
     const rows = await listPendingArbitrations();
     expect(rows).toHaveLength(1);
@@ -57,7 +57,7 @@ describe("pending arbitration", () => {
   // 「同窗口回收 synced=2 的隔离死信日志」覆盖）。这里直接删日志来模拟那个终局，
   // 只守一件事：冲突记录独立于 syncLog 存活。
   it("still holds the full payload after its sync log is gone", async () => {
-    await recordPendingArbitration(change, ["log-1"], new Date("2026-08-01T00:00:00.000Z"));
+    await recordPendingArbitration(change, ["log-1"], "pending", new Date("2026-08-01T00:00:00.000Z"));
 
     await db.syncLog.delete("log-1");
 
@@ -68,5 +68,31 @@ describe("pending arbitration", () => {
       startTime: "2026-08-19T11:58:00.000Z",
       endTime: "2026-08-19T12:42:00.000Z",
     });
+  });
+
+  it("does not throw on circular payload and stores a serializable stub", async () => {
+    const circular: Record<string, unknown> = { id: "entry-circular" };
+    circular.self = circular;
+    const circularChange = {
+      tableName: "time_entries" as const,
+      recordId: "entry-circular",
+      action: "create" as const,
+      data: circular,
+      timestamp: "2026-08-19T15:31:00.000Z",
+    };
+
+    await expect(recordPendingArbitration(circularChange as never, ["log-circular"])).resolves.toBeUndefined();
+
+    const rows = await listPendingArbitrations();
+    expect(rows).toHaveLength(1);
+    const payload = JSON.parse(rows[0].payloadJson);
+    expect(payload.__serializeFailed).toBe(true);
+    expect(typeof payload.reason).toBe("string");
+  });
+
+  it("stores disposition correctly", async () => {
+    await recordPendingArbitration(change, ["log-1"], "discarded", new Date("2026-08-19T15:31:30.000Z"));
+    const rows = await listPendingArbitrations();
+    expect(rows[0].disposition).toBe("discarded");
   });
 });

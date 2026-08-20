@@ -202,6 +202,7 @@ beforeEach(async () => {
   await db.quickNotes.clear();
   await db.syncLog.clear();
   await db.categories.clear();
+  if ("pendingArbitrations" in db) await db.pendingArbitrations.clear();
   localStorage.clear();
 });
 
@@ -345,5 +346,22 @@ describe("importBackup", () => {
     ]);
     await expect(db.timeEntries.toArray()).resolves.toEqual([externalBackupEntry]);
     expect(result).toEqual({ categoryCount: 1, entryCount: 1, domainCounts: { tasks: 1 } });
+  });
+
+  it("clears pending arbitrations when importing a backup", async () => {
+    await db.pendingArbitrations.put({
+      recordId: "entry-offline",
+      tableName: "time_entries",
+      action: "create",
+      payloadJson: JSON.stringify({ id: "entry-offline" }),
+      syncLogIds: ["log-1"],
+      rejectedAt: "2026-08-19T12:00:00.000Z",
+      disposition: "pending",
+    });
+    await db.categories.add(oldCategory);
+
+    await importBackup(backup());
+
+    expect(await db.pendingArbitrations.count()).toBe(0);
   });
 });

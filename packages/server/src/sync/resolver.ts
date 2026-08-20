@@ -73,6 +73,9 @@ function rejectIfStale(
 
 export function applyChange(change: SyncChange, options: ApplyChangeOptions = {}): ApplyChangeResult {
   const db = options.db ?? getDb();
+  if (options.unseenImpactRecords === undefined && options.staleGuard) {
+    throw new Error("unseenImpactRecords must be explicitly provided when staleGuard is enabled");
+  }
   if (options.staleGuard) {
     const stale = rejectIfStale(db, change, options.staleAgainst, options.staleServerTimestamps);
     if (stale) return stale;
@@ -82,7 +85,9 @@ export function applyChange(change: SyncChange, options: ApplyChangeOptions = {}
   // 但要删的是这台设备从未见过的记录。时间戳对"后发动作 + 旧视图"结构性失效。
   const unseen = options.unseenImpactRecords ?? [];
   if (unseen.length > 0) {
-    const names = unseen.map((record) => `${record.tableName}:${record.recordId}`).join(", ");
+    const MAX_LISTED = 5;
+    const listed = unseen.slice(0, MAX_LISTED).map((record) => `${record.tableName}:${record.recordId}`).join(", ");
+    const names = unseen.length > MAX_LISTED ? `${listed} …(共 ${unseen.length} 条)` : listed;
     return applyResult(
       change,
       "skipped",

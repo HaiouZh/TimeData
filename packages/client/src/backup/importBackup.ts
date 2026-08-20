@@ -20,7 +20,7 @@ export async function importBackup(value: unknown): Promise<ImportBackupResult> 
   const bundledStores = BACKUP_BUNDLED_DOMAINS.map((domain) => db.table(domain.storeName));
   const domainCounts: Record<string, number> = {};
 
-  await db.transaction("rw", [db.categories, db.timeEntries, db.syncLog, ...bundledStores], async () => {
+  await db.transaction("rw", [db.categories, db.timeEntries, db.syncLog, db.pendingArbitrations, ...bundledStores], async () => {
     const currentCategories = await db.categories.toArray();
     const currentNameById = new Map(currentCategories.map((category) => [category.id, category.name]));
     const categories = backup.categories.map((category) => {
@@ -30,6 +30,7 @@ export async function importBackup(value: unknown): Promise<ImportBackupResult> 
 
     await db.timeEntries.clear();
     await db.syncLog.clear();
+    await db.pendingArbitrations.clear();
     await db.categories.clear();
     await db.categories.bulkAdd(categories);
     await db.timeEntries.bulkAdd(backup.timeEntries);

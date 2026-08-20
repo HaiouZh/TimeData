@@ -3707,6 +3707,8 @@ describe("sync route additional guards", () => {
     seedEntry("entry-wash", "2026-08-19T11:58:00.000Z", "2026-08-19T12:18:00.000Z");
     seedEntry("entry-eat", "2026-08-19T12:18:00.000Z", "2026-08-19T12:42:00.000Z");
 
+    const seqBefore = latestSeq();
+
     // 离线设备推一条盖住上面两条的新记录，时间戳晚于服务器（离线设备天然更晚）
     const res = await pushChanges(
       [
@@ -3740,8 +3742,10 @@ describe("sync route additional guards", () => {
 
     expect(body.outcomes[0]).toMatchObject({
       recordId: "entry-offline",
+      status: "conflict",
       reasonCode: "unseen_record_deletion_rejected",
     });
+    expect(latestSeq()).toBe(seqBefore);
     // 被拒的那条不得落库
     expect(db.prepare("SELECT id FROM time_entries WHERE id = ?").get("entry-offline")).toBeUndefined();
   });
@@ -3812,7 +3816,104 @@ describe("sync route additional guards", () => {
 
     expect(body.outcomes[0]).toMatchObject({
       recordId: "cat-doomed",
+      status: "conflict",
       reasonCode: "unseen_record_deletion_rejected",
     });
+  });
+
+  it("rejects with truncated message when级联删除隐式目标超过 5 条", async () => {
+    const baseSeq = latestSeq();
+    db.prepare("INSERT INTO categories (id, name, color, created_at, updated_at) VALUES (?, ?, ?, ?, ?)").run(
+      "cat-trunc-parent", "待删父", "#4A90D9", "2026-08-19T00:00:00.000Z", "2026-08-19T00:00:00.000Z",
+    );
+    db.prepare("INSERT INTO sync_seq (table_name, record_id, action, created_at) VALUES ('categories', 'cat-trunc-parent', 'create', '2026-08-19T00:00:00.000Z')").run();
+    // 6 条隐式目标：3 个子分类 + 3 条时间记录，全部在 baseSeq 之后 = 未见过
+    const childIds = ["cat-trunc-c1", "cat-trunc-c2", "cat-trunc-c3"];
+    const entryIds = ["entry-trunc-1", "entry-trunc-2", "entry-trunc-3"];
+    for (const cid of childIds) {
+      db.prepare("INSERT INTO categories (id, name, parent_id, color, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)").run(
+        cid, cid, "cat-trunc-parent", "#22c55e", "2026-08-19T01:00:00.000Z", "2026-08-19T01:00:00.000Z",
+      );
+      db.prepare("INSERT INTO sync_seq (table_name, record_id, action, created_at) VALUES ('categories', ?, 'create', '2026-08-19T01:00:00.000Z')").run(cid);
+    }
+    for (const eid of entryIds) {
+      const cid = childIds[entryIds.indexOf(eid) % childIds.length];
+      db.prepare(`
+      INSERT INTO time_entries (id, category_id, start_time, end_time, note, created_at, updated_at)
+      VALUES (?, ?, '2026-08-19T13:00:00.000Z', '2026-08-19T13:30:00.000Z', NULL, '2026-08-19T13:00:00.000Z', '2026-08-19T13:30:00.000Z')
+    `).run(eid, cid);
+      db.prepare("INSERT INTO sync_seq (table_name, record_id, action, created_at) VALUES ('time_entries', ?, 'create', '2026-08-19T13:30:00.000Z')").run(eid);
+    }
+
+    const res = await pushChanges(
+      [{ tableName: "categories", recordId: "cat-trunc-parent", action: "delete", data: null, timestamp: "2026-08-19T15:31:00.000Z" }],
+      baseSeq,
+    );
+
+    expect(res.status).toBe(200);
+    const body = await res.json();
+
+    // 数据断言必须排在 reasonCode 之前
+    for (const cid of childIds) {
+      expect(db.prepare("SELECT id FROM categories WHERE id = ?").get(cid)).toBeTruthy();
+    }
+    for (const eid of entryIds) {
+      expect(db.prepare("SELECT id FROM time_entries WHERE id = ?").get(eid)).toBeTruthy();
+    }
+
+    expect(body.outcomes[0]).toMatchObject({
+      recordId: "cat-trunc-parent",
+      status: "conflict",
+      reasonCode: "unseen_record_deletion_rejected",
+    });
+    expect(body.outcomes[0].message).toContain("…(共 ");
+    expect(body.outcomes[0].message.length).toBeLessThan(300);
+  });
+
+  it("unknown_base 时不拦截隐式删除——老入口仍可正常删除", async () => {
+    // 预置一条待被重叠删除的记录
+    db.prepare("INSERT INTO categories (id, name, color, created_at, updated_at) VALUES (?, ?, ?, ?, ?)").run(
+      "cat-unknown-base", "占位", "#4A90D9", "2026-08-19T00:00:00.000Z", "2026-08-19T00:00:00.000Z",
+    );
+    db.prepare(`
+      INSERT INTO time_entries (id, category_id, start_time, end_time, note, created_at, updated_at)
+      VALUES ('entry-unknown-old', 'cat-unknown-base', '2026-08-19T11:58:00.000Z', '2026-08-19T12:18:00.000Z', NULL, '2026-08-19T11:58:00.000Z', '2026-08-19T12:18:00.000Z')
+    `).run();
+
+    // 不带 baseSeq 的 push（unknown_base），应被接受且旧记录被覆盖删除
+    const res = await app.request("/api/sync/push", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        changes: [
+          {
+            tableName: "time_entries",
+            recordId: "entry-unknown-new",
+            action: "create",
+            data: {
+              id: "entry-unknown-new",
+              categoryId: "cat-unknown-base",
+              startTime: "2026-08-19T11:58:00.000Z",
+              endTime: "2026-08-19T12:42:00.000Z",
+              note: null,
+              createdAt: "2026-08-19T15:31:00.000Z",
+              updatedAt: "2026-08-19T15:31:00.000Z",
+            },
+            timestamp: "2026-08-19T15:31:00.000Z",
+          },
+        ],
+      }),
+    });
+
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.outcomes[0]).toMatchObject({
+      recordId: "entry-unknown-new",
+      status: "accepted",
+    });
+    expect(body.outcomes[0].reasonCode).not.toBe("unseen_record_deletion_rejected");
+    // 老记录确实被删，新记录已落库
+    expect(db.prepare("SELECT id FROM time_entries WHERE id = ?").get("entry-unknown-old")).toBeUndefined();
+    expect(db.prepare("SELECT id FROM time_entries WHERE id = ?").get("entry-unknown-new")).toBeTruthy();
   });
 });

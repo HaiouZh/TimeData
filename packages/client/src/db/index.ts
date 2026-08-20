@@ -52,6 +52,8 @@ export interface PendingArbitration {
   payloadJson: string;
   syncLogIds: string[];
   rejectedAt: string;
+  /** pending = 等用户裁决；discarded = 本地主张已放弃，仅留内容快照供找回。 */
+  disposition: "pending" | "discarded";
 }
 
 db.version(1).stores({

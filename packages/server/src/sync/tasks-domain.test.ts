@@ -184,7 +184,7 @@ describe("tasks rides generic LWW pipeline with zero apply hook", () => {
       tableName: "tasks", recordId: "arch-3", action: "delete", data: null,
       timestamp: "2026-06-15T00:00:00.000Z",
     } as unknown as SyncChange;
-    const result = applyChange(staleDelete, { staleGuard: true });
+    const result = applyChange(staleDelete, { staleGuard: true, unseenImpactRecords: [] });
     expect(result.status).toBe("skipped");
 
     const count = db.prepare("SELECT COUNT(*) c FROM deleted_tasks_archive WHERE task_id='arch-3'").get() as {
