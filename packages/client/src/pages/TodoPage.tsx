@@ -163,9 +163,10 @@ export function TodoPage() {
   const goalLinkedIds = goalBarTaskIds(buckets.goalLinkedIds, projectChips);
   const trackData = useTaskTrackIndex();
   const taskTrackIndex = trackData.index;
-  const projectGoals = useLiveQuery(() => db.goals.toArray(), [], []) as Goal[];
-  const tracksByGoal = useMemo(() => groupTracksByProject(buildTrackProjectIndex(projectGoals)), [projectGoals]);
+  const projectGoals = useLiveQuery(() => db.goals.toArray(), []) as Goal[] | undefined;
+  const tracksByGoal = useMemo(() => groupTracksByProject(buildTrackProjectIndex(projectGoals ?? [])), [projectGoals]);
   const activeTrackIdSet = useMemo(() => new Set(trackData.tracks.map((t) => t.id)), [trackData.tracks]);
+  const promotingTaskIdsRef = useRef<Set<string>>(new Set<string>());
   // 轨道展开态由页面持有，跨分区重挂不丢——轨道桶行（下一单接线）复用
   const [expandedTrackIds, setExpandedTrackIds] = useState<ReadonlySet<string>>(() => new Set<string>());
   const toggleTrackExpand = useCallback((trackId: string) => {
@@ -503,15 +504,24 @@ export function TodoPage() {
   const gravitySettings = useTodoGravitySettings();
   const surfacedMap = useGravitySurfacedMap();
   const dormantGoalIds = useMemo(() => {
+    if (!trackData.ready || projectGoals === undefined) return new Set<string>();
     const s = new Set<string>();
     for (const group of buckets.projects) {
       const ids = tracksByGoal.get(group.goalId) ?? [];
       const hasActiveTrack = ids.some((id) => activeTrackIdSet.has(id));
-      if (isProjectDormant({ pendingTasks: group.tasks, hasActiveTrack, settings: gravitySettings, now: gravityNow }))
+      if (
+        isProjectDormant({
+          pendingTasks: group.tasks,
+          hasActiveTrack,
+          settings: gravitySettings,
+          now: gravityNow,
+          blockedTaskIds: new Set(group.blockedByMember.keys()),
+        })
+      )
         s.add(group.goalId);
     }
     return s;
-  }, [buckets.projects, tracksByGoal, activeTrackIdSet, gravitySettings, gravityNow]);
+  }, [buckets.projects, tracksByGoal, activeTrackIdSet, gravitySettings, gravityNow, trackData.ready, projectGoals]);
   useEffect(() => {
     let timer: number | undefined;
     const refreshGravityNow = () => {
@@ -1236,11 +1246,15 @@ export function TodoPage() {
       revealChildren={revealChildren}
       gravitySettings={gravitySettings}
       onPromoteToTrack={async (task) => {
+        if (promotingTaskIdsRef.current.has(task.id)) return;
+        promotingTaskIdsRef.current.add(task.id);
         try {
           await promoteTaskToTrack(task);
           showActionToast({ message: "已升格，轨道在桶里" });
         } catch (e) {
           showActionToast({ message: e instanceof Error ? e.message : String(e) });
+        } finally {
+          promotingTaskIdsRef.current.delete(task.id);
         }
       }}
       projectTrackRows={(goalId) => {

@@ -233,4 +233,13 @@ describe("blockerCandidateContext", () => {
     const expected = `${d.getMonth() + 1}月${d.getDate()}日`;
     expect(blockerCandidateContext(t, ctx)).toBe(expected);
   });
+
+  it("非法 scheduledAt → null（不渲染 NaN月NaN日）", () => {
+    const t = task({ id: "t1", parentId: null, scheduledAt: "not-a-date" });
+    const ctx = {
+      projectNameByTaskId: new Map<string, string>(),
+      taskTitleById: new Map<string, string>(),
+    };
+    expect(blockerCandidateContext(t, ctx)).toBeNull();
+  });
 });

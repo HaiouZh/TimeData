@@ -230,10 +230,12 @@ export function isProjectDormant(args: {
   hasActiveTrack: boolean;
   settings: TodoGravitySettings;
   now: Date;
+  blockedTaskIds: ReadonlySet<string>;
 }): boolean {
   if (args.pendingTasks.length === 0) return false;
   if (args.hasActiveTrack) return false;
   for (const task of args.pendingTasks) {
+    if (args.blockedTaskIds.has(task.id)) return false;
     if (!isTaskSunken(task, args.settings, args.now)) return false;
   }
   return true;

@@ -30,7 +30,7 @@ last-reviewed: 2026-08-21
 
 `Task.weight` 是同步字段，`updatedAt` 提供时间衰减。`TodoPage` 在 `listTasks()` 出桶后用 `splitInboxByGravity` 把 inbox 拆成 `floatingInbox` / `sunkenInbox`：久未更新（`updatedAt` 老于水位线天数）且 `weight` 不足以抗沉的 root 任务判水下（`isTaskSunken`）。水位日期在本地跨日、focus、visibility 恢复时刷新。
 
-重力**只作用于展示层**：`listTasks()`、排期分桶、tag/search、DnD 域登记都不感知它。展示层消费方有三处，同一把尺子（`isTaskSunken`）：① root inbox 的活水/水下切分（本节上文）；② **项目组内沉降**——`TodoProjectSection` 用 `splitInboxByGravity` 把组内躺着段切「活水/水下折叠尾」，被挡成员豁免（「等 XX」信息量大于「沉了」），「还剩 N」计数含水下；③ **沉睡项目派生**——`isProjectDormant`（`projectZone.ts`）判「无 active 轨道成员 + 未完成成员全沉」的组整组沉入储备末尾折叠段，touch 任一成员即浮回（见 [project-zone](../project-zone.md) §3）。聚合收纳因此不再是重力豁免牌。
+重力**只作用于展示层**：`listTasks()`、排期分桶、tag/search、DnD 域登记都不感知它。展示层消费方有三处，同一把尺子（`isTaskSunken`）：① root inbox 的活水/水下切分（本节上文）；② **项目组内沉降**——`TodoProjectSection` 用 `splitInboxByGravity` 把组内躺着段切「活水/水下折叠尾」，被挡成员豁免（「等 XX」信息量大于「沉了」），「还剩 N」计数含水下；③ **沉睡项目派生**——`isProjectDormant`（`projectZone.ts`）判「无 active 轨道成员 + 未完成成员全沉」的组整组沉入储备末尾折叠段，被挡成员视为不沉——口径与组内沉降的被挡豁免一致，touch 任一成员即浮回（见 [project-zone](../project-zone.md) §3）。聚合收纳因此不再是重力豁免牌。
 
 ### 1.2 翻牌复查区（`GravityReviewSection`）
 

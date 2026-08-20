@@ -50,6 +50,7 @@ export function blockerCandidateContext(
   }
   if (task.scheduledAt !== null) {
     const d = new Date(task.scheduledAt);
+    if (Number.isNaN(d.getTime())) return null;
     return `${d.getMonth() + 1}月${d.getDate()}日`;
   }
   return null;

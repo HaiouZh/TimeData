@@ -65,7 +65,7 @@ last-reviewed: 2026-08-21
 7. 项目内 `+` 新建成功后，组件本地用 `recentTaskIds` 把新建的 idle 成员临时提到 idle 段顶部；这只是反馈层覆盖，不持久化、不改 `sortOrder`。
 8. 查不到的成员 ref 直接丢弃、**不做清理**：悬空 ref 正是 goals 星图 ghost 节点的唯一数据源（见 [goals](goals.md)）。但这些 ref 仍计入 `memberCount`，因为 500 闸看的是原始数组。
 9. 零可解析 task 成员的目标不进项目区（纯 track 目标在星图里已有位置）。
-10. **沉睡项目派生段**（track-workbench 阶段4，纯派生无新字段）：`isProjectDormant`（`projectZone.ts`）判「无 active 轨道成员 + 未完成成员全部 `isTaskSunken`」的组为沉睡——无未完成成员的组走既有全完成三态、不算沉睡；有排期成员的组经尺子内建判定天然不沉。沉睡组从主列表**搬进**区末尾「沉睡项目 · N」折叠段（默认收起，展开后同款组块全功能——沉睡不是归档），touch 任一成员或挂上 active 轨道即自动浮回。判定输入（`tracksByGoal`/`dormantGoalIds`）由 `TodoPage` 算好传入，组件不自查。
+10. **沉睡项目派生段**（track-workbench 阶段4，纯派生无新字段）：`isProjectDormant`（`projectZone.ts`）判「无 active 轨道成员 + 未完成成员全部 `isTaskSunken`」的组为沉睡——无未完成成员的组走既有全完成三态、不算沉睡；有排期成员的组经尺子内建判定天然不沉。被挡成员视为不沉——口径与组内沉降的被挡豁免一致，被挡的组不进沉睡段。沉睡组从主列表**搬进**区末尾「沉睡项目 · N」折叠段（默认收起，展开后同款组块全功能——沉睡不是归档），touch 任一成员或挂上 active 轨道即自动浮回。判定输入（`tracksByGoal`/`dormantGoalIds`）由 `TodoPage` 算好传入，组件不自查。
 
 <a id="project-zone-ownership-write"></a>
 

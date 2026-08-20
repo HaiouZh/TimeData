@@ -23,18 +23,21 @@ export interface TaskTrackData {
   stepsByTrack: Map<string, TrackStep[]>;
   /** 已被某任务行徽章认领的轨道 id；轨道行去重的唯一判据。 */
   claimedTrackIds: Set<string>;
+  ready: boolean;
 }
 
 export function useTaskTrackIndex(): TaskTrackData {
-  const tracks = useLiveQuery(() => listTracks("active"), [], []);
-  const steps = useLiveQuery(() => listAllTrackSteps(), [], []);
+  const tracks = useLiveQuery(() => listTracks("active"), []) as Track[] | undefined;
+  const steps = useLiveQuery(() => listAllTrackSteps(), []) as TrackStep[] | undefined;
   const actionTags = useTrackActionTags();
   const agentExecTags = useAgentExecTags();
   return useMemo(() => {
-    const stepsByTrack = groupStepsByTrack(steps);
-    const index = buildTaskTrackIndex(tracks, stepsByTrack, actionTags, agentExecTags);
+    const safeTracks = tracks ?? [];
+    const safeSteps = steps ?? [];
+    const stepsByTrack = groupStepsByTrack(safeSteps);
+    const index = buildTaskTrackIndex(safeTracks, stepsByTrack, actionTags, agentExecTags);
     const claimedTrackIds = new Set<string>();
     for (const info of index.values()) claimedTrackIds.add(info.track.id);
-    return { index, tracks, stepsByTrack, claimedTrackIds };
+    return { index, tracks: safeTracks, stepsByTrack, claimedTrackIds, ready: tracks !== undefined && steps !== undefined };
   }, [tracks, steps, actionTags, agentExecTags]);
 }

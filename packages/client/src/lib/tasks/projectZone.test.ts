@@ -379,24 +379,24 @@ describe("isProjectDormant", () => {
   const settings = DEFAULT_TODO_GRAVITY_SETTINGS;
 
   it("空 pending → false（走全完成三态，不算沉睡）", () => {
-    expect(isProjectDormant({ pendingTasks: [], hasActiveTrack: false, settings, now })).toBe(false);
+    expect(isProjectDormant({ pendingTasks: [], hasActiveTrack: false, settings, now, blockedTaskIds: new Set() })).toBe(false);
   });
 
   it("hasActiveTrack → false（有在飞轨道的项目不沉睡）", () => {
     const sunken = task({ id: "s1", updatedAt: "2026-05-01T00:00:00.000Z", createdAt: "2026-05-01T00:00:00.000Z" });
-    expect(isProjectDormant({ pendingTasks: [sunken], hasActiveTrack: true, settings, now })).toBe(false);
+    expect(isProjectDormant({ pendingTasks: [sunken], hasActiveTrack: true, settings, now, blockedTaskIds: new Set() })).toBe(false);
   });
 
   it("一新鲜一沉 → false（有非沉睡成员的项目不沉睡）", () => {
     const sunken = task({ id: "s1", updatedAt: "2026-05-01T00:00:00.000Z", createdAt: "2026-05-01T00:00:00.000Z" });
     const fresh = task({ id: "f1", updatedAt: "2026-06-24T00:00:00.000Z", createdAt: "2026-05-01T00:00:00.000Z" });
-    expect(isProjectDormant({ pendingTasks: [sunken, fresh], hasActiveTrack: false, settings, now })).toBe(false);
+    expect(isProjectDormant({ pendingTasks: [sunken, fresh], hasActiveTrack: false, settings, now, blockedTaskIds: new Set() })).toBe(false);
   });
 
   it("全沉且无轨道 → true", () => {
     const sunken1 = task({ id: "s1", updatedAt: "2026-05-01T00:00:00.000Z", createdAt: "2026-05-01T00:00:00.000Z" });
     const sunken2 = task({ id: "s2", updatedAt: "2026-05-10T00:00:00.000Z", createdAt: "2026-05-01T00:00:00.000Z" });
-    expect(isProjectDormant({ pendingTasks: [sunken1, sunken2], hasActiveTrack: false, settings, now })).toBe(true);
+    expect(isProjectDormant({ pendingTasks: [sunken1, sunken2], hasActiveTrack: false, settings, now, blockedTaskIds: new Set() })).toBe(true);
   });
 
   it("已排期的成员 → not sunken → false（有排期的项目不沉睡）", () => {
@@ -406,6 +406,34 @@ describe("isProjectDormant", () => {
       createdAt: "2026-05-01T00:00:00.000Z",
       scheduledAt: "2026-07-01T00:00:00.000Z",
     });
-    expect(isProjectDormant({ pendingTasks: [scheduled], hasActiveTrack: false, settings, now })).toBe(false);
+    expect(isProjectDormant({ pendingTasks: [scheduled], hasActiveTrack: false, settings, now, blockedTaskIds: new Set() })).toBe(false);
+  });
+
+  it("全部成员老且全部被挡 → false（被挡视为不沉，口径与组内沉降一致）", () => {
+    const sunken1 = task({ id: "s1", updatedAt: "2026-05-01T00:00:00.000Z", createdAt: "2026-05-01T00:00:00.000Z" });
+    const sunken2 = task({ id: "s2", updatedAt: "2026-05-10T00:00:00.000Z", createdAt: "2026-05-01T00:00:00.000Z" });
+    expect(
+      isProjectDormant({
+        pendingTasks: [sunken1, sunken2],
+        hasActiveTrack: false,
+        settings,
+        now,
+        blockedTaskIds: new Set(["s1", "s2"]),
+      }),
+    ).toBe(false);
+  });
+
+  it("混合：一老被挡 + 一老不被挡 → false", () => {
+    const sunken1 = task({ id: "s1", updatedAt: "2026-05-01T00:00:00.000Z", createdAt: "2026-05-01T00:00:00.000Z" });
+    const sunken2 = task({ id: "s2", updatedAt: "2026-05-10T00:00:00.000Z", createdAt: "2026-05-01T00:00:00.000Z" });
+    expect(
+      isProjectDormant({
+        pendingTasks: [sunken1, sunken2],
+        hasActiveTrack: false,
+        settings,
+        now,
+        blockedTaskIds: new Set(["s1"]),
+      }),
+    ).toBe(false);
   });
 });

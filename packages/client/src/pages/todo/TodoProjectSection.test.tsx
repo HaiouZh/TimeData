@@ -1372,4 +1372,22 @@ describe("TodoProjectSection 切片新增", () => {
     expect(promoteIndex).toBeLessThan(exitIndex);
     await unmount(root);
   });
+
+  it("filterActive 时跳过沉降：沉员全部进主列表、标题 1 项匹配、无水下尾", async () => {
+    const sunken = oldTask("sunken1", "陈年沉员");
+    const { host, root } = await renderDom(
+      sectionElement({
+        groups: [group({ goalId: "g1", goalTitle: "装修", tasks: [sunken] })],
+        filterActive: true,
+        gravitySettings: gravityEnabled,
+      }),
+    );
+    // filterActive 强制展开，无需点击
+    expect(host.textContent).toContain("1 项匹配");
+    expect(host.textContent).toContain("陈年沉员");
+    expect(host.textContent).not.toContain("水下");
+    const visibleLabels = [...host.querySelectorAll('[aria-label^="打开 "]')].map((el) => el.getAttribute("aria-label"));
+    expect(visibleLabels.some((l) => l?.includes("陈年沉员"))).toBe(true);
+    await unmount(root);
+  });
 });

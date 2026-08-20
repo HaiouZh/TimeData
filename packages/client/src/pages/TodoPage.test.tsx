@@ -3743,3 +3743,42 @@ describe("TodoPage y3-wire 接线集成", () => {
     await unmount(root);
   });
 });
+
+describe("TodoPage 升格守卫", () => {
+  it("同一成员行快速触发两次升格 → 轨道表只 1 条", async () => {
+    await db.tracks.clear();
+    await db.trackSteps.clear();
+    await db.trackMilestones.clear();
+    await db.goals.clear();
+    await db.sessions.clear();
+    await db.taskRelations.clear();
+    const member = await addTask({ title: "待升格任务", toInbox: true });
+    await db.goals.add({
+      id: "g1",
+      title: "升格项目",
+      kind: "project",
+      status: "active",
+      members: [{ kind: "task", id: member.id }],
+      prerequisites: [],
+      createdAt: "2026-07-01T00:00:00.000Z",
+      updatedAt: "2026-07-01T00:00:00.000Z",
+    });
+    const { host, root } = await renderPage();
+    await waitForCondition(() => host.querySelector('[data-testid="project-group"]') !== null, "project group");
+    await click(host.querySelector('[data-testid="project-group-toggle"]') as HTMLElement);
+    const promoteBtn = host.querySelector('[aria-label="升格为轨道 待升格任务"]') as HTMLElement | null;
+    expect(promoteBtn).not.toBeNull();
+    // 快速双击：两次点击间不等待，让两次 handler 并发
+    await act(async () => {
+      promoteBtn!.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+      promoteBtn!.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    await settle();
+    await settle();
+    const tracks = await db.tracks.toArray();
+    expect(tracks).toHaveLength(1);
+    await unmount(root);
+  });
+});

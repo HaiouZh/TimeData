@@ -645,13 +645,15 @@ export function TodoProjectSection({
           const visibleTasks = displayProjectTasks(group, recentTaskIds.get(group.goalId) ?? [], handSessionId, now);
           const blocked = group.blockedByMember;
           const effectiveGravity = gravitySettings ?? { ...DEFAULT_TODO_GRAVITY_SETTINGS, enabled: false };
-          const sunkenSet = new Set(
-            splitInboxByGravity(
-              visibleTasks.filter((t) => !blocked.has(t.id)),
-              effectiveGravity,
-              now,
-            ).sunken.map((t) => t.id),
-          );
+          const sunkenSet = filterActive
+            ? new Set<string>()
+            : new Set(
+                splitInboxByGravity(
+                  visibleTasks.filter((t) => !blocked.has(t.id)),
+                  effectiveGravity,
+                  now,
+                ).sunken.map((t) => t.id),
+              );
           const aboveWater = visibleTasks.filter((t) => !sunkenSet.has(t.id));
           const sunkenTasks = visibleTasks.filter((t) => sunkenSet.has(t.id));
           const trackRows = projectTrackRows?.(group.goalId) ?? null;
@@ -780,13 +782,15 @@ export function TodoProjectSection({
                 const visibleTasks = displayProjectTasks(group, recentTaskIds.get(group.goalId) ?? [], handSessionId, now);
                 const blocked = group.blockedByMember;
                 const effectiveGravity = gravitySettings ?? { ...DEFAULT_TODO_GRAVITY_SETTINGS, enabled: false };
-                const sunkenSet = new Set(
-                  splitInboxByGravity(
-                    visibleTasks.filter((t) => !blocked.has(t.id)),
-                    effectiveGravity,
-                    now,
-                  ).sunken.map((t) => t.id),
-                );
+                const sunkenSet = filterActive
+                  ? new Set<string>()
+                  : new Set(
+                      splitInboxByGravity(
+                        visibleTasks.filter((t) => !blocked.has(t.id)),
+                        effectiveGravity,
+                        now,
+                      ).sunken.map((t) => t.id),
+                    );
                 const aboveWater = visibleTasks.filter((t) => !sunkenSet.has(t.id));
                 const sunkenTasks = visibleTasks.filter((t) => sunkenSet.has(t.id));
                 const trackRows = projectTrackRows?.(group.goalId) ?? null;
