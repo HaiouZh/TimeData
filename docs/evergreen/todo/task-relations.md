@@ -8,7 +8,7 @@ contracts:
   - packages/shared/src/entitySchemas.ts:TaskRelationSchema
   - packages/shared/src/taskRelations.ts
   - packages/client/src/lib/taskRelations.ts
-last-reviewed: 2026-08-20
+last-reviewed: 2026-08-21
 ---
 
 # 待办 · 前置关系表

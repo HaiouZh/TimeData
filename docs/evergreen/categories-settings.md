@@ -18,7 +18,7 @@ contracts:
   - packages/shared/src/types.ts:Category
   - packages/shared/src/entitySchemas.ts
   - packages/shared/src/constants.ts
-last-reviewed: 2026-08-20
+last-reviewed: 2026-08-21
 ---
 
 # 分类与设置

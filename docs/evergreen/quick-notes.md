@@ -23,7 +23,7 @@ contracts:
   - packages/shared/src/entitySchemas.ts
   - packages/shared/src/syncDomains.ts
   - packages/server/src/sync/domains.ts
-last-reviewed: 2026-08-20
+last-reviewed: 2026-08-21
 ---
 
 # 速记
