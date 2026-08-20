@@ -1,5 +1,6 @@
 import { latestTrackBoardSignal, type Track, type TrackStep } from "@timedata/shared";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
+import { classifyBoardSignal } from "../../../lib/tracksDispatch.js";
 import { useTrackActionTags } from "../../../lib/settings/trackActionTagsSetting.js";
 import { useAgentExecTags } from "../../../lib/settings/trackAgentExecTagsSetting.js";
 import { useResumeTags } from "../../../lib/settings/trackResumeTagsSetting.js";
@@ -8,29 +9,19 @@ import { appendUserStep } from "../../../lib/tracks.js";
 
 type DispatchGroupKey = "awaiting-me" | "agent-running" | "wait-external" | "in-progress";
 
-function classify(
-  signal: { tag: string } | null,
-  awaitTag: string | null,
-  agentExecTags: readonly string[],
-  waitExternalTags: readonly string[],
-): DispatchGroupKey {
-  if (awaitTag !== null && signal?.tag === awaitTag) return "awaiting-me";
-  if (signal !== null && agentExecTags.includes(signal.tag)) return "agent-running";
-  if (signal !== null && waitExternalTags.includes(signal.tag)) return "wait-external";
-  return "in-progress";
-}
-
 export interface SignalSwitcherProps {
   track: Track;
   steps: readonly TrackStep[];
+  onError?: (message: string) => void;
 }
 
 export function SignalSwitcher(props: SignalSwitcherProps): React.JSX.Element | null {
-  const { track, steps } = props;
+  const { track, steps, onError } = props;
   const actionTags = useTrackActionTags();
   const agentExecTags = useAgentExecTags();
   const waitExternalTags = useWaitExternalTags();
   const resumeTags = useResumeTags();
+  const [isPending, setIsPending] = useState(false);
 
   const boardSignals = useMemo(
     () => [...actionTags, ...agentExecTags, ...waitExternalTags, ...resumeTags],
@@ -40,7 +31,7 @@ export function SignalSwitcher(props: SignalSwitcherProps): React.JSX.Element | 
   const signal = useMemo(() => latestTrackBoardSignal(steps, boardSignals), [steps, boardSignals]);
 
   const currentGroup = useMemo(
-    () => classify(signal, actionTags[0] ?? null, agentExecTags, waitExternalTags),
+    () => classifyBoardSignal(signal, actionTags, agentExecTags, waitExternalTags),
     [signal, actionTags, agentExecTags, waitExternalTags],
   );
 
@@ -66,9 +57,12 @@ export function SignalSwitcher(props: SignalSwitcherProps): React.JSX.Element | 
             aria-label={`切换信号：${g.label}`}
             data-testid={`signal-${g.key}`}
             data-active={isActive ? "true" : "false"}
+            disabled={isPending}
             onClick={() => {
               if (isActive) return;
+              if (isPending) return;
               void (async () => {
+                setIsPending(true);
                 try {
                   await appendUserStep({
                     trackId: track.id,
@@ -77,7 +71,11 @@ export function SignalSwitcher(props: SignalSwitcherProps): React.JSX.Element | 
                     tags: [g.tag as string],
                   });
                 } catch (error) {
+                  const message = error instanceof Error ? error.message : String(error);
+                  onError?.(message);
                   console.warn("[SignalSwitcher] appendUserStep failed", error);
+                } finally {
+                  setIsPending(false);
                 }
               })();
             }}

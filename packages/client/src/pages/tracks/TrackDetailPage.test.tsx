@@ -4,6 +4,7 @@ import { MemoryRouter, Route, Routes } from "react-router";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { setTrackActionTags } from "../../lib/settings/trackActionTagsSetting.js";
 import * as trackMilestonesOps from "../../lib/trackMilestones.js";
+import { addMilestones } from "../../lib/trackMilestones.js";
 import { addTrack, addTrackStep, getTrack, listTrackSteps, listTracks } from "../../lib/tracks.js";
 import { db } from "../../test/dbReset.js";
 import { renderDom, unmount } from "../../test/domHarness.js";
@@ -624,11 +625,18 @@ describe("TrackDetailPage", () => {
     const host = await renderDetail(track.id);
     await waitForText(host, "全马破三");
     for (let i = 0; i < 20; i += 1) await flush();
-    const workbench = host.querySelector('[data-testid="milestone-panel"]');
+    // 两份渲染均存在：xl:hidden 的窄屏折叠版与 hidden xl:block 的常驻版
+    const panels = host.querySelectorAll('[data-testid="milestone-panel"]');
+    expect(panels.length).toBe(2);
+    const narrowContainer = host.querySelector("div.xl\\:hidden");
+    const desktopContainer = host.querySelector("div.hidden.xl\\:block");
+    expect(narrowContainer?.querySelector('[data-testid="milestone-panel"]')).not.toBeNull();
+    expect(desktopContainer?.querySelector('[data-testid="milestone-panel"]')).not.toBeNull();
+    const workbench = panels[0] as HTMLElement;
     const card = host.querySelector('[data-testid="current-frame-card"]');
     expect(workbench).not.toBeNull();
     expect(card).not.toBeNull();
-    // DOM 顺序：workbench 先于 card
+    // DOM 顺序：首个 workbench（窄屏折叠版）先于 card
     const pos = workbench!.compareDocumentPosition(card!);
     expect(pos & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
@@ -668,5 +676,41 @@ describe("TrackDetailPage", () => {
     expect(banner?.getAttribute("role")).toBe("alert");
     expect(banner?.textContent).toContain("立骨架失败 mock");
     spy.mockRestore();
+  });
+
+  it("⑥ 窄屏折叠段默认展开且 count 为实际段数", async () => {
+    const track = await seedTrack();
+    await addMilestones(track.id, ["段A", "段B"]);
+    const host = await renderDetail(track.id);
+    await waitForText(host, "全马破三");
+    for (let i = 0; i < 20; i += 1) await flush();
+    const narrowDetails = host.querySelector("div.xl\\:hidden details") as HTMLDetailsElement | null;
+    expect(narrowDetails).not.toBeNull();
+    expect(narrowDetails?.open).toBe(true);
+    // count 应为实际段数 2，而非 0
+    expect(narrowDetails?.textContent).toContain("2");
+    // details 内部应仍含 milestone 面板
+    expect(narrowDetails?.querySelector('[data-testid="milestone-panel"]')).not.toBeNull();
+  });
+
+  it("⑦ concluded 非空轨道：加一段输入不渲染且 checkbox disabled", async () => {
+    await addTrack({ title: "已收束有段", status: "concluded", now });
+    const [track] = await listTracks("concluded");
+    await addMilestones(track.id, ["段A", "段B"]);
+    const host = await renderDetail(track.id);
+    await waitForText(host, "已收束有段");
+    for (let i = 0; i < 20; i += 1) await flush();
+    // 加一段输入在 readOnly 非空分支也不渲染
+    expect(host.querySelector('[data-testid="milestone-add-input"]')).toBeNull();
+    expect(host.querySelector('[data-testid="milestone-add-one"]')).toBeNull();
+    // 面板仍在
+    expect(host.querySelector('[data-testid="milestone-panel"]')).not.toBeNull();
+    // 非空分支的 MilestoneRow checkbox 应为 disabled
+    const checkbox = host.querySelector(
+      '[data-testid="milestone-checkbox-host"] input[type="checkbox"]',
+    ) as HTMLInputElement | null;
+    if (checkbox) expect(checkbox.disabled).toBe(true);
+    // 操作菜单在 readOnly 下不渲染
+    expect(host.querySelector('[data-testid="milestone-menu"]')).toBeNull();
   });
 });

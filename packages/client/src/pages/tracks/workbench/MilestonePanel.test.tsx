@@ -5,6 +5,7 @@ import { act, createElement } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { addTrack } from "../../../lib/tracks.js";
 import { addMilestones, listTrackMilestones } from "../../../lib/trackMilestones.js";
+import * as trackMilestonesModule from "../../../lib/trackMilestones.js";
 import { renderDom, unmount } from "../../../test/domHarness.js";
 import { MilestonePanel } from "./MilestonePanel.js";
 
@@ -20,6 +21,7 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
+  vi.restoreAllMocks();
   if (mounted) await unmount(mounted.root);
   mounted = null;
 });
@@ -222,5 +224,72 @@ describe("MilestonePanel", () => {
     await addMilestones(track.id, ["A"]);
     for (let i = 0; i < 20; i += 1) await flush();
     expect(host.textContent).toContain("0/1");
+  });
+
+  it("⑤ 立骨架提交锁：挂起时按钮 disabled 且二次点击不重复调用", async () => {
+    const track = await addTrack({ title: "T1", now: new Date("2026-06-21T00:00:00.000Z") });
+    const { host } = await mountPanel(track.id);
+    const textarea = await waitForElement<HTMLTextAreaElement>(host, '[data-testid="milestone-skeleton-textarea"]');
+    await typeTextarea(textarea, "段A\n段B");
+    let resolve!: () => void;
+    const pending = new Promise<void>((r) => {
+      resolve = r;
+    });
+    const spy = vi
+      .spyOn(trackMilestonesModule, "addMilestones")
+      .mockImplementation(() => pending as unknown as Promise<never>);
+    const btn = (await waitForElement<HTMLElement>(host, '[data-testid="milestone-skeleton-submit"]')) as HTMLButtonElement;
+    await clickElement(btn);
+    await flush();
+    expect(btn.disabled).toBe(true);
+    // 二次点击不应产生第二次调用
+    await clickElement(btn);
+    expect(spy).toHaveBeenCalledTimes(1);
+    // resolve 后恢复
+    resolve();
+    // 等状态回落
+    for (let i = 0; i < 20; i += 1) await flush();
+    // 按钮应恢复可用（若仍在空态则仍可见；若已被 liveQuery 更新则会消失，此处只断 disabled 已解除或按钮已不存在）
+    // 但为验证锁释放，我们造一个新追踪：再次触发应可调
+    // 此处置空 spy 后恢复原实现再测一次可用性
+    spy.mockRestore();
+    // 重新输入并提交应成功
+    const textarea2 = host.querySelector('[data-testid="milestone-skeleton-textarea"]') as HTMLTextAreaElement | null;
+    if (textarea2) {
+      await typeTextarea(textarea2, "段C");
+      const btn2 = (await waitForElement<HTMLElement>(host, '[data-testid="milestone-skeleton-submit"]')) as HTMLButtonElement;
+      expect(btn2.disabled).toBe(false);
+    }
+  });
+
+  it("⑥ 加一段提交锁：挂起时按钮 disabled 且二次点击不重复调用", async () => {
+    const track = await addTrack({ title: "T1", now: new Date("2026-06-21T00:00:00.000Z") });
+    await addMilestones(track.id, ["已有"]);
+    const { host } = await mountPanel(track.id);
+    await waitForElement<HTMLElement>(host, '[data-testid="milestone-row"]');
+    for (let i = 0; i < 10; i += 1) await flush();
+    const input = await waitForElement<HTMLInputElement>(host, '[data-testid="milestone-add-input"]');
+    await typeInput(input, "新段");
+    let resolve!: () => void;
+    const pending = new Promise<void>((r) => {
+      resolve = r;
+    });
+    const spy = vi.spyOn(trackMilestonesModule, "addMilestones").mockImplementation(() => pending as unknown as Promise<never>);
+    const btn = (await waitForElement<HTMLElement>(host, '[data-testid="milestone-add-submit"]')) as HTMLButtonElement;
+    await clickElement(btn);
+    await flush();
+    expect(btn.disabled).toBe(true);
+    await clickElement(btn);
+    expect(spy).toHaveBeenCalledTimes(1);
+    resolve();
+    for (let i = 0; i < 20; i += 1) await flush();
+    spy.mockRestore();
+    // 解锁后按钮应可再次点击
+    const input2 = host.querySelector('[data-testid="milestone-add-input"]') as HTMLInputElement | null;
+    if (input2) {
+      await typeInput(input2, "又一段");
+      const btn2 = (await waitForElement<HTMLElement>(host, '[data-testid="milestone-add-submit"]')) as HTMLButtonElement;
+      expect(btn2.disabled).toBe(false);
+    }
   });
 });

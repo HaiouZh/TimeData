@@ -96,15 +96,28 @@ describe("SegmentProgressBar", () => {
     expect(host.querySelectorAll('[data-testid="segment"]').length).toBe(0);
   });
 
-  it("⑤ 全 dropped → 同④ 未立骨架且无 0/0", async () => {
+  it("⑤ 全 dropped → 段已全部砍掉且无 0/0", async () => {
     const ms: TrackMilestone[] = [
       milestone({ id: "a", status: "dropped", position: 0 }),
       milestone({ id: "b", status: "dropped", position: 1 }),
     ];
     const host = await mount(ms);
-    expect(host.textContent).toContain("未立骨架");
+    expect(host.textContent).toContain("段已全部砍掉");
+    expect(host.textContent).not.toContain("未立骨架");
     expect(host.textContent).not.toContain("0/0");
     expect(host.querySelector('[data-testid="segment-empty-line"]')).not.toBeNull();
+  });
+
+  it("⑤-mini 全 dropped → 仍只渲染短横线不带字且无 0/0", async () => {
+    const ms: TrackMilestone[] = [
+      milestone({ id: "a", status: "dropped", position: 0 }),
+      milestone({ id: "b", status: "dropped", position: 1 }),
+    ];
+    const host = await mount(ms, "mini");
+    expect(host.querySelector('[data-testid="segment-empty-line"]')).not.toBeNull();
+    expect(host.textContent).not.toContain("段已全部砍掉");
+    expect(host.textContent).not.toContain("未立骨架");
+    expect(host.textContent).not.toContain("0/0");
   });
 
   it("mini 档 total===0 只渲染短横线不带字且无 0/0", async () => {

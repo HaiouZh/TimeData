@@ -12,13 +12,24 @@ export function SegmentProgressBar(props: SegmentProgressBarProps): React.JSX.El
   const isMini = size === "mini";
 
   if (total === 0) {
+    if (milestones.length === 0) {
+      return (
+        <div data-testid="segment-progress-bar" className="flex items-center gap-2">
+          <span
+            data-testid="segment-empty-line"
+            className={isMini ? "h-1 w-12 rounded-pill bg-border" : "h-1.5 w-16 rounded-pill bg-border"}
+          />
+          {!isMini && <span className="td-text-caption text-ink-3">未立骨架</span>}
+        </div>
+      );
+    }
     return (
       <div data-testid="segment-progress-bar" className="flex items-center gap-2">
         <span
           data-testid="segment-empty-line"
           className={isMini ? "h-1 w-12 rounded-pill bg-border" : "h-1.5 w-16 rounded-pill bg-border"}
         />
-        {!isMini && <span className="td-text-caption text-ink-3">未立骨架</span>}
+        {!isMini && <span className="td-text-caption text-ink-3">段已全部砍掉</span>}
       </div>
     );
   }

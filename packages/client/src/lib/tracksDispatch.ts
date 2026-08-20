@@ -41,7 +41,7 @@ export interface DispatchGroup {
 // - 信号口径 = latestTrackBoardSignal（最近一个带信号的步，同导航 badge / goals 候选口径），
 //   中途补一条无信号步不清除在场信号。
 function classify(
-  signal: TrackBoardSignal | null,
+  signal: { tag: string } | null,
   awaitTag: string | null,
   agentExecTags: readonly string[],
   waitExternalTags: readonly string[],
@@ -50,6 +50,15 @@ function classify(
   if (signal !== null && agentExecTags.includes(signal.tag)) return "agent-running";
   if (signal !== null && waitExternalTags.includes(signal.tag)) return "wait-external";
   return "in-progress";
+}
+
+export function classifyBoardSignal(
+  signal: { tag: string } | null,
+  actionTags: readonly string[],
+  agentExecTags: readonly string[],
+  waitExternalTags: readonly string[],
+): DispatchGroupKey {
+  return classify(signal, actionTags[0] ?? null, agentExecTags, waitExternalTags);
 }
 
 export function dispatchItems(
@@ -61,7 +70,6 @@ export function dispatchItems(
   resumeTags: readonly string[],
   now: Date,
 ): DispatchItem[] {
-  const awaitTag = actionTags[0] ?? null;
   const boardSignals = [...actionTags, ...agentExecTags, ...waitExternalTags, ...resumeTags];
   return tracks.map((track) => {
     const steps = stepsByTrack.get(track.id) ?? [];
@@ -76,7 +84,7 @@ export function dispatchItems(
       signal,
       lastActivityAt: activityAt,
       stalledDays: stalled ? Math.floor(idleMs / DAY_MS) : null,
-      group: classify(signal, awaitTag, agentExecTags, waitExternalTags),
+      group: classifyBoardSignal(signal, actionTags, agentExecTags, waitExternalTags),
     };
   });
 }

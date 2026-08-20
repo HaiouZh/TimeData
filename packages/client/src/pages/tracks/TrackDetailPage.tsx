@@ -19,6 +19,7 @@ import {
   updateTrack,
   updateTrackStep,
 } from "../../lib/tracks.js";
+import { db } from "../../db/index.js";
 import { currentStepId, latestStep } from "../../lib/tracksView.js";
 import { CollapsibleSection } from "../todo/CollapsibleSection.js";
 import { CurrentFrameCard } from "./CurrentFrameCard.js";
@@ -36,6 +37,7 @@ export default function TrackDetailPage() {
   // ?? null 把三态分开:undefined=查询未落(加载中)、null=查到但不存在、实体=命中。
   const track = useLiveQuery(async () => (await getTrack(id)) ?? null, [id]);
   const steps = useLiveQuery(() => listTrackSteps(id), [id], []);
+  const milestoneCount = useLiveQuery(() => db.trackMilestones.where("trackId").equals(id).count(), [id], 0) ?? 0;
   const actionTags = useTrackActionTags();
   const [editingMeta, setEditingMeta] = useState(false);
   const [titleDraft, setTitleDraft] = useState("");
@@ -261,9 +263,9 @@ export default function TrackDetailPage() {
             <div className="xl:grid xl:grid-cols-[minmax(300px,380px)_1fr] xl:gap-4 xl:items-start">
               <div data-testid="detail-workbench" className="mb-3 xl:mb-0">
                 <div className="xl:hidden">
-                  <CollapsibleSection title="阶段骨架" count={0}>
+                  <CollapsibleSection title="阶段骨架" count={milestoneCount} defaultOpen>
                     <div className="flex flex-col gap-3 pt-2">
-                      <SignalSwitcher track={track} steps={steps} />
+                      <SignalSwitcher track={track} steps={steps} onError={setActionError} />
                       <MilestonePanel
                         trackId={track.id}
                         readOnly={track.status !== "active"}
@@ -274,7 +276,7 @@ export default function TrackDetailPage() {
                 </div>
                 <div className="hidden xl:block">
                   <div className="flex flex-col gap-3">
-                    <SignalSwitcher track={track} steps={steps} />
+                    <SignalSwitcher track={track} steps={steps} onError={setActionError} />
                     <MilestonePanel trackId={track.id} readOnly={track.status !== "active"} onError={setActionError} />
                   </div>
                 </div>

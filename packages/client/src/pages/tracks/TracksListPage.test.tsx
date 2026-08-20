@@ -2,7 +2,7 @@
 import { act, createElement } from "react";
 import { MemoryRouter, Route, Routes, useParams } from "react-router";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { addMilestones } from "../../lib/trackMilestones.js";
+import { addMilestones, dropMilestone, listTrackMilestones } from "../../lib/trackMilestones.js";
 import { addTrack, addTrackStep, listTracks, updateTrack } from "../../lib/tracks.js";
 import { db } from "../../test/dbReset.js";
 import { click, renderDom, unmount } from "../../test/domHarness.js";
@@ -340,5 +340,29 @@ describe("TracksListPage", () => {
     expect(withLi?.querySelector('[data-testid="segment-progress-bar"]')).not.toBeNull();
     expect(withLi?.querySelector('[data-testid="segment-progress-text"]')?.textContent).toContain("0/2");
     expect(withoutLi?.querySelector('[data-testid="segment-progress-bar"]')).toBeNull();
+  });
+
+  it("⑦ 全 dropped 轨道卡不渲染迷你条（有效 total=0 判空）", async () => {
+    await addTrack({ title: "全砍轨道", now });
+    const droppedTrack = (await listTracks()).find((t) => t.title === "全砍轨道");
+    if (!droppedTrack) throw new Error("missing droppedTrack");
+    await addMilestones(droppedTrack.id, ["段A", "段B"]);
+    const ms = await listTrackMilestones(droppedTrack.id);
+    for (const m of ms) await dropMilestone(m.id);
+    await addTrack({ title: "正常轨道", now });
+    const normalTrack = (await listTracks()).find((t) => t.title === "正常轨道");
+    if (!normalTrack) throw new Error("missing normalTrack");
+    await addMilestones(normalTrack.id, ["段X"]);
+    const host = await renderList();
+    await waitForText(host, "全砍轨道");
+    await waitForText(host, "正常轨道");
+    for (let i = 0; i < 40; i += 1) await flush();
+    const lis = [...host.querySelectorAll("li")];
+    const droppedLi = lis.find((li) => li.textContent?.includes("全砍轨道"));
+    const normalLi = lis.find((li) => li.textContent?.includes("正常轨道"));
+    expect(droppedLi).toBeDefined();
+    expect(normalLi).toBeDefined();
+    expect(droppedLi?.querySelector('[data-testid="segment-progress-bar"]')).toBeNull();
+    expect(normalLi?.querySelector('[data-testid="segment-progress-bar"]')).not.toBeNull();
   });
 });

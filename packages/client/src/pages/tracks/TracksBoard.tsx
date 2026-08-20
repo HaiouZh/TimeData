@@ -1,4 +1,4 @@
-import type { TrackMilestone } from "@timedata/shared";
+import { type TrackMilestone, milestoneProgress } from "@timedata/shared";
 import { useLiveQuery } from "dexie-react-hooks";
 import { useMemo } from "react";
 import { useMatch, useNavigate } from "react-router";
@@ -104,7 +104,7 @@ export function TracksBoard() {
                         statusTags={actionTags}
                         onSubmitStep={(draft) => addStep(item.track.id, draft)}
                       />
-                      {milestones.length > 0 && (
+                      {milestoneProgress(milestones).total > 0 && (
                         <div className="mt-1 px-1">
                           <SegmentProgressBar milestones={milestones} size="mini" />
                         </div>
@@ -130,7 +130,7 @@ export function TracksBoard() {
                         selected={track.id === selectedTrackId}
                         compact
                       />
-                      {milestones.length > 0 && (
+                      {milestoneProgress(milestones).total > 0 && (
                         <div className="mt-1 px-1">
                           <SegmentProgressBar milestones={milestones} size="mini" />
                         </div>

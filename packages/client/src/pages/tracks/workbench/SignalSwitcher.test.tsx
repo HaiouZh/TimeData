@@ -31,6 +31,8 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
+  vi.restoreAllMocks();
+  appendSpy = null;
   if (mounted) await unmount(mounted.root);
   mounted = null;
 });
@@ -52,8 +54,8 @@ async function waitForButton(host: HTMLElement, text: string): Promise<HTMLButto
   throw new Error(`Timed out waiting for button ${text}`);
 }
 
-async function mountSwitcher(track: Track, steps: TrackStep[]) {
-  mounted = await renderDom(createElement(SignalSwitcher, { track, steps }));
+async function mountSwitcher(track: Track, steps: TrackStep[], onError?: (msg: string) => void) {
+  mounted = await renderDom(createElement(SignalSwitcher, { track, steps, onError }));
   // 等 settings liveQuery 回流（actionTags 等默认）
   for (let i = 0; i < 200; i += 1) {
     if (hostHasSwitcher(mounted.host)) break;
@@ -207,5 +209,58 @@ describe("SignalSwitcher", () => {
     const host = await mountSwitcher(track, []);
     await flush();
     expect(host.querySelector('[data-testid="signal-switcher"]')).toBeNull();
+  });
+
+  it("⑪ in-flight 锁：同胶囊连点只一次调用，期间按钮 disabled", async () => {
+    const track = trackFactory();
+    await db.tracks.add(track);
+    let resolve!: () => void;
+    const pending = new Promise<void>((r) => {
+      resolve = r;
+    });
+    // 挂起 appendUserStep
+    appendSpy!.mockImplementation(() => pending as unknown as Promise<never>);
+    const host = await mountSwitcher(track, []);
+    const btn = await waitForButton(host, "等我接");
+    expect(btn.getAttribute("data-active")).toBe("false");
+    // 第一次点击
+    await act(async () => {
+      btn.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+    });
+    await flush();
+    expect(btn.disabled).toBe(true);
+    // 同胶囊二次连点应被忽略
+    await act(async () => {
+      btn.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+    });
+    await flush();
+    expect(appendSpy).toHaveBeenCalledTimes(1);
+    // 其他胶囊也应 disabled
+    const resumeBtn = await waitForButton(host, "恢复推进");
+    expect(resumeBtn.disabled).toBe(true);
+    // resolve 后解锁
+    resolve();
+    for (let i = 0; i < 20; i += 1) await flush();
+    expect(btn.disabled).toBe(false);
+    expect(resumeBtn.disabled).toBe(false);
+  });
+
+  it("⑫ appendUserStep 失败通过 onError 信道", async () => {
+    const track = trackFactory();
+    await db.tracks.add(track);
+    const onError = vi.fn();
+    appendSpy!.mockRejectedValue(new Error("写入失败 mock"));
+    const host = await mountSwitcher(track, [], onError);
+    await clickButton(host, "等我接");
+    // onError 应收到消息
+    for (let i = 0; i < 20; i += 1) {
+      if (onError.mock.calls.length > 0) break;
+      await flush();
+    }
+    expect(onError).toHaveBeenCalledTimes(1);
+    expect(onError.mock.calls[0][0]).toContain("写入失败 mock");
+    // 失败后按钮应恢复可用
+    const btn = await waitForButton(host, "等我接");
+    expect(btn.disabled).toBe(false);
   });
 });

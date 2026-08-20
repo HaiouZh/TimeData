@@ -13,6 +13,7 @@ export function MilestonePanel(props: {
   const list = useLiveQuery(() => listTrackMilestones(trackId), [trackId], []) ?? [];
   const [skeletonDraft, setSkeletonDraft] = useState("");
   const [addOneDraft, setAddOneDraft] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   async function handleCreateSkeleton(): Promise<void> {
     const lines = skeletonDraft
@@ -20,22 +21,30 @@ export function MilestonePanel(props: {
       .map((line) => line.trim())
       .filter((line) => line.length > 0);
     if (lines.length === 0) return;
+    if (isSubmitting) return;
+    setIsSubmitting(true);
     try {
       await addMilestones(trackId, lines);
       setSkeletonDraft("");
     } catch (error) {
       onError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setIsSubmitting(false);
     }
   }
 
   async function handleAddOne(): Promise<void> {
     const title = addOneDraft.trim();
     if (!title) return;
+    if (isSubmitting) return;
+    setIsSubmitting(true);
     try {
       await addMilestones(trackId, [title]);
       setAddOneDraft("");
     } catch (error) {
       onError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setIsSubmitting(false);
     }
   }
 
@@ -57,7 +66,8 @@ export function MilestonePanel(props: {
             type="button"
             data-testid="milestone-skeleton-submit"
             onClick={() => void handleCreateSkeleton()}
-            className="self-start rounded-ctl bg-accent px-4 py-1.5 td-text-label text-accent-contrast"
+            disabled={isSubmitting}
+            className="self-start rounded-ctl bg-accent px-4 py-1.5 td-text-label text-accent-contrast disabled:opacity-50"
           >
             立骨架
           </button>
@@ -102,7 +112,8 @@ export function MilestonePanel(props: {
                 type="button"
                 data-testid="milestone-add-submit"
                 onClick={() => void handleAddOne()}
-                className="rounded-ctl bg-accent px-3 py-1.5 td-text-label text-accent-contrast"
+                disabled={isSubmitting}
+                className="rounded-ctl bg-accent px-3 py-1.5 td-text-label text-accent-contrast disabled:opacity-50"
               >
                 ＋ 加一段
               </button>
