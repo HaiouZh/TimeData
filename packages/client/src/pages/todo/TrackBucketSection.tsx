@@ -1,13 +1,13 @@
 import type { Goal, Track, TrackMilestone, TrackStep } from "@timedata/shared";
 import { useLiveQuery } from "dexie-react-hooks";
-import { type ReactElement, useMemo } from "react";
+import { type ReactElement, useCallback, useMemo } from "react";
 import { db } from "../../db/index.js";
 import { useTrackActionTags } from "../../lib/settings/trackActionTagsSetting.js";
 import { useAgentExecTags } from "../../lib/settings/trackAgentExecTagsSetting.js";
 import { useResumeTags } from "../../lib/settings/trackResumeTagsSetting.js";
 import { useWaitExternalTags } from "../../lib/settings/trackWaitExternalTagsSetting.js";
 import { buildTrackProjectIndex } from "../../lib/tasks/trackProjectIndex.js";
-import { dispatchItems, groupDispatchItems } from "../../lib/tracksDispatch.js";
+import { type DispatchItem, dispatchItems, groupDispatchItems } from "../../lib/tracksDispatch.js";
 import { CollapsibleSection } from "./CollapsibleSection.js";
 import { TrackBucketRow } from "./TrackBucketRow.js";
 
@@ -28,7 +28,12 @@ export function useTrackBucketContext() {
     return map;
   }, [allMilestones]);
   const projectIndex = useMemo(() => buildTrackProjectIndex(goals), [goals]);
-  return { actionTags, agentExecTags, waitExternalTags, resumeTags, milestonesByTrack, projectIndex };
+  const buildItems = useCallback(
+    (tracks: readonly Track[], stepsByTrack: Map<string, TrackStep[]>): DispatchItem[] =>
+      dispatchItems([...tracks], stepsByTrack, actionTags, agentExecTags, waitExternalTags, resumeTags, new Date()),
+    [actionTags, agentExecTags, waitExternalTags, resumeTags],
+  );
+  return { actionTags, agentExecTags, waitExternalTags, resumeTags, milestonesByTrack, projectIndex, buildItems };
 }
 
 export interface HandTrackRowsProps {
@@ -47,19 +52,7 @@ export function HandTrackRows({
   onError,
 }: HandTrackRowsProps): ReactElement | null {
   const ctx = useTrackBucketContext();
-  const items = useMemo(
-    () =>
-      dispatchItems(
-        [...tracks],
-        stepsByTrack,
-        ctx.actionTags,
-        ctx.agentExecTags,
-        ctx.waitExternalTags,
-        ctx.resumeTags,
-        new Date(),
-      ),
-    [tracks, stepsByTrack, ctx.actionTags, ctx.agentExecTags, ctx.waitExternalTags, ctx.resumeTags],
-  );
+  const items = useMemo(() => ctx.buildItems(tracks, stepsByTrack), [tracks, stepsByTrack, ctx.buildItems]);
   if (items.length === 0) return null;
   return (
     <div className="space-y-1">
@@ -99,19 +92,7 @@ export function TrackBucketSection({
 }: TrackBucketSectionProps): ReactElement | null {
   const ctx = useTrackBucketContext();
   const eligible = useMemo(() => tracks.filter((t) => !sessionTrackIds.includes(t.id)), [tracks, sessionTrackIds]);
-  const items = useMemo(
-    () =>
-      dispatchItems(
-        [...eligible],
-        stepsByTrack,
-        ctx.actionTags,
-        ctx.agentExecTags,
-        ctx.waitExternalTags,
-        ctx.resumeTags,
-        new Date(),
-      ),
-    [eligible, stepsByTrack, ctx.actionTags, ctx.agentExecTags, ctx.waitExternalTags, ctx.resumeTags],
-  );
+  const items = useMemo(() => ctx.buildItems(eligible, stepsByTrack), [eligible, stepsByTrack, ctx.buildItems]);
   const groups = useMemo(() => groupDispatchItems(items), [items]);
   if (items.length === 0) return null;
   return (

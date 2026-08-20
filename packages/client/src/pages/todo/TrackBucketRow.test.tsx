@@ -8,7 +8,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import * as sessionsModule from "../../lib/sessions.js";
 import * as trackMilestonesModule from "../../lib/trackMilestones.js";
 import * as tracksModule from "../../lib/tracks.js";
-import { DISPATCH_GROUP_LABELS } from "../../lib/tracksDispatch.js";
+import { DISPATCH_GROUP_LABELS, dispatchItems } from "../../lib/tracksDispatch.js";
+import { DEFAULT_ACTION_TAGS } from "../../lib/settings/trackActionTagsSetting.js";
+import { DEFAULT_AGENT_EXEC_TAGS } from "../../lib/settings/trackAgentExecTagsSetting.js";
+import { DEFAULT_WAIT_EXTERNAL_TAGS } from "../../lib/settings/trackWaitExternalTagsSetting.js";
+import { DEFAULT_RESUME_TAGS } from "../../lib/settings/trackResumeTagsSetting.js";
 import { click, renderDom, unmount } from "../../test/domHarness.js";
 import { TrackBucketRow } from "./TrackBucketRow.js";
 
@@ -548,6 +552,198 @@ describe("TrackBucketRow 展开态", () => {
     // Need to flush for settings
     for (let i = 0; i < 10; i += 1) await flush();
     expect(host.querySelector('[data-testid="signal-switcher"]')).not.toBeNull();
+    await unmount(root);
+    mounted = null;
+  });
+});
+
+describe("TrackBucketRow 守卫：信号完整流分辨（规格3）", () => {
+  it("完整 steps 含等外部信号时，SignalSwitcher 等外部为高亮；单步兜底则判不出", async () => {
+    const track = trackFactory({ id: "tr1", title: "信号轨道" });
+    const sWait = stepFactory({
+      id: "s1",
+      seq: 0,
+      trackId: "tr1",
+      tags: ["等外部"],
+      content: "等外部阻塞",
+      startedAt: "2026-08-18T10:00:00.000Z",
+      endedAt: "2026-08-18T10:00:00.000Z",
+    });
+    const sFollow = stepFactory({
+      id: "s2",
+      seq: 1,
+      trackId: "tr1",
+      tags: [],
+      content: "后续更新",
+      startedAt: "2026-08-18T11:00:00.000Z",
+      endedAt: "2026-08-18T11:00:00.000Z",
+    });
+    const steps: readonly TrackStep[] = [sWait, sFollow];
+    // 用真实口径产 item：latest = sFollow，但 signal 仍为 等外部（最近带 tag 的步）
+    const items = dispatchItems(
+      [track],
+      new Map<string, TrackStep[]>([["tr1", [...steps] as TrackStep[]]]),
+      DEFAULT_ACTION_TAGS,
+      DEFAULT_AGENT_EXEC_TAGS,
+      DEFAULT_WAIT_EXTERNAL_TAGS,
+      DEFAULT_RESUME_TAGS,
+      new Date("2026-08-18T12:00:00.000Z"),
+    );
+    const item = items[0];
+    expect(item.latest?.id).toBe("s2");
+    expect(item.signal?.tag).toBe("等外部");
+    expect(item.group).toBe("wait-external");
+    const { host, root } = await renderBucket({ item: item as never, steps, expanded: true });
+    for (let i = 0; i < 10; i += 1) await flush();
+    const waitExternalBtn = host.querySelector('[data-testid="signal-wait-external"]') as HTMLElement | null;
+    expect(waitExternalBtn).not.toBeNull();
+    expect(waitExternalBtn?.getAttribute("data-active")).toBe("true");
+    // 其它胶囊不应高亮
+    const awaitingBtn = host.querySelector('[data-testid="signal-awaiting-me"]');
+    const agentBtn = host.querySelector('[data-testid="signal-agent-running"]');
+    const resumeBtn = host.querySelector('[data-testid="signal-in-progress"]');
+    if (awaitingBtn) expect(awaitingBtn.getAttribute("data-active")).not.toBe("true");
+    if (agentBtn) expect(agentBtn.getAttribute("data-active")).not.toBe("true");
+    if (resumeBtn) expect(resumeBtn.getAttribute("data-active")).not.toBe("true");
+    // 单步兜底变异下应红：在此断言单步产生的信号为 null、分入推进中，用于说明变异会红
+    const singleItems = dispatchItems(
+      [track],
+      new Map<string, TrackStep[]>([["tr1", item.latest ? [item.latest as TrackStep] : []]]),
+      DEFAULT_ACTION_TAGS,
+      DEFAULT_AGENT_EXEC_TAGS,
+      DEFAULT_WAIT_EXTERNAL_TAGS,
+      DEFAULT_RESUME_TAGS,
+      new Date("2026-08-18T12:00:00.000Z"),
+    );
+    expect(singleItems[0].signal).toBeNull();
+    expect(singleItems[0].group).toBe("in-progress");
+    await unmount(root);
+    mounted = null;
+  });
+});
+
+describe("TrackBucketRow 守卫：提交草稿保留（规格4）", () => {
+  function setInputValue(el: HTMLInputElement, value: string): void {
+    const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value")?.set;
+    setter?.call(el, value);
+    el.dispatchEvent(new Event("input", { bubbles: true }));
+    el.dispatchEvent(new Event("change", { bubbles: true }));
+  }
+
+  it("提交失败保留草稿且 onError 被调", async () => {
+    const track = trackFactory({ id: "tr1" });
+    await db.tracks.add(track);
+    const item = {
+      track,
+      latest: null,
+      signal: null,
+      lastActivityAt: null,
+      stalledDays: null,
+      group: "in-progress" as const,
+    };
+    const onError = vi.fn();
+    vi.spyOn(tracksModule, "appendUserStep").mockRejectedValue(new Error("写入失败-守卫"));
+    const { host, root } = await renderBucket({ item: item as never, steps: [], expanded: true, onError });
+    const input = host.querySelector('input[aria-label="新步骤内容"]') as HTMLInputElement;
+    await act(async () => {
+      setInputValue(input, "失败保留原文");
+    });
+    await flush();
+    await act(async () => {
+      input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+    });
+    for (let i = 0; i < 10; i += 1) await flush();
+    expect(onError).toHaveBeenCalled();
+    expect(onError.mock.calls[0][0]).toContain("写入失败-守卫");
+    expect((host.querySelector('input[aria-label="新步骤内容"]') as HTMLInputElement).value).toBe("失败保留原文");
+    await unmount(root);
+    mounted = null;
+  });
+
+  it("await 期间键入新字符不被清空（规格1 回归）", async () => {
+    const track = trackFactory({ id: "tr1" });
+    await db.tracks.add(track);
+    const item = {
+      track,
+      latest: null,
+      signal: null,
+      lastActivityAt: null,
+      stalledDays: null,
+      group: "in-progress" as const,
+    };
+    let pendingResolve!: (value: unknown) => void;
+    const pendingPromise = new Promise<unknown>((resolve) => {
+      pendingResolve = resolve;
+    });
+    vi.spyOn(tracksModule, "appendUserStep").mockImplementation(() => pendingPromise as never);
+    const { host, root } = await renderBucket({ item: item as never, steps: [], expanded: true });
+    const input = host.querySelector('input[aria-label="新步骤内容"]') as HTMLInputElement;
+    await act(async () => {
+      setInputValue(input, "初始内容");
+    });
+    await flush();
+    await act(async () => {
+      input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+    });
+    await flush();
+    // await 期间用户继续键入
+    await act(async () => {
+      setInputValue(input, "初始内容追加");
+    });
+    await flush();
+    // resolve 提交
+    await act(async () => {
+      pendingResolve({ closed: [], created: null });
+      // 让 handleSubmit 的 await 完成
+      await new Promise((r) => window.setTimeout(r, 0));
+    });
+    await flush();
+    await flush();
+    // 若为无条件 setDraft("") 则会被清空，此断言在该变异下必须红
+    expect((host.querySelector('input[aria-label="新步骤内容"]') as HTMLInputElement).value).toBe("初始内容追加");
+    await unmount(root);
+    mounted = null;
+  });
+});
+
+describe("TrackBucketRow 守卫：里程碑边界（规格5）", () => {
+  it("全 dropped 里程碑展开态不渲染当前阶段行", async () => {
+    const milestones: TrackMilestone[] = [
+      milestoneFactory({ id: "m1", status: "dropped", position: 0, title: "阶段1" }),
+      milestoneFactory({ id: "m2", status: "dropped", position: 1, title: "阶段2" }),
+    ];
+    const { host, root } = await renderBucket({ milestones, expanded: true });
+    expect(host.querySelector('[data-testid="track-bucket-current-milestone"]')).toBeNull();
+    expect(host.querySelector('input[type="checkbox"]')).toBeNull();
+    await unmount(root);
+    mounted = null;
+  });
+});
+
+describe("TrackBucketRow 守卫：手头失败路径（规格6）", () => {
+  it("inHand 行 releaseTrackFromHand reject 时 onError 收到消息", async () => {
+    const track = trackFactory({ id: "tr1" });
+    await db.tracks.add(track);
+    const item = {
+      track,
+      latest: null,
+      signal: null,
+      lastActivityAt: null,
+      stalledDays: null,
+      group: "in-progress" as const,
+    };
+    const onError = vi.fn();
+    vi.spyOn(sessionsModule, "releaseTrackFromHand").mockRejectedValue(new Error("移出手头失败-守卫"));
+    const { host, root } = await renderBucket({ item: item as never, steps: [], expanded: true, inHand: true, onError });
+    const btn = host.querySelector('button[aria-label="移出手头"]') as HTMLButtonElement;
+    expect(btn).not.toBeNull();
+    await act(async () => {
+      btn.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    await flush();
+    await flush();
+    expect(onError).toHaveBeenCalled();
+    expect(onError.mock.calls[0][0]).toContain("移出手头失败-守卫");
     await unmount(root);
     mounted = null;
   });

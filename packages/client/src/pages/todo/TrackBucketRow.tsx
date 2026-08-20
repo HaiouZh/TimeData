@@ -91,7 +91,7 @@ export function TrackBucketRow(props: {
     setIsSubmitting(true);
     try {
       await appendUserStep({ trackId: item.track.id, content, mode: "instant" });
-      setDraft("");
+      setDraft((cur) => (cur === content ? "" : cur));
     } catch (error) {
       onError(error instanceof Error ? error.message : String(error));
     } finally {

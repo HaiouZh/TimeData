@@ -299,4 +299,48 @@ describe("TrackBucketSection", () => {
     await unmount(filled.root);
     mounted = null;
   });
+
+  it("stepsByTrack 缺 key 时照常渲染无步形态，不抛错", async () => {
+    const t1 = trackFactory({ id: "t1", title: "有步轨道" });
+    const t2 = trackFactory({ id: "t2", title: "缺步轨道" });
+    const s1 = stepFactory({ id: "s1", seq: 0, trackId: "t1", tags: [], content: "有步内容" });
+    const stepsByTrack = new Map<string, TrackStep[]>([["t1", [s1]]]);
+    const { host, root } = await renderBucketSection({
+      tracks: [t1, t2],
+      stepsByTrack,
+      sessionTrackIds: [],
+      expandedTrackIds: new Set(),
+      onToggleExpand: vi.fn(),
+      onError: vi.fn(),
+    });
+    // 两行都应渲染，不因缺 key 抛错
+    expect(host.querySelectorAll('[data-testid="track-bucket-row"]').length).toBe(2);
+    expect(host.textContent).toContain("有步轨道");
+    expect(host.textContent).toContain("缺步轨道");
+    // 缺步轨道的最新动静应显示尚无步骤
+    const rows = host.querySelectorAll('[data-testid="track-bucket-latest"]');
+    expect(rows.length).toBe(2);
+    await unmount(root);
+    mounted = null;
+  });
+
+  it("projectIndex 空时不渲染项目 chip（显式断言不存在）", async () => {
+    const t1 = trackFactory({ id: "t1", title: "无项目轨道" });
+    const s1 = stepFactory({ id: "s1", seq: 0, trackId: "t1", tags: [] });
+    const stepsByTrack = new Map<string, TrackStep[]>([["t1", [s1]]]);
+    // db.goals 为空，projectIndex 必然空
+    const { host, root } = await renderBucketSection({
+      tracks: [t1],
+      stepsByTrack,
+      sessionTrackIds: [],
+      expandedTrackIds: new Set(),
+      onToggleExpand: vi.fn(),
+      onError: vi.fn(),
+    });
+    for (let i = 0; i < 5; i += 1) await flush();
+    expect(host.querySelector('[data-testid="track-project-chip"]')).toBeNull();
+    expect(host.textContent).toContain("无项目轨道");
+    await unmount(root);
+    mounted = null;
+  });
 });

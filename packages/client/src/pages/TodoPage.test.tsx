@@ -3496,4 +3496,58 @@ describe("TodoPage 轨道桶分区 + 手头抓轨道接线", () => {
     expect(track.title).toBe("新增轨道");
     await unmount(root);
   });
+
+  it("悬空 id 过滤：活跃场含不存在轨道 id 时不渲染幽灵行、不抛错", async () => {
+    await db.tracks.clear();
+    await db.trackSteps.clear();
+    await db.trackMilestones.clear();
+    await db.goals.clear();
+    await db.sessions.clear();
+    const realTrack = await addTrack({ title: "真实轨道" });
+    const nowIso = new Date().toISOString();
+    // 手工构造含悬空 id 的活跃场
+    await db.sessions.add({
+      id: "s-active-dangle",
+      startedAt: nowIso,
+      endedAt: null,
+      note: null,
+      trackIds: [realTrack.id, "ghost-missing-id"],
+      createdAt: nowIso,
+      updatedAt: nowIso,
+    });
+    const { host, root } = await renderPage();
+    await waitForCondition(
+      () => host.querySelector('[data-section="todo-at-hand"]')?.textContent?.includes("真实轨道") === true,
+      "hand contains real track",
+      settle,
+    );
+    expect(host.querySelector('[data-section="todo-at-hand"]')?.textContent).toContain("真实轨道");
+    // 悬空 id 不应产生任何行或标题
+    expect(host.querySelector('[data-section="todo-at-hand"]')?.textContent).not.toContain("ghost");
+    // 桶区不应因悬空 id 抛错，且仍可能显示（若有其他轨道）或按排他正常隐藏真实轨道
+    // 真实轨道已被抓，不在桶；悬空不计，故桶应为空
+    expect(host.querySelector('[data-section="todo-track-bucket"]')).toBeNull();
+    await unmount(root);
+  });
+
+  it("任务升格为轨道后桶里立即可见（走 promoteTaskToTrack 真实路径）", async () => {
+    await db.tracks.clear();
+    await db.trackSteps.clear();
+    await db.trackMilestones.clear();
+    await db.goals.clear();
+    await db.sessions.clear();
+    const { host, root } = await renderPage();
+    await settle();
+    expect(host.querySelector('[data-section="todo-track-bucket"]')).toBeNull();
+    const task = await addTask({ title: "待升格任务", toInbox: true });
+    const track = await promoteTaskToTrack(task);
+    expect(track.title).toBe("待升格任务");
+    await waitForCondition(
+      () => host.querySelector('[data-section="todo-track-bucket"]') !== null,
+      "bucket appears after promoteTaskToTrack",
+      settle,
+    );
+    expect(host.textContent).toContain("待升格任务");
+    await unmount(root);
+  });
 });

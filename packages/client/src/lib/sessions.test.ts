@@ -438,3 +438,19 @@ describe("endActiveSession 保留 trackIds", () => {
     expect(await getActiveSession()).toBeNull();
   });
 });
+
+describe("releaseTrackFromHand 重复 id 一次全清（规格9）", () => {
+  it("手工造 trackIds 含重复 a → releaseTrackFromHand('a') 后 []", async () => {
+    // 直接写库制造重复 id 的活跃场（正常抓取不会产生重复，但语义应一次全清）
+    const dupSession = makeSession({
+      id: "s-dup",
+      startedAt: "2026-07-24T08:00:00.000Z",
+      trackIds: ["a", "a"],
+    });
+    await db.sessions.add(dupSession);
+    const after = await releaseTrackFromHand("a", { now: new Date("2026-07-24T09:00:00.000Z") });
+    expect(after?.trackIds).toEqual([]);
+    const stored = await db.sessions.get("s-dup");
+    expect(stored?.trackIds).toEqual([]);
+  });
+});
