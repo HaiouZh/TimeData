@@ -250,6 +250,7 @@ export type SyncReasonCategory =
   | "client_bug" // missing_payload / invalid_shape / id_mismatch — 客户端 bug，标 synced + 上报
   | "user_actionable" // archived_category / missing_category / overlap / invalid_time_range — 用户处理
   | "stale_rejected" // stale_change_rejected / orphan_step_rejected — 服务端拒收过期或孤儿变更，客户端放弃本地主张、标 synced
+  | "needs_arbitration" // unseen_record_deletion_rejected — 服务端拦下"会删掉本设备没见过的记录"的写入；
+                        // 客户端放弃本地主张（隔离）+ 保住内容 + 等人裁决
   | "conflict" // server_version_newer_or_same — 进入冲突流程
   | "unknown";
-

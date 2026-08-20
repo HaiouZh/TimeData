@@ -56,6 +56,7 @@ export const SyncChangeSchema = buildSyncChangeSchema(UtcIsoStringSchema) as z.Z
 
 export const SyncPushReasonCodeSchema = z.enum([
   "stale_change_rejected",
+  "unseen_record_deletion_rejected",
   "orphan_step_rejected",
   "missing_payload",
   "invalid_shape",

@@ -38,4 +38,16 @@ describe("classifyReasonCode", () => {
   it("未知 reasonCode → unknown", () => {
     expect(classifyReasonCode("something_new")).toBe("unknown");
   });
+
+  it("classifies unseen_record_deletion_rejected as needs_arbitration", () => {
+    expect(classifyReasonCode("unseen_record_deletion_rejected")).toBe("needs_arbitration");
+  });
+
+  // 归错类会让整个修复归零：user_actionable 在 200 路径不标记 syncLog，
+  // stale_rejected 不保存本地内容。这条守的是那个选择本身。
+  it("does not classify unseen_record_deletion_rejected as user_actionable or stale_rejected", () => {
+    const category = classifyReasonCode("unseen_record_deletion_rejected");
+    expect(category).not.toBe("user_actionable");
+    expect(category).not.toBe("stale_rejected");
+  });
 });
