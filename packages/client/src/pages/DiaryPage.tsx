@@ -21,6 +21,7 @@ import { DIARY_SPLIT_PREFS } from "../lib/tasks/workbenchPrefs.js";
 import { formatMonthDay, getDateString } from "../lib/time.js";
 import { useIsWideScreen } from "../lib/useIsWideScreen.js";
 import { parseGuideItems } from "../lib/diary/guideItems.js";
+import { DiaryMobileRefBar } from "./diary/DiaryMobileRefBar.js";
 import { DiaryReferencePanel } from "./diary/DiaryReferencePanel.js";
 import { ResizableSplit } from "./todo/ResizableSplit.js";
 
@@ -128,7 +129,7 @@ export default function DiaryPage() {
         if (cancelled) return;
         setEnabled(config.enabled);
         setTemplate(config.template);
-        setGuideItems(config.guideItems);
+        setGuideItems(config.guideItems ?? "");
         setConfigLoaded(true);
       } catch (err) {
         if (cancelled) return;
@@ -575,7 +576,10 @@ export default function DiaryPage() {
           right={<DiaryReferencePanel date={date} isToday={date === liveToday} guideItems={guideList} />}
         />
       ) : (
-        editor
+        <>
+          <DiaryMobileRefBar date={date} isToday={date === liveToday} guideItems={guideList} />
+          {editor}
+        </>
       )}
     </div>
   );

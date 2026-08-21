@@ -1515,6 +1515,23 @@ describe("DiaryPage", () => {
     await unmount(root);
   });
 
+  it("窄屏正文上方渲染参考条 chips", async () => {
+    const { host, root } = await renderPage();
+
+    // chips 应在正文上方：容器内有打点/速记等按钮，且 textarea 仍正常渲染其后
+    const chips = [...host.querySelectorAll('button[aria-expanded]')] as HTMLButtonElement[];
+    expect(chips.length).toBeGreaterThanOrEqual(5);
+    expect(chips.map((b) => b.textContent).join("|")).toContain("打点");
+    expect(chips.map((b) => b.textContent).join("|")).toContain("速记");
+    expect(host.querySelector("textarea")).not.toBeNull();
+    const textarea = host.querySelector("textarea") as HTMLTextAreaElement;
+    const firstChip = chips[0];
+    // DOM 顺序：chips 在 textarea 之前
+    expect(firstChip.compareDocumentPosition(textarea) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+
+    await unmount(root);
+  });
+
   describe("空白日记预填 “1. ”", () => {
     it("正文为空时预填，但不算已修改——保存按钮仍置灰，离开不弹未保存", async () => {
       fetchDiary.mockResolvedValue({ content: "", mtime: null });
