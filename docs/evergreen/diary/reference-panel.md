@@ -3,16 +3,17 @@ type: evergreen
 title: 日记 · 参考栏（只读）
 covers:
   - packages/client/src/pages/diary/DiaryRef*.tsx
+  - packages/client/src/pages/diary/DiaryMobileRefBar.tsx
   - packages/client/src/lib/diary/diaryRefEntries.ts
   - packages/client/src/lib/diary/diaryRefEntriesQuery.ts
   - packages/client/src/lib/diary/diaryRefTasks.ts
   - packages/client/src/lib/diary/diaryRefPrefs.ts
-last-reviewed: 2026-08-04
+last-reviewed: 2026-08-21
 ---
 
 # 日记 · 参考栏（只读）
 
-> 讲什么：宽屏右栏四块（今天的打点 / 完成的待办 / 速记，回看的昨天 / 上周今日）的布局挂载、数据口径、错误围栏、回看块的两道闸。
+> 讲什么：宽屏右栏五块（今天的打点 / 完成的待办 / 速记，回看的昨天 / 上周今日，存档引导）的布局挂载、数据口径、错误围栏、回看块的两道闸；窄屏 chips 参考条（§6）。
 > 不讲什么：日记正文的读写与日期语义（见 [diary](../diary.md)）、编辑器键位（见 [diary/editor](editor.md)）。
 
 ## 承上启下
@@ -40,6 +41,7 @@ last-reviewed: 2026-08-04
 | 完成的待办 | `listTasks().completed` 再过滤 | 硬性三条：`done === true`（排除账本判定耗尽、混在同一桶里的重复模板）、`completedAt !== null`（**绝不回退 `updatedAt`**）、`getDateString(completedAt) === date` |
 | 速记 | `listQuickNotesByDate(date)` | 现成，走 `occurredAt` 索引半开区间、日界已是 Asia/Shanghai，**不再包一层过滤** |
 | 回看 | `fetchDiary(addDays(date,-1))` / `addDays(date,-7)` | 相对 `date` 而非相对真实今天。两块**一律默认收起、展开才请求**，已加载过不重复拉 |
+| 引导 | `DiaryPage` 的 config `guideItems` 经 `parseGuideItems` 拆行传入 | 零请求零查询的只读条目列表；**空 items 整段不渲染**（section 级守卫在 Panel）；折叠偏好走 `diaryRefPrefs`（`guide` 键，默认展开，与窄屏容器共享） |
 
 回看两块的**措辞随 `isToday` 切**：今天说「昨天 / 上周今日」，看历史日期说「前一天 / 前七天」。口径本来就对，但看 7/20 时上半区标题写着「7月20日」、下半区说「昨天 7月19日」，屏幕上同时出现两句互相矛盾的话；非今天时一律用不带绝对时间断言的相对说法。
 
@@ -80,3 +82,14 @@ last-reviewed: 2026-08-04
 > **已知缺口（两道闸共用同一条承重用例）**：删掉成功分支的 epoch 守卫，原有用例照样全绿——因为切日的重置 effect 会先把块收起，两条闸保护的是同一个可观察面，「折叠态看不见旧内容」这条断言测不出闸有没有真的在起作用。真正暴露它的是**再次展开**：迟到响应若把 `state` 写成 `loaded`，`toggle()` 会因为 `state.kind` 不是 `idle` 而跳过重新请求，把上一个日期的正文渲染在新日期的标签下。已补用例「迟到响应被作废后，再次展开会重新请求而不是显示旧日期的正文」（`DiaryReferencePanel.test.tsx`）堵住这条。**「折叠态看不见旧内容」不是充分判据，判据必须落在「再次展开时会不会重新请求」上**——这是本阶段唯一一处「两道闸共用一个可观察面」的教训，值得成文。
 >
 > **更脆的一点**：终审做具名逃逸变异（把两处 `epochRef.current` 换成闭包变量 `epoch`）时，**只有上面那条新补的用例变红**，「A→B→A 切回原日期」那条照绿。也就是说两道闸共用**同一条**承重用例——删掉它，两道闸同时失守且无人报警。
+
+<a id="diary-reference-panel-s6"></a>
+
+## 6 窄屏容器（DiaryMobileRefBar）
+
+窄屏（<1024px，含 APK）不渲染常驻面板，`DiaryMobileRefBar` 是替代形态：一行横排 chips（可横滑）+ 单开展开区。挂载在 `DiaryPage` 内容三元的窄屏分支——全部全局条之后、正文之前；`shrink-0` 常驻一行，展开区 `style={{ maxHeight: "45dvh" }}` 内滚（常量内联形制同 `ReviewCard`，不写 arbitrary utility），不许把 textarea 挤出首屏。
+
+- **单开语义**：`active: null | 六值`，本地 state 不持久化；点同一 chip 收起。`引导` chip 仅在 `guideItems` 非空时渲染，其余五个恒在。chips 文案随 `isToday` 切（`昨天/前一天`、`上周/前七天`——同 §2 回看措辞教训）。
+- **三个 Dexie 块与引导块原样复用**宽屏组件，各围 `RefBlock`（从 `DiaryReferencePanel` 导出）；**块内 CollapsibleSection 折叠头保留**、prefs 与宽屏共享——拍板「原样复用」的已知取舍，chip 与块头是两层开关。
+- **回看不复用 `DiaryRefLookback`**：其「块内再点一次才请求 + 已加载缓存 + epoch 闸」是为宽屏常驻面板设计的；chip 打开已经表达意图，再点一层是冗余。窄屏用独立的 `MobileLookback`：**挂载即 `fetchDiary`**、`cancelled` 守卫、error 态 `retryNonce` 重驱。**在途响应的作废靠卸载重挂**：切日期时 `DiaryPage` 的 `loading` 三元把整个容器卸载（与宽屏面板同一防线），不需要 epoch——这是 design §6.1「按新容器语义补等效守卫」的落地答案。
+- `DiaryPage` 读 config 的 `guideItems` 兜 `?? ""`：旧服务器（升级窗口）的响应没有该字段，不兜会 `parseGuideItems(undefined)` 崩整页。

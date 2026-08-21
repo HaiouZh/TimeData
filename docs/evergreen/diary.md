@@ -7,12 +7,13 @@ covers:
   - packages/client/src/components/DateNav.tsx
   - packages/client/src/lib/diary/diaryApi.ts
   - packages/client/src/lib/diary/diaryDate.ts
+  - packages/client/src/lib/diary/guideItems.ts
   - packages/server/src/routes/diary.ts
   - packages/server/src/lib/diary-path.ts
 contracts:
   - packages/server/src/routes/diary.ts
   - packages/server/src/lib/diary-path.ts
-last-reviewed: 2026-08-04
+last-reviewed: 2026-08-21
 ---
 
 # 日记
@@ -41,12 +42,13 @@ DiaryPage 保存
   → 前端捕获 409 为 DiaryConflictError，展示「刷新重载」/「仍然覆盖」二选
   → 前端捕获 vault 权限错误，提示检查 DIARY_VAULT_HOST_DIR 挂载目录所有权
 
-SettingsDiaryPage 保存模板
-  → PUT /api/diary/config { template? , weeklyTemplate? }（两个字段至少给一个，否则 400）
+SettingsDiaryPage 保存模板 / 存档引导
+  → PUT /api/diary/config { template? , weeklyTemplate? , guideItems? }（三个字段至少给一个，否则 400）
   → server 用固定日期 2026-01-01 / 固定周号 2026-W01 校验对应模板语法，非法 → 400 { error: 中文原因 }
+  → guideItems 无语法校验（自由多行文本），仅 >10000 字符拒 400
 ```
 
-`enabled` 由服务端 `DIARY_VAULT_DIR` 环境变量是否配置决定（非 server_config 存储项）；`template` 与周记模板 `weeklyTemplate` 都存在 `server_config` 表（key 分别是 `diary.pathTemplate.v1` 与 `diary.weeklyPathTemplate.v1`，走 `lib/serverConfig.ts` 的 `getServerConfig`/`setServerConfig` 通用 KV，同表其他配置项 key 独立）。`PUT /config` 按传入字段分别写入，两者互不牵连。**但对空串不对称**：`template: ""` 照走语法校验、被「模板不能为空」拦成 400；`weeklyTemplate: ""` 显式跳过校验直接落库，等于**清除周记配置**（兑现设置页「留空 = 回顾页周览不显示周记」）。
+`enabled` 由服务端 `DIARY_VAULT_DIR` 环境变量是否配置决定（非 server_config 存储项）；`template`、周记模板 `weeklyTemplate` 与存档引导 `guideItems` 都存在 `server_config` 表（key 分别是 `diary.pathTemplate.v1`、`diary.weeklyPathTemplate.v1` 与 `diary.guideItems.v1`，走 `lib/serverConfig.ts` 的 `getServerConfig`/`setServerConfig` 通用 KV，同表其他配置项 key 独立）。`PUT /config` 按传入字段分别写入，三者互不牵连。**但对空串不对称**：`template: ""` 照走语法校验、被「模板不能为空」拦成 400；`weeklyTemplate: ""` 与 `guideItems: ""` 显式跳过校验直接落库，等于**清除对应配置**（兑现设置页「留空 = 不显示」）。`guideItems` 是多行文本一行一条，**拆行唯一口径在客户端** `lib/diary/guideItems.ts:parseGuideItems`（split `/\r?\n/` + trim + 滤空行），宽屏面板与窄屏容器都从它拿条目、不许各拆各的；client 读取处对缺字段兜 `?? ""`（旧服务器升级窗口的响应没有这个字段）。
 
 <a id="diary-s2"></a>
 
@@ -65,9 +67,9 @@ SettingsDiaryPage 保存模板
 11. **日期口径**：日记的「今天」恒用 `getDateString`（`lib/time.ts`，固定 `Asia/Shanghai`），**禁止** import 待办域的 `localDateString`（设备本地日界）。服务端对 `:date` 是纯字符串透传、自己从不求「今天」（`diary-path.ts` 只做占位符替换与日历有效性校验），**文件名日期 100% 由客户端口径决定**，选错就是文件名整体错一天且服务端不会纠偏。由 `pnpm check:diary`（`scripts/check-diary-date.mjs`，CI 必跑）静态守：日记域源码出现 `localDateString` 即红——单测锁不住（本机与 CI 时区同为 UTC+8，两套日界恒等）。
 12. **当前日期的事实源是 URL `?date=`**（`lib/diary/diaryDate.ts:resolveDiaryDate`）：有合法的过去日期 = 显式模式（用户自选的补写目标，跨零点**永不**提示）；无参 = 跟随模式，展示 `followAnchor` 并在实时今天越过它时出提示条。非法 / 未来 / 恰是今天的参数一律归一成无参形态（`replace`，不新增历史条目）。不用 `following: boolean` state 表达模式——state 活不过 PWA 冷启动。
 13. **切日期用 `replace` 不用 `push`**。与时间轴的「保留 push」有意分叉：日记页有 header 返回按钮（`handleBack` 走 `navigate(-1)`）且安卓返回键 `/diary` 分支恒返回 `back`，push 会把「离开日记页」变成「逐日倒带」，翻 5 天要按 6 次才出得去；时间轴没有返回按钮，不暴露这个矛盾。
-14. **参考栏只读**：不向正文写一个字节，无「插入」入口。它既是产品选择，也免掉了光标插入/格式化/撤销栈交互的一整片复杂度。
+14. **参考栏只读**：不向正文写一个字节，无「插入」入口。它既是产品选择，也免掉了光标插入/格式化/撤销栈交互的一整片复杂度。只读原则同样覆盖窄屏 chips 容器与存档引导块——引导是「看的」，永不写正文。
 15. **参考栏不得污染主编辑区状态**：任何一块的加载中/失败只在自己那块显示，绝不 set 页面的 `loading`/`loadFailed`/`conflict`/`error`/`dirty`。否则参考栏一超时会连累正文写不了。
-16. **窄屏（<1024px，含 APK）整个不渲染参考栏**：窄屏行为与加参考栏之前完全一致。
+16. **窄屏（<1024px，含 APK）不渲染常驻参考栏面板**，改由 `DiaryMobileRefBar` chips 参考条按需展开：收起态只占一行、展开区限高内滚、单开语义（同时最多一块）。挂载在内容三元的窄屏分支——全部全局条（跨天/冲突/错误）之后、正文之前。容器语义见 [diary/reference-panel](diary/reference-panel.md#diary-reference-panel-s6)。
 17. **空正文预填 `"1. "`**（`DiaryPage.tsx:DIARY_SEED`）：`fetchDiary` 返回的 `content === ""` 时（文件不存在，或存在但是空的）正文预填一条空的有序列表项，之后每次回车由 §2.5 自动接号。判据是**内容**不是 `mtime === null`——手动清空过的旧文件也该照样预填。**预填不置脏**（不调 `markDirty`）：不写字就不落盘，既不会每天路过一眼就在 vault 里攒出一堆只有 `"1. "` 的空壳文件，离开也不会弹「未保存的修改」。这条靠 dirty 的记账口径天然成立（dirty 只由 `onChange` / 降级编辑置位，不是内容比对，见 §2.8）；谁把 dirty 改成内容比对，这里会连带变成「打开就永远脏」。**只在加载路径预填，`handleReload` 不预填**——重载语义是「我要看服务器到底是什么」。
 18. **预填后只有宽屏抢焦点**（光标落到 `"1. "` 之后）：窄屏（手机）抢焦点会立刻顶起软键盘，把本就矮的正文区再压掉半屏，而用户这一步多半只是想先扫一眼当天的打点。窄屏仍然预填，只是等用户自己点进去。驱动它的 `seedNonce` 是**计数器不是布尔**：连续切到第二天空日记时 `true→true` 不会触发 effect，第二天的光标就不会归位。
 
@@ -157,7 +159,9 @@ SettingsDiaryPage 保存模板
 | `lib/diary/indent.ts` | Tab/Shift+Tab 缩进出层纯函数，带父行约束与顶层逃生口（[diary/editor](diary/editor.md#diary-editor-s3)） |
 | `lib/diary/link.ts` | Ctrl+K 补 markdown 链接纯函数，四态返回（null/noop/select/replace）+ 围栏豁免，七 case（[diary/editor](diary/editor.md#diary-editor-s4)） |
 | `lib/diary/eol.ts` | 行尾保护：探测原文件主导行尾（CRLF/LF），`DiaryPage` 保存时据此还原，避免打开 CRLF 文件后静默改写成 LF（[diary/editor](diary/editor.md#diary-editor-s8)） |
-| `lib/diary/diaryRefPrefs.ts` | 参考栏折叠偏好：「今天」三块的展开/折叠状态存取（[diary/reference-panel](diary/reference-panel.md#diary-reference-panel-s2)） |
+| `lib/diary/diaryRefPrefs.ts` | 参考栏折叠偏好：「今天」三块 + 引导块的展开/折叠状态存取（[diary/reference-panel](diary/reference-panel.md#diary-reference-panel-s2)） |
+| `lib/diary/guideItems.ts` | `parseGuideItems`：存档引导拆行唯一口径（一行一条、trim 滤空）。纯函数，模块图里不得出现 db |
+| `pages/diary/DiaryMobileRefBar.tsx` | 窄屏参考条：横排 chips 单开展开，五块+引导复用，`MobileLookback` 挂载即拉（[diary/reference-panel §6](diary/reference-panel.md#diary-reference-panel-s6)） |
 | `lib/diary/diaryRefEntries.ts` | 日界裁剪 `clipEntriesToDay` + 窗口原语 `diaryRefDayWindow`。**纯函数，模块图里不得出现 db**——它的测试跑 node 干净桶（零 DOM、零 db），import 一次 db 就整桶报废（[diary/reference-panel §4](diary/reference-panel.md#diary-reference-panel-s4)） |
 | `lib/diary/diaryRefEntriesQuery.ts` | 上一行拆出来的那半：打点当天窗口查询 `listEntriesOverlappingDay`，碰 db，共用 `diaryRefDayWindow`（[diary/reference-panel §2](diary/reference-panel.md#diary-reference-panel-s2)） |
 | `lib/diary/diaryRefTasks.ts` | 完成待办过滤：`selectTasksCompletedOn` 三条硬性口径（[diary/reference-panel](diary/reference-panel.md#diary-reference-panel-s2)） |
@@ -168,5 +172,5 @@ SettingsDiaryPage 保存模板
 | `server/routes/diary.ts` | 六端点：编辑页用 `GET/PUT /config`、`GET/PUT /:date`；回顾页另用 `POST /batch`、`GET /asset`。**`GET /asset` 必须注册在 `GET /:date` 之前**，否则被 `:date` 参数路由吞掉（`POST /batch` 与只注册了 GET/PUT 的 `/:date` 天然不冲突，顺序对它无风险） |
 | `server/lib/diary-path.ts` | 日模板与周记模板的展开 + 路径安全校验纯函数（`expandDiaryTemplate` / `expandWeeklyTemplate` / `resolve*File`） |
 
-**client**：`pages/DiaryPage.test.tsx`、`pages/DiaryPage.successPath.test.tsx`、`pages/DiaryPage.wide.test.tsx`、`pages/settings/SettingsDiaryPage.test.tsx`、`lib/diary/{diaryApi,diaryDate,orderedList,listModel,indent,link,eol,diaryRefPrefs,diaryRefEntries,diaryRefTasks,reviewDates,reviewMarkdown,reviewPrefs}.test.ts`、`lib/diary/textareaEdit.test.tsx`、`pages/diary/DiaryReferencePanel.test.tsx`、`pages/diary/review/{DiaryReviewPage,DiaryReviewPage.narrow,DiaryMarkdown}.test.tsx`（分栏底座本身的用例在 `pages/todo/ResizableSplit.test.tsx`）
+**client**：`pages/DiaryPage.test.tsx`、`pages/DiaryPage.successPath.test.tsx`、`pages/DiaryPage.wide.test.tsx`、`pages/settings/SettingsDiaryPage.test.tsx`、`lib/diary/{diaryApi,diaryDate,guideItems,orderedList,listModel,indent,link,eol,diaryRefPrefs,diaryRefEntries,diaryRefTasks,reviewDates,reviewMarkdown,reviewPrefs}.test.ts`、`lib/diary/textareaEdit.test.tsx`、`pages/diary/DiaryReferencePanel.test.tsx`、`pages/diary/DiaryMobileRefBar.test.tsx`、`pages/diary/review/{DiaryReviewPage,DiaryReviewPage.narrow,DiaryMarkdown}.test.tsx`（分栏底座本身的用例在 `pages/todo/ResizableSplit.test.tsx`）
 **server**：`routes/diary.test.ts`、`lib/diary-path.test.ts`
