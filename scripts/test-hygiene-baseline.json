@@ -94,6 +94,7 @@
   "dirty-in-clean-bucket:pages/TodoPage.keyboard.test.tsx",
   "dirty-in-clean-bucket:pages/TodoPage.test.tsx",
   "dirty-in-clean-bucket:pages/TodoStatsPage.test.tsx",
+  "dirty-in-clean-bucket:pages/diary/DiaryMobileRefBar.test.tsx",
   "dirty-in-clean-bucket:pages/diary/DiaryReferencePanel.test.tsx",
   "dirty-in-clean-bucket:pages/diary/review/DiaryMarkdown.test.tsx",
   "dirty-in-clean-bucket:pages/diary/review/DiaryReviewPage.narrow.test.tsx",
