@@ -10,10 +10,20 @@ export interface DesktopHotkeyBinding {
   target?: string;
 }
 
+export interface DesktopWindowStateDto {
+  width: number;
+  height: number;
+  x: number;
+  y: number;
+  maximized: boolean;
+}
+
 export interface DesktopConfigDto {
   autostartDisabled: boolean;
   punchConfirmHours: number;
   hotkeys: DesktopHotkeyBinding[];
+  /** 主窗口上次关闭时的几何状态。壳自产自销，前端目前只透传，不参与任何 UI。 */
+  windowState?: DesktopWindowStateDto;
 }
 
 export interface RegistrationOutcome {
