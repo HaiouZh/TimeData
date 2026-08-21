@@ -10,7 +10,7 @@ contracts:
   - packages/client/src/lib/desktop/navigateAction.ts
   - packages/client/src/lib/desktop/api.ts
   - packages/client/src/pages/settings/SettingsDesktopPage.tsx
-last-reviewed: 2026-08-13
+last-reviewed: 2026-08-21
 ---
 
 # Windows 桌面壳 · 全局热键与打点
@@ -35,6 +35,7 @@ last-reviewed: 2026-08-13
 | `hotkeys` | `[{ shortcut, action }]`，出厂空数组（不带默认键位，装好后在设置页自己配） |
 | `punchConfirmHours` | 打点确认阈值（小时），默认 4；非有限值或 `<= 0` 被拒 |
 | `autostartDisabled` | 用户在设置页关过自启的意图记录，见 [母文档](../desktop.md) §3 |
+| `windowState` | 主窗口上次的几何（宽高 + 物理坐标 + 是否最大化），壳自己写自己读，前端不参与，机制见 [母文档](../desktop.md) §2 |
 
 `shortcut` 是 Tauri accelerator 字符串，修饰键顺序由前端 `normalizeShortcutFromKeyboardEvent` 钉死为 `Ctrl→Alt→Shift→Super`，与用户按下的先后无关——存进配置的串必须与回显注册结果时用来匹配的串逐字一致。字母 / 数字必须带修饰键（裸键会让正常打字触发全局动作），F1–F24 例外可裸录。`action` 是带参枚举，成员为 `punch` / `toggleMain` / `capture` / `navigate`。前三个无参；`navigate` 带一个 `target`（内部标签 + `#[serde(flatten)]` 让它直接落位，见 §7）。
 

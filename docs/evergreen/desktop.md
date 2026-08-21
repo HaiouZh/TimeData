@@ -13,7 +13,7 @@ contracts:
   - packages/desktop/src-tauri/tauri.conf.json
   - packages/desktop/src-tauri/src/shell.rs
   - .github/workflows/mobile-release.yml
-last-reviewed: 2026-08-14
+last-reviewed: 2026-08-21
 ---
 
 # Windows 桌面壳
@@ -45,6 +45,8 @@ Rust 侧的可判定逻辑集中在 `packages/desktop/src-tauri/src/shell.rs`，
 - 窗口的 `CloseRequested` 被拦截（`api.prevent_close()`）后隐藏窗口，进程不退。
 - 真退出只有一条路：托盘菜单的「退出」先置 `QUITTING` 标记再 `app.exit(0)`，此时 `CloseRequested` 放行。
 - 托盘图标左键单击等价于菜单里的「打开 TimeData」；托盘菜单项 id 为 `show` 与 `quit`。
+
+主窗口的几何状态（宽高 + 物理坐标 + 是否最大化）在关窗隐藏到托盘前与真退出时写入 `desktop-config.json` 的 `windowState` 字段，下次启动在 `setup` 内、窗口显示之前恢复：位置先过「与任一显示器相交」判定，出界（如拔掉副屏）回退居中；最大化标志最后生效，取消最大化回到的是记忆尺寸。运行期只在非最大化非最小化时更新内存缓存——最大化时查到的尺寸是整屏、最小化时坐标是 `-32000` 假位，都不许进缓存。恢复必须排在 `--hidden` 隐藏之前：`maximize()` 会把隐藏窗口顶出来，靠后面的 hide 兜底藏回去。强杀进程（断电、任务管理器、Windows 关机）不走退出事件，丢最后一次状态，回退到上次关窗隐藏时存的。速记浮窗固定尺寸，不参与。
 
 ## 3. 开机自启
 
@@ -150,6 +152,7 @@ Tauri 用独立的 WebView2 用户数据目录，与 Edge / Chrome 的 profile �
 - **开机自启指向了旧路径**：标记文件与启动项不同步。删除 `%APPDATA%\icu.yanzhou.timedata\autostart-initialized` 后重新运行一次即可重建。
 - **在任务管理器里关了自启，下次启动又回来了**：这是 §3 的判定语义。持久关闭的路径只有一条——应用的「设置 → 桌面设置」，它会把意图记进 `desktop-config.json`。
 - **窗口关不掉 / 关了进程还在**：这是设计语义（§2），托盘菜单「退出」才是唯一退出口。
+- **窗口跑到屏幕外面 / 想重置窗口位置**：删掉 `%APPDATA%\icu.yanzhou.timedata\desktop-config.json` 里的 `windowState` 字段（删整个文件会连热键等设置一起重置），下次启动回默认居中。
 - **热键没反应**：先看「设置 → 桌面设置」里该行有没有红字——有则组合被别的软件占用（换一个）；再看有没有「改动要保存才生效」——**改了 / 删了行不点保存是不生效的**，壳里注册着的仍是上次保存的那张表，而且再聚焦任意录入框会按磁盘配置重新注册、把「删掉」的那条装回来；都没有则检查是不是按了裸字母 / 数字（录入框会就地回显「要带 Ctrl / Alt / Shift」）。
 - **按了跳转键没反应**：先看「设置 → 桌面设置」那一行有没有红字——有则目标页已失效（多半是路由改过名），重选一个。都没有则看主窗口是不是已经停在那一页了：同页再按是刻意不做任何事的（[desktop/hotkeys](desktop/hotkeys.md) §7）。**主窗口隐藏 / 最小化时失效的表现不是「没反应」**：窗口会被拉出来、页面停在原处——窗口弹出来但没换页 = target 失效（去设置页看红字），不是热键没生效（原因同 [desktop/hotkeys](desktop/hotkeys.md) §7）。
 - **在 `?date=` 翻过页的时间轴上按「跳时间轴」没反应**：判据是 pathname，`?date=` 不算另一页。要回今天走时间轴页自己的入口。
