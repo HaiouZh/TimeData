@@ -18,6 +18,7 @@ type LookState = { kind: "loading" } | { kind: "error" } | { kind: "loaded"; con
 function MobileLookback({ date }: { date: string }) {
   const [state, setState] = useState<LookState>({ kind: "loading" });
   const [retryNonce, setRetryNonce] = useState(0);
+  // biome-ignore lint/correctness/useExhaustiveDependencies(retryNonce): 触发器依赖——重试按钮靠 nonce 变化重跑本 effect,「删除多余依赖」的建议会弄断重试
   useEffect(() => {
     let cancelled = false;
     setState({ kind: "loading" });
@@ -96,6 +97,7 @@ export function DiaryMobileRefBar({
           id="diary-mobile-ref-active"
           role="region"
           aria-label="参考内容"
+          // biome-ignore lint/a11y/noNoninteractiveTabindex: 可滚动限高区域必须键盘可聚焦（axe scrollable-region-focusable 要求）,biome 不识别滚动语义
           tabIndex={0}
           className="overflow-y-auto border-t border-border px-1 pb-2"
           style={{ maxHeight: ACTIVE_MAX_HEIGHT }}

@@ -11,11 +11,20 @@ export function DiaryRefGuide({ items }: { items: string[] }) {
       onToggle={(open) => setDiaryRefCollapsed("guide", !open)}
     >
       <ul className="space-y-1" data-testid="diary-ref-guide-list">
-        {items.map((item, i) => (
-          <li key={`${i}-${item}`} className="break-words px-2 py-1 td-text-label text-ink">
-            {item}
-          </li>
-        ))}
+        {(() => {
+          // 条目允许重复（同一句提示写两遍合法），单用文本做 key 会撞；
+          // 「文本 + 同文出现序」让不重复条目的 key 与位置无关，插入/删除不整列失效。
+          const seen = new Map<string, number>();
+          return items.map((item) => {
+            const nth = seen.get(item) ?? 0;
+            seen.set(item, nth + 1);
+            return (
+              <li key={`${item}#${nth}`} className="break-words px-2 py-1 td-text-label text-ink">
+                {item}
+              </li>
+            );
+          });
+        })()}
       </ul>
     </CollapsibleSection>
   );
