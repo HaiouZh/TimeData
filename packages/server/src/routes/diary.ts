@@ -14,6 +14,7 @@ import {
 
 const TEMPLATE_KEY = "diary.pathTemplate.v1";
 const WEEKLY_TEMPLATE_KEY = "diary.weeklyPathTemplate.v1";
+const GUIDE_ITEMS_KEY = "diary.guideItems.v1";
 const diary = new Hono();
 
 const vaultDir = () => process.env.DIARY_VAULT_DIR?.trim() || null;
@@ -48,6 +49,7 @@ diary.get("/config", (c) =>
     enabled: vaultDir() !== null,
     template: getServerConfig(TEMPLATE_KEY) ?? "",
     weeklyTemplate: getServerConfig(WEEKLY_TEMPLATE_KEY) ?? "",
+    guideItems: getServerConfig(GUIDE_ITEMS_KEY) ?? "",
   }),
 );
 
@@ -56,9 +58,13 @@ diary.put("/config", async (c) => {
   if (typeof rawBody !== "object" || rawBody === null || Array.isArray(rawBody)) {
     return c.json({ error: "请求体必须是有效 JSON 对象" }, 400);
   }
-  const { template, weeklyTemplate } = rawBody as { template?: unknown; weeklyTemplate?: unknown };
-  if (typeof template !== "string" && typeof weeklyTemplate !== "string") {
-    return c.json({ error: "缺少 template 或 weeklyTemplate" }, 400);
+  const { template, weeklyTemplate, guideItems } = rawBody as {
+    template?: unknown;
+    weeklyTemplate?: unknown;
+    guideItems?: unknown;
+  };
+  if (typeof template !== "string" && typeof weeklyTemplate !== "string" && typeof guideItems !== "string") {
+    return c.json({ error: "缺少 template、weeklyTemplate 或 guideItems" }, 400);
   }
   if (typeof template === "string") {
     try {
@@ -77,8 +83,13 @@ diary.put("/config", async (c) => {
       return c.json({ error: (err as Error).message }, 400);
     }
   }
+  // 存档引导是自由文本，无语法校验；只设长度上限。空串 = 清除（对齐 weeklyTemplate 语义）。
+  if (typeof guideItems === "string" && guideItems.length > 10_000) {
+    return c.json({ error: "存档引导过长（上限 10000 字符）" }, 400);
+  }
   if (typeof template === "string") setServerConfig(TEMPLATE_KEY, template.trim());
   if (typeof weeklyTemplate === "string") setServerConfig(WEEKLY_TEMPLATE_KEY, weeklyTemplate.trim());
+  if (typeof guideItems === "string") setServerConfig(GUIDE_ITEMS_KEY, guideItems.trim());
   return c.json({ ok: true });
 });
 

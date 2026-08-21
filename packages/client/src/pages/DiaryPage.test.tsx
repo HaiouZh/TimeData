@@ -148,7 +148,7 @@ beforeEach(() => {
   fetchDiaryConfig.mockReset();
   fetchDiary.mockReset();
   saveDiary.mockReset();
-  fetchDiaryConfig.mockResolvedValue({ enabled: true, template: "1. " });
+  fetchDiaryConfig.mockResolvedValue({ enabled: true, template: "1. ", guideItems: "" });
   fetchDiary.mockResolvedValue({ content: "1. x", mtime: 100 });
   document.body.innerHTML = "";
   // 固定"今天"，日期断言才能写死。绝不能用 vi.useFakeTimers()——本文件的 flush()
@@ -296,7 +296,7 @@ describe("DiaryPage", () => {
   });
 
   it("enabled=false 显示未配置提示、无 textarea、不调用 fetchDiary", async () => {
-    fetchDiaryConfig.mockResolvedValue({ enabled: false, template: "" });
+    fetchDiaryConfig.mockResolvedValue({ enabled: false, template: "", guideItems: "" });
     const { host, root } = await renderPage();
 
     expect(host.textContent).toContain("DIARY_VAULT_DIR");
@@ -308,7 +308,7 @@ describe("DiaryPage", () => {
   });
 
   it("enabled=true 但 template 为空 显示去配模板提示、不调用 fetchDiary", async () => {
-    fetchDiaryConfig.mockResolvedValue({ enabled: true, template: "" });
+    fetchDiaryConfig.mockResolvedValue({ enabled: true, template: "", guideItems: "" });
     const { host, root } = await renderPage();
 
     expect(host.textContent).toContain("还没有配置日记模板");
@@ -331,7 +331,7 @@ describe("DiaryPage", () => {
   });
 
   it("脏状态点返回被 blocker 拦下，点取消不导航、编辑内容仍在", async () => {
-    fetchDiaryConfig.mockResolvedValue({ enabled: true, template: "日记/{yyyy}/{MM}-{dd}.md" });
+    fetchDiaryConfig.mockResolvedValue({ enabled: true, template: "日记/{yyyy}/{MM}-{dd}.md", guideItems: "" });
     fetchDiary.mockResolvedValue({ content: "原文", mtime: 100 });
     const { host, root, router } = await renderPage();
 

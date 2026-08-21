@@ -36,10 +36,10 @@ const putConfig = () =>
 describe("diary config", () => {
   it("默认空模板，保存后可读回", async () => {
     let res = await app.request("/api/diary/config");
-    expect(await res.json()).toEqual({ enabled: true, template: "", weeklyTemplate: "" });
+    expect(await res.json()).toEqual({ enabled: true, template: "", weeklyTemplate: "", guideItems: "" });
     expect((await putConfig()).status).toBe(200);
     res = await app.request("/api/diary/config");
-    expect(await res.json()).toEqual({ enabled: true, template: TPL, weeklyTemplate: "" });
+    expect(await res.json()).toEqual({ enabled: true, template: TPL, weeklyTemplate: "", guideItems: "" });
   });
 
   it("非法模板 400", async () => {
@@ -454,5 +454,62 @@ describe("diary read/write", () => {
     });
     expect(res.status).toBe(400);
     expect(await res.json()).toEqual({ error });
+  });
+});
+
+describe("diary config 存档引导", () => {
+  it("PUT guideItems 后 GET 能读回，且不牵连另两字段", async () => {
+    expect((await putConfig()).status).toBe(200); // 先落 template
+    const put = await app.request("/api/diary/config", {
+      method: "PUT",
+      body: JSON.stringify({ guideItems: "回看昨日小记\n亮点&成就" }),
+      headers: { "Content-Type": "application/json" },
+    });
+    expect(put.status).toBe(200);
+    const body = await (await app.request("/api/diary/config")).json();
+    expect(body.guideItems).toBe("回看昨日小记\n亮点&成就");
+    expect(body.template).toBe(TPL); // 互不牵连
+  });
+
+  it("空串 = 清除", async () => {
+    await app.request("/api/diary/config", {
+      method: "PUT",
+      body: JSON.stringify({ guideItems: "x" }),
+      headers: { "Content-Type": "application/json" },
+    });
+    const put = await app.request("/api/diary/config", {
+      method: "PUT",
+      body: JSON.stringify({ guideItems: "" }),
+      headers: { "Content-Type": "application/json" },
+    });
+    expect(put.status).toBe(200);
+    expect((await (await app.request("/api/diary/config")).json()).guideItems).toBe("");
+  });
+
+  it("超长 400", async () => {
+    const put = await app.request("/api/diary/config", {
+      method: "PUT",
+      body: JSON.stringify({ guideItems: "宁".repeat(10_001) }),
+      headers: { "Content-Type": "application/json" },
+    });
+    expect(put.status).toBe(400);
+  });
+
+  it("恰好 10_000 字符返回 200", async () => {
+    const put = await app.request("/api/diary/config", {
+      method: "PUT",
+      body: JSON.stringify({ guideItems: "宁".repeat(10_000) }),
+      headers: { "Content-Type": "application/json" },
+    });
+    expect(put.status).toBe(200);
+  });
+
+  it("只传 guideItems 也满足「至少一个字段」", async () => {
+    const put = await app.request("/api/diary/config", {
+      method: "PUT",
+      body: JSON.stringify({ guideItems: "x" }),
+      headers: { "Content-Type": "application/json" },
+    });
+    expect(put.status).toBe(200);
   });
 });

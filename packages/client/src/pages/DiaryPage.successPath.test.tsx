@@ -105,7 +105,7 @@ beforeEach(() => {
   fetchDiaryConfig.mockReset();
   fetchDiary.mockReset();
   saveDiary.mockReset();
-  fetchDiaryConfig.mockResolvedValue({ enabled: true, template: "1. " });
+  fetchDiaryConfig.mockResolvedValue({ enabled: true, template: "1. ", guideItems: "" });
   fetchDiary.mockResolvedValue({ content: "1. x", mtime: 100 });
   document.body.innerHTML = "";
 });

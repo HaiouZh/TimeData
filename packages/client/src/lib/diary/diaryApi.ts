@@ -14,6 +14,7 @@ export interface DiaryConfig {
   enabled: boolean;
   template: string;
   weeklyTemplate: string;
+  guideItems: string;
 }
 
 /** 批量读接口的单条结果：是否存在及内容 */
@@ -63,6 +64,10 @@ export const saveDiaryTemplate = async (template: string): Promise<void> => {
 
 export const saveDiaryWeeklyTemplate = async (weeklyTemplate: string): Promise<void> => {
   await apiFetch("/api/diary/config", { method: "PUT", body: JSON.stringify({ weeklyTemplate }) });
+};
+
+export const saveDiaryGuideItems = async (guideItems: string): Promise<void> => {
+  await apiFetch("/api/diary/config", { method: "PUT", body: JSON.stringify({ guideItems }) });
 };
 
 /** 批量读日记内容：一次请求获取多个日期/周的内容，供回顾页拼装用 */
