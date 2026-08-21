@@ -197,6 +197,15 @@ describe("DiaryPage", () => {
     await unmount(root);
   });
 
+  it("旧服务器响应缺 guideItems 字段时页面照常渲染（?? \"\" 兜底，parseGuideItems 不收 undefined）", async () => {
+    fetchDiaryConfig.mockResolvedValue({ enabled: true, template: "1. " });
+    const { host, root } = await renderPage();
+
+    expect(textarea(host).value).toBe("1. x");
+
+    await unmount(root);
+  });
+
   it("改动后点保存，saveDiary 收到 { content, baseMtime }", async () => {
     saveDiary.mockResolvedValue({ mtime: 200 });
     const { host, root } = await renderPage();

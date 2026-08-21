@@ -305,4 +305,72 @@ describe("SettingsDiaryPage", () => {
 
     await unmount(root);
   });
+
+  it("旧服务器响应缺 guideItems 字段时兜为空串：直接保存发出 {guideItems: \"\"} 而非 {}", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(input);
+        if (url.endsWith("/api/diary/config") && init?.method === "PUT") {
+          return jsonResponse({ ok: true });
+        }
+        if (url.endsWith("/api/diary/config")) {
+          // 旧服务器升级窗口：响应没有 guideItems 字段
+          return jsonResponse({ enabled: true, template: "日记/{yyyy}.md", weeklyTemplate: "" });
+        }
+        return jsonResponse({ error: "not_found" }, { status: 404 });
+      }),
+    );
+    const { host, root } = await renderPage();
+
+    const saveButtons = [...host.querySelectorAll("button")].filter((button) => button.textContent === "保存");
+    await act(async () => {
+      saveButtons[2]?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    await flushEffects();
+
+    const putBodies = (fetch as unknown as ReturnType<typeof vi.fn>).mock.calls
+      .filter(([url, opts]) => String(url).endsWith("/api/diary/config") && opts?.method === "PUT")
+      .map(([, opts]) => JSON.parse(String(opts?.body)) as Record<string, unknown>);
+    expect(putBodies).toEqual([{ guideItems: "" }]);
+
+    await unmount(root);
+  });
+
+  it("配置加载失败时三个保存按钮全部禁用（防空表单覆盖已存配置）", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => {
+        throw new Error("网络断开");
+      }),
+    );
+    const { host, root } = await renderPage();
+
+    const saveButtons = [...host.querySelectorAll("button")].filter((button) => button.textContent === "保存");
+    expect(saveButtons).toHaveLength(3);
+    for (const button of saveButtons) {
+      expect(button.disabled).toBe(true);
+    }
+
+    await unmount(root);
+  });
+
+  it("三个保存按钮带可区分的 aria-label，引导输入框关联帮助文案", async () => {
+    const { host, root } = await renderPage();
+
+    const saveButtons = [...host.querySelectorAll("button")].filter((button) => button.textContent === "保存");
+    expect(saveButtons.map((button) => button.getAttribute("aria-label"))).toEqual([
+      "保存日记路径模板",
+      "保存周记路径模板",
+      "保存存档引导",
+    ]);
+
+    const guideInput = host.querySelector('textarea[name="guideItems"]') as HTMLTextAreaElement;
+    const describedBy = guideInput.getAttribute("aria-describedby");
+    expect(describedBy).toBeTruthy();
+    const helpText = host.querySelector(`#${describedBy}`);
+    expect(helpText?.textContent).toContain("一行一条");
+
+    await unmount(root);
+  });
 });

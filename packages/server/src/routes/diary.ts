@@ -84,12 +84,14 @@ diary.put("/config", async (c) => {
     }
   }
   // 存档引导是自由文本，无语法校验；只设长度上限。空串 = 清除（对齐 weeklyTemplate 语义）。
-  if (typeof guideItems === "string" && guideItems.length > 10_000) {
+  // 长度按 trim 后的落库值判：原文首尾空白不该把本可保存的内容顶超上限。
+  const trimmedGuideItems = typeof guideItems === "string" ? guideItems.trim() : undefined;
+  if (trimmedGuideItems !== undefined && trimmedGuideItems.length > 10_000) {
     return c.json({ error: "存档引导过长（上限 10000 字符）" }, 400);
   }
   if (typeof template === "string") setServerConfig(TEMPLATE_KEY, template.trim());
   if (typeof weeklyTemplate === "string") setServerConfig(WEEKLY_TEMPLATE_KEY, weeklyTemplate.trim());
-  if (typeof guideItems === "string") setServerConfig(GUIDE_ITEMS_KEY, guideItems.trim());
+  if (trimmedGuideItems !== undefined) setServerConfig(GUIDE_ITEMS_KEY, trimmedGuideItems);
   return c.json({ ok: true });
 });
 

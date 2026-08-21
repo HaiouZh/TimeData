@@ -18,9 +18,9 @@ last-reviewed: 2026-08-21
 
 ## 承上启下
 
-- **上游**：`DiaryPage.tsx` 宽屏时把 textarea 包进 `ResizableSplit`，右栏挂 `DiaryReferencePanel`；窄屏整个不渲染。
-- **下游**：四块各自读 Dexie（打点/完成待办/速记）或走网络（回看），**只读，不向正文写一个字节**。
-- **契约**：只读、失败不污染主编辑区、窄屏不渲染——三条正本在 [diary](../diary.md#diary-s2) 契约 14–16。
+- **上游**：`DiaryPage.tsx` 宽屏时把 textarea 包进 `ResizableSplit`，右栏挂 `DiaryReferencePanel`；窄屏挂 `DiaryMobileRefBar` chips 参考条（§6）。
+- **下游**：五块各自读 Dexie（打点/完成待办/速记）、走网络（回看）或吃已拉取的配置（引导，零请求），**只读，不向正文写一个字节**。
+- **契约**：只读、失败不污染主编辑区、窄屏 chips 容器同受约束——三条正本在 [diary](../diary.md#diary-s2) 契约 14–16。
 - **邻居**：[diary](../diary.md)（主文档）、[diary/editor](editor.md)（同主题子文档）、[timeline](../timeline.md) / [todo](../todo.md) / [quick-notes](../quick-notes.md)（三个数据来源，参考栏只在 UI 层临时组装，不引用它们的数据层）。
 
 ## 1 布局与挂载

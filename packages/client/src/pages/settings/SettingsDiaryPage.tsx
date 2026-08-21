@@ -30,6 +30,8 @@ export default function SettingsDiaryPage() {
   const [guideSaving, setGuideSaving] = useState(false);
   const [guideMessage, setGuideMessage] = useState("");
   const [guideError, setGuideError] = useState("");
+  // 加载失败时表单停在初始空值，此时放行保存会用空串覆盖服务器已存的配置——整页禁保存。
+  const [loadFailed, setLoadFailed] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -39,11 +41,13 @@ export default function SettingsDiaryPage() {
         setEnabled(config.enabled);
         setTemplate(config.template);
         setWeeklyTemplate(config.weeklyTemplate);
-        setGuideItems(config.guideItems);
+        // 旧服务器升级窗口的响应没有 guideItems 字段（契约见 docs/evergreen/diary.md §1）
+        setGuideItems(config.guideItems ?? "");
       })
       .catch((err) => {
         if (cancelled) return;
         setError(extractServerMessage(err));
+        setLoadFailed(true);
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -129,7 +133,8 @@ export default function SettingsDiaryPage() {
 
           <button
             type="button"
-            disabled={saving}
+            aria-label="保存日记路径模板"
+            disabled={saving || loadFailed}
             onClick={() => void handleSave()}
             className="min-h-11 rounded-ctl bg-accent px-4 py-2 td-text-body font-medium text-page transition-colors hover:bg-accent-strong disabled:opacity-50"
           >
@@ -158,7 +163,8 @@ export default function SettingsDiaryPage() {
 
           <button
             type="button"
-            disabled={weeklySaving}
+            aria-label="保存周记路径模板"
+            disabled={weeklySaving || loadFailed}
             onClick={() => void handleSaveWeekly()}
             className="min-h-11 rounded-ctl bg-accent px-4 py-2 td-text-body font-medium text-page transition-colors hover:bg-accent-strong disabled:opacity-50"
           >
@@ -178,16 +184,18 @@ export default function SettingsDiaryPage() {
                 rows={8}
                 className="mt-1 block w-full resize-none rounded-row border border-border bg-surface px-3 py-2 text-ink placeholder-ink-3 focus:border-accent focus:outline-none"
                 placeholder={"一行一条，例如：\n回看昨日小记\n亮点&成就：今天最有价值的时刻"}
+                aria-describedby="settings-diary-guide-help"
               />
             </label>
-            <p className="td-text-caption text-ink-3">
+            <p id="settings-diary-guide-help" className="td-text-caption text-ink-3">
               写日记时显示在参考栏（电脑）与参考条（手机）里，一行一条；留空 = 不显示引导。
             </p>
           </div>
 
           <button
             type="button"
-            disabled={guideSaving}
+            aria-label="保存存档引导"
+            disabled={guideSaving || loadFailed}
             onClick={() => void handleSaveGuide()}
             className="min-h-11 rounded-ctl bg-accent px-4 py-2 td-text-body font-medium text-page transition-colors hover:bg-accent-strong disabled:opacity-50"
           >

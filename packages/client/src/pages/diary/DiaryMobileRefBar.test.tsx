@@ -181,4 +181,66 @@ describe("DiaryMobileRefBar", () => {
     expect(labels.join("|")).not.toContain("昨天");
     expect(labels.join("|")).not.toContain("上周");
   });
+
+  it("可访问性：chips 分组可命名、chip 关联展开区、选中态不只靠颜色、滚容器可聚焦", async () => {
+    mounted = await renderDom(
+      createElement(DiaryMobileRefBar, { date: "2026-07-25", isToday: true, guideItems: ["x"] }),
+    );
+    await flush();
+    const { host } = mounted;
+
+    const group = host.querySelector('[role="group"]');
+    expect(group?.getAttribute("aria-label")).toBe("日记参考条");
+
+    const chip = findChip(host, "打点");
+    expect(chip.getAttribute("aria-controls")).toBe("diary-mobile-ref-active");
+    await act(async () => {
+      chip.click();
+    });
+    await flush();
+
+    // 选中态除变色外还有字重变化（aria-expanded 之外的可视信号）
+    expect(chip.className).toContain("font-semibold");
+    expect(findChip(host, "速记").className).not.toContain("font-semibold");
+
+    const region = host.querySelector('[data-testid="diary-mobile-ref-active"]') as HTMLElement;
+    expect(region.id).toBe("diary-mobile-ref-active");
+    expect(region.getAttribute("role")).toBe("region");
+    expect(region.getAttribute("aria-label")).toBe("参考内容");
+    expect(region.tabIndex).toBe(0);
+  });
+
+  it("切日期后旧请求迟到返回不覆盖新结果（cancelled 守卫）", async () => {
+    let resolveFirst: (v: { content: string; mtime: number | null }) => void = () => {};
+    fetchDiaryMock.mockImplementationOnce(
+      () => new Promise<{ content: string; mtime: number | null }>((resolve) => {
+        resolveFirst = resolve;
+      }),
+    );
+    mounted = await renderDom(
+      createElement(DiaryMobileRefBar, { date: "2026-07-25", isToday: true, guideItems: [] }),
+    );
+    await flush();
+    const { host, root } = mounted;
+    await act(async () => {
+      findChip(host, "昨天").click();
+    });
+    await flush();
+    expect(host.textContent).toContain("读取中");
+
+    // 切日期：MobileLookback 不卸载、date prop 变化触发 effect 重跑，旧请求闭包应被 cancelled 拦下
+    fetchDiaryMock.mockResolvedValueOnce({ content: "24 号的正文", mtime: 2 });
+    await act(async () => {
+      root.render(createElement(DiaryMobileRefBar, { date: "2026-07-26", isToday: false, guideItems: [] }));
+    });
+    await waitFor(() => host.textContent?.includes("24 号的正文") === true, "新日期内容");
+
+    // 旧请求此刻才 resolve——内容不得回退成旧日期的正文
+    await act(async () => {
+      resolveFirst({ content: "23 号的旧正文", mtime: 1 });
+    });
+    await flush();
+    expect(host.textContent).toContain("24 号的正文");
+    expect(host.textContent).not.toContain("23 号的旧正文");
+  });
 });

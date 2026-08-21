@@ -45,10 +45,10 @@ DiaryPage 保存
 SettingsDiaryPage 保存模板 / 存档引导
   → PUT /api/diary/config { template? , weeklyTemplate? , guideItems? }（三个字段至少给一个，否则 400）
   → server 用固定日期 2026-01-01 / 固定周号 2026-W01 校验对应模板语法，非法 → 400 { error: 中文原因 }
-  → guideItems 无语法校验（自由多行文本），仅 >10000 字符拒 400
+  → guideItems 无语法校验（自由多行文本），仅 >10000 字符拒 400（按 trim 后长度判）
 ```
 
-`enabled` 由服务端 `DIARY_VAULT_DIR` 环境变量是否配置决定（非 server_config 存储项）；`template`、周记模板 `weeklyTemplate` 与存档引导 `guideItems` 都存在 `server_config` 表（key 分别是 `diary.pathTemplate.v1`、`diary.weeklyPathTemplate.v1` 与 `diary.guideItems.v1`，走 `lib/serverConfig.ts` 的 `getServerConfig`/`setServerConfig` 通用 KV，同表其他配置项 key 独立）。`PUT /config` 按传入字段分别写入，三者互不牵连。**但对空串不对称**：`template: ""` 照走语法校验、被「模板不能为空」拦成 400；`weeklyTemplate: ""` 与 `guideItems: ""` 显式跳过校验直接落库，等于**清除对应配置**（兑现设置页「留空 = 不显示」）。`guideItems` 是多行文本一行一条，**拆行唯一口径在客户端** `lib/diary/guideItems.ts:parseGuideItems`（split `/\r?\n/` + trim + 滤空行），宽屏面板与窄屏容器都从它拿条目、不许各拆各的；client 读取处对缺字段兜 `?? ""`（旧服务器升级窗口的响应没有这个字段）。
+`enabled` 由服务端 `DIARY_VAULT_DIR` 环境变量是否配置决定（非 server_config 存储项）；`template`、周记模板 `weeklyTemplate` 与存档引导 `guideItems` 都存在 `server_config` 表（key 分别是 `diary.pathTemplate.v1`、`diary.weeklyPathTemplate.v1` 与 `diary.guideItems.v1`，走 `lib/serverConfig.ts` 的 `getServerConfig`/`setServerConfig` 通用 KV，同表其他配置项 key 独立）。`PUT /config` 按传入字段分别写入，三者互不牵连。**但对空串不对称**：`template: ""` 照走语法校验、被「模板不能为空」拦成 400；`weeklyTemplate: ""` 与 `guideItems: ""` 显式跳过校验直接落库，等于**清除对应配置**（兑现设置页「留空 = 不显示」）。`guideItems` 是多行文本一行一条，server 落库前整串 `trim()`（首尾空白不入库、内部换行保留），长度上限 10000 也按 trim 后的落库值判；**拆行唯一口径在客户端** `lib/diary/guideItems.ts:parseGuideItems`（split `/\r?\n/` + trim + 滤空行），宽屏面板与窄屏容器都从它拿条目、不许各拆各的；client 读取处对缺字段兜 `?? ""`（旧服务器升级窗口的响应没有这个字段）。
 
 <a id="diary-s2"></a>
 

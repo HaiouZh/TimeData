@@ -73,15 +73,18 @@ export function DiaryMobileRefBar({
   ];
   return (
     <div className="shrink-0 border-b border-border bg-surface">
-      <div className="flex gap-2 overflow-x-auto px-4 py-2">
+      <div role="group" aria-label="日记参考条" className="flex gap-2 overflow-x-auto px-4 py-2">
         {chips.map((chip) => (
           <button
             key={chip.key}
             type="button"
             aria-expanded={active === chip.key}
+            aria-controls="diary-mobile-ref-active"
             onClick={() => setActive(active === chip.key ? null : chip.key)}
             className={`shrink-0 rounded-pill border px-3 py-1 td-text-caption transition ${
-              active === chip.key ? "border-accent bg-accent-soft text-accent-ink" : "border-border bg-surface text-ink-2"
+              active === chip.key
+                ? "border-accent bg-accent-soft font-semibold text-accent-ink"
+                : "border-border bg-surface text-ink-2"
             }`}
           >
             {chip.label}
@@ -90,6 +93,10 @@ export function DiaryMobileRefBar({
       </div>
       {active && (
         <div
+          id="diary-mobile-ref-active"
+          role="region"
+          aria-label="参考内容"
+          tabIndex={0}
           className="overflow-y-auto border-t border-border px-1 pb-2"
           style={{ maxHeight: ACTIVE_MAX_HEIGHT }}
           data-testid="diary-mobile-ref-active"

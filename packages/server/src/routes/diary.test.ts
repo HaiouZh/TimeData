@@ -512,4 +512,23 @@ describe("diary config 存档引导", () => {
     });
     expect(put.status).toBe(200);
   });
+
+  it("长度上限按 trim 后计：原始超限但去掉首尾空白后 ≤10000 应保存成功", async () => {
+    const put = await app.request("/api/diary/config", {
+      method: "PUT",
+      body: JSON.stringify({ guideItems: "宁".repeat(9_999) + " ".repeat(10) }),
+      headers: { "Content-Type": "application/json" },
+    });
+    expect(put.status).toBe(200);
+    expect((await (await app.request("/api/diary/config")).json()).guideItems).toBe("宁".repeat(9_999));
+  });
+
+  it("落库前整串 trim：首尾空白不入库、内部换行保留", async () => {
+    await app.request("/api/diary/config", {
+      method: "PUT",
+      body: JSON.stringify({ guideItems: "  回看昨日小记\n亮点&成就  \n" }),
+      headers: { "Content-Type": "application/json" },
+    });
+    expect((await (await app.request("/api/diary/config")).json()).guideItems).toBe("回看昨日小记\n亮点&成就");
+  });
 });

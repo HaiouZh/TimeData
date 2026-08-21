@@ -12,7 +12,7 @@ export function DiaryRefGuide({ items }: { items: string[] }) {
     >
       <ul className="space-y-1" data-testid="diary-ref-guide-list">
         {items.map((item, i) => (
-          <li key={`${i}-${item}`} className="px-2 py-1 td-text-label text-ink">
+          <li key={`${i}-${item}`} className="break-words px-2 py-1 td-text-label text-ink">
             {item}
           </li>
         ))}
