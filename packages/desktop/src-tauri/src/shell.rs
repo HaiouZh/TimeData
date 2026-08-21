@@ -216,14 +216,17 @@ pub fn resolve_window_capture(maximized: bool, minimized: bool) -> WindowCapture
 pub type MonitorRect = (i64, i64, i64, i64);
 
 /// 窗口矩形与任一显示器矩形**相交**（面积 > 0）即有效——部分搭边也算，尊重用户摆的位置。
-/// 宽高非正在 parse 层已被挡，这里仍显式拒绝，真值表完整。
+/// 宽高非正在 parse 层已被挡，这里仍显式拒绝，真值表完整。算术全程 saturating：
+/// 本函数的入参是裸 i64，调用方喂进饱和转换后的巨值时不许 panic 或回绕。
 pub fn position_on_any_monitor(x: i64, y: i64, width: i64, height: i64, monitors: &[MonitorRect]) -> bool {
     if width <= 0 || height <= 0 {
         return false;
     }
-    monitors
-        .iter()
-        .any(|&(mx, my, mw, mh)| x < mx + mw && mx < x + width && y < my + mh && my < y + height)
+    let right = x.saturating_add(width);
+    let bottom = y.saturating_add(height);
+    monitors.iter().any(|&(mx, my, mw, mh)| {
+        x < mx.saturating_add(mw) && mx < right && y < my.saturating_add(mh) && my < bottom
+    })
 }
 
 #[cfg(test)]
@@ -576,5 +579,29 @@ mod tests {
         // 否则窗口会被恢复到完全看不见的地方。
         assert!(!position_on_any_monitor(1920, 100, 1100, 800, &[PRIMARY]));
         assert!(!position_on_any_monitor(-1100, 100, 1100, 800, &[PRIMARY]));
+    }
+
+    #[test]
+    fn y轴边缘相贴同样不算相交() {
+        // 终审补：原贴边探针只覆盖 x 轴两向——把 y 半边的某个 < 写成 <=，原有四条照绿。
+        assert!(!position_on_any_monitor(100, 1080, 1100, 800, &[PRIMARY])); // 贴下缘
+        assert!(!position_on_any_monitor(100, -800, 1100, 800, &[PRIMARY])); // 贴上缘
+    }
+
+    #[test]
+    fn 巨值入参饱和运算不回绕() {
+        // parse 层的量级上限挡的是配置文件；本函数入参是裸 i64，调用方喂巨值时不许 panic / 回绕。
+        // 裸加法下 x + width 在 debug 溢出 panic、release 回绕成负数——回绕后「mx < right」会把
+        // 明明覆盖屏幕的巨窗判成不相交。两种坏法这两条探针都抓得住（saturating 后语义正确）。
+        assert!(position_on_any_monitor(0, 0, i64::MAX, i64::MAX, &[PRIMARY]));
+        assert!(!position_on_any_monitor(i64::MAX - 1, 0, i64::MAX, 800, &[PRIMARY]));
+    }
+
+    #[test]
+    fn 屏内零尺寸也无效_守卫不可删() {
+        // 终审补：原探针 (0,0,0,800) 在删掉零尺寸早退后照样 false（0 < 0+0 不成立），锁不住守卫；
+        // 挪进屏内 (100,100) 后删守卫会走相交判定判 true——这两条才真正压住 width/height 两个早退位。
+        assert!(!position_on_any_monitor(100, 100, 0, 800, &[PRIMARY]));
+        assert!(!position_on_any_monitor(100, 100, 1100, 0, &[PRIMARY]));
     }
 }

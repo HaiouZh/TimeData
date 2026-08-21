@@ -5,6 +5,9 @@ use tauri::{AppHandle, Manager};
 
 pub const DEFAULT_PUNCH_CONFIRM_HOURS: f64 = 4.0;
 
+/// windowState 宽高的量级上限（物理像素）。只挡荒谬巨值，不约束真实显示器。
+pub const MAX_WINDOW_DIMENSION: f64 = 100_000.0;
+
 /// 主窗口上次的几何状态（物理像素）。x/y 允许负值——副屏在主屏左侧/上方时就是负的。
 /// 解析守卫只做类型层（宽高 > 0 且有限）；「位置是否还在某个显示器内」是语义校验，
 /// 归恢复层（`shell::position_on_any_monitor`），两层各管各的。
@@ -123,10 +126,19 @@ pub fn parse_config(text: &str) -> DesktopConfig {
         })
         .unwrap_or_default();
     // 整体作废不做半份降级（拍板⑤）：坏一个字段整个当没有，回退 conf 默认几何。
+    // 量级上限挡「合法但荒谬」的巨值（1e30 这类有限数会穿透 > 0 守卫，到恢复层参与
+    // 坐标运算）；10 万像素远超任何真实显示器，又远低于 i32 边界。
     let window_state = raw
         .get("windowState")
         .and_then(|value| serde_json::from_value::<WindowState>(value.clone()).ok())
-        .filter(|state| state.width.is_finite() && state.width > 0.0 && state.height.is_finite() && state.height > 0.0);
+        .filter(|state| {
+            state.width.is_finite()
+                && state.width > 0.0
+                && state.width <= MAX_WINDOW_DIMENSION
+                && state.height.is_finite()
+                && state.height > 0.0
+                && state.height <= MAX_WINDOW_DIMENSION
+        });
     DesktopConfig {
         autostart_disabled,
         punch_confirm_hours,
@@ -501,6 +513,22 @@ mod tests {
         .is_none());
         assert!(parse_config(
             r#"{"windowState": {"width": -5, "height": 800, "x": 0, "y": 0, "maximized": false}}"#
+        )
+        .window_state
+        .is_none());
+    }
+
+    #[test]
+    fn 荒谬巨值的window_state整体作废() {
+        // 有限巨值穿透「> 0 且有限」守卫后，到恢复层参与坐标运算会溢出（debug panic）——
+        // 在 parse 这道门就挡掉。1e30 合法有限，专门选它当探针。
+        assert!(parse_config(
+            r#"{"windowState": {"width": 1e30, "height": 800, "x": 0, "y": 0, "maximized": false}}"#
+        )
+        .window_state
+        .is_none());
+        assert!(parse_config(
+            r#"{"windowState": {"width": 1100, "height": 1e30, "x": 0, "y": 0, "maximized": false}}"#
         )
         .window_state
         .is_none());

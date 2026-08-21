@@ -58,8 +58,11 @@ fn persist_window_state(app: &AppHandle) {
 /// **顺序红线（spec 拍板⑦）**：调用点必须在 `--hidden` 隐藏逻辑之前——`maximize()` 会把
 /// 隐藏窗口顶出来（Windows `ShowWindow(SW_MAXIMIZE)` 对隐藏窗口即显示），靠后面已有的
 /// hide 步骤兜底藏回去。
-fn restore_window_state(app: &AppHandle, saved: config::WindowState) {
-    let Some(window) = app.get_webview_window(shell::MAIN_WINDOW) else { return };
+/// 返回值：存储位置已出界、被 center 兜底时，回传 center 后的实际位置（供播种层自愈用）；
+/// 存储位置仍有效时回 `None`。不回传的话，播种层会把出界老坐标播进缓存——用户不挪窗口
+/// 直接退出时，出界坐标被原样存回，**永不自愈**（终审 finding，2026-08-21 修复波）。
+fn restore_window_state(app: &AppHandle, saved: config::WindowState) -> Option<(i32, i32)> {
+    let window = app.get_webview_window(shell::MAIN_WINDOW)?;
     let width = (saved.width.round() as i64).max(1) as u32;
     let height = (saved.height.round() as i64).max(1) as u32;
     let _ = window.set_size(tauri::PhysicalSize::new(width, height));
@@ -73,6 +76,7 @@ fn restore_window_state(app: &AppHandle, saved: config::WindowState) {
             (position.x as i64, position.y as i64, size.width as i64, size.height as i64)
         })
         .collect();
+    let mut centered_position = None;
     if shell::position_on_any_monitor(
         saved.x as i64,
         saved.y as i64,
@@ -83,10 +87,14 @@ fn restore_window_state(app: &AppHandle, saved: config::WindowState) {
         let _ = window.set_position(tauri::PhysicalPosition::new(saved.x, saved.y));
     } else {
         let _ = window.center();
+        // 必须在下面的 maximize 之前查：此刻 outer_position 是 center 后的真实位置，
+        // maximize 之后查到的是整屏假位（与播种口径「不从刚 maximize 完的窗口现查」同一个坑）。
+        centered_position = window.outer_position().ok().map(|p| (p.x, p.y));
     }
     if saved.maximized {
         let _ = window.maximize();
     }
+    centered_position
 }
 
 fn main() {
@@ -203,16 +211,23 @@ fn main() {
 
             // 窗口状态恢复（spec §4）。**必须排在下面 --hidden 隐藏之前**：maximize() 会把
             // 隐藏窗口顶出来，靠后面已有的 hide 步骤兜底藏回去（拍板⑦顺序红线）。
+            let mut restored_center: Option<(i32, i32)> = None;
             if let Some(saved) = desktop_config.as_ref().and_then(|cfg| cfg.window_state) {
-                restore_window_state(app.handle(), saved);
+                restored_center = restore_window_state(app.handle(), saved);
             }
 
             // 播种几何缓存：有存储值直接用（它必然是某次正常态的快照）；没有则问窗口要实际值。
-            // 不从「刚 maximize 完的窗口」现查——那查到的是整屏尺寸。
+            // 不从「刚 maximize 完的窗口」现查——那查到的是整屏尺寸。存储位置已出界被 center
+            // 兜底时，位置改播 center 后的实际值（尺寸仍取存储值）——播出界老坐标它永不自愈。
             let seeded = desktop_config
                 .as_ref()
                 .and_then(|cfg| cfg.window_state)
-                .map(|saved| shell::NormalGeometry { width: saved.width, height: saved.height, x: saved.x, y: saved.y })
+                .map(|saved| shell::NormalGeometry {
+                    width: saved.width,
+                    height: saved.height,
+                    x: restored_center.map_or(saved.x, |p| p.0),
+                    y: restored_center.map_or(saved.y, |p| p.1),
+                })
                 .or_else(|| {
                     let window = app.get_webview_window(shell::MAIN_WINDOW)?;
                     let size = window.inner_size().ok()?;
