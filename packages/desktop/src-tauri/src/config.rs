@@ -5,6 +5,19 @@ use tauri::{AppHandle, Manager};
 
 pub const DEFAULT_PUNCH_CONFIRM_HOURS: f64 = 4.0;
 
+/// 主窗口上次的几何状态（物理像素）。x/y 允许负值——副屏在主屏左侧/上方时就是负的。
+/// 解析守卫只做类型层（宽高 > 0 且有限）；「位置是否还在某个显示器内」是语义校验，
+/// 归恢复层（`shell::position_on_any_monitor`），两层各管各的。
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WindowState {
+    pub width: f64,
+    pub height: f64,
+    pub x: i32,
+    pub y: i32,
+    pub maximized: bool,
+}
+
 /// 热键动作。内部标签 `action`。
 ///
 /// `Navigate { target }` 是唯一带参的变体：内部标签 + `HotkeyBinding` 的 `#[serde(flatten)]`
@@ -57,6 +70,8 @@ pub struct DesktopConfig {
     pub autostart_disabled: bool,
     pub punch_confirm_hours: f64,
     pub hotkeys: Vec<HotkeyBinding>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub window_state: Option<WindowState>,
 }
 
 impl Default for DesktopConfig {
@@ -65,6 +80,7 @@ impl Default for DesktopConfig {
             autostart_disabled: false,
             punch_confirm_hours: DEFAULT_PUNCH_CONFIRM_HOURS,
             hotkeys: Vec::new(),
+            window_state: None,
         }
     }
 }
@@ -106,10 +122,16 @@ pub fn parse_config(text: &str) -> DesktopConfig {
                 .collect()
         })
         .unwrap_or_default();
+    // 整体作废不做半份降级（拍板⑤）：坏一个字段整个当没有，回退 conf 默认几何。
+    let window_state = raw
+        .get("windowState")
+        .and_then(|value| serde_json::from_value::<WindowState>(value.clone()).ok())
+        .filter(|state| state.width.is_finite() && state.width > 0.0 && state.height.is_finite() && state.height > 0.0);
     DesktopConfig {
         autostart_disabled,
         punch_confirm_hours,
         hotkeys,
+        window_state,
     }
 }
 
@@ -358,6 +380,7 @@ mod tests {
             autostart_disabled: true,
             punch_confirm_hours: 6.0,
             hotkeys: vec![HotkeyBinding { shortcut: "Ctrl+Alt+P".into(), action: HotkeyAction::Punch }],
+            window_state: None,
         };
         assert_eq!(parse_config(&serialize_config(&config)), config);
     }
@@ -368,6 +391,7 @@ mod tests {
             autostart_disabled: false,
             punch_confirm_hours: 4.0,
             hotkeys: vec![HotkeyBinding { shortcut: "Ctrl+Alt+M".into(), action: HotkeyAction::ToggleMain }],
+            window_state: None,
         };
         let text = serialize_config(&config);
         assert!(text.contains("\"autostartDisabled\""));
@@ -427,9 +451,66 @@ mod tests {
                 shortcut: "Ctrl+Alt+T".into(),
                 action: HotkeyAction::Navigate { target: "/todo".into() },
             }],
+            window_state: None,
         };
         let reparsed = parse_config(&serialize_config(&original));
         assert_eq!(reparsed.hotkeys, original.hotkeys);
+    }
+
+    // ---- windowState：主窗口几何记忆（spec 2026-08-21）----
+
+    #[test]
+    fn 合法window_state被接受含负坐标() {
+        // 副屏在左/上时坐标是负的，合法值不许被误杀。
+        let parsed = parse_config(
+            r#"{"windowState": {"width": 1200, "height": 900, "x": -1920, "y": 40, "maximized": true}}"#,
+        );
+        assert_eq!(
+            parsed.window_state,
+            Some(WindowState { width: 1200.0, height: 900.0, x: -1920, y: 40, maximized: true })
+        );
+    }
+
+    #[test]
+    fn 缺window_state字段读成none且写回不带该字段() {
+        // skip_serializing_if 是旧文件的干净性契约：没这功能的配置写回后一个字不多。
+        let config = parse_config("{}");
+        assert!(config.window_state.is_none());
+        assert!(!serialize_config(&config).contains("windowState"));
+    }
+
+    #[test]
+    fn 坏类型的window_state整体作废() {
+        // 整体作废不做半份降级（拍板⑤）：坏一个字段整个当没有，回退 conf 默认几何。
+        assert!(parse_config(r#"{"windowState": "nope"}"#).window_state.is_none());
+        assert!(parse_config(
+            r#"{"windowState": {"width": "big", "height": 800, "x": 0, "y": 0, "maximized": false}}"#
+        )
+        .window_state
+        .is_none());
+        // 缺字段 serde 直接反序列化失败，同样整体作废。
+        assert!(parse_config(r#"{"windowState": {"width": 1100, "height": 800}}"#).window_state.is_none());
+    }
+
+    #[test]
+    fn 非正宽高的window_state整体作废() {
+        assert!(parse_config(
+            r#"{"windowState": {"width": 0, "height": 800, "x": 0, "y": 0, "maximized": false}}"#
+        )
+        .window_state
+        .is_none());
+        assert!(parse_config(
+            r#"{"windowState": {"width": -5, "height": 800, "x": 0, "y": 0, "maximized": false}}"#
+        )
+        .window_state
+        .is_none());
+    }
+
+    #[test]
+    fn window_state往返不丢字段() {
+        let mut config = sample_config();
+        config.window_state = Some(WindowState { width: 1400.0, height: 900.0, x: 100, y: -40, maximized: true });
+        assert_eq!(parse_config(&serialize_config(&config)), config);
     }
 
     // ---- 读写落盘：三态 + 往返不变量（`load_config` / `save_config` 此前零覆盖）----
@@ -451,6 +532,7 @@ mod tests {
                 HotkeyBinding { shortcut: "Ctrl+Alt+P".into(), action: HotkeyAction::Punch },
                 HotkeyBinding { shortcut: "Ctrl+Alt+M".into(), action: HotkeyAction::ToggleMain },
             ],
+            window_state: None,
         }
     }
 
@@ -578,6 +660,7 @@ mod tests {
                     autostart_disabled: true,
                     punch_confirm_hours: 2.5,
                     hotkeys: vec![HotkeyBinding { shortcut: "Ctrl+Alt+P".into(), action: HotkeyAction::Punch }],
+                    window_state: None,
                 })
             },
             |cfg| {
