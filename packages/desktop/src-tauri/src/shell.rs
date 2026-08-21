@@ -187,6 +187,45 @@ pub fn resolve_toggle_from_window(
     resolve_toggle_action(visible, minimized, resolve_is_foreground(is_focused, foreground_root, self_hwnd))
 }
 
+/// 主窗口「最近一次正常态」的几何快照（物理像素）。最大化/最小化期间的尺寸与坐标是假的
+/// （整屏 / -32000），不进这份快照。
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct NormalGeometry {
+    pub width: f64,
+    pub height: f64,
+    pub x: i32,
+    pub y: i32,
+}
+
+/// 此刻能不能采窗口几何。装配层据此决定更新缓存还是沿用旧值。
+#[derive(Debug, PartialEq, Eq)]
+pub enum WindowCapture {
+    Sample,
+    Skip,
+}
+
+pub fn resolve_window_capture(maximized: bool, minimized: bool) -> WindowCapture {
+    if maximized || minimized {
+        WindowCapture::Skip
+    } else {
+        WindowCapture::Sample
+    }
+}
+
+/// 显示器矩形 `(x, y, w, h)`，物理像素。i64 防边界相加溢出。
+pub type MonitorRect = (i64, i64, i64, i64);
+
+/// 窗口矩形与任一显示器矩形**相交**（面积 > 0）即有效——部分搭边也算，尊重用户摆的位置。
+/// 宽高非正在 parse 层已被挡，这里仍显式拒绝，真值表完整。
+pub fn position_on_any_monitor(x: i64, y: i64, width: i64, height: i64, monitors: &[MonitorRect]) -> bool {
+    if width <= 0 || height <= 0 {
+        return false;
+    }
+    monitors
+        .iter()
+        .any(|&(mx, my, mw, mh)| x < mx + mw && mx < x + width && y < my + mh && my < y + height)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -486,5 +525,56 @@ mod tests {
             resolve_toggle_from_window(Visible(true), Minimized(true), true, SELF_RAW, SELF_ROOT, SELF_HWND),
             ToggleAction::Show
         );
+    }
+
+    // ---- 窗口状态记忆：采不采 + 位置还有效吗（spec 2026-08-21）----
+
+    #[test]
+    fn capture_只有正常态才采尺寸() {
+        // 最大化时查到的尺寸是整屏、最小化时坐标是 -32000 假位，都不许进缓存。
+        assert_eq!(resolve_window_capture(false, false), WindowCapture::Sample);
+        assert_eq!(resolve_window_capture(true, false), WindowCapture::Skip);
+        assert_eq!(resolve_window_capture(false, true), WindowCapture::Skip);
+        assert_eq!(resolve_window_capture(true, true), WindowCapture::Skip);
+    }
+
+    const PRIMARY: MonitorRect = (0, 0, 1920, 1080);
+    const SECONDARY_LEFT: MonitorRect = (-1920, 0, 1920, 1080);
+
+    #[test]
+    fn 主屏内的位置有效() {
+        assert!(position_on_any_monitor(100, 200, 1100, 800, &[PRIMARY]));
+    }
+
+    #[test]
+    fn 副屏负坐标有效() {
+        assert!(position_on_any_monitor(-1800, 40, 1100, 800, &[PRIMARY, SECONDARY_LEFT]));
+    }
+
+    #[test]
+    fn 完全出界无效() {
+        assert!(!position_on_any_monitor(5000, 5000, 1100, 800, &[PRIMARY]));
+        assert!(!position_on_any_monitor(-5000, 0, 1100, 800, &[PRIMARY]));
+    }
+
+    #[test]
+    fn 部分搭边仍算有效() {
+        // 大半在屏外但还压着一条边——尊重用户摆的位置，不回中。
+        assert!(position_on_any_monitor(1900, 0, 1100, 800, &[PRIMARY]));
+    }
+
+    #[test]
+    fn 零尺寸矩形一律无效() {
+        // 调用方契约是宽高 > 0（parse 层已挡），这里仍显式拒绝让真值表完整。
+        assert!(!position_on_any_monitor(0, 0, 0, 800, &[PRIMARY]));
+        assert!(!position_on_any_monitor(0, 0, 1100, 0, &[PRIMARY]));
+    }
+
+    #[test]
+    fn 边缘相贴不算相交() {
+        // 窗口左/右边缘恰好压在显示器边界上：重叠面积为零，不许算「还在屏内」——
+        // 否则窗口会被恢复到完全看不见的地方。
+        assert!(!position_on_any_monitor(1920, 100, 1100, 800, &[PRIMARY]));
+        assert!(!position_on_any_monitor(-1100, 100, 1100, 800, &[PRIMARY]));
     }
 }
