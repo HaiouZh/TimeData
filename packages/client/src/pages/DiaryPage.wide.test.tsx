@@ -144,4 +144,16 @@ describe("DiaryPage 宽屏参考栏", () => {
     expect(field.selectionStart).toBe(3);
     await unmount(root);
   });
+
+  it("宽屏引导条目传递——参考栏出现引导条目", async () => {
+    fetchDiaryConfig.mockResolvedValue({ enabled: true, template: "1. ", guideItems: "回看昨日小记\n亮点&成就" });
+    const { host, root } = await renderPage();
+
+    expect(host.textContent).toContain("引导");
+    expect(host.textContent).toContain("回看昨日小记");
+    expect(host.textContent).toContain("亮点&成就");
+    expect(host.querySelector('[data-testid="diary-ref-guide-list"]')).not.toBeNull();
+
+    await unmount(root);
+  });
 });

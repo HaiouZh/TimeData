@@ -15,6 +15,7 @@ export const STORAGE_KEYS = {
   diaryRefPunchesCollapsed: "timedata_diary_ref_punches_collapsed",
   diaryRefDoneTasksCollapsed: "timedata_diary_ref_done_tasks_collapsed",
   diaryRefQuickNotesCollapsed: "timedata_diary_ref_quick_notes_collapsed",
+  diaryRefGuideCollapsed: "timedata_diary_ref_guide_collapsed",
   todoDoneCollapsed: "timedata_todo_done_collapsed",
   todoInboxCollapsed: "timedata_todo_inbox_collapsed",
   todoScheduledCollapsed: "timedata_todo_scheduled_collapsed",

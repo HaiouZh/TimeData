@@ -1,12 +1,13 @@
 import { safeGetItem, safeSetItem } from "../safeStorage.js";
 import { STORAGE_KEYS } from "../storageKeys.js";
 
-export type DiaryRefBlock = "punches" | "doneTasks" | "quickNotes";
+export type DiaryRefBlock = "punches" | "doneTasks" | "quickNotes" | "guide";
 
 const KEY_BY_BLOCK: Record<DiaryRefBlock, string> = {
   punches: STORAGE_KEYS.diaryRefPunchesCollapsed,
   doneTasks: STORAGE_KEYS.diaryRefDoneTasksCollapsed,
   quickNotes: STORAGE_KEYS.diaryRefQuickNotesCollapsed,
+  guide: STORAGE_KEYS.diaryRefGuideCollapsed,
 };
 
 // 「今天」三块未设偏好时一律展开：它们全是本地读、无网络代价，且正是起笔素材。

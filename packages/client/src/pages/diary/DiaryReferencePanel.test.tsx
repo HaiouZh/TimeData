@@ -81,8 +81,8 @@ async function waitFor(predicate: () => boolean, label: string): Promise<void> {
   throw new Error(`Timed out waiting for ${label}`);
 }
 
-async function renderPanel(date: string, isToday = true) {
-  mounted = await renderDom(createElement(DiaryReferencePanel, { date, isToday }));
+async function renderPanel(date: string, isToday = true, guideItems: string[] = []) {
+  mounted = await renderDom(createElement(DiaryReferencePanel, { date, isToday, guideItems }));
   await flush();
   return mounted;
 }
@@ -177,7 +177,7 @@ describe("参考栏 · 打点块", () => {
       release = () => resolve();
     });
 
-    mounted = await renderDom(createElement(DiaryReferencePanel, { date: "2026-07-25", isToday: true }));
+    mounted = await renderDom(createElement(DiaryReferencePanel, { date: "2026-07-25", isToday: true, guideItems: [] }));
     const punches = mounted.host.querySelectorAll("details")[0];
 
     expect(punches.textContent).toContain("读取中…");
@@ -226,7 +226,7 @@ describe("参考栏 · 完成的待办块", () => {
     await waitFor(() => host.textContent?.includes("周一收的尾") === true, "07-20 的完成待办");
 
     await act(async () => {
-      root.render(createElement(DiaryReferencePanel, { date: "2026-07-25", isToday: true }));
+      root.render(createElement(DiaryReferencePanel, { date: "2026-07-25", isToday: true, guideItems: [] }));
     });
     await waitFor(() => host.textContent?.includes("周六收的尾") === true, "07-25 的完成待办");
     expect(host.textContent).not.toContain("周一收的尾");
@@ -254,7 +254,7 @@ describe("参考栏 · 每块各自的错误围栏", () => {
           "div",
           null,
           createElement("p", null, "栏外的正文哨兵"),
-          createElement(DiaryReferencePanel, { date: "2026-07-25", isToday: true }),
+          createElement(DiaryReferencePanel, { date: "2026-07-25", isToday: true, guideItems: [] }),
         ),
       );
       const { host } = mounted;
@@ -309,7 +309,7 @@ describe("参考栏 · 速记块", () => {
     await waitFor(() => host.textContent?.includes("周一记的") === true, "07-20 的速记");
 
     await act(async () => {
-      root.render(createElement(DiaryReferencePanel, { date: "2026-07-25", isToday: true }));
+      root.render(createElement(DiaryReferencePanel, { date: "2026-07-25", isToday: true, guideItems: [] }));
     });
     await waitFor(() => host.textContent?.includes("周六记的") === true, "07-25 的速记");
     expect(host.textContent).not.toContain("周一记的");
@@ -412,7 +412,7 @@ describe("参考栏 · 回看块", () => {
     await waitFor(() => host.textContent?.includes("7月24日的正文") === true, "首次加载");
 
     await act(async () => {
-      root.render(createElement(DiaryReferencePanel, { date: "2026-07-20", isToday: false }));
+      root.render(createElement(DiaryReferencePanel, { date: "2026-07-20", isToday: false, guideItems: [] }));
     });
     await flush();
 
@@ -440,10 +440,10 @@ describe("参考栏 · 回看块", () => {
 
     // A → B → A
     await act(async () => {
-      root.render(createElement(DiaryReferencePanel, { date: "2026-07-20", isToday: false }));
+      root.render(createElement(DiaryReferencePanel, { date: "2026-07-20", isToday: false, guideItems: [] }));
     });
     await act(async () => {
-      root.render(createElement(DiaryReferencePanel, { date: "2026-07-25", isToday: true }));
+      root.render(createElement(DiaryReferencePanel, { date: "2026-07-25", isToday: true, guideItems: [] }));
     });
     await flush();
 
@@ -476,7 +476,7 @@ describe("参考栏 · 回看块", () => {
 
     // 切到别的日期：重置 effect 收起并清空
     await act(async () => {
-      root.render(createElement(DiaryReferencePanel, { date: "2026-07-20", isToday: false }));
+      root.render(createElement(DiaryReferencePanel, { date: "2026-07-20", isToday: false, guideItems: [] }));
     });
     await flush();
 
@@ -496,5 +496,47 @@ describe("参考栏 · 回看块", () => {
 
     expect(host.textContent).not.toContain("07-24 的正文");
     expect(fetchDiaryMock).toHaveBeenCalledWith("2026-07-19");
+  });
+
+  describe("参考栏 · 引导块", () => {
+    it("guideItems 非空时渲染引导块条目", async () => {
+      const { host } = await renderPanel("2026-07-25", true, ["回看昨日小记", "亮点&成就"]);
+      expect(host.textContent).toContain("引导");
+      expect(host.textContent).toContain("回看昨日小记");
+      expect(host.textContent).toContain("亮点&成就");
+      expect(host.querySelector('[data-testid="diary-ref-guide-list"]')).not.toBeNull();
+    });
+
+    it("guideItems 为空数组时整个引导 section 不渲染", async () => {
+      const { host } = await renderPanel("2026-07-25", true, []);
+      expect(host.querySelector('[data-testid="diary-ref-guide-list"]')).toBeNull();
+      expect(host.textContent).not.toContain("引导");
+      // 其余四块照常存在
+      expect(host.textContent).toContain("打点");
+      expect(host.textContent).toContain("完成的待办");
+      expect(host.textContent).toContain("速记");
+      expect(host.textContent).toContain("回看");
+    });
+
+    it("引导块折叠状态写进 prefs", async () => {
+      const { host } = await renderPanel("2026-07-25", true, ["回看昨日小记"]);
+      const guideDetails = [...host.querySelectorAll("details")].find((d) =>
+        d.textContent?.includes("引导"),
+      );
+      expect(guideDetails).toBeDefined();
+      // 默认展开：prefs 无值时 getDiaryRefCollapsed("guide") === false → open=true
+      expect(guideDetails!.open).toBe(true);
+      await act(async () => {
+        guideDetails!.querySelector("summary")!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      });
+      await flush();
+      expect(localStorage.getItem("timedata_diary_ref_guide_collapsed")).toBe("true");
+      // 再次点击收起→展开应写回 false
+      await act(async () => {
+        guideDetails!.querySelector("summary")!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      });
+      await flush();
+      expect(localStorage.getItem("timedata_diary_ref_guide_collapsed")).toBe("false");
+    });
   });
 });

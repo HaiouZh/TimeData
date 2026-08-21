@@ -1,5 +1,5 @@
 import { ClockCounterClockwise } from "@phosphor-icons/react";
-import { type KeyboardEvent, useEffect, useRef, useState } from "react";
+import { type KeyboardEvent, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useNavigate, useSearchParams } from "react-router";
 import DateNav from "../components/DateNav.js";
 import { Icon } from "../components/Icon.js";
@@ -20,6 +20,7 @@ import { type EditAction, runEditAction } from "../lib/diary/textareaEdit.js";
 import { DIARY_SPLIT_PREFS } from "../lib/tasks/workbenchPrefs.js";
 import { formatMonthDay, getDateString } from "../lib/time.js";
 import { useIsWideScreen } from "../lib/useIsWideScreen.js";
+import { parseGuideItems } from "../lib/diary/guideItems.js";
 import { DiaryReferencePanel } from "./diary/DiaryReferencePanel.js";
 import { ResizableSplit } from "./todo/ResizableSplit.js";
 
@@ -75,6 +76,7 @@ export default function DiaryPage() {
   const editorRef = useRef<HTMLTextAreaElement>(null);
   const [enabled, setEnabled] = useState(true);
   const [template, setTemplate] = useState("");
+  const [guideItems, setGuideItems] = useState("");
   const [configLoaded, setConfigLoaded] = useState(false);
   const [content, setContent] = useState("");
   const [baseMtime, setBaseMtime] = useState<number | null>(null);
@@ -114,6 +116,8 @@ export default function DiaryPage() {
   const reloadingRef = useRef(reloading);
   reloadingRef.current = reloading;
 
+  const guideList = useMemo(() => parseGuideItems(guideItems), [guideItems]);
+
   // config 与日期无关，只拉一次。不拆的话每切一天都多一次 /api/diary/config 往返，
   // 也多一次"config 请求失败 → 整页 loadFailed"的机会。
   useEffect(() => {
@@ -124,6 +128,7 @@ export default function DiaryPage() {
         if (cancelled) return;
         setEnabled(config.enabled);
         setTemplate(config.template);
+        setGuideItems(config.guideItems);
         setConfigLoaded(true);
       } catch (err) {
         if (cancelled) return;
@@ -567,7 +572,7 @@ export default function DiaryPage() {
           leftClassName="flex flex-col min-h-0"
           rightClassName="min-h-0 overflow-y-auto"
           left={editor}
-          right={<DiaryReferencePanel date={date} isToday={date === liveToday} />}
+          right={<DiaryReferencePanel date={date} isToday={date === liveToday} guideItems={guideList} />}
         />
       ) : (
         editor

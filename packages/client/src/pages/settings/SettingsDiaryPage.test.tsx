@@ -32,12 +32,22 @@ beforeEach(() => {
     vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
       if (url.endsWith("/api/diary/config") && init?.method === "PUT") {
-        const body = JSON.parse(String(init?.body)) as { template?: string; weeklyTemplate?: string };
+        const body = JSON.parse(String(init?.body)) as {
+          template?: string;
+          weeklyTemplate?: string;
+          guideItems?: string;
+        };
         if (body.template === "坏模板") {
           return jsonResponse({ error: "模板格式不合法" }, { status: 400 });
         }
         if (body.weeklyTemplate === "坏周模板") {
           return jsonResponse({ error: "周记模板格式不合法" }, { status: 400 });
+        }
+        if (body.guideItems === "坏引导") {
+          return jsonResponse({ error: "存档引导过长（上限 10000 字符）" }, { status: 400 });
+        }
+        if (typeof body.guideItems === "string" && body.guideItems.length > 10_000) {
+          return jsonResponse({ error: "存档引导过长（上限 10000 字符）" }, { status: 400 });
         }
         return jsonResponse({ ok: true });
       }
@@ -46,6 +56,7 @@ beforeEach(() => {
           enabled: true,
           template: "日记_{yyyy}/{yyyy}-{MM}-{dd}.md",
           weeklyTemplate: "Reviews/{gggg}/{gggg}-W{ww}.md",
+          guideItems: "回看昨日小记",
         });
       }
       return jsonResponse({ error: "not_found" }, { status: 404 });
@@ -152,7 +163,7 @@ describe("SettingsDiaryPage", () => {
     });
 
     const saveButtons = [...host.querySelectorAll("button")].filter((button) => button.textContent === "保存");
-    const weeklySaveButton = saveButtons[saveButtons.length - 1];
+    const weeklySaveButton = saveButtons[1];
     await act(async () => {
       weeklySaveButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
@@ -186,7 +197,7 @@ describe("SettingsDiaryPage", () => {
     });
 
     const saveButtons = [...host.querySelectorAll("button")].filter((button) => button.textContent === "保存");
-    const weeklySaveButton = saveButtons[saveButtons.length - 1];
+    const weeklySaveButton = saveButtons[1];
     await act(async () => {
       weeklySaveButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
@@ -216,7 +227,7 @@ describe("SettingsDiaryPage", () => {
 
     const saveButtons = [...host.querySelectorAll("button")].filter((button) => button.textContent === "保存");
     await act(async () => {
-      saveButtons[saveButtons.length - 1]?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      saveButtons[1]?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
     await flushEffects();
 
@@ -230,6 +241,67 @@ describe("SettingsDiaryPage", () => {
     expect(JSON.parse(String(putCall?.[1]?.body))).toEqual({ weeklyTemplate: "" });
     expect(host.textContent).toContain("模板已保存");
     expect(host.querySelector("[data-tone='ok']")).toBeInstanceOf(HTMLElement);
+
+    await unmount(root);
+  });
+
+  it("渲染服务器返回的存档引导", async () => {
+    const { host, root } = await renderPage();
+
+    const input = host.querySelector('textarea[name="guideItems"]') as HTMLTextAreaElement | null;
+    expect(input).not.toBeNull();
+    expect(input!.value).toBe("回看昨日小记");
+
+    await unmount(root);
+  });
+
+  it("保存时只携带 guideItems", async () => {
+    const { host, root } = await renderPage();
+
+    const input = host.querySelector('textarea[name="guideItems"]') as HTMLTextAreaElement | HTMLInputElement;
+    const nativeValueSetter = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(input), "value")?.set;
+
+    await act(async () => {
+      nativeValueSetter?.call(input, "a\nb");
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+
+    const saveButtons = [...host.querySelectorAll("button")].filter((button) => button.textContent === "保存");
+    await act(async () => {
+      saveButtons[2]?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    await flushEffects();
+
+    const putCall = (fetch as unknown as ReturnType<typeof vi.fn>).mock.calls.find(
+      ([url, opts]) =>
+        String(url).endsWith("/api/diary/config") &&
+        opts?.method === "PUT" &&
+        JSON.parse(String(opts?.body)).guideItems !== undefined,
+    );
+    expect(JSON.parse(String(putCall?.[1]?.body))).toEqual({ guideItems: "a\nb" });
+
+    await unmount(root);
+  });
+
+  it("存档引导 400 时展示服务器 message", async () => {
+    const { host, root } = await renderPage();
+
+    const input = host.querySelector('textarea[name="guideItems"]') as HTMLTextAreaElement | HTMLInputElement;
+    const nativeValueSetter = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(input), "value")?.set;
+
+    await act(async () => {
+      nativeValueSetter?.call(input, "坏引导");
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+
+    const saveButtons = [...host.querySelectorAll("button")].filter((button) => button.textContent === "保存");
+    await act(async () => {
+      saveButtons[2]?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    await flushEffects();
+
+    expect(host.textContent).toContain("存档引导过长（上限 10000 字符）");
+    expect(host.querySelector("[data-tone='danger']")).toBeInstanceOf(HTMLElement);
 
     await unmount(root);
   });

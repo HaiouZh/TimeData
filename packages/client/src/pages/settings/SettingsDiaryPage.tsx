@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { StatusBanner } from "../../components/ui/StatusBanner.js";
 import { ApiError } from "../../lib/api.js";
-import { fetchDiaryConfig, saveDiaryTemplate, saveDiaryWeeklyTemplate } from "../../lib/diary/diaryApi.js";
+import { fetchDiaryConfig, saveDiaryGuideItems, saveDiaryTemplate, saveDiaryWeeklyTemplate } from "../../lib/diary/diaryApi.js";
 import SettingsDetailPage from "./SettingsDetailPage.tsx";
 
 const TEMPLATE_EXAMPLE = "日记_{yyyy}/Day/{yyyy}年{MM}月/{yyyy}-{MM}-{dd}.md";
@@ -26,6 +26,10 @@ export default function SettingsDiaryPage() {
   const [weeklySaving, setWeeklySaving] = useState(false);
   const [weeklyMessage, setWeeklyMessage] = useState("");
   const [weeklyError, setWeeklyError] = useState("");
+  const [guideItems, setGuideItems] = useState("");
+  const [guideSaving, setGuideSaving] = useState(false);
+  const [guideMessage, setGuideMessage] = useState("");
+  const [guideError, setGuideError] = useState("");
 
   useEffect(() => {
     let cancelled = false;
@@ -35,6 +39,7 @@ export default function SettingsDiaryPage() {
         setEnabled(config.enabled);
         setTemplate(config.template);
         setWeeklyTemplate(config.weeklyTemplate);
+        setGuideItems(config.guideItems);
       })
       .catch((err) => {
         if (cancelled) return;
@@ -75,6 +80,21 @@ export default function SettingsDiaryPage() {
       setWeeklyError(extractServerMessage(err));
     } finally {
       setWeeklySaving(false);
+    }
+  }
+
+  async function handleSaveGuide() {
+    if (guideSaving) return;
+    setGuideSaving(true);
+    setGuideMessage("");
+    setGuideError("");
+    try {
+      await saveDiaryGuideItems(guideItems);
+      setGuideMessage("已保存");
+    } catch (err) {
+      setGuideError(extractServerMessage(err));
+    } finally {
+      setGuideSaving(false);
     }
   }
 
@@ -147,6 +167,35 @@ export default function SettingsDiaryPage() {
 
           {weeklyMessage && <StatusBanner tone="ok">{weeklyMessage}</StatusBanner>}
           {weeklyError && <StatusBanner tone="danger">{weeklyError}</StatusBanner>}
+
+          <div className="space-y-3 rounded-card border border-border bg-surface p-4">
+            <label className="block">
+              <span className="td-text-caption text-ink-3">存档引导</span>
+              <textarea
+                name="guideItems"
+                value={guideItems}
+                onChange={(e) => setGuideItems(e.target.value)}
+                rows={8}
+                className="mt-1 block w-full resize-none rounded-row border border-border bg-surface px-3 py-2 text-ink placeholder-ink-3 focus:border-accent focus:outline-none"
+                placeholder={"一行一条，例如：\n回看昨日小记\n亮点&成就：今天最有价值的时刻"}
+              />
+            </label>
+            <p className="td-text-caption text-ink-3">
+              写日记时显示在参考栏（电脑）与参考条（手机）里，一行一条；留空 = 不显示引导。
+            </p>
+          </div>
+
+          <button
+            type="button"
+            disabled={guideSaving}
+            onClick={() => void handleSaveGuide()}
+            className="min-h-11 rounded-ctl bg-accent px-4 py-2 td-text-body font-medium text-page transition-colors hover:bg-accent-strong disabled:opacity-50"
+          >
+            {guideSaving ? "保存中…" : "保存"}
+          </button>
+
+          {guideMessage && <StatusBanner tone="ok">{guideMessage}</StatusBanner>}
+          {guideError && <StatusBanner tone="danger">{guideError}</StatusBanner>}
         </div>
       )}
     </SettingsDetailPage>

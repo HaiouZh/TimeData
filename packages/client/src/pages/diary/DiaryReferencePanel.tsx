@@ -3,6 +3,7 @@ import { ErrorBoundary } from "../../components/ErrorBoundary.js";
 import { formatMonthDay } from "../../lib/time.js";
 
 import { DiaryRefDoneTasks } from "./DiaryRefDoneTasks.js";
+import { DiaryRefGuide } from "./DiaryRefGuide.js";
 import { DiaryRefLookback } from "./DiaryRefLookback.js";
 import { DiaryRefPunches } from "./DiaryRefPunches.js";
 import { DiaryRefQuickNotes } from "./DiaryRefQuickNotes.js";
@@ -10,6 +11,7 @@ import { DiaryRefQuickNotes } from "./DiaryRefQuickNotes.js";
 export interface DiaryReferencePanelProps {
   date: string;
   isToday: boolean;
+  guideItems: string[];
 }
 
 /**
@@ -18,7 +20,7 @@ export interface DiaryReferencePanelProps {
  * DiaryPage 的 React state（不进 Dexie、不进同步域），整页一掀就永久丢了。逐块围而不是整栏围一层，
  * 是为了兑现契约 15 的字面：一块挂了另外三块照常显示。
  */
-function RefBlock({ label, children }: { label: string; children: ReactNode }) {
+export function RefBlock({ label, children }: { label: string; children: ReactNode }) {
   return (
     <ErrorBoundary fallback={() => <p className="px-2 py-1 td-text-caption text-danger">{label}读取失败</p>}>
       {children}
@@ -26,7 +28,7 @@ function RefBlock({ label, children }: { label: string; children: ReactNode }) {
   );
 }
 
-export function DiaryReferencePanel({ date, isToday }: DiaryReferencePanelProps) {
+export function DiaryReferencePanel({ date, isToday, guideItems }: DiaryReferencePanelProps) {
   return (
     <div className="space-y-5 px-3 py-4" data-testid="diary-reference-panel">
       <section className="space-y-1">
@@ -47,6 +49,13 @@ export function DiaryReferencePanel({ date, isToday }: DiaryReferencePanelProps)
           <DiaryRefLookback date={date} isToday={isToday} />
         </RefBlock>
       </section>
+      {guideItems.length > 0 && (
+        <section className="space-y-1 border-t border-border pt-4">
+          <RefBlock label="引导">
+            <DiaryRefGuide items={guideItems} />
+          </RefBlock>
+        </section>
+      )}
     </div>
   );
 }
