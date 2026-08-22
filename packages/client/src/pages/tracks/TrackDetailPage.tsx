@@ -156,13 +156,13 @@ export default function TrackDetailPage() {
     <div className="min-h-full bg-page text-ink">
       {dialog}
       <div className="mx-auto w-full max-w-3xl xl:max-w-6xl px-4 py-4 pb-24">
-        <div className="mb-3">
+        <div className="mb-4">
           <PageBackButton to="/tracks" label="轨道" />
         </div>
         {track === undefined ? (
-          <LoadingState label="正在加载..." className="rounded-card bg-surface px-3 py-6" />
+          <LoadingState label="正在加载..." className="py-6" />
         ) : track === null ? (
-          <p className="rounded-card bg-surface px-3 py-6 text-center td-text-body text-ink-3">轨道不存在</p>
+          <p className="py-6 text-center td-text-body text-ink-3">轨道不存在</p>
         ) : (
           <>
             <header className="mb-6 border-b border-border pb-4">
@@ -231,7 +231,7 @@ export default function TrackDetailPage() {
               )}
             </header>
             {actionError && (
-              <StatusBanner tone="danger" role="alert" className="mb-3">
+              <StatusBanner tone="danger" role="alert" className="mb-4">
                 {actionError}
               </StatusBanner>
             )}
@@ -258,7 +258,7 @@ export default function TrackDetailPage() {
                 {latest ? (
                   <CurrentFrameCard key={latest.id} step={latest} onEdit={editStep} onDelete={removeStep} />
                 ) : (
-                  <p className="mb-3 rounded-card bg-surface px-3 py-6 td-text-body text-center text-ink-3">尚无步骤</p>
+                  <p className="mb-4 py-6 td-text-body text-ink-3">尚无步骤</p>
                 )}
                 {isActive && (
                   <StepComposer

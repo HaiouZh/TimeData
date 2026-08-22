@@ -23,7 +23,7 @@ export function TrackTimeline({
 }) {
   const [showAll, setShowAll] = useState(false);
   if (steps.length === 0) {
-    return <p className="rounded-card bg-surface px-3 py-6 td-text-body text-center text-ink-3">尚无步骤</p>;
+    return <p className="py-6 td-text-body text-ink-3">尚无步骤</p>;
   }
   const currentId = currentStepId(steps);
   const ordered = orderedTimeline(steps);
