@@ -1,8 +1,7 @@
-import { DotsThree } from "@phosphor-icons/react";
 import type { TrackMilestone } from "@timedata/shared";
 import { useState } from "react";
-import { Icon } from "../../../components/Icon.js";
 import { Checkbox } from "../../../components/ui/Checkbox.js";
+import { OverflowMenu, type OverflowMenuItem } from "../../../components/ui/OverflowMenu.js";
 import {
   dropMilestone,
   insertMilestoneAt,
@@ -28,7 +27,6 @@ export function MilestoneRow(props: {
   const [insertTitle, setInsertTitle] = useState("");
   const [showDrop, setShowDrop] = useState(false);
   const [dropNote, setDropNote] = useState("");
-  const [menuOpen, setMenuOpen] = useState(false);
 
   const isDropped = milestone.status === "dropped";
 
@@ -249,75 +247,23 @@ export function MilestoneRow(props: {
         )}
       </div>
       {!readOnly && (
-        <div data-testid="milestone-menu" className="relative shrink-0">
-          <button
-            type="button"
-            aria-label="操作菜单"
-            data-testid="milestone-menu-trigger"
-            onClick={() => setMenuOpen((v) => !v)}
-            className="rounded-ctl px-2 py-1 text-ink-2 hover:text-ink"
-          >
-            <Icon icon={DotsThree} size={18} />
-          </button>
-          {menuOpen && (
-            <div
-              data-testid="milestone-menu-content"
-              className="absolute right-0 z-10 mt-1 flex min-w-40 flex-col gap-1 rounded-ctl border border-border bg-surface p-2 shadow"
-            >
-              {isDropped ? (
-                <button
-                  type="button"
-                  onClick={() => void handleRestore()}
-                  className="rounded-ctl px-3 py-1.5 text-left td-text-label text-ink hover:bg-surface-elevated"
-                >
-                  恢复为待办
-                </button>
-              ) : (
-                <>
-                  <button
-                    type="button"
-                    disabled={isFirst}
-                    onClick={() => void handleMoveUp()}
-                    className="rounded-ctl px-3 py-1.5 text-left td-text-label text-ink hover:bg-surface-elevated disabled:opacity-40"
-                  >
-                    上移
-                  </button>
-                  <button
-                    type="button"
-                    disabled={isLast}
-                    onClick={() => void handleMoveDown()}
-                    className="rounded-ctl px-3 py-1.5 text-left td-text-label text-ink hover:bg-surface-elevated disabled:opacity-40"
-                  >
-                    下移
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setShowInsert((v) => !v)}
-                    className="rounded-ctl px-3 py-1.5 text-left td-text-label text-ink hover:bg-surface-elevated"
-                  >
-                    在此段前加塞
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setShowDrop((v) => !v)}
-                    className="rounded-ctl px-3 py-1.5 text-left td-text-label text-ink hover:bg-surface-elevated"
-                  >
-                    砍掉留痕
-                  </button>
-                  {milestone.taskId != null && (
-                    <button
-                      type="button"
-                      onClick={() => void handleUnlink()}
-                      className="rounded-ctl px-3 py-1.5 text-left td-text-label text-ink hover:bg-surface-elevated"
-                    >
-                      解挂任务
-                    </button>
-                  )}
-                </>
-              )}
-            </div>
-          )}
-        </div>
+        <OverflowMenu
+          testId="milestone-menu"
+          ariaLabel="操作菜单"
+          items={
+            isDropped
+              ? ([{ key: "restore", label: "恢复为待办", onSelect: () => void handleRestore() }] satisfies OverflowMenuItem[])
+              : ([
+                  { key: "up", label: "上移", onSelect: () => void handleMoveUp(), disabled: isFirst },
+                  { key: "down", label: "下移", onSelect: () => void handleMoveDown(), disabled: isLast },
+                  { key: "insert", label: "在此段前加塞", onSelect: () => setShowInsert((v) => !v) },
+                  { key: "drop", label: "砍掉留痕", onSelect: () => setShowDrop((v) => !v), danger: true },
+                  ...(milestone.taskId != null
+                    ? [{ key: "unlink", label: "解挂任务", onSelect: () => void handleUnlink() }]
+                    : []),
+                ] satisfies OverflowMenuItem[])
+          }
+        />
       )}
     </div>
   );

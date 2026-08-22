@@ -67,10 +67,12 @@ async function mountRow(params: {
 }
 
 async function openMenu(host: HTMLElement): Promise<void> {
-  const trigger = host.querySelector('[data-testid="milestone-menu-trigger"]') as HTMLElement | null;
+  const trigger = host.querySelector(
+    '[data-testid="milestone-menu"] [aria-haspopup="menu"]',
+  ) as HTMLElement | null;
   if (!trigger) throw new Error("menu trigger not found");
   // if content already visible, skip
-  if (host.querySelector('[data-testid="milestone-menu-content"]')) return;
+  if (host.querySelector('[data-testid="milestone-menu"] [role="menu"]')) return;
   await act(async () => {
     trigger.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
   });
@@ -79,7 +81,7 @@ async function openMenu(host: HTMLElement): Promise<void> {
 
 async function clickMenuButton(host: HTMLElement, text: string): Promise<void> {
   await openMenu(host);
-  const btn = [...host.querySelectorAll('[data-testid="milestone-menu-content"] button')].find(
+  const btn = [...host.querySelectorAll('[data-testid="milestone-menu"] [role="menuitem"]')].find(
     (b) => b.textContent?.trim() === text,
   ) as HTMLElement | undefined;
   if (!btn) throw new Error(`menu button ${text} not found`);
@@ -319,7 +321,7 @@ describe("MilestoneRow", () => {
     });
     // menu should only have restore
     await openMenu(host);
-    const content = host.querySelector('[data-testid="milestone-menu-content"]');
+    const content = host.querySelector('[data-testid="milestone-menu"] [role="menu"]');
     expect(content?.textContent).toContain("恢复为待办");
     expect(content?.textContent).not.toContain("上移");
     expect(content?.textContent).not.toContain("砍掉留痕");
@@ -363,7 +365,7 @@ describe("MilestoneRow", () => {
     expect(host2.querySelector('[data-testid="milestone-task-chip"]')).toBeNull();
     // menu should not have 解挂任务 now
     await openMenu(host2);
-    const content = host2.querySelector('[data-testid="milestone-menu-content"]');
+    const content = host2.querySelector('[data-testid="milestone-menu"] [role="menu"]');
     expect(content?.textContent).not.toContain("解挂任务");
   });
 
