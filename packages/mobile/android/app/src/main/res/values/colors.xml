@@ -1,7 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- 与 capacitor.config.ts 的 android.backgroundColor / client --color-page 同源（#0e1320）：
-         窗口背景兜底。IME 动画等任何时刻 WebView 未覆盖到的缝隙露出的是它——默认主题是白色，
-         真机表现为键盘弹起时先闪一块「白框」。 -->
+    <!-- 与 capacitor.config.ts 的 android.backgroundColor / client 页面底色 token 同源（#0e1320）：
+         窗口背景兜底。IME 动画等任何时刻 WebView 未覆盖到的缝隙露出的是它。默认主题是白色，
+         真机表现为键盘弹起时先闪一块「白框」。（XML 注释里不能出现连续两个连字符，
+         故此处不写 CSS 变量原名，见 packages/client/src/index.css 的页面底色变量。） -->
     <color name="pageBackground">#0e1320</color>
 </resources>
