@@ -16,19 +16,12 @@ interface DebugLogEntry {
 const LOG_LIMIT = 7;
 
 function isEnabled(): boolean {
-  if (Capacitor.getPlatform() !== "web") return true;
+  // 一律 opt-in（含 native）：常显读数条被产品负责人判为页面污染（2026-08-22 验收反馈），
+  // 且首轮真机读数已把根因钉死。要再采数据时置 td.kbdDebug=1 出一个诊断包即可。
   try {
     return localStorage.getItem("td.kbdDebug") === "1";
   } catch {
     return false;
-  }
-}
-
-function readCache(): string {
-  try {
-    return `${localStorage.getItem("td.kbdHeightPx.portrait") ?? "-"}/${localStorage.getItem("td.kbdHeightPx.landscape") ?? "-"}`;
-  } catch {
-    return "-";
   }
 }
 
@@ -43,7 +36,7 @@ function readCache(): string {
  * - 流水里 willHide 缺失 → 事件丢失（候选 C6-2 命中）；
  * - kh 先跳缓存值再被 willShow 校正 → 预测抬升在场的时序证据。
  *
- * native 平台常显；web 平台需 localStorage 置 td.kbdDebug=1。pointer-events 关闭，
+ * 所有平台都需 localStorage 置 td.kbdDebug=1 才显示（默认零痕迹）。pointer-events 关闭，
  * 不参与任何交互与布局，读数每次事件驱动刷新，无轮询。
  */
 export function KeyboardDebugOverlay() {
@@ -123,7 +116,7 @@ export function KeyboardDebugOverlay() {
         {Math.round(readViewportBottomGap())}
       </div>
       <div>
-        kh:{Math.round(keyboardHeight)} vis:{keyboardVisible ? "T" : "F"} cache:{readCache()}
+        kh:{Math.round(keyboardHeight)} vis:{keyboardVisible ? "T" : "F"}
       </div>
       {log.map((entry) => (
         <div key={`${entry.t}-${entry.tag}`}>

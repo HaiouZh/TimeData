@@ -131,7 +131,7 @@ describe("useKeyboardHeight — native", () => {
     await unmount(root);
   });
 
-  it("插件 addListener 返回 rejected promise（插件缺席）时静默降级，实测路径照常", async () => {
+  it("插件 addListener 返回 rejected promise（插件缺席）时静默降级，不炸也不抬", async () => {
     // 插件缺席时 Capacitor 的 addListener **不是同步抛**而是返回 rejected promise（web 桥
     // UNIMPLEMENTED / native 壳未注册同理），只包 try/catch 逮不住——rejection 无人接就是
     // unhandled rejection（AppShell 挂 KeyboardAvoidanceBridge 后 App.keptStack.test.tsx 在
@@ -155,8 +155,9 @@ describe("useKeyboardHeight — native", () => {
       await new Promise((resolve) => window.setTimeout(resolve, 0));
     });
 
-    // 只剩实测路径：800 - 500 - 0 = 300，好过整条 effect 挂掉。
-    expect(readHeight(host)).toBe("300");
+    // TG 单源：native 无插件信源时高度恒 0（宁可不抬也不引入实测与事件的双源竞态），
+    // 本用例真正钉的是 rejection 被同步接住、整条 effect 不挂。
+    expect(readHeight(host)).toBe("0");
 
     await unmount(root);
   });
@@ -201,7 +202,10 @@ describe("useKeyboardHeight — 壳已经让过位时不再重复避让", () => 
     await unmount(root);
   });
 
-  it("壳缩过一次后，下一次弹起首帧就不再冲高（不抖）", async () => {
+  it("壳缩量不留跨次记忆：收起恢复后再弹起，首帧按插件全额、壳缩到位后收敛 0", async () => {
+    // 旧版把「上次实测到的缩量」记下来给下一次弹起预扣——那份记忆在壳行为变化时就是
+    // 「飞半空 / 抬不够」的温床（2026-08-22 对抗验证 C5-2 一族）。新口径：每次弹起都按
+    // 当下实况算，首帧的瞬态目标由输入条 250ms 的 td-kbd-motion 过渡消化，不留跨次状态。
     getPlatformMock.mockReturnValue("android");
     setInnerHeight(800);
     const callbacks = mockNativeKeyboard();
@@ -227,49 +231,56 @@ describe("useKeyboardHeight — 壳已经让过位时不再重复避让", () => 
     });
     expect(readHeight(host)).toBe("0");
 
-    // 再次弹起，壳尚未 reflow：按上次实测到的缩量预扣，首帧即 0，不再先冲到 300 再落回。
+    // 再次弹起、壳尚未 reflow：无记忆可预扣，按插件全额（壳不缩的设备这就是终值）。
     await act(async () => {
       callbacks.keyboardWillShow?.({ keyboardHeight: 300 });
+    });
+    expect(readHeight(host)).toBe("300");
+
+    // 壳缩到位：跟随收敛为 0。
+    setInnerHeight(500);
+    await act(async () => {
+      window.dispatchEvent(new Event("resize"));
     });
     expect(readHeight(host)).toBe("0");
 
     await unmount(root);
   });
 
-  it("壳逐帧缩 webview（IME 动画同步）期间基线不漂移：插件事件最后到达时不叠成双倍", async () => {
-    // 安卓壳改逐帧让位（WindowInsetsAnimationCompat.onProgress）后，动画期间每帧一个 resize、
-    // 且插件高度尚为 0。基线若在这些帧里被「顺手校准」到缩小中的值，动画结束插件报 300 时
-    // 壳缩量会算成 0，JS 再叠 300 = 双倍避让（输入条飞到键盘上方一个键盘高）。
-    // 键盘在不在场 recompute 无从直接知道，但「可编辑元素持焦点」时禁校准即可挡住整段动画窗口。
+  it("willShow 先到、壳逐帧缩（IME 动画同步）：每帧跟随扣除，不叠成双倍", async () => {
+    // 安卓插件的 willShow 在 IME inset 动画 onStart 即发（2026-08-22 真机读数：WS 早于任何
+    // 壳 reflow），此后壳若逐帧缩 webview，键盘在场（raw>0）期间基线不被校准，
+    // 每帧 shrink 如实扣除——动画结束正好收敛到 0。
     getPlatformMock.mockReturnValue("android");
     setInnerHeight(800);
     const callbacks = mockNativeKeyboard();
-    const input = document.createElement("input");
-    document.body.appendChild(input);
-    input.focus();
 
     const { host, root } = await renderDom(createElement(Probe));
 
-    // IME 动画逐帧缩：每帧 resize 时插件高度仍为 0。
-    for (const frameHeight of [740, 660, 580, 500]) {
+    await act(async () => {
+      callbacks.keyboardWillShow?.({ keyboardHeight: 300 });
+    });
+    expect(readHeight(host)).toBe("300");
+
+    for (const [frameHeight, expected] of [
+      [740, "240"],
+      [660, "160"],
+      [500, "0"],
+    ] as const) {
       setInnerHeight(frameHeight);
       await act(async () => {
         window.dispatchEvent(new Event("resize"));
       });
+      expect(readHeight(host)).toBe(expected);
     }
-    // 动画结束插件事件才到：壳已让掉 300（基线 800 - 现值 500），JS 必须收敛为 0。
-    await act(async () => {
-      callbacks.keyboardWillShow?.({ keyboardHeight: 300 });
-    });
-    expect(readHeight(host)).toBe("0");
 
-    input.remove();
     await unmount(root);
   });
 
-  it("native 平台上 visualViewport 实测到的遮挡量优先于插件高度", async () => {
-    // 壳把视口整体上移（WKWebView 的 scroll-to-focus）而非缩小时，innerHeight 不变、
-    // 实测 gap 才说得出真相；插件高度此时是过量的。
+  it("native 不拿 visualViewport 实测与插件高度互相校正（TG 单源）", async () => {
+    // 旧版「实测优先于插件」让三个信号源互相校正，正是「飞半空 / 收起悬空」竞态的温床
+    //（对抗验证报告 .dispatch/20260822-kbd-statemachine）。新口径：native 只信插件事件，
+    // vv 有读数也不接管——2026-08-22 真机读数里两者数值本就相同（gap 302 == WS 302）。
     getPlatformMock.mockReturnValue("ios");
     setInnerHeight(800);
     const viewport = createViewportMock({ height: 620, offsetTop: 0 });
@@ -281,8 +292,7 @@ describe("useKeyboardHeight — 壳已经让过位时不再重复避让", () => 
     await act(async () => {
       callbacks.keyboardWillShow?.({ keyboardHeight: 300 });
     });
-    // 实测：800 - 620 - 0 = 180 被遮，而插件报 300。以实测为准。
-    expect(readHeight(host)).toBe("180");
+    expect(readHeight(host)).toBe("300");
 
     await unmount(root);
   });
@@ -341,39 +351,32 @@ describe("useKeyboardHeight — 壳已经让过位时不再重复避让", () => 
     await unmount(root);
   });
 
-  it("抑制窗口过期后，实测路径恢复效力", async () => {
-    // 抑制只为吞掉收起动画的残影（~250ms），不能永久闭眼——过期后 visualViewport 再报遮挡
-    //（如 web 外接场景、壳行为变化）仍要能避让。实现读 Date.now()，这里直接 mock 它推进时间，
-    // 不涉及定时器等待。
+  it("收起之后任意时刻，实测报遮挡也不再接管（单源，450ms 抑制窗随之退役）", async () => {
+    // 旧版收起后压制实测 450ms、过期恢复效力——「过期恢复」正是 ToDo 收起悬空的存活候选
+    // C6-1（vv 恢复慢于 450ms 时高度被残影顶回）。单源后 native 永不读实测，此竞态整族消亡。
     getPlatformMock.mockReturnValue("ios");
     setInnerHeight(800);
     const viewport = createViewportMock({ height: 500, offsetTop: 0 });
     (window as unknown as { visualViewport?: unknown }).visualViewport = viewport;
     const callbacks = mockNativeKeyboard();
-    const nowSpy = vi.spyOn(Date, "now").mockReturnValue(100_000);
 
-    try {
-      const { host, root } = await renderDom(createElement(Probe));
+    const { host, root } = await renderDom(createElement(Probe));
 
-      await act(async () => {
-        callbacks.keyboardWillShow?.({ keyboardHeight: 300 });
-      });
-      await act(async () => {
-        callbacks.keyboardWillHide?.();
-      });
-      expect(readHeight(host)).toBe("0");
+    await act(async () => {
+      callbacks.keyboardWillShow?.({ keyboardHeight: 300 });
+    });
+    await act(async () => {
+      callbacks.keyboardWillHide?.();
+    });
+    expect(readHeight(host)).toBe("0");
 
-      // 过了抑制窗口（500ms 后），viewport 仍在报遮挡 → 实测重新说了算。
-      nowSpy.mockReturnValue(100_500);
-      await act(async () => {
-        viewport.fire("resize");
-      });
-      expect(readHeight(host)).toBe("300");
+    // 收起后很久 viewport 仍报遮挡（恢复慢 / offsetTop 粘连）：事件说收起了就是收起了。
+    await act(async () => {
+      viewport.fire("resize");
+    });
+    expect(readHeight(host)).toBe("0");
 
-      await unmount(root);
-    } finally {
-      nowSpy.mockRestore();
-    }
+    await unmount(root);
   });
 
   it("android overlay 模型：壳不动、视口无任何变化，插件高度即遮挡量（willShow 动画起点即发）", async () => {
@@ -401,13 +404,14 @@ describe("useKeyboardHeight — 壳已经让过位时不再重复避让", () => 
     await unmount(root);
   });
 
-  // TG kbd_height 式预测：插件事件要过 JS 桥（几十 ms），等它到才抬 = 用户看见「后加载痕迹」。
-  // focusin 那一刻先按记忆值抬到位，事件到达后校正并回写缓存；预测值与实测通常相同，校正不可见。
-  it("focusin 预测抬升：有缓存用缓存值，willShow 到达后校正并回写", async () => {
+  // TG 单源：双端 Telegram 都**不做**预测抬升（安卓等真实 Resize、iOS 等 WillChangeFrame，
+  // kbd_height 缓存只用于表情面板估高、不驱动输入条位移——采掘报告 .dispatch/20260822-tg-reference
+  // P9(e)/P10(e)）。此前的 focusin 预抬让输入条「先按记忆值动一段、willShow 再校正」，
+  // 两段运动就是真机「唤起卡顿」的主体，且预测值是三源竞态的一极。
+  it("focusin 不预抬：高度只由插件事件驱动（TG 单源）", async () => {
     getPlatformMock.mockReturnValue("android");
     setInnerHeight(800);
-    // 缓存按横竖屏分键：钉死竖屏口径（jsdom 默认 innerWidth 1024 会被判成横屏）。
-    Object.defineProperty(window, "innerWidth", { value: 390, configurable: true });
+    // 就算留着旧缓存也不读：预测机制整体退役。
     localStorage.setItem("td.kbdHeightPx.portrait", "287");
     const callbacks = mockNativeKeyboard();
     const input = document.createElement("input");
@@ -418,36 +422,31 @@ describe("useKeyboardHeight — 壳已经让过位时不再重复避让", () => 
     await act(async () => {
       input.dispatchEvent(new FocusEvent("focusin", { bubbles: true }));
     });
-    // 事件未到，先按缓存预测。
-    expect(readHeight(host)).toBe("287");
+    expect(readHeight(host)).toBe("0");
 
     await act(async () => {
       callbacks.keyboardWillShow?.({ keyboardHeight: 301 });
     });
     expect(readHeight(host)).toBe("301");
-    // 实测值回写缓存，下次预测用它。
-    expect(localStorage.getItem("td.kbdHeightPx.portrait")).toBe("301");
 
     input.remove();
     localStorage.removeItem("td.kbdHeightPx.portrait");
     await unmount(root);
   });
 
-  it("focusin 预测：无缓存用保守默认值；focusout 到非可编辑目标即归零（预测的自愈出口）", async () => {
+  it("focusout 到非可编辑目标即归零（willHide 丢失时的自愈出口）", async () => {
     getPlatformMock.mockReturnValue("ios");
     setInnerHeight(800);
     const callbacks = mockNativeKeyboard();
-    void callbacks;
     const input = document.createElement("input");
     document.body.appendChild(input);
 
     const { host, root } = await renderDom(createElement(Probe));
 
     await act(async () => {
-      input.dispatchEvent(new FocusEvent("focusin", { bubbles: true }));
+      callbacks.keyboardWillShow?.({ keyboardHeight: 300 });
     });
-    const predicted = Number(readHeight(host));
-    expect(predicted).toBeGreaterThan(0);
+    expect(readHeight(host)).toBe("300");
 
     await act(async () => {
       input.dispatchEvent(new FocusEvent("focusout", { bubbles: true, relatedTarget: null }));
@@ -458,10 +457,9 @@ describe("useKeyboardHeight — 壳已经让过位时不再重复避让", () => 
     await unmount(root);
   });
 
-  it("focusin 预测不覆盖已有的真实高度（切输入框时键盘还在，别把 301 冲回预测值）", async () => {
+  it("focusout 去向仍可编辑（换输入框）不闪落", async () => {
     getPlatformMock.mockReturnValue("android");
     setInnerHeight(800);
-    localStorage.setItem("td.kbdHeightPx.portrait", "287");
     const callbacks = mockNativeKeyboard();
     const inputA = document.createElement("input");
     const inputB = document.createElement("textarea");
@@ -470,19 +468,18 @@ describe("useKeyboardHeight — 壳已经让过位时不再重复避让", () => 
     const { host, root } = await renderDom(createElement(Probe));
 
     await act(async () => {
-      inputA.dispatchEvent(new FocusEvent("focusin", { bubbles: true }));
       callbacks.keyboardWillShow?.({ keyboardHeight: 301 });
     });
     expect(readHeight(host)).toBe("301");
 
+    // 键盘在两个输入框之间保持弹起：focusout 的去向仍是可编辑元素，高度不动。
     await act(async () => {
-      inputB.dispatchEvent(new FocusEvent("focusin", { bubbles: true }));
+      inputA.dispatchEvent(new FocusEvent("focusout", { bubbles: true, relatedTarget: inputB }));
     });
     expect(readHeight(host)).toBe("301");
 
     inputA.remove();
     inputB.remove();
-    localStorage.removeItem("td.kbdHeightPx.portrait");
     await unmount(root);
   });
 
@@ -629,11 +626,12 @@ describe("useKeyboardVisible — 键盘在不在场，与「还挡着多少」�
   });
 });
 
-describe("useKeyboardVisible — focusin 预测性在场（聚焦即在场，不等滞后信号）", () => {
-  // Telegram Android 的核心原则「预测先行、实测校正」：用户点输入框那一刻就知道键盘要来了，
-  // 不必等壳缩 webview（与 IME 动画同步）更不必等插件事件（键盘显示完毕才发）。在场信号
-  // 提前到 focusin，消费方（收底栏、composer 定位）首帧即到位，输入条不再「上蹿下跳找位置」。
-  it("native：可编辑元素 focusin 那一刻即在场，不等插件事件与壳缩", async () => {
+describe("useKeyboardVisible — 不做预测性在场（TG 单源），focusout 只当自愈出口", () => {
+  // Telegram 双端都不做预测：安卓等真实 Resize（等不到就每 100ms 重试 showKeyboard），
+  // iOS 等 WillChangeFrame（采掘报告 .dispatch/20260822-tg-reference P9(e)/P10(e)）。
+  // 此前 focusin 即置在场让消费方（收底栏 / composer 定位）先动一段再被事件校正——
+  // 与高度侧的预测抬升叠成「上蹿下跳找位置」。在场信号一律等真实键盘信号。
+  it("native：focusin 不置在场——等插件事件或壳缩，不预测", async () => {
     getPlatformMock.mockReturnValue("android");
     addListenerMock.mockImplementation(() => Promise.resolve({ remove: vi.fn() }));
 
@@ -645,15 +643,24 @@ describe("useKeyboardVisible — focusin 预测性在场（聚焦即在场，不
     await act(async () => {
       input.dispatchEvent(new FocusEvent("focusin", { bubbles: true }));
     });
-    expect(readVisible(host)).toBe("true");
+    expect(readVisible(host)).toBe("false");
 
     input.remove();
     await unmount(root);
   });
 
+  function mockVisibleKeyboard() {
+    const callbacks: Record<string, (arg?: unknown) => void> = {};
+    addListenerMock.mockImplementation((eventName: string, cb: (arg?: unknown) => void) => {
+      callbacks[eventName] = cb;
+      return Promise.resolve({ remove: vi.fn() });
+    });
+    return callbacks;
+  }
+
   it("native：focusout 切到另一个可编辑元素（换输入框）不闪落", async () => {
     getPlatformMock.mockReturnValue("android");
-    addListenerMock.mockImplementation(() => Promise.resolve({ remove: vi.fn() }));
+    const callbacks = mockVisibleKeyboard();
 
     const { host, root } = await renderDom(createElement(VisibleProbe));
     const inputA = document.createElement("input");
@@ -661,7 +668,7 @@ describe("useKeyboardVisible — focusin 预测性在场（聚焦即在场，不
     document.body.append(inputA, inputB);
 
     await act(async () => {
-      inputA.dispatchEvent(new FocusEvent("focusin", { bubbles: true }));
+      callbacks.keyboardWillShow?.({ keyboardHeight: 300 });
     });
     expect(readVisible(host)).toBe("true");
 
@@ -678,14 +685,14 @@ describe("useKeyboardVisible — focusin 预测性在场（聚焦即在场，不
 
   it("native：focusout 到非可编辑目标时离场（外接键盘 / 插件事件缺席时的自愈出口）", async () => {
     getPlatformMock.mockReturnValue("android");
-    addListenerMock.mockImplementation(() => Promise.resolve({ remove: vi.fn() }));
+    const callbacks = mockVisibleKeyboard();
 
     const { host, root } = await renderDom(createElement(VisibleProbe));
     const input = document.createElement("input");
     document.body.appendChild(input);
 
     await act(async () => {
-      input.dispatchEvent(new FocusEvent("focusin", { bubbles: true }));
+      callbacks.keyboardWillShow?.({ keyboardHeight: 300 });
     });
     expect(readVisible(host)).toBe("true");
 
@@ -711,10 +718,7 @@ describe("useKeyboardVisible — focusin 预测性在场（聚焦即在场，不
     const input = document.createElement("input");
     document.body.appendChild(input);
 
-    await act(async () => {
-      input.dispatchEvent(new FocusEvent("focusin", { bubbles: true }));
-    });
-    // 壳让位（IME 动画同步缩 webview）。
+    // 壳让位（IME 动画同步缩 webview）：缩量分支置起在场。
     Object.defineProperty(window, "innerHeight", { value: 500, configurable: true });
     viewport.height = 500;
     await act(async () => {

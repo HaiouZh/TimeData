@@ -112,7 +112,9 @@ export function TodoComposer({
     <form
       ref={setFormRef}
       onSubmit={submit}
-      className="fixed left-0 right-0 border-t border-border bg-page/95 p-2 backdrop-blur transition-transform duration-200 ease-out will-change-transform [bottom:var(--bottom-offset)] sm:p-3"
+      // 实心底 + td-kbd-motion（250ms TG 曲线）：backdrop-blur 与 transform 位移动画同帧是
+      // 移动端掉帧经典组合（TG 输入条也是实心的），键盘运动期间不能挂模糊。
+      className="td-kbd-motion fixed left-0 right-0 border-t border-border bg-page p-2 [bottom:var(--bottom-offset)] sm:p-3"
       // 载体分工（键盘运动波）：bottom 只装安全区、恒定不动；动态抬升（navOffset / 键盘高）走
       // transform: translateY(-抬升量)——吃上面 transition-transform 的过渡，键盘弹起/收起、底栏
       // 显隐的位移全部变成滑动（合成器线程，无重排），等效终点位置与迁移前逐值相等。

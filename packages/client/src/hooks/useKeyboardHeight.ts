@@ -6,61 +6,12 @@ import { useEffect, useState } from "react";
 // 才当作键盘遮挡，避免误报。
 const KEYBOARD_BOTTOM_GAP_THRESHOLD_PX = 80;
 
-// keyboardWillHide 后压制实测路径的时长：visualViewport 要等键盘收起动画结束（iOS 约 250ms）
-// 才恢复，动画期间实测仍报遮挡，不压会把高度顶住不落——输入条比键盘晚落一拍（用户实测
-//「收起输入法后输入框有个下滑动作」）。取动画时长 + 余量；窗口内只压「实测优先」分支，
-// 重新弹起（willShow）立即清零该窗口，不影响任何弹起路径。
-const HIDE_MEASURE_SUPPRESS_MS = 450;
-
 function readInnerHeight(): number {
   return typeof window === "undefined" ? 0 : window.innerHeight;
 }
 
-// —— TG kbd_height 式键盘高度记忆（预测先行、实测校正）——
-// 插件事件要过 JS 桥（几十 ms），等它到才抬升 = 真机可见的「后加载痕迹」。focusin 那一刻先按
-// 记忆值抬到位；插件 willShow 带真实高度到达后校正并回写。横竖屏分开记（TG 同款），无记忆时
-// 用保守默认值（预测偏差由 transform 过渡在 200ms 内消化，通常不可见）。
-const KEYBOARD_HEIGHT_CACHE_KEY_PORTRAIT = "td.kbdHeightPx.portrait";
-const KEYBOARD_HEIGHT_CACHE_KEY_LANDSCAPE = "td.kbdHeightPx.landscape";
-const KEYBOARD_HEIGHT_FALLBACK_PX = 300;
-// 面板类高度污染护栏（TG 的 >50dp 同款）：小于它的实测值不进缓存。
-const KEYBOARD_HEIGHT_CACHE_MIN_PX = 80;
-
-function keyboardHeightCacheKey(): string {
-  return window.innerWidth > window.innerHeight
-    ? KEYBOARD_HEIGHT_CACHE_KEY_LANDSCAPE
-    : KEYBOARD_HEIGHT_CACHE_KEY_PORTRAIT;
-}
-
-function readPredictedKeyboardHeight(): number {
-  try {
-    const cached = Number(localStorage.getItem(keyboardHeightCacheKey()));
-    if (Number.isFinite(cached) && cached >= KEYBOARD_HEIGHT_CACHE_MIN_PX) return cached;
-  } catch {
-    // localStorage 不可用（隐私模式等）：退默认值。
-  }
-  return KEYBOARD_HEIGHT_FALLBACK_PX;
-}
-
-function writeMeasuredKeyboardHeight(heightPx: number): void {
-  if (heightPx < KEYBOARD_HEIGHT_CACHE_MIN_PX) return;
-  try {
-    localStorage.setItem(keyboardHeightCacheKey(), String(Math.round(heightPx)));
-  } catch {
-    // 写不进就算了，下次仍用默认值。
-  }
-}
-
-// 「键盘八成在场/在路上」的粗判据：可编辑元素持焦点。安卓壳逐帧让位（WindowInsetsAnimationCompat
-// 的 onProgress）后，IME 动画期间每帧一个 resize 且插件高度仍为 0——基线若在这些帧里被顺手校准到
-// 缩小中的值，动画结束插件报高时壳缩量会算成 0，JS 再叠一个键盘高 = 双倍避让。焦点期禁校准即可
-// 挡住整段动画窗口；键盘真正收起时 Bridge 会 blur 焦点，校准随之恢复。
 function isEditableTarget(target: EventTarget | null): boolean {
   return target instanceof HTMLElement && target.matches("input, textarea, [contenteditable]");
-}
-
-function isEditableFocused(): boolean {
-  return isEditableTarget(document.activeElement);
 }
 
 /**
@@ -78,31 +29,15 @@ export function readViewportBottomGap(): number {
 }
 
 /**
- * 键盘挡住页面底部多少（px）——**不是**键盘自身的高度，而是「JS 还需要额外让开多少」。
- * 键盘收起、或壳已经自己让过位时都是 0。
+ * 键盘**在不在场**，与 useKeyboardHeight 的「还挡着多少」刻意解耦：壳层让过位时遮挡量恒 0——
+ * 那是「JS 无需再让位」，不等于「键盘没弹」。「键盘弹起时收起底栏」「composer 不算滚动隐藏」
+ * 这类在场判断必须用本信号。
  *
- * 为什么不能直接用插件报的键盘高度：`@capacitor/keyboard` 的 `resize` 配置**只有 iOS 读**
- *（Android 端 `KeyboardPlugin.java` 只读 `resizeOnFullScreen`，`setResizeMode` 是 unimplemented），
- * 而 iOS 侧 `resize: none` 也只拦住插件自己 resize，拦不住 WebKit 因聚焦输入框而挪视口。
- * 也就是说「壳不会自己让位」这个前提在两个平台上都没人保证：壳一旦让过位，JS 再加一个
- * 键盘高就是双倍避让，输入条会冲到屏幕上半部分（安卓表现为飞到顶上，iOS 表现为钻进顶栏底下看不见）。
- *
- * 故口径改成实测优先、插件兜底：
- * 1. `visualViewport` 实测到底部仍被遮 → 用实测值。这一条自动涵盖「壳缩了 webview」（实测为 0）
- *    与「壳挪了视口」（实测已扣掉挪动量）两种让位方式，不需要事先知道壳会怎么做。
- * 2. 实测报不出遮挡（iOS `resize: none` 下 WebKit 可能既不缩视口也不更新 visualViewport）→
- *    回落到插件高度，再减去壳实际缩掉的高度（`innerHeight` 相对键盘收起时的基线）。
- *
- * web / PWA 没有插件桥接，插件高度恒 0，结果等于第 1 条的纯实测值——与本次改动前的 web 路径一字不差。
- */
-/**
- * 键盘**在不在场**，与 useKeyboardHeight 的「还挡着多少」刻意解耦：安卓壳层让位
- * （adjustResize + ime inset，见 check-android-config.mjs）后遮挡量恒 0——那是「JS 无需再让位」，
- * 不等于「键盘没弹」。「键盘弹起时收起底栏」「composer 不算滚动隐藏」这类在场判断必须用本信号。
- *
- * 口径：native 平台由插件事件驱动（壳让位后 keyboardWillShow/Hide 照发，是唯一还知道键盘在场的
- * 信源）；web / PWA 无插件桥接，用实测遮挡兜底（超阈值即在场）。插件缺席时 native 也落到实测兜底
- * ——rejection 接法与 useKeyboardHeight 同款（addListener 缺席时返回 rejected promise，非同步抛）。
+ * 口径（TG 单源模型，2026-08-22 真机读数钉死）：native 平台由插件事件驱动——安卓 willShow 在
+ * IME inset 动画 onStart 即发、iOS 走 UIKit 通知，都是「动画开始那一刻」的信号，不需要预测；
+ * 壳缩 webview 的设备另有缩量兜底（缩量与 IME 动画同步，比插件事件还早半拍）。web / PWA 无插件
+ * 桥接，用实测遮挡兜底。focusout 到非可编辑目标即离场：这是插件事件缺席 / 外接键盘（willShow
+ * 永不来）时把在场信号收回来的唯一自愈出口。
  */
 export function useKeyboardVisible(): boolean {
   const [visible, setVisible] = useState(false);
@@ -110,15 +45,12 @@ export function useKeyboardVisible(): boolean {
   useEffect(() => {
     if (typeof window === "undefined") return;
 
-    // 壳还没让位时的 innerHeight 基线。安卓的 adjustResize 与 IME 动画同步地缩 webview，
-    // 而插件的 keyboardWillShow 由 OnGlobalLayoutListener 驱动、**键盘显示完毕才发**；中间这段
-    // 窗口里在场信号是假的「不在场」，消费方（待办页的 navOffsetPx）据此还给底栏留着一个身位，
-    // 等事件到了才把输入条向下吸附一段——真机观感即「先渲染到页面中间，键盘完整出现后才吸附」。
-    // 缩量与动画同步，拿它把这段窗口补上。
+    // 壳还没让位时的 innerHeight 基线。壳缩 webview 的设备上，缩量与 IME 动画同步，
+    // 是最早的在场信号；壳不动的设备（overlay 模型，本仓当前配置）此分支恒不触发。
     let baselineInnerHeight = readInnerHeight();
-    // keyboardWillHide 之后压住缩量路径，直到壳真的把 webview 恢复回来。事件先到、壳 reflow 在后，
-    // 恢复途中的中间帧缩量仍超阈值，不压就会把刚落下的在场状态一路顶回 true（底栏收着不回来、
-    // 输入条停在键盘早已消失的位置）。按缩量解除、不猜动画时长——壳分几帧恢复都不影响判定。
+    // keyboardWillHide / focusout 之后压住缩量路径，直到壳真的把 webview 恢复回来。事件先到、
+    // 壳 reflow 在后，恢复途中的中间帧缩量仍超阈值，不压就会把刚落下的在场状态一路顶回 true。
+    // 按缩量解除、不猜动画时长——壳分几帧恢复都不影响判定。
     let shrinkSuppressed = false;
 
     const handleViewportChange = () => {
@@ -146,16 +78,9 @@ export function useKeyboardVisible(): boolean {
     viewport?.addEventListener("resize", handleViewportChange);
     viewport?.addEventListener("scroll", handleViewportChange);
 
-    // 预测性在场（Telegram 式「预测先行、实测校正」）：用户聚焦可编辑元素那一刻就知道键盘要来，
-    // 不等壳缩 webview（与 IME 动画同步）更不等插件事件（安卓键盘显示完毕才发）——消费方
-    // （收底栏 / composer 定位）首帧即到位。只挂 native：桌面浏览器聚焦输入框不许收底栏。
-    // focusout 到非可编辑目标即离场：换输入框（去向仍可编辑）不闪落；这同时是插件事件缺席 /
-    // 外接键盘（willShow 永不来）时把在场信号收回来的唯一自愈出口。
-    const handleFocusIn = (event: FocusEvent) => {
-      if (!isEditableTarget(event.target)) return;
-      shrinkSuppressed = false;
-      setVisible(true);
-    };
+    // focusout 到非可编辑目标即离场（换输入框不闪落）：插件事件缺席 / 外接键盘时的自愈出口。
+    // 刻意**没有** focusin 对称分支——TG 双端都不做预测性在场，聚焦一律等真实键盘信号
+    //（预测会让消费方先动一段再被校正，真机观感即「卡顿 / 上蹿下跳找位置」）。
     const handleFocusOut = (event: FocusEvent) => {
       if (!isEditableTarget(event.target)) return;
       if (isEditableTarget(event.relatedTarget)) return;
@@ -167,7 +92,6 @@ export function useKeyboardVisible(): boolean {
     };
     const nativePlatform = Capacitor.getPlatform() !== "web";
     if (nativePlatform) {
-      window.addEventListener("focusin", handleFocusIn);
       window.addEventListener("focusout", handleFocusOut);
     }
 
@@ -200,7 +124,6 @@ export function useKeyboardVisible(): boolean {
       viewport?.removeEventListener("resize", handleViewportChange);
       viewport?.removeEventListener("scroll", handleViewportChange);
       if (nativePlatform) {
-        window.removeEventListener("focusin", handleFocusIn);
         window.removeEventListener("focusout", handleFocusOut);
       }
       removeNative();
@@ -210,6 +133,23 @@ export function useKeyboardVisible(): boolean {
   return visible;
 }
 
+/**
+ * 键盘挡住页面底部多少（px）——**不是**键盘自身的高度，而是「JS 还需要额外让开多少」。
+ * 键盘收起、或壳已经自己让过位时都是 0。
+ *
+ * TG 单源模型（对抗验证 + 2026-08-22 真机读数后重写，报告见 .dispatch/20260822-kbd-statemachine
+ * 与 20260822-tg-reference）：
+ *
+ * - **native 只听插件事件**。安卓 willShow 在 IME inset 动画 onStart 即发、带最终高度（CSS px，
+ *   插件源码 imeHeight/density）；iOS 走 UIKit WillShow/WillHide 通知。事件到达即起步，输入条的
+ *   `.td-kbd-motion` 过渡（250ms，TG DEFAULT_INTERPOLATOR 同参）与 IME 动画同向同段滑动。
+ *   Telegram 双端同款：不预测（focusin 不预抬——预测值与校正值的两段运动就是「唤起卡顿」）、
+ *   不拿 visualViewport 实测与事件互相校正（多源竞态正是「飞半空 / 收起悬空」的温床）。
+ * - **壳缩量兜底**：壳真的缩了 webview 的设备（本仓配置下不该发生，OEM 兜底），按
+ *   「基线 - 当前 innerHeight」把壳已让掉的量从插件高度里扣除；基线只在键盘不在场时校准。
+ * - **web / PWA 无插件桥接**：visualViewport 实测是唯一信源，行为与历史版本一字不差。
+ * - focusout 到非可编辑目标把高度清零：插件 willHide 丢失时的自愈出口（TG 之外的 webview 现实）。
+ */
 export function useKeyboardHeight(): number {
   const [height, setHeight] = useState(0);
 
@@ -219,37 +159,27 @@ export function useKeyboardHeight(): number {
     // 键盘收起时的 innerHeight。壳缩 webview 时 innerHeight 会变小，差值就是壳已经让掉的量。
     let baselineInnerHeight = readInnerHeight();
     let rawKeyboardPx = 0;
-    // 上一次实测到的壳缩量。壳的 reflow 晚于 keyboardWillShow，首帧无从判断；记住上次的结果，
-    // 下次弹起就能立刻按同样的量预扣，避免「先冲高再落回」的抖动（首次弹起仍会收敛一次）。
-    let lastShellShrinkPx = 0;
-    // 实测压制截止时刻（Date.now() 口径）。keyboardWillHide 竖起，willShow 清零；只有插件事件
-    // 写它，web / PWA 恒为 0、实测路径行为不变。
-    let suppressMeasureUntilMs = 0;
+    const webPlatform = Capacitor.getPlatform() === "web";
 
     const recompute = () => {
-      // 实测**先于**「插件说键盘收起了」判断：web / PWA 没有插件桥接，rawKeyboardPx 恒 0，
-      // 先判收起会把整条实测路径短路成 0（回归护栏用例「visualViewport 差值超过阈值出正值」守这里）。
-      // 唯一例外：插件刚宣布收起（HIDE_MEASURE_SUPPRESS_MS 窗口内），收起动画期间的实测残影不作数，
-      // 否则输入条要等 visualViewport 恢复才落、比键盘晚一拍。
-      const measuredGap = readViewportBottomGap();
-      if (measuredGap > 0 && Date.now() >= suppressMeasureUntilMs) {
-        setHeight(measuredGap);
+      // web：实测是唯一信源（无插件桥接，rawKeyboardPx 恒 0）。
+      if (webPlatform) {
+        setHeight(readViewportBottomGap());
         return;
       }
 
       if (rawKeyboardPx <= 0) {
-        // 键盘收起且实测无遮挡：此刻 innerHeight 就是没有键盘时的真实值，顺手刷新基线
+        // 键盘不在场：此刻 innerHeight 就是没有键盘时的真实值，顺手刷新基线
         //（壳缩过 webview 的话，它恢复全高时会再触发一次 resize，基线随之回到全高）。
-        // 例外：可编辑元素持焦点时不校准——壳逐帧让位的 IME 动画期间插件高度仍为 0，
-        // 把缩小中的 innerHeight 当基线会让随后的壳缩量算成 0、叠成双倍避让（见 isEditableFocused）。
-        if (!isEditableFocused()) baselineInnerHeight = readInnerHeight();
+        baselineInnerHeight = readInnerHeight();
         setHeight(0);
         return;
       }
 
+      // 键盘在场：插件高度减去壳已让掉的量。壳不动（overlay，本仓配置）时 shrink 恒 0、
+      // 全额生效；壳缩了的设备逐次 resize 跟随，不留跨次记忆（记忆值曾是「飞半空」的温床）。
       const shellShrinkPx = Math.max(0, baselineInnerHeight - readInnerHeight());
-      if (shellShrinkPx > 0) lastShellShrinkPx = shellShrinkPx;
-      setHeight(Math.max(0, rawKeyboardPx - (shellShrinkPx > 0 ? shellShrinkPx : lastShellShrinkPx)));
+      setHeight(Math.max(0, rawKeyboardPx - shellShrinkPx));
     };
 
     const viewport = window.visualViewport;
@@ -258,27 +188,17 @@ export function useKeyboardHeight(): number {
     viewport?.addEventListener("resize", handleViewportChange);
     viewport?.addEventListener("scroll", handleViewportChange);
 
-    // 预测先行（TG kbd_height 式）：focusin 那一刻按记忆值抬到位，不等插件事件过桥；
-    // willShow 到达后用真实值校正并回写缓存。键盘已在场（切输入框）时不冲掉真实值。
-    // focusout 到非可编辑目标 = 镜像 willHide（含实测残影压制窗口），也是预测的自愈出口。
-    const handlePredictFocusIn = (event: FocusEvent) => {
-      if (!isEditableTarget(event.target)) return;
-      if (rawKeyboardPx > 0) return;
-      rawKeyboardPx = readPredictedKeyboardHeight();
-      suppressMeasureUntilMs = 0;
-      recompute();
-    };
-    const handlePredictFocusOut = (event: FocusEvent) => {
+    // 自愈出口：焦点离开可编辑域（去向非可编辑）即清零。willHide 丢失（进程被杀重建、
+    // 外接键盘等）时高度不至于永远悬着。换输入框（去向仍可编辑）不闪落。
+    const handleFocusOut = (event: FocusEvent) => {
       if (!isEditableTarget(event.target)) return;
       if (isEditableTarget(event.relatedTarget)) return;
       rawKeyboardPx = 0;
-      suppressMeasureUntilMs = Date.now() + HIDE_MEASURE_SUPPRESS_MS;
       recompute();
     };
-    const nativePlatform = Capacitor.getPlatform() !== "web";
+    const nativePlatform = !webPlatform;
     if (nativePlatform) {
-      window.addEventListener("focusin", handlePredictFocusIn);
-      window.addEventListener("focusout", handlePredictFocusOut);
+      window.addEventListener("focusout", handleFocusOut);
     }
 
     let removeNative = () => {};
@@ -287,16 +207,13 @@ export function useKeyboardHeight(): number {
         // 插件缺席时 addListener **不是同步抛**而是返回 rejected promise（web 桥 UNIMPLEMENTED /
         // native 壳未注册同理），外层 try/catch 逮不住——必须在返回处同步 .catch 接住，否则是
         // unhandled rejection（AppShell 挂 KeyboardAvoidanceBridge 后，凡 mock 平台为 native 又
-        // 没 mock 插件的测试整文件炸掉，App.keptStack.test.tsx 曾如此）。接住后静默降级到实测路径。
+        // 没 mock 插件的测试整文件炸掉，App.keptStack.test.tsx 曾如此）。接住后静默降级。
         const showListener = Keyboard.addListener("keyboardWillShow", (info: KeyboardInfo) => {
           rawKeyboardPx = Number.isFinite(info.keyboardHeight) ? info.keyboardHeight : 0;
-          writeMeasuredKeyboardHeight(rawKeyboardPx);
-          suppressMeasureUntilMs = 0;
           recompute();
         }).catch(() => null);
         const hideListener = Keyboard.addListener("keyboardWillHide", () => {
           rawKeyboardPx = 0;
-          suppressMeasureUntilMs = Date.now() + HIDE_MEASURE_SUPPRESS_MS;
           recompute();
         }).catch(() => null);
         removeNative = () => {
@@ -304,7 +221,8 @@ export function useKeyboardHeight(): number {
           void hideListener.then((handle) => handle?.remove()).catch(() => {});
         };
       } catch {
-        // addListener 同步抛（旧桥 shim / 插件对象缺失）时只剩实测路径，仍好过整条 effect 挂掉。
+        // addListener 同步抛（旧桥 shim / 插件对象缺失）：native 无信源，高度恒 0——
+        // 宁可不抬也不引入实测与事件的双源竞态。
       }
     }
 
@@ -315,8 +233,7 @@ export function useKeyboardHeight(): number {
       viewport?.removeEventListener("resize", handleViewportChange);
       viewport?.removeEventListener("scroll", handleViewportChange);
       if (nativePlatform) {
-        window.removeEventListener("focusin", handlePredictFocusIn);
-        window.removeEventListener("focusout", handlePredictFocusOut);
+        window.removeEventListener("focusout", handleFocusOut);
       }
       removeNative();
     };

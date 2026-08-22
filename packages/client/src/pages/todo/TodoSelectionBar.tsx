@@ -47,7 +47,7 @@ export function TodoSelectionBar({
     <div
       ref={glideRef}
       data-testid="todo-selection-bar"
-      className="fixed inset-x-0 px-4 transition-transform duration-200 ease-out will-change-transform [bottom:var(--bottom-offset)]"
+      className="td-kbd-motion fixed inset-x-0 px-4 [bottom:var(--bottom-offset)]"
       // 与被顶替的 TodoComposer 同一个常量：同一个位置、同一个角色，就该在同一层。
       //
       // **本栏与待办页的 toast 容器同层（都是 z-backdrop=40）、且在 DOM 里排它之后 → 后绘制的本栏赢。**

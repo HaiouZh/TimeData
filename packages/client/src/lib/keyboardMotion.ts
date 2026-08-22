@@ -1,10 +1,10 @@
 import { Capacitor } from "@capacitor/core";
 import { type RefObject, useEffect } from "react";
 
-// 与底部固定条的 transition-transform duration-200 ease-out 对齐：抬升过渡与跳变补偿同曲线同时长，
-// 两种运动叠加/衔接时不出现速度断层。
-export const KEYBOARD_MOTION_DURATION_MS = 200;
-export const KEYBOARD_MOTION_EASING = "ease-out";
+// 与底部固定条的 .td-kbd-motion（index.css）对齐：250ms + TG DEFAULT_INTERPOLATOR 同参曲线，
+// 抬升过渡与跳变补偿同曲线同时长，两种运动叠加/衔接时不出现速度断层。改任一侧必须同步另一侧。
+export const KEYBOARD_MOTION_DURATION_MS = 250;
+export const KEYBOARD_MOTION_EASING = "cubic-bezier(0.25, 0.1, 0.25, 1)";
 // 键盘量级门槛，与 useKeyboardHeight 的 KEYBOARD_BOTTOM_GAP_THRESHOLD_PX 同源同值：
 // 地址栏收合等小抖动不值得补偿动画。
 const JUMP_THRESHOLD_PX = 80;

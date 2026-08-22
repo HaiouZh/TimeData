@@ -351,6 +351,15 @@ details[open] > summary .ts-collapse-caret {
  * 盖不住默认值了（TagFilterPanel 的 max-h-28、日期气泡的 sm:top-20 都靠 utility 覆盖）。
  */
 @layer components {
+  /* 键盘运动角色：底部固定条跟随键盘的 transform 过渡。250ms + 标准三次贝塞尔与
+     Telegram DEFAULT_INTERPOLATOR 同参（双端 IME 动画的近似曲线），显示与收起同一条管线
+     ——事件（keyboardWillShow/Hide）到达即起步，与 IME 同向滑动。改这里必须同步
+     lib/keyboardMotion.ts 的常量（壳缩量抹平动画与本过渡同曲线同时长，否则两种运动衔接断速）。 */
+  .td-kbd-motion {
+    transition: transform 250ms cubic-bezier(0.25, 0.1, 0.25, 1);
+    will-change: transform;
+  }
+
   /* 卡片眉标（TimeData / 面板 eyebrow）：小号大写 + 宽字距的一体化排版角色。
      字距必须写在这里而不是靠调用方的 tracking-* utility —— .td-text-* 定义在本文件顶层
      未分层区，其 letter-spacing: 0 会压过 @layer utilities 里的 tracking-*（顶层规则

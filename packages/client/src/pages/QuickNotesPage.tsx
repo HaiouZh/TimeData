@@ -219,7 +219,11 @@ export default function QuickNotesPage() {
   // 在场判断用 keyboardVisible 而非 keyboardHeight > 0：安卓壳层让位后 height 恒 0（JS 无需再
   // 让位），键盘弹着 nav 也得收，否则缩短的视口里输入条与键盘之间杵一条 tab 行。
   const inputInteractionActive = composerFocused || searchOpen || keyboardVisible;
-  const navOffsetPx = !isWideScreen && !navHidden ? BOTTOM_NAV_HEIGHT_PX : 0;
+  // !keyboardVisible 守卫与待办页同款（TodoPage.tsx）：键盘在场时 nav 不占避让空间。没有它，
+  // willShow 置起 visible 到 navHidden effect 提交之间的一帧里，composer 会按「键盘高 + 49」
+  // 定位——高出键盘一个底栏位（真机「飞半空」存活候选 C5-1，对抗验证报告
+  // .dispatch/20260822-kbd-statemachine）。两页口径必须一致，修一处两页同好。
+  const navOffsetPx = !isWideScreen && !navHidden && !keyboardVisible ? BOTTOM_NAV_HEIGHT_PX : 0;
   const bottomInsetPx = selectionMode || searchOpen ? COMPOSER_BOTTOM_GAP_PX : composerInsetPx;
   // 底部避让量单一合成来源（composeBottomInset，见 lib/bottomInset.ts）：bottomInsetPx/navOffsetPx
   // 仍是本页私有的「此刻底部站着谁」判断，这里只把它们的结果连同键盘遮挡量一起喂进合成
@@ -1631,7 +1635,9 @@ export default function QuickNotesPage() {
         <form
           ref={composerRef}
           aria-label="速记输入区"
-          className="fixed left-0 right-0 border-t border-border bg-page/95 p-2 shadow-elev2 backdrop-blur transition-transform duration-200 ease-out will-change-transform [bottom:var(--bottom-offset)] sm:p-3"
+          // 实心底 + td-kbd-motion（250ms TG 曲线）：backdrop-blur 与 transform 位移动画同帧
+          // 是移动端掉帧经典组合（TG 输入条也是实心的），键盘运动期间不能挂模糊。
+          className="td-kbd-motion fixed left-0 right-0 border-t border-border bg-page p-2 shadow-elev2 [bottom:var(--bottom-offset)] sm:p-3"
           // 载体分工（键盘运动波，与 TodoComposer 同款）：bottom 只装安全区、恒定不动，动态抬升
           //（navOffset / 键盘高）走 transform: translateY(-抬升量) 吃 transition-transform 的过渡
           //（合成器线程；此前是 transition-[bottom]，主线程逐帧重排）。等效终点位置逐值不变。

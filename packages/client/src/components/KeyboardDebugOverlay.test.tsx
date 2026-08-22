@@ -45,10 +45,10 @@ describe("KeyboardDebugOverlay", () => {
     await unmount(root);
   });
 
-  it("native 平台常显（真机诊断不需要任何开关）", async () => {
+  it("native 平台同样默认不渲染（常显读数条属页面污染，采数据时置 td.kbdDebug=1）", async () => {
     getPlatformMock.mockReturnValue("android");
     const { host, root } = await renderDom(createElement(KeyboardDebugOverlay));
-    expect(query(host)).not.toBeNull();
+    expect(query(host)).toBeNull();
     await unmount(root);
   });
 });
