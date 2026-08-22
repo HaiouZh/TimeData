@@ -50,7 +50,7 @@ export function TrackListItem({
       >
         <Link
           to={`/tracks/${track.id}`}
-          className="flex items-center gap-2 px-3 py-2 focus:outline-none focus:ring-1 focus:ring-accent"
+          className="flex items-center gap-2 px-3 py-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
         >
           <span
             aria-hidden="true"
@@ -80,7 +80,7 @@ export function TrackListItem({
         selected ? "border-accent" : "border-border"
       }`}
     >
-      <Link to={`/tracks/${track.id}`} className="block px-3 py-3 focus:outline-none focus:ring-1 focus:ring-accent">
+      <Link to={`/tracks/${track.id}`} className="block px-3 py-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface">
         <span className="flex items-start gap-3">
           <span
             aria-hidden="true"

@@ -60,7 +60,7 @@ export function MilestonePanel(props: {
             value={skeletonDraft}
             onChange={(e) => setSkeletonDraft(e.target.value)}
             rows={4}
-            className="w-full rounded-ctl border border-border bg-surface-elevated px-3 py-2 text-ink focus:outline-none focus:ring-1 focus:ring-accent"
+            className="w-full rounded-ctl border border-border bg-surface-elevated px-3 py-2 text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-page focus-visible:border-accent"
           />
           <button
             type="button"
@@ -106,7 +106,7 @@ export function MilestonePanel(props: {
                   if (e.key === "Enter") void handleAddOne();
                 }}
                 placeholder="输入段标题"
-                className="flex-1 rounded-ctl border border-border bg-surface-elevated px-3 py-2 text-ink focus:outline-none focus:ring-1 focus:ring-accent"
+                className="flex-1 rounded-ctl border border-border bg-surface-elevated px-3 py-2 text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-page focus-visible:border-accent"
               />
               <button
                 type="button"

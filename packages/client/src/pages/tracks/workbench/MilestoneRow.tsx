@@ -156,7 +156,7 @@ export function MilestoneRow(props: {
               if (e.key === "Escape") cancelEdit();
             }}
             onBlur={() => cancelEdit()}
-            className="w-full rounded-ctl border border-border bg-surface-elevated px-3 py-1.5 text-ink focus:outline-none focus:ring-1 focus:ring-accent"
+            className="w-full rounded-ctl border border-border bg-surface-elevated px-3 py-1.5 text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-page focus-visible:border-accent"
           />
         ) : readOnly ? (
           <span data-testid="milestone-title" className="block td-text-body text-ink">
@@ -197,7 +197,7 @@ export function MilestoneRow(props: {
                 if (e.key === "Escape") setShowInsert(false);
               }}
               placeholder="新段标题"
-              className="flex-1 rounded-ctl border border-border bg-surface-elevated px-3 py-1.5 text-ink focus:outline-none focus:ring-1 focus:ring-accent"
+              className="flex-1 rounded-ctl border border-border bg-surface-elevated px-3 py-1.5 text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-page focus-visible:border-accent"
             />
             <button
               type="button"
@@ -227,7 +227,7 @@ export function MilestoneRow(props: {
                 if (e.key === "Escape") setShowDrop(false);
               }}
               placeholder="备注（可选）"
-              className="flex-1 rounded-ctl border border-border bg-surface-elevated px-3 py-1.5 text-ink focus:outline-none focus:ring-1 focus:ring-accent"
+              className="flex-1 rounded-ctl border border-border bg-surface-elevated px-3 py-1.5 text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-page focus-visible:border-accent"
             />
             <button
               type="button"

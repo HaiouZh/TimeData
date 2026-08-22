@@ -35,7 +35,7 @@ export function NewTrackComposer({ onCreate }: { onCreate: (title: string) => Pr
         }}
         placeholder="新建轨道..."
         aria-label="新建轨道标题"
-        className="min-w-0 flex-1 rounded-ctl border border-border bg-surface px-3 py-2 text-ink placeholder:text-ink-3 focus:outline-none focus:ring-1 focus:ring-accent"
+        className="min-w-0 flex-1 rounded-ctl border border-border bg-surface px-3 py-2 text-ink placeholder:text-ink-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-page focus-visible:border-accent"
       />
       <button
         type="submit"

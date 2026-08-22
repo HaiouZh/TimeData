@@ -172,14 +172,14 @@ export default function TrackDetailPage() {
                     value={titleDraft}
                     onChange={(event) => setTitleDraft(event.target.value)}
                     aria-label="轨道标题"
-                    className="w-full rounded-ctl border border-border bg-surface-elevated px-3 py-2 text-ink focus:outline-none focus:ring-1 focus:ring-accent"
+                    className="w-full rounded-ctl border border-border bg-surface-elevated px-3 py-2 text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-page focus-visible:border-accent"
                   />
                   <textarea
                     value={summaryDraft}
                     onChange={(event) => setSummaryDraft(event.target.value)}
                     aria-label="轨道摘要"
                     rows={2}
-                    className="w-full resize-none rounded-ctl border border-border bg-surface-elevated px-3 py-2 text-ink focus:outline-none focus:ring-1 focus:ring-accent"
+                    className="w-full resize-none rounded-ctl border border-border bg-surface-elevated px-3 py-2 text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-page focus-visible:border-accent"
                   />
                   <div className="flex justify-end gap-2">
                     <button
