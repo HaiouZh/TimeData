@@ -236,6 +236,7 @@ describe("TracksListPage", () => {
 
   it("creates a track from the composer", async () => {
     const host = await renderList();
+    await click(host.querySelector("[data-testid='new-track-open']"));
     const input = host.querySelector("input") as HTMLInputElement;
     const setValue = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
     await act(async () => {
@@ -266,6 +267,7 @@ describe("TracksListPage", () => {
     );
     const host = mounted.host;
     await flush();
+    await click(host.querySelector("[data-testid='new-track-open']"));
     const input = host.querySelector('input[aria-label="新建轨道标题"]') as HTMLInputElement;
     const setValue = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
     await act(async () => {
