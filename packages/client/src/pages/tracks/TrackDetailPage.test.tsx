@@ -626,24 +626,26 @@ describe("TrackDetailPage", () => {
     const track = await seedTrack();
     const host = await renderDetail(track.id);
     await waitForText(host, "全马破三");
-    // 编排面：SignalSwitcher 或 MilestonePanel 至少其一可见（active 轨道应两者皆可见，判宽松）
     for (let i = 0; i < 20; i += 1) await flush();
     const hasSwitcher = host.querySelector('[data-testid="signal-switcher"]') !== null;
-    const hasSkeleton = host.querySelector('[data-testid="milestone-skeleton-textarea"]') !== null;
-    const hasPanel = host.querySelector('[data-testid="milestone-panel"]') !== null;
-    expect(hasSwitcher || hasSkeleton || hasPanel).toBe(true);
-    expect(host.querySelector('[data-testid="milestone-panel"]')).not.toBeNull();
+    const hasToggle = host.querySelector('[data-testid="milestone-bar-toggle"]') !== null;
+    expect(hasSwitcher || hasToggle).toBe(true);
+    expect(host.querySelector('[data-testid="signal-switcher"]')).not.toBeNull();
+    expect(host.querySelector('[data-testid="milestone-bar-toggle"]')).not.toBeNull();
+    // 新布局：panel 默认收起，skeleton 需展开后才可见
+    expect(host.querySelector('[data-testid="milestone-panel"]')).toBeNull();
   });
 
   it("② xl 双栏容器含 xl:grid-cols- 冒烟", async () => {
     const track = await seedTrack();
     const host = await renderDetail(track.id);
     await waitForText(host, "全马破三");
-    // 冒烟：存在含 xl:grid-cols- 的布局容器
-    expect(host.innerHTML).toContain("xl:grid-cols-");
-    const grid = host.querySelector('div[class*="xl:grid-cols-"]');
-    expect(grid).not.toBeNull();
-    // 外层容器放大到 xl:max-w-6xl
+    // 新布局：工具带取代双栏，xl:grid 已删除，改为 border-y 横带
+    expect(host.innerHTML).not.toContain("xl:grid-cols-");
+    expect(host.innerHTML).toContain("border-y");
+    expect(host.querySelector('[data-testid="milestone-bar-toggle"]')).not.toBeNull();
+    expect(host.querySelector('[data-testid="detail-workbench"]')).toBeNull();
+    // 外层容器仍放大到 xl:max-w-6xl
     expect(host.innerHTML).toContain("xl:max-w-6xl");
   });
 
@@ -652,20 +654,30 @@ describe("TrackDetailPage", () => {
     const host = await renderDetail(track.id);
     await waitForText(host, "全马破三");
     for (let i = 0; i < 20; i += 1) await flush();
-    // 两份渲染均存在：xl:hidden 的窄屏折叠版与 hidden xl:block 的常驻版
-    const panels = host.querySelectorAll('[data-testid="milestone-panel"]');
-    expect(panels.length).toBe(2);
-    const narrowContainer = host.querySelector("div.xl\\:hidden");
-    const desktopContainer = host.querySelector("div.hidden.xl\\:block");
-    expect(narrowContainer?.querySelector('[data-testid="milestone-panel"]')).not.toBeNull();
-    expect(desktopContainer?.querySelector('[data-testid="milestone-panel"]')).not.toBeNull();
-    const workbench = panels[0] as HTMLElement;
-    const card = host.querySelector('[data-testid="current-frame-card"]');
-    expect(workbench).not.toBeNull();
+    // 单份渲染：不再有两份 panel
+    expect(host.querySelectorAll('[data-testid="milestone-panel"]').length).toBe(0);
+    expect(host.querySelectorAll('[data-testid="signal-switcher"]').length).toBe(1);
+    expect(host.querySelector("div.xl\\:hidden")).toBeNull();
+    expect(host.querySelector("div.hidden.xl\\:block")).toBeNull();
+    expect(host.querySelector('[data-testid="detail-workbench"]')).toBeNull();
+    const switcher = host.querySelector('[data-testid="signal-switcher"]') as HTMLElement;
+    const barToggle = host.querySelector('[data-testid="milestone-bar-toggle"]') as HTMLElement;
+    const card = host.querySelector('[data-testid="current-frame-card"]') as HTMLElement;
+    expect(switcher).not.toBeNull();
+    expect(barToggle).not.toBeNull();
     expect(card).not.toBeNull();
-    // DOM 顺序：首个 workbench（窄屏折叠版）先于 card
-    const pos = workbench!.compareDocumentPosition(card!);
+    // DOM 顺序：编排工具带先于叙事卡片
+    const pos = switcher.compareDocumentPosition(card);
     expect(pos & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    const pos2 = barToggle.compareDocumentPosition(card);
+    expect(pos2 & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    // 展开后 panel 单份出现且仍在 card 之前
+    await act(async () => {
+      barToggle.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+    });
+    await flush();
+    const panel = await waitForElement<HTMLElement>(host, '[data-testid="milestone-panel"]');
+    expect(panel.compareDocumentPosition(card) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
   it("④ concluded 轨道：MilestonePanel 为 readOnly 且 SignalSwitcher 不渲染", async () => {
@@ -675,9 +687,10 @@ describe("TrackDetailPage", () => {
     await waitForText(host, "已收束轨道");
     for (let i = 0; i < 20; i += 1) await flush();
     expect(host.querySelector('[data-testid="signal-switcher"]')).toBeNull();
+    // concluded 空轨道：MilestoneBar 在 readOnly && 0 时不渲染 toggle，panel 默认收起所以为空
+    expect(host.querySelector('[data-testid="milestone-bar-toggle"]')).toBeNull();
+    expect(host.querySelector('[data-testid="milestone-panel"]')).toBeNull();
     expect(host.querySelector('[data-testid="milestone-skeleton-textarea"]')).toBeNull();
-    // 面板仍在但为只读（有面板容器、无输入）
-    expect(host.querySelector('[data-testid="milestone-panel"]')).not.toBeNull();
   });
 
   it("⑤ 编排面写入失败落 actionError 横幅", async () => {
@@ -686,6 +699,12 @@ describe("TrackDetailPage", () => {
     await waitForText(host, "全马破三");
     for (let i = 0; i < 20; i += 1) await flush();
     const spy = vi.spyOn(trackMilestonesOps, "addMilestones").mockRejectedValue(new Error("立骨架失败 mock"));
+    // 新布局：需先展开工具带才可见 textarea
+    const toggle = await waitForElement<HTMLElement>(host, '[data-testid="milestone-bar-toggle"]');
+    await act(async () => {
+      toggle.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+    });
+    await flush();
     const textarea = await waitForElement<HTMLTextAreaElement>(host, '[data-testid="milestone-skeleton-textarea"]');
     await act(async () => {
       const setValue = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")?.set;
@@ -711,13 +730,21 @@ describe("TrackDetailPage", () => {
     const host = await renderDetail(track.id);
     await waitForText(host, "全马破三");
     for (let i = 0; i < 20; i += 1) await flush();
-    const narrowDetails = host.querySelector("div.xl\\:hidden details") as HTMLDetailsElement | null;
-    expect(narrowDetails).not.toBeNull();
-    expect(narrowDetails?.open).toBe(true);
-    // count 应为实际段数 2，而非 0
-    expect(narrowDetails?.textContent).toContain("2");
-    // details 内部应仍含 milestone 面板
-    expect(narrowDetails?.querySelector('[data-testid="milestone-panel"]')).not.toBeNull();
+    // 新布局：工具带取代窄屏折叠段，count 体现在 toggle 文案与展开后列表
+    const toggle = await waitForElement<HTMLElement>(host, '[data-testid="milestone-bar-toggle"]');
+    expect(toggle.textContent).toContain("阶段");
+    // 默认收起
+    expect(host.querySelector('[data-testid="milestone-panel"]')).toBeNull();
+    // 展开后可见 2 段
+    await act(async () => {
+      toggle.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+    });
+    await flush();
+    const list = await waitForElement<HTMLElement>(host, '[data-testid="milestone-list"]');
+    expect(list.querySelectorAll('[data-testid="milestone-row"]').length).toBe(2);
+    // 旧的 xl:hidden 折叠段已删除
+    expect(host.querySelector("div.xl\\:hidden")).toBeNull();
+    expect(host.querySelector('[data-testid="detail-workbench"]')).toBeNull();
   });
 
   it("⑦ concluded 非空轨道：加一段输入不渲染且 checkbox disabled", async () => {
@@ -727,11 +754,19 @@ describe("TrackDetailPage", () => {
     const host = await renderDetail(track.id);
     await waitForText(host, "已收束有段");
     for (let i = 0; i < 20; i += 1) await flush();
+    // 新布局：需展开后检查 readOnly 分支
+    const toggle = await waitForElement<HTMLElement>(host, '[data-testid="milestone-bar-toggle"]');
+    expect(toggle.textContent).toContain("阶段");
+    await act(async () => {
+      toggle.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+    });
+    await flush();
+    const panel = await waitForElement<HTMLElement>(host, '[data-testid="milestone-panel"]');
+    expect(panel).not.toBeNull();
     // 加一段输入在 readOnly 非空分支也不渲染
     expect(host.querySelector('[data-testid="milestone-add-input"]')).toBeNull();
     expect(host.querySelector('[data-testid="milestone-add-one"]')).toBeNull();
-    // 面板仍在
-    expect(host.querySelector('[data-testid="milestone-panel"]')).not.toBeNull();
+    expect(host.querySelectorAll('[data-testid="milestone-row"]').length).toBe(2);
     // 非空分支的 MilestoneRow checkbox 应为 disabled
     const checkbox = host.querySelector(
       '[data-testid="milestone-checkbox-host"] input[type="checkbox"]',

@@ -20,15 +20,16 @@ import {
   updateTrack,
   updateTrackStep,
 } from "../../lib/tracks.js";
-import { db } from "../../db/index.js";
 import { currentStepId, latestStep } from "../../lib/tracksView.js";
 import { CollapsibleSection } from "../todo/CollapsibleSection.js";
 import { CurrentFrameCard } from "./CurrentFrameCard.js";
 import { RefChip } from "./RefChip.js";
 import { StepComposer, type StepDraft } from "./StepComposer.js";
 import { TrackTimeline } from "./TrackTimeline.js";
+import { MilestoneBar } from "./workbench/MilestoneBar.js";
 import { MilestonePanel } from "./workbench/MilestonePanel.js";
 import { SignalSwitcher } from "./workbench/SignalSwitcher.js";
+import { listTrackMilestones } from "../../lib/trackMilestones.js";
 
 const STATUS_LABEL: Record<string, string> = { active: "推进中", concluded: "已归档", parked: "已归档" };
 
@@ -38,12 +39,13 @@ export default function TrackDetailPage() {
   // ?? null 把三态分开:undefined=查询未落(加载中)、null=查到但不存在、实体=命中。
   const track = useLiveQuery(async () => (await getTrack(id)) ?? null, [id]);
   const steps = useLiveQuery(() => listTrackSteps(id), [id], []);
-  const milestoneCount = useLiveQuery(() => db.trackMilestones.where("trackId").equals(id).count(), [id], 0) ?? 0;
+  const milestones = useLiveQuery(() => listTrackMilestones(id), [id], []) ?? [];
   const actionTags = useTrackActionTags();
   const [editingMeta, setEditingMeta] = useState(false);
   const [titleDraft, setTitleDraft] = useState("");
   const [summaryDraft, setSummaryDraft] = useState("");
   const [actionError, setActionError] = useState<string | null>(null);
+  const [milestonesExpanded, setMilestonesExpanded] = useState(false);
   const { confirm, dialog } = useConfirm();
 
   const isActive = track != null && track.status === "active";
@@ -234,28 +236,26 @@ export default function TrackDetailPage() {
                 {actionError}
               </StatusBanner>
             )}
-            <div className="xl:grid xl:grid-cols-[minmax(300px,380px)_1fr] xl:gap-4 xl:items-start">
-              <div data-testid="detail-workbench" className="mb-3 xl:mb-0">
-                <div className="xl:hidden">
-                  <CollapsibleSection title="阶段骨架" count={milestoneCount} defaultOpen>
-                    <div className="flex flex-col gap-3 pt-2">
-                      <SignalSwitcher track={track} steps={steps} onError={setActionError} />
-                      <MilestonePanel
-                        trackId={track.id}
-                        readOnly={track.status !== "active"}
-                        onError={setActionError}
-                      />
-                    </div>
-                  </CollapsibleSection>
-                </div>
-                <div className="hidden xl:block">
-                  <div className="flex flex-col gap-3">
-                    <SignalSwitcher track={track} steps={steps} onError={setActionError} />
-                    <MilestonePanel trackId={track.id} readOnly={track.status !== "active"} onError={setActionError} />
-                  </div>
-                </div>
+            <div className="mb-6 flex flex-col gap-4 border-y border-border py-4">
+              <div className="flex flex-wrap items-center gap-4">
+                <SignalSwitcher track={track} steps={steps} onError={setActionError} />
+                <span aria-hidden="true" className="hidden h-4 w-px bg-border sm:block" />
+                <MilestoneBar
+                  milestones={milestones}
+                  expanded={milestonesExpanded}
+                  onToggle={() => setMilestonesExpanded((v) => !v)}
+                  readOnly={track.status !== "active"}
+                />
               </div>
-              <div data-testid="detail-narrative">
+              <MilestonePanel
+                trackId={track.id}
+                milestones={milestones}
+                expanded={milestonesExpanded}
+                readOnly={track.status !== "active"}
+                onError={setActionError}
+              />
+            </div>
+            <div data-testid="detail-narrative">
                 {latest ? (
                   <CurrentFrameCard key={latest.id} step={latest} onEdit={editStep} onDelete={removeStep} />
                 ) : (
@@ -282,7 +282,6 @@ export default function TrackDetailPage() {
                   </CollapsibleSection>
                 )}
               </div>
-            </div>
           </>
         )}
       </div>

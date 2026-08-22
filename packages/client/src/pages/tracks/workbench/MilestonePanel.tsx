@@ -1,19 +1,20 @@
-import { useLiveQuery } from "dexie-react-hooks";
+import type { TrackMilestone } from "@timedata/shared";
 import { useState } from "react";
-import { addMilestones, listTrackMilestones } from "../../../lib/trackMilestones.js";
+import { addMilestones } from "../../../lib/trackMilestones.js";
 import { MilestoneRow } from "./MilestoneRow.js";
-import { SegmentProgressBar } from "./SegmentProgressBar.js";
 
 export function MilestonePanel(props: {
   trackId: string;
+  milestones: readonly TrackMilestone[];
+  expanded: boolean;
   readOnly?: boolean;
   onError: (message: string) => void;
-}): React.JSX.Element {
-  const { trackId, readOnly, onError } = props;
-  const list = useLiveQuery(() => listTrackMilestones(trackId), [trackId], []) ?? [];
+}): React.JSX.Element | null {
+  const { trackId, milestones, expanded, readOnly, onError } = props;
   const [skeletonDraft, setSkeletonDraft] = useState("");
   const [addOneDraft, setAddOneDraft] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  if (!expanded) return null;
 
   async function handleCreateSkeleton(): Promise<void> {
     const lines = skeletonDraft
@@ -49,9 +50,8 @@ export function MilestonePanel(props: {
   }
 
   return (
-    <div data-testid="milestone-panel" className="flex flex-col gap-3">
-      <SegmentProgressBar milestones={list} size="full" />
-      {list.length === 0 && !readOnly && (
+    <div data-testid="milestone-panel" className="flex flex-col gap-4">
+      {milestones.length === 0 && !readOnly && (
         <div data-testid="milestone-skeleton-creator" className="flex flex-col gap-2">
           <textarea
             aria-label="骨架输入"
@@ -67,20 +67,20 @@ export function MilestonePanel(props: {
             data-testid="milestone-skeleton-submit"
             onClick={() => void handleCreateSkeleton()}
             disabled={isSubmitting}
-            className="self-start rounded-ctl bg-accent px-4 py-1.5 td-text-label text-accent-contrast disabled:opacity-50"
+            className="self-start rounded-ctl bg-accent px-4 py-2 td-text-label text-accent-contrast disabled:opacity-50"
           >
             立骨架
           </button>
         </div>
       )}
-      {list.length > 0 && (
+      {milestones.length > 0 && (
         <>
           <div data-testid="milestone-list" className="flex flex-col">
-            {list.map((m, index) => {
-              const prevId = index > 0 ? list[index - 1].id : null;
-              const nextNextId = index + 2 < list.length ? list[index + 2].id : null;
+            {milestones.map((m, index) => {
+              const prevId = index > 0 ? milestones[index - 1].id : null;
+              const nextNextId = index + 2 < milestones.length ? milestones[index + 2].id : null;
               const isFirst = index === 0;
-              const isLast = index === list.length - 1;
+              const isLast = index === milestones.length - 1;
               return (
                 <MilestoneRow
                   key={m.id}
@@ -106,14 +106,14 @@ export function MilestonePanel(props: {
                   if (e.key === "Enter") void handleAddOne();
                 }}
                 placeholder="输入段标题"
-                className="flex-1 rounded-ctl border border-border bg-surface-elevated px-3 py-1.5 text-ink focus:outline-none focus:ring-1 focus:ring-accent"
+                className="flex-1 rounded-ctl border border-border bg-surface-elevated px-3 py-2 text-ink focus:outline-none focus:ring-1 focus:ring-accent"
               />
               <button
                 type="button"
                 data-testid="milestone-add-submit"
                 onClick={() => void handleAddOne()}
                 disabled={isSubmitting}
-                className="rounded-ctl bg-accent px-3 py-1.5 td-text-label text-accent-contrast disabled:opacity-50"
+                className="rounded-ctl bg-accent px-3 py-2 td-text-label text-accent-contrast disabled:opacity-50"
               >
                 ＋ 加一段
               </button>

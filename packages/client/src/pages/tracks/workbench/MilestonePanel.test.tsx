@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 // biome-ignore assist/source/organizeImports: dbReset must be before track modules to register fake-indexeddb before Dexie
 import { db } from "../../../test/dbReset.js";
+import { useLiveQuery } from "dexie-react-hooks";
 import { act, createElement } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { addTrack } from "../../../lib/tracks.js";
@@ -41,9 +42,14 @@ async function waitForElement<T extends Element>(host: HTMLElement, selector: st
   throw new Error(`Timed out waiting for element ${selector}`);
 }
 
-async function mountPanel(trackId: string, opts?: { readOnly?: boolean; onError?: (msg: string) => void }) {
+async function mountPanel(trackId: string, opts?: { readOnly?: boolean; onError?: (msg: string) => void; expanded?: boolean }) {
   const onError = opts?.onError ?? vi.fn();
-  mounted = await renderDom(createElement(MilestonePanel, { trackId, readOnly: opts?.readOnly, onError }));
+  const expanded = opts?.expanded ?? true;
+  function Wrapper() {
+    const milestones = useLiveQuery(() => listTrackMilestones(trackId), [trackId], []) ?? [];
+    return createElement(MilestonePanel, { trackId, milestones, expanded, readOnly: opts?.readOnly, onError });
+  }
+  mounted = await renderDom(createElement(Wrapper));
   // wait for liveQuery initial flush
   for (let i = 0; i < 20; i += 1) await flush();
   return { host: mounted.host, onError };
@@ -84,8 +90,6 @@ describe("MilestonePanel", () => {
     const textarea = await waitForElement<HTMLTextAreaElement>(host, '[data-testid="milestone-skeleton-textarea"]');
     expect(textarea.placeholder).toContain("一行一段");
     expect(textarea.placeholder).toContain("调研");
-    // progress bar should show 未立骨架
-    expect(host.textContent).toContain("未立骨架");
 
     await typeTextarea(textarea, "  调研  \n\n  打样\n上线  ");
     const btn = await waitForElement<HTMLElement>(host, '[data-testid="milestone-skeleton-submit"]');
@@ -179,8 +183,8 @@ describe("MilestonePanel", () => {
     expect(hostEmpty.querySelector('[data-testid="milestone-skeleton-creator"]')).toBeNull();
     expect(hostEmpty.querySelector('[data-testid="milestone-add-input"]')).toBeNull();
     expect(hostEmpty.querySelector('[data-testid="milestone-add-one"]')).toBeNull();
-    // progress bar still renders
-    expect(hostEmpty.querySelector('[data-testid="segment-progress-bar"]')).not.toBeNull();
+    // 进度条已移至 MilestoneBar，Panel 不再渲染
+    expect(hostEmpty.querySelector('[data-testid="segment-progress-bar"]')).toBeNull();
 
     if (mounted) await unmount(mounted.root);
     mounted = null;
@@ -217,13 +221,21 @@ describe("MilestonePanel", () => {
 
   it("顶部渲染 SegmentProgressBar", async () => {
     const track = await addTrack({ title: "T1", now: new Date("2026-06-21T00:00:00.000Z") });
-    const { host } = await mountPanel(track.id);
-    const bar = await waitForElement<HTMLElement>(host, '[data-testid="segment-progress-bar"]');
-    expect(bar).not.toBeNull();
-    // after adding segments, progress text appears
+    // expanded false 时不渲染明细（早返回 null）
+    const { host: hostCollapsed } = await mountPanel(track.id, { expanded: false });
+    expect(hostCollapsed.querySelector('[data-testid="milestone-panel"]')).toBeNull();
+    expect(hostCollapsed.querySelector('[data-testid="segment-progress-bar"]')).toBeNull();
+    if (mounted) await unmount(mounted.root);
+    mounted = null;
+    // expanded true 时渲染骨架但不渲染进度条（进度条已移至 MilestoneBar）
+    const { host } = await mountPanel(track.id, { expanded: true });
+    expect(host.querySelector('[data-testid="milestone-panel"]')).not.toBeNull();
+    expect(host.querySelector('[data-testid="segment-progress-bar"]')).toBeNull();
+    expect(host.querySelector('[data-testid="milestone-skeleton-creator"]')).not.toBeNull();
     await addMilestones(track.id, ["A"]);
     for (let i = 0; i < 20; i += 1) await flush();
-    expect(host.textContent).toContain("0/1");
+    expect(host.querySelector('[data-testid="milestone-list"]')).not.toBeNull();
+    expect(host.querySelector('[data-testid="segment-progress-bar"]')).toBeNull();
   });
 
   it("⑤ 立骨架提交锁：挂起时按钮 disabled 且二次点击不重复调用", async () => {
