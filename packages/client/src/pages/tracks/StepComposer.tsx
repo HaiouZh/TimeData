@@ -38,12 +38,16 @@ export function StepComposer({
   statusTags = [],
   surface = "card",
   submitLabel = "加入这一步",
+  onCloseStep,
+  canCloseStep = false,
 }: {
   onSubmit: (draft: StepDraft) => Promise<void> | void;
   disabled?: boolean;
   statusTags?: readonly string[];
   surface?: "card" | "inline";
   submitLabel?: string;
+  onCloseStep?: () => void | Promise<void>;
+  canCloseStep?: boolean;
 }) {
   const [content, setContent] = useState("");
   // 看板信号单选、检索标签多选，三组并存不再互斥清空（TK-14）。
@@ -88,12 +92,12 @@ export function StepComposer({
 
   const formClass =
     surface === "card"
-      ? "mb-3 rounded-card border border-border bg-surface p-3"
-      : "border-t border-border bg-surface px-3 py-3";
+      ? "mb-4 rounded-card bg-surface-elevated p-4"
+      : "border-t border-border bg-surface px-4 py-4";
 
   return (
     <form onSubmit={submit} className={formClass}>
-      <div className="mb-2 td-text-caption font-medium text-ink-3">写一步</div>
+      <div className="mb-4 td-text-body font-medium text-ink-2">写一步</div>
       <textarea
         value={content}
         onChange={(event) => {
@@ -102,37 +106,37 @@ export function StepComposer({
         }}
         placeholder="写下这一步的进展、结论或需要接手的事..."
         aria-label="步骤内容"
-        rows={2}
+        rows={3}
         disabled={disabled}
-        className="min-h-16 w-full resize-none rounded-ctl border border-border bg-surface-elevated px-3 py-2 text-ink placeholder:text-ink-3 focus:outline-none focus:ring-1 focus:ring-accent"
+        className="w-full resize-none rounded-ctl border border-border bg-surface-elevated px-3 py-2 text-ink placeholder:text-ink-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-elevated focus-visible:border-accent"
       />
+      {normalizedStatusTags.length > 0 && (
+        <div className="mt-4 flex flex-wrap items-center gap-2">
+          <span className="w-14 shrink-0 td-text-caption text-ink-3">看板信号</span>
+          {normalizedStatusTags.map((preset) => (
+            <button
+              key={preset}
+              type="button"
+              aria-pressed={signal === preset}
+              onClick={() => toggleSignal(preset)}
+              className={`rounded-pill px-2 py-1 td-text-caption transition ${
+                signal === preset ? "bg-accent-soft text-accent" : "bg-surface-hover text-ink-2 hover:text-ink"
+              }`}
+            >
+              #{preset}
+            </button>
+          ))}
+        </div>
+      )}
       <div className="mt-2 flex flex-wrap items-center gap-2">
-        {normalizedStatusTags.length > 0 && (
-          <>
-            <span className="td-text-caption text-ink-3">看板信号</span>
-            {normalizedStatusTags.map((preset) => (
-              <button
-                key={preset}
-                type="button"
-                aria-pressed={signal === preset}
-                onClick={() => toggleSignal(preset)}
-                className={`rounded-pill px-2.5 py-0.5 td-text-caption transition ${
-                  signal === preset ? "bg-accent-soft text-accent" : "bg-surface-hover text-ink-2 hover:text-ink"
-                }`}
-              >
-                #{preset}
-              </button>
-            ))}
-          </>
-        )}
-        <span className="td-text-caption text-ink-3">常用标签</span>
+        <span className="w-14 shrink-0 td-text-caption text-ink-3">常用标签</span>
         {normalizedCommonTags.map((preset) => (
           <button
             key={preset}
             type="button"
             aria-pressed={tags.includes(preset)}
             onClick={() => toggleTag(preset)}
-            className={`rounded-pill px-2.5 py-0.5 td-text-caption transition ${
+            className={`rounded-pill px-2 py-1 td-text-caption transition ${
               tags.includes(preset) ? "bg-accent-soft text-accent" : "bg-surface-hover text-ink-2 hover:text-ink"
             }`}
           >
@@ -145,12 +149,23 @@ export function StepComposer({
           placeholder="自定义标签"
           aria-label="自定义步骤标签"
           disabled={disabled}
-          className="min-h-8 w-28 rounded-ctl border border-border bg-surface-elevated px-2 text-ink placeholder:text-ink-3 focus:outline-none focus:ring-1 focus:ring-accent"
+          className="min-h-8 w-28 rounded-ctl border border-border bg-surface-elevated px-2 text-ink placeholder:text-ink-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-elevated focus-visible:border-accent"
         />
+      </div>
+      <div className="mt-4 flex items-center justify-end gap-4 border-t border-border pt-4">
+        {canCloseStep && onCloseStep && (
+          <button
+            type="button"
+            onClick={() => void onCloseStep()}
+            className="td-text-label text-ink-3 hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-elevated"
+          >
+            闭合当前步
+          </button>
+        )}
         <button
           type="submit"
           disabled={disabled || submitting || content.trim().length === 0}
-          className="ml-auto rounded-ctl bg-accent px-3 py-1.5 td-text-label text-page disabled:bg-surface-hover disabled:text-ink-3"
+          className="rounded-ctl bg-accent px-4 py-2 td-text-label text-accent-contrast disabled:bg-surface-hover disabled:text-ink-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-elevated"
         >
           {submitLabel}
         </button>

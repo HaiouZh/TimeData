@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { act } from "react";
+import { act, createElement } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { click, renderDom, unmount } from "../../test/domHarness.js";
 import { resolveStepMode, StepComposer, type StepDraft } from "./StepComposer.js";
@@ -179,5 +179,27 @@ describe("StepComposer", () => {
     await click(buttonByText(host, "#待我处理"));
     await submit(host);
     expect(submitted).toEqual([{ content: "就地推进一下", mode: "open", tags: ["待我处理"] }]);
+  });
+});
+
+describe("闭合当前步内迁", () => {
+  it("canCloseStep 为真时渲染闭合按钮并回调", async () => {
+    const onCloseStep = vi.fn();
+    const { host, root } = await renderDom(
+      createElement(StepComposer, { onSubmit: async () => {}, onCloseStep, canCloseStep: true }),
+    );
+    const btn = [...host.querySelectorAll("button")].find((b) => b.textContent?.trim() === "闭合当前步");
+    expect(btn).toBeDefined();
+    await click(btn);
+    expect(onCloseStep).toHaveBeenCalledTimes(1);
+    await unmount(root);
+  });
+
+  it("canCloseStep 为假时不渲染闭合按钮", async () => {
+    const { host, root } = await renderDom(
+      createElement(StepComposer, { onSubmit: async () => {}, onCloseStep: () => {}, canCloseStep: false }),
+    );
+    expect([...host.querySelectorAll("button")].some((b) => b.textContent?.trim() === "闭合当前步")).toBe(false);
+    await unmount(root);
   });
 });

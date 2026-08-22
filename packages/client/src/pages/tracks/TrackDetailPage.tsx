@@ -260,15 +260,13 @@ export default function TrackDetailPage() {
                 ) : (
                   <p className="mb-3 rounded-card bg-surface px-3 py-6 td-text-body text-center text-ink-3">尚无步骤</p>
                 )}
-                {isActive && <StepComposer onSubmit={(draft) => addStep(draft)} statusTags={actionTags} />}
-                {isActive && hasOpenStep && (
-                  <button
-                    type="button"
-                    onClick={() => void closeStep()}
-                    className="mb-3 w-full rounded-ctl border border-border bg-surface px-3 py-2 td-text-label text-ink-2 hover:border-accent hover:text-accent"
-                  >
-                    闭合当前步
-                  </button>
+                {isActive && (
+                  <StepComposer
+                    onSubmit={(draft) => addStep(draft)}
+                    statusTags={actionTags}
+                    onCloseStep={() => void closeStep()}
+                    canCloseStep={hasOpenStep}
+                  />
                 )}
                 {history.length > 0 && (
                   <CollapsibleSection title="历史" count={history.length} defaultOpen>
