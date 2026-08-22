@@ -225,15 +225,30 @@ export function landsInCollapsedProjectGroup(
   return placementForTask(task, options.now).pool === "inbox";
 }
 
+/**
+ * 项目要不要收进沉睡区。两条来源合流：用户显式按下的手动位，与全成员沉降的自动判定。
+ *
+ * **活跃轨道排在最前，连手动位一起压过**：与「有在飞轨道的项目不沉睡」是同一条规矩，
+ * 手动位不给它开例外——否则会出现「右栏轨道桶里这条轨道在跑，点回项目却在沉睡区」的分歧态，
+ * 而用户对此毫无线索可循。
+ *
+ * **手动位是粘性的，只有「唤回」清得掉**：轨道跑完、往里加新任务都不清它。用户按下它时说的是
+ * 「这个项目我先不做了」，那句话没被撤回之前不该由系统代为推翻——这也正是它与自动判定的分工：
+ * 自动判定看数据，手动位看人的意图。
+ *
+ * **手动位不看 `settings.enabled`**：关引力等于关自动沉降，不是把用户按下去的项目顶回来。
+ */
 export function isProjectDormant(args: {
   pendingTasks: readonly Task[];
   hasActiveTrack: boolean;
   settings: TodoGravitySettings;
   now: Date;
   blockedTaskIds: ReadonlySet<string>;
+  manuallyDormant?: boolean;
 }): boolean {
-  if (args.pendingTasks.length === 0) return false;
   if (args.hasActiveTrack) return false;
+  if (args.manuallyDormant === true) return true;
+  if (args.pendingTasks.length === 0) return false;
   for (const task of args.pendingTasks) {
     if (args.blockedTaskIds.has(task.id)) return false;
     if (!isTaskSunken(task, args.settings, args.now)) return false;

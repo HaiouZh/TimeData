@@ -9,6 +9,7 @@ import { SyncProvider } from "../contexts/SyncContext.tsx";
 import { db } from "../db/index.js";
 import { grabTaskToHand } from "../lib/sessions.js";
 import { getSetting } from "../lib/settings/index.js";
+import { setProjectDormant } from "../lib/settings/dormantProjectsSetting.js";
 import { setTodoDefaultDestination } from "../lib/settings/todoDefaultDestinationSetting.js";
 import { normalizeScheduledDate } from "../lib/tasks/placement.js";
 import { setInboxCollapsed } from "../lib/tasks/workbenchPrefs.js";
@@ -364,6 +365,77 @@ describe("TodoPage", () => {
     expect(host.querySelector('[data-section="inbox"]')).not.toBeNull();
     expect(today).toBeTruthy();
     await unmount(root);
+  });
+
+  /**
+   * 已排期紧贴收件箱上方，两处渲染顺序（宽屏右栏 / 窄屏单栏）各锁一条。
+   *
+   * 承重的是「已排期在项目区**之后**」：它原先是右栏第一位，把它压到底下才腾出右栏顶给轨道桶，
+   * 与左栏顶的手头区两两相对（左 = 在进行的单条任务，右 = 在进行的多步骤轨道）。
+   * 只断言「已排期在收件箱之前」是假闸——原顺序也满足。
+   */
+  async function seedSectionOrderFixture(): Promise<void> {
+    const member = await addTask({ title: "刷墙", toInbox: true });
+    const now = "2026-06-28T09:00:00.000Z";
+    await db.goals.add({
+      id: "g-order",
+      title: "装修房子",
+      kind: "project",
+      status: "active",
+      members: [{ kind: "task", id: member.id }],
+      prerequisites: [],
+      createdAt: now,
+      updatedAt: now,
+    });
+    const future = await addTask({ title: "未来任务", toInbox: true });
+    await scheduleTask(future.id, "2099-12-25");
+  }
+
+  function sectionOrder(host: HTMLElement): string[] {
+    return [...host.querySelectorAll("[data-section]")].map((el) => el.getAttribute("data-section") ?? "");
+  }
+
+  it("区块顺序（窄屏单栏）：项目区 → 已排期 → 收件箱", async () => {
+    await seedSectionOrderFixture();
+    const { host, root } = await renderPage();
+    await waitForText(host, "装修房子");
+
+    const order = sectionOrder(host);
+    expect(order).toContain("scheduled");
+    expect(order.indexOf("todo-projects")).toBeLessThan(order.indexOf("scheduled"));
+    expect(order.indexOf("scheduled")).toBeLessThan(order.indexOf("inbox"));
+    await unmount(root);
+  });
+
+  it("区块顺序（宽屏右栏）：项目区 → 已排期 → 收件箱", async () => {
+    // 宽屏走 ResizableSplit 的 right，与窄屏是两处独立的渲染顺序：只改一处、另一处会在这里红。
+    const originalMatchMedia = Object.getOwnPropertyDescriptor(window, "matchMedia");
+    Object.defineProperty(window, "matchMedia", {
+      configurable: true,
+      value: (query: string) => ({
+        matches: query === "(min-width: 1024px)",
+        media: query,
+        onchange: null,
+        addEventListener: () => {},
+        removeEventListener: () => {},
+        addListener: () => {},
+        removeListener: () => {},
+        dispatchEvent: () => false,
+      }),
+    });
+    try {
+      await seedSectionOrderFixture();
+      const { host, root } = await renderPage();
+      await waitForText(host, "装修房子");
+
+      const order = sectionOrder(host);
+      expect(order).toContain("scheduled");
+      expect(order.indexOf("todo-projects")).toBeLessThan(order.indexOf("scheduled"));
+      expect(order.indexOf("scheduled")).toBeLessThan(order.indexOf("inbox"));
+      await unmount(root);
+    } finally {
+      if (originalMatchMedia) Object.defineProperty(window, "matchMedia", originalMatchMedia);
+    }
   });
 
   it("已排期水位线：7 天内在水上，更远折叠成「更远还有 N 条」，点开可见", async () => {
@@ -2741,6 +2813,27 @@ describe("TodoPage 多选提交", () => {
     await unmount(root);
   });
 
+  it("归入睡着的项目：toast 说清「在沉睡区」（不唤醒它，就得说明去了哪儿）", async () => {
+    const seedMember = await addTask({ title: "刷墙", toInbox: true });
+    await seedProjectGoal(seedMember.id);
+    await setProjectDormant("g1", true);
+    await addTask({ title: "买灯", toInbox: true });
+    const { host, root } = await renderPage();
+    await waitForText(host, "买灯");
+    await waitForCondition(() => host.querySelector('[data-testid="dormant-projects-section"]') !== null, "装修睡着");
+
+    await enterSelection(host);
+    await clickSelectRow(host, "买灯");
+    await clickByLabel(host, "放进已有项目");
+    // 睡着的组仍是「放进…」的候选——这正是「能放但不唤醒」那条选择的现状面。
+    await clickByLabel(host, "放进 装修");
+    await waitForToast(host, "已归入「装修」· 1 条 · 在沉睡区");
+
+    // 归入没把它顶醒。
+    expect(host.querySelector('[data-testid="dormant-projects-section"]')).not.toBeNull();
+    await unmount(root);
+  });
+
   it("非预期错误：兜底提示 + console.error，不吞掉、不退出多选", async () => {
     const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
     const seedMember = await addTask({ title: "刷墙", toInbox: true });
@@ -3826,5 +3919,74 @@ describe("TodoPage 升格守卫", () => {
     expect(refIds.has(memberA.id)).toBe(true);
     expect(refIds.has(memberB.id)).toBe(true);
     await unmount(root);
+  });
+});
+
+describe("TodoPage 项目手动沉睡", () => {
+  /** 轨道归属项目走的是 goal.members 里的 track ref（`buildTrackProjectIndex`），不是 Track 上的字段。 */
+  async function seedProject(trackId?: string): Promise<void> {
+    const member = await addTask({ title: "刷墙", toInbox: true });
+    const now = "2026-06-28T09:00:00.000Z";
+    await db.goals.add({
+      id: "g-dormant",
+      title: "装修房子",
+      kind: "project",
+      status: "active",
+      members: trackId === undefined ? [{ kind: "task", id: member.id }] : [{ kind: "task", id: member.id }, { kind: "track", id: trackId }],
+      prerequisites: [],
+      createdAt: now,
+      updatedAt: now,
+    });
+  }
+
+  const dormantSection = (host: HTMLElement) => host.querySelector('[data-testid="dormant-projects-section"]');
+
+  it("菜单点「让它沉睡」→ 卡进沉睡区；重挂后仍睡着（设置落库、跨会话生效）", async () => {
+    await seedProject();
+    const { host, root } = await renderPage();
+    await waitForText(host, "装修房子");
+    // 前置：成员是刚建的，自动判定判它醒着——后面进沉睡区只可能是手动位干的。
+    expect(dormantSection(host)).toBeNull();
+
+    await click(host.querySelector('button[aria-label="项目 装修房子 更多操作"]'));
+    await click(host.querySelector('[data-testid="project-dormant-action"]'));
+    await waitForCondition(() => dormantSection(host) !== null, "卡进沉睡区");
+    expect(dormantSection(host)?.textContent).toContain("沉睡项目 · 1");
+    await unmount(root);
+
+    const second = await renderPage();
+    await waitForCondition(() => dormantSection(second.host) !== null, "重挂后仍睡着");
+    await unmount(second.root);
+  });
+
+  it("沉睡区里点「唤回」→ 回活跃区", async () => {
+    await seedProject();
+    await setProjectDormant("g-dormant", true);
+    const { host, root } = await renderPage();
+    await waitForCondition(() => dormantSection(host) !== null, "开场就睡着");
+
+    await click(host.querySelector('[data-testid="dormant-projects-toggle"]'));
+    await click(host.querySelector('button[aria-label="项目 装修房子 更多操作"]'));
+    await click(host.querySelector('[data-testid="project-dormant-action"]'));
+    await waitForCondition(() => dormantSection(host) === null, "回到活跃区");
+    await unmount(root);
+  });
+
+  it("手动睡着的项目里轨道跑起来 → 自动醒（活跃轨道压过手动位）", async () => {
+    const track = await addTrack({ title: "改水电" });
+    expect(track.status).toBe("active");
+    await seedProject(track.id);
+    await setProjectDormant("g-dormant", true);
+
+    const { host, root } = await renderPage();
+    await waitForText(host, "装修房子");
+    expect(dormantSection(host)).toBeNull();
+
+    // 反证：同一份手动位、轨道一归档就睡回去——绿不是因为手动位在页面这一层没接上。
+    await unmount(root);
+    await setTrackStatus(track.id, "concluded");
+    const second = await renderPage();
+    await waitForCondition(() => dormantSection(second.host) !== null, "轨道归档后回沉睡区");
+    await unmount(second.root);
   });
 });

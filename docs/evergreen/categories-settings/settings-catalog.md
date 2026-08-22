@@ -12,7 +12,7 @@ covers:
   - packages/client/src/pages/settings/SettingsMorePage.tsx
 contracts:
   - packages/client/src/lib/settings/index.ts
-last-reviewed: 2026-08-21
+last-reviewed: 2026-08-22
 ---
 
 # 设置 · 同步键值表
@@ -54,6 +54,7 @@ last-reviewed: 2026-08-21
 | `todo.defaultDestination.v1` | `"today"\|"inbox"`，默认 today | `lib/settings/todoDefaultDestinationSetting.ts`（covers 归 [todo](../todo.md)） | [todo](../todo.md) |
 | `todo.gravity.v1` | JSON `{enabled,waterlineDays,weightStepDays,graceDays,drawM,pickN}`，默认 `{true,14,7,7,5,1}` | `lib/settings/todoGravitySetting.ts`（covers 归 [todo](../todo.md)） | [todo](../todo.md)（inbox 水位线 + 翻牌参数，可视化入口 `/settings/todo-gravity`） |
 | `todo.gravity.review.v1` | JSON `{[taskId]: iso}`；机器轮换状态，写时 merge + prune `max(90, waterlineDays*4)` 天 | `lib/tasks/gravityReviewStorage.ts`（covers 归 [todo](../todo.md)） | [todo](../todo.md)（翻牌跨设备避重） |
+| `todo.dormantProjects.v1` | JSON `string[]`；用户手动按下沉睡的 goal id，读-改-写、值不变不落库 | `lib/settings/dormantProjectsSetting.ts`（covers 归 [project-zone](../project-zone.md)） | [project-zone](../project-zone.md) §3.11（手动沉睡位；孤儿 id 不清理，读侧取交集） |
 | `track.actionTags.v2` | JSON 字符串数组；旧 `{tag,court}` 数组兼容读取但忽略 `court`；未配置→种子 `[待我处理,agent在做]`；旧默认 `[等我,待决策,卡住,agent在做]` 读时归一为新默认；显式 `"[]"`→空 | `lib/settings/trackActionTagsSetting.ts` + `shared/src/trackBoardSignals.ts` parser（covers 归 [tracks](../tracks.md)） | [tracks](../tracks.md)(看板信号 + 步骤检索标签) |
 | `track.agentExecTags.v1` | JSON 字符串数组；未配置→默认 `[agent在做]`；显式 `"[]"`→空，即调度台不归出「agent 在跑」分组；读时去 `#` 前缀、trim、去重，单条 ≤64 字符、至多 20 条 | `lib/settings/trackAgentExecTagsSetting.ts`（covers 归 [tracks](../tracks.md)） | [tracks](../tracks.md)（调度台「agent 在跑」分组判据，不论这一步是谁写的） |
 | `track.waitExternalTags.v1` | JSON 字符串数组；未配置→默认 `[等外部]`；显式 `"[]"`→空，即调度台不归出「等外部」分组；读时去 `#` 前缀、trim、去重，单条 ≤64 字符、至多 20 条 | `lib/settings/trackWaitExternalTagsSetting.ts`（covers 归 [tracks](../tracks.md)） | [tracks](../tracks.md)（调度台「等外部」分组判据：在等一个不是自己也不是 agent 的条件） |

@@ -94,6 +94,8 @@ function sectionElement(props: Partial<Parameters<typeof TodoProjectSection>[0]>
         projectTrackRows={props.projectTrackRows}
         gravitySettings={props.gravitySettings ?? { ...DEFAULT_TODO_GRAVITY_SETTINGS, enabled: false }}
         dormantGoalIds={props.dormantGoalIds ?? new Set<string>()}
+        manuallyDormantGoalIds={props.manuallyDormantGoalIds ?? new Set<string>()}
+        onSetDormant={props.onSetDormant}
         onPromoteToTrack={props.onPromoteToTrack}
         onBumpTask={props.onBumpTask}
         onToggle={props.onToggle ?? handlers.onToggle}
@@ -1468,6 +1470,73 @@ describe("沉睡项目段", () => {
     // 主列表仍显示该组 header 计数 1
     const headerCount = host.querySelector('[data-section="todo-projects"] > div > span')?.textContent ?? "";
     expect(headerCount).toBe("1");
+    await unmount(root);
+  });
+});
+
+describe("手动沉睡入口", () => {
+  /** 打开某组的 ⋯ 菜单，返回菜单项文案。 */
+  async function openMenuLabels(host: HTMLElement, goalTitle: string): Promise<string[]> {
+    await click(host.querySelector(`button[aria-label="项目 ${goalTitle} 更多操作"]`));
+    return [...host.querySelectorAll('[role="menuitem"]')].map((el) => el.textContent ?? "");
+  }
+
+  it("活跃区的卡：菜单有「让它沉睡」，点了上抛 (goalId, true)", async () => {
+    const onSetDormant = vi.fn();
+    const { host, root } = await renderSection({
+      groups: [group({ goalId: "g1", goalTitle: "装修", tasks: [task({ id: "t1" })] })],
+      dormantGoalIds: new Set<string>(),
+      manuallyDormantGoalIds: new Set<string>(),
+      onSetDormant,
+    });
+
+    expect(await openMenuLabels(host, "装修")).toContain("让它沉睡");
+    await click([...host.querySelectorAll('[role="menuitem"]')].find((el) => el.textContent === "让它沉睡"));
+    expect(onSetDormant).toHaveBeenCalledWith("g1", true);
+    await unmount(root);
+  });
+
+  it("沉睡区里手动睡的卡：菜单换成「唤回」，点了上抛 (goalId, false)", async () => {
+    const onSetDormant = vi.fn();
+    const { host, root } = await renderSection({
+      groups: [group({ goalId: "g1", goalTitle: "装修", tasks: [task({ id: "t1" })] })],
+      dormantGoalIds: new Set(["g1"]),
+      manuallyDormantGoalIds: new Set(["g1"]),
+      onSetDormant,
+    });
+    await click(host.querySelector('[data-testid="dormant-projects-toggle"]'));
+
+    const labels = await openMenuLabels(host, "装修");
+    expect(labels).toContain("唤回");
+    expect(labels).not.toContain("让它沉睡");
+    await click([...host.querySelectorAll('[role="menuitem"]')].find((el) => el.textContent === "唤回"));
+    expect(onSetDormant).toHaveBeenCalledWith("g1", false);
+    await unmount(root);
+  });
+
+  it("沉睡区里**自动**睡的卡：两项都不放（点了不会有变化的东西不该出现在菜单里）", async () => {
+    const { host, root } = await renderSection({
+      groups: [group({ goalId: "g1", goalTitle: "装修", tasks: [task({ id: "t1" })] })],
+      dormantGoalIds: new Set(["g1"]),
+      manuallyDormantGoalIds: new Set<string>(),
+      onSetDormant: vi.fn(),
+    });
+    await click(host.querySelector('[data-testid="dormant-projects-toggle"]'));
+
+    const labels = await openMenuLabels(host, "装修");
+    expect(labels).not.toContain("唤回");
+    expect(labels).not.toContain("让它沉睡");
+    // 反证：既有菜单项还在，不是整个菜单没渲染出来导致的空。
+    expect(labels).toContain("改名");
+    await unmount(root);
+  });
+
+  it("没接 onSetDormant 时整项不渲染（goals 页等只读复用点不该冒出个死按钮）", async () => {
+    const { host, root } = await renderSection({
+      groups: [group({ goalId: "g1", goalTitle: "装修", tasks: [task({ id: "t1" })] })],
+      dormantGoalIds: new Set<string>(),
+    });
+    expect(await openMenuLabels(host, "装修")).not.toContain("让它沉睡");
     await unmount(root);
   });
 });

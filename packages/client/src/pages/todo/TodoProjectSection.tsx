@@ -84,6 +84,13 @@ export interface TodoProjectSectionProps {
   onPromoteToTrack?: (task: Task) => void;
   onBumpTask?: (task: Task) => void;
   dormantGoalIds: ReadonlySet<string>;
+  /**
+   * `dormantGoalIds` 里由**用户显式按下**的那一部分（另一部分是引力自动判的）。
+   * 只用来决定 ⋯ 菜单给哪一项：自动睡的给「唤回」是骗人的——清掉不存在的手动位后它照样自动睡回去。
+   */
+  manuallyDormantGoalIds?: ReadonlySet<string>;
+  /** 不接 = 整项不渲染（只读复用点不冒死按钮）。 */
+  onSetDormant?: (goalId: string, dormant: boolean) => void;
   onToggle: (task: Task) => void;
   onEdit: (task: Task) => void;
   onDelete: (task: Task) => void;
@@ -152,6 +159,7 @@ function ProjectGroupCard({
   sunkenTasks,
   onBumpTask,
   sunkenRowHandlers,
+  dormantAction,
   children,
 }: {
   group: TodoProjectGroup;
@@ -179,6 +187,11 @@ function ProjectGroupCard({
     onToInbox: (task: Task) => void;
     onToHand?: (task: Task) => void;
   };
+  /**
+   * ⋯ 菜单里那一项手动沉睡动作；`null` = 这张卡没有可点的方向，整项不渲染。
+   * 三态由 `TodoProjectSection` 判（见 `dormantActionFor`），卡片只管画。
+   */
+  dormantAction: { label: string; onSelect: () => void } | null;
   children: ReactNode;
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
@@ -468,6 +481,22 @@ function ProjectGroupCard({
             >
               在 goals 页打开
             </button>
+            {dormantAction && (
+              <button
+                type="button"
+                role="menuitem"
+                data-testid="project-dormant-action"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  setMenuOpen(false);
+                  menuTriggerRef.current?.focus();
+                  dormantAction.onSelect();
+                }}
+                className="block w-full px-3 py-2 text-left td-text-body text-ink hover:bg-surface-hover"
+              >
+                {dormantAction.label}
+              </button>
+            )}
           </div>
         )}
         {summary.allDone && (
@@ -577,6 +606,8 @@ export function TodoProjectSection({
   onPromoteToTrack,
   onBumpTask,
   dormantGoalIds,
+  manuallyDormantGoalIds,
+  onSetDormant,
   ...rowHandlers
 }: TodoProjectSectionProps) {
   const [overrides, setOverrides] = useState<Map<string, boolean>>(() => new Map());
@@ -616,6 +647,20 @@ export function TodoProjectSection({
   const dormantSet = dormantGoalIds;
   const activeGroups = dormantSet.size === 0 ? groups : groups.filter((g) => !dormantSet.has(g.goalId));
   const dormantGroups = dormantSet.size === 0 ? [] : groups.filter((g) => dormantSet.has(g.goalId));
+
+  /**
+   * ⋯ 菜单里那一项的三态：
+   * - 醒着 → 「让它沉睡」
+   * - 睡着且手动位在 → 「唤回」
+   * - 睡着但纯自动 → 无。给它「唤回」等于给一个点了就弹回来的按钮（手动位本就没有、清了也白清），
+   *   真想把它顶上来的手势是组内的「顶一下」（`onBumpTask`）。
+   */
+  const dormantActionFor = (goalId: string): { label: string; onSelect: () => void } | null => {
+    if (onSetDormant === undefined) return null;
+    if (!dormantSet.has(goalId)) return { label: "让它沉睡", onSelect: () => onSetDormant(goalId, true) };
+    if (manuallyDormantGoalIds?.has(goalId) === true) return { label: "唤回", onSelect: () => onSetDormant(goalId, false) };
+    return null;
+  };
 
   if (groups.length === 0) {
     if (filterActive && hasActiveProjects) {
@@ -703,6 +748,7 @@ export function TodoProjectSection({
         }}
         onRenameGoal={onRenameGoal}
         onOpenGoal={onOpenGoal}
+        dormantAction={dormantActionFor(group.goalId)}
         registerRef={(el) => {
           rowRefs.current.set(group.goalId, el);
         }}

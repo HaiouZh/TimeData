@@ -458,4 +458,74 @@ describe("isProjectDormant", () => {
     expect(isProjectDormant({ pendingTasks: [sunken1, sunken2], hasActiveTrack: false, settings: disabled, now, blockedTaskIds: new Set() })).toBe(false);
     expect(isProjectDormant({ pendingTasks: [sunken1], hasActiveTrack: false, settings: disabled, now, blockedTaskIds: new Set() })).toBe(false);
   });
+
+  describe("手动沉睡位", () => {
+    // 手动位的存在意义就是**推翻自动判定说的「醒着」**，所以每条用例都刻意用自动判定判不沉的料：
+    // 新鲜成员、已排期成员、空 pending。拿全沉的料测手动位是假闸——不带手动位它也是 true。
+    const fresh = task({ id: "f1", updatedAt: "2026-06-27T00:00:00.000Z", createdAt: "2026-05-01T00:00:00.000Z" });
+
+    it("手动位压过自动判定：成员新鲜照样沉睡", () => {
+      expect(
+        isProjectDormant({
+          pendingTasks: [fresh],
+          hasActiveTrack: false,
+          settings,
+          now,
+          blockedTaskIds: new Set(),
+          manuallyDormant: true,
+        }),
+      ).toBe(true);
+      // 反证：同一份料不带手动位是醒着的。
+      expect(isProjectDormant({ pendingTasks: [fresh], hasActiveTrack: false, settings, now, blockedTaskIds: new Set() })).toBe(
+        false,
+      );
+    });
+
+    it("手动位压不住活跃轨道：有在飞轨道就醒着", () => {
+      expect(
+        isProjectDormant({
+          pendingTasks: [fresh],
+          hasActiveTrack: true,
+          settings,
+          now,
+          blockedTaskIds: new Set(),
+          manuallyDormant: true,
+        }),
+      ).toBe(false);
+    });
+
+    it("手动位对空 pending 同样生效（全完成的项目也收得起来）", () => {
+      expect(
+        isProjectDormant({
+          pendingTasks: [],
+          hasActiveTrack: false,
+          settings,
+          now,
+          blockedTaskIds: new Set(),
+          manuallyDormant: true,
+        }),
+      ).toBe(true);
+    });
+
+    it("手动位对引力开关无依赖：settings.enabled=false 也照睡", () => {
+      // 手动位不是引力的一部分——关掉引力等于关掉自动沉降，不该把用户显式按下去的项目顶回来。
+      expect(
+        isProjectDormant({
+          pendingTasks: [fresh],
+          hasActiveTrack: false,
+          settings: { ...settings, enabled: false },
+          now,
+          blockedTaskIds: new Set(),
+          manuallyDormant: true,
+        }),
+      ).toBe(true);
+    });
+
+    it("manuallyDormant=false 与不传等价：完全走原自动判定", () => {
+      const sunken = task({ id: "s1", updatedAt: "2026-05-01T00:00:00.000Z", createdAt: "2026-05-01T00:00:00.000Z" });
+      const args = { hasActiveTrack: false, settings, now, blockedTaskIds: new Set<string>() };
+      expect(isProjectDormant({ ...args, pendingTasks: [sunken], manuallyDormant: false })).toBe(true);
+      expect(isProjectDormant({ ...args, pendingTasks: [fresh], manuallyDormant: false })).toBe(false);
+    });
+  });
 });

@@ -54,6 +54,7 @@ import {
   resumeSession,
   updateSessionNote,
 } from "../lib/sessions.js";
+import { setProjectDormant, useDormantProjects } from "../lib/settings/dormantProjectsSetting.ts";
 import { useTodoGravitySettings } from "../lib/settings/todoGravitySetting.ts";
 import { nestTaskUnderParent, promoteTaskToHand, promoteTaskToProject } from "../lib/taskNesting.js";
 import { projectAssignBlock, projectAssignBlockMessage } from "../lib/tasks/goalMembership.js";
@@ -503,6 +504,7 @@ export function TodoPage() {
 
   const gravitySettings = useTodoGravitySettings();
   const surfacedMap = useGravitySurfacedMap();
+  const manuallyDormantGoalIds = useDormantProjects();
   const dormantGoalIds = useMemo(() => {
     if (!trackData.ready || projectGoals === undefined) return new Set<string>();
     const s = new Set<string>();
@@ -516,12 +518,39 @@ export function TodoPage() {
           settings: gravitySettings,
           now: gravityNow,
           blockedTaskIds: new Set(group.blockedByMember.keys()),
+          manuallyDormant: manuallyDormantGoalIds.has(group.goalId),
         })
       )
         s.add(group.goalId);
     }
     return s;
-  }, [buckets.projects, tracksByGoal, activeTrackIdSet, gravitySettings, gravityNow, trackData.ready, projectGoals]);
+  }, [
+    buckets.projects,
+    tracksByGoal,
+    activeTrackIdSet,
+    gravitySettings,
+    gravityNow,
+    trackData.ready,
+    projectGoals,
+    manuallyDormantGoalIds,
+  ]);
+  /**
+   * 归入反馈的沉睡后缀。睡着的组不在项目区活跃段里，任务从收件箱消失后**全屏没有落点**——
+   * 组不会跳到第一位、也没有展开动画，只有一句 toast 能说清它去了哪儿。
+   *
+   * 这正是「往睡着的项目里放东西也不唤醒它」这条产品选择的配套：不唤醒就必须说清楚。
+   */
+  const dormantSuffix = (goalId: string): string => (dormantGoalIds.has(goalId) ? " · 在沉睡区" : "");
+  /**
+   * 手动位只在这里写。失败要出声：静默吞掉的话卡片纹丝不动，用户只会以为「点了没反应」再点一次
+   *（而下一次同样静默失败）。
+   */
+  const setDormant = (goalId: string, dormant: boolean): void => {
+    setProjectDormant(goalId, dormant).catch((error: unknown) => {
+      console.error("[todo] 项目沉睡状态写入失败:", error);
+      showActionToast({ message: dormant ? "没能让它沉睡，稍后再试" : "没能唤回，稍后再试" });
+    });
+  };
   useEffect(() => {
     let timer: number | undefined;
     const refreshGravityNow = () => {
@@ -1194,7 +1223,7 @@ export function TodoPage() {
             // 组间排序键是成员的 max(updatedAt)，而归入刚好刷新它——目标组会跳到项目区第一位。
             // 「不展开组」挡不住这种布局变化，所以必须说出它去了哪儿，否则连续拖第二条会照着
             // 旧的视觉位置落进别的组，而且几乎不可见（组不展开、任务同时从收件箱消失）。
-            showActionToast({ message: `已归入「${group?.goalTitle ?? "项目"}」` });
+            showActionToast({ message: `已归入「${group?.goalTitle ?? "项目"}」${dormantSuffix(op.goalId)}` });
           } catch (error) {
             // 准入/满员/目标组失效是**可预期**的用户操作结果，说出原因。
             // 成功路径刻意不做 revealProjectHome：落点就在手指下方，自动展开会在连续拖入第二条时
@@ -1271,6 +1300,8 @@ export function TodoPage() {
         );
       }}
       dormantGoalIds={dormantGoalIds}
+      manuallyDormantGoalIds={manuallyDormantGoalIds}
+      onSetDormant={setDormant}
       onBumpTask={bumpWeight}
       {...rowHandlers}
     />
@@ -1569,7 +1600,7 @@ export function TodoPage() {
         const goal = await assignTasksToProject(goalId, taskIds);
         exitSelection();
         openProject(goalId);
-        showActionToast({ message: `已归入「${goal.title}」· ${taskIds.length} 条` });
+        showActionToast({ message: `已归入「${goal.title}」· ${taskIds.length} 条${dormantSuffix(goalId)}` });
       } catch (error) {
         reportSubmitFailure(error, "这些任务或它们原来所在的项目数据有问题，暂时移不过去");
       }
@@ -1582,24 +1613,27 @@ export function TodoPage() {
     ? scheduledFiltered
     : buckets.scheduled.slice(0, buckets.scheduledSunkenFromIndex);
   const scheduledSunken = scheduledFilterActive ? [] : buckets.scheduled.slice(buckets.scheduledSunkenFromIndex);
+  // `data-section` 包裹与收件箱同形：分区顺序（宽屏右栏 / 窄屏单栏）靠它在 TodoPage.test.tsx 里锁死。
   const scheduledBlock = (
-    <CollapsibleSection
-      title="已排期"
-      count={scheduledFiltered.length}
-      defaultOpen={!getScheduledCollapsed()}
-      onToggle={(open) => setScheduledCollapsed(!open)}
-    >
-      {scheduledFiltered.length === 0 ? (
-        <p className="rounded-card bg-surface px-3 py-6 text-center td-text-body text-ink-3">没有已排期任务</p>
-      ) : (
-        <div className="rounded-card p-1.5">
-          {scheduledSurface.length > 0 && (
-            <TaskList pool="upcoming" tasks={scheduledSurface} metaChip={taskMetaChips} {...rowHandlers} />
-          )}
-          <SunkenScheduledTail sunkenTasks={scheduledSunken} metaChip={taskMetaChips} {...rowHandlers} />
-        </div>
-      )}
-    </CollapsibleSection>
+    <section data-section="scheduled">
+      <CollapsibleSection
+        title="已排期"
+        count={scheduledFiltered.length}
+        defaultOpen={!getScheduledCollapsed()}
+        onToggle={(open) => setScheduledCollapsed(!open)}
+      >
+        {scheduledFiltered.length === 0 ? (
+          <p className="rounded-card bg-surface px-3 py-6 text-center td-text-body text-ink-3">没有已排期任务</p>
+        ) : (
+          <div className="rounded-card p-1.5">
+            {scheduledSurface.length > 0 && (
+              <TaskList pool="upcoming" tasks={scheduledSurface} metaChip={taskMetaChips} {...rowHandlers} />
+            )}
+            <SunkenScheduledTail sunkenTasks={scheduledSunken} metaChip={taskMetaChips} {...rowHandlers} />
+          </div>
+        )}
+      </CollapsibleSection>
+    </section>
   );
 
   const trackBucketBlock = (
@@ -1668,10 +1702,12 @@ export function TodoPage() {
                 </>
               }
               right={
+                // 轨道桶打头，与左栏打头的手头区两两相对：左边是在进行的单条任务，右边是在进行的多步骤轨道。
+                // 已排期与收件箱都是「不是现在」的两摞，一起沉到栏底。顺序由 TodoPage.test.tsx「区块顺序」锁住。
                 <>
-                  {dimWhenSelecting(scheduledBlock)}
                   {dimWhenSelecting(trackBucketBlock)}
                   {dimWhenSelecting(projectsBlock)}
+                  {dimWhenSelecting(scheduledBlock)}
                   {inboxBlock}
                 </>
               }
@@ -1683,9 +1719,10 @@ export function TodoPage() {
               {dimWhenSelecting(waitingBlock)}
               {gravityReviewBlock}
               {dimWhenSelecting(completedBlock)}
-              {dimWhenSelecting(scheduledBlock)}
+              {/* 与宽屏右栏同一份顺序：单栏下不为窄屏另立一套心智模型。 */}
               {dimWhenSelecting(trackBucketBlock)}
               {dimWhenSelecting(projectsBlock)}
+              {dimWhenSelecting(scheduledBlock)}
               {inboxBlock}
             </div>
           )}

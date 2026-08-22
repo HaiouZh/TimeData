@@ -4,11 +4,12 @@ title: 项目区与归属轴
 covers:
   - packages/client/src/lib/tasks/goalMembership.ts
   - packages/client/src/lib/tasks/projectZone.ts
+  - packages/client/src/lib/settings/dormantProjectsSetting.ts
   - packages/client/src/pages/todo/TodoProjectSection.tsx
 contracts:
   - packages/client/src/lib/tasks/projectZone.ts
   - packages/client/src/lib/goals.ts
-last-reviewed: 2026-08-21
+last-reviewed: 2026-08-22
 ---
 
 # 项目区与归属轴
@@ -66,6 +67,12 @@ last-reviewed: 2026-08-21
 8. 查不到的成员 ref 直接丢弃、**不做清理**：悬空 ref 正是 goals 星图 ghost 节点的唯一数据源（见 [goals](goals.md)）。但这些 ref 仍计入 `memberCount`，因为 500 闸看的是原始数组。
 9. 零可解析 task 成员的目标不进项目区（纯 track 目标在星图里已有位置）。
 10. **沉睡项目派生段**（track-workbench 阶段4，纯派生无新字段）：`isProjectDormant`（`projectZone.ts`）判「无 active 轨道成员 + 未完成成员全部 `isTaskSunken`」的组为沉睡——无未完成成员的组走既有全完成三态、不算沉睡；有排期成员的组经尺子内建判定天然不沉。被挡成员视为不沉——口径与组内沉降的被挡豁免一致，被挡的组不进沉睡段。沉睡组从主列表**搬进**区末尾「沉睡项目 · N」折叠段（默认收起，展开后同款组块全功能——沉睡不是归档），touch 任一成员或挂上 active 轨道即自动浮回。判定输入（`tracksByGoal`/`dormantGoalIds`）由 `TodoPage` 算好传入，组件不自查。
+11. **手动沉睡位**：用户可在组卡 `⋯` 菜单显式按下「让它沉睡」，与自动判定合流进同一个沉睡段。判定顺序 `hasActiveTrack → manuallyDormant → 自动`，三条不变量：
+    - **活跃轨道压过手动位**：否则会出现「轨道桶里这条轨道在跑、点回项目却在沉睡区」的分歧态，用户无从解释。
+    - **手动位粘性，只有「唤回」清得掉**：轨道跑完、往里归入新任务都不清它——它表达的是人的意图（「这个项目我先不做了」），不是数据状态，不该由系统代为推翻。因此也不看 `settings.enabled`（关引力 = 关自动沉降，不是把用户按下去的项目顶回来）。
+    - **`⋯` 菜单三态**：醒着给「让它沉睡」；睡着且手动位在给「唤回」；睡着但纯自动**两项都不给**——给它「唤回」等于给一个点了就弹回来的按钮，真想顶上来的手势是组内「顶一下」。
+    存储走 settings 同步域 `todo.dormantProjects.v1`（id 数组，`lib/settings/dormantProjectsSetting.ts`），不加 Goal 字段：它是看法不是项目数据，且 LWW 整值覆盖对单人低频操作够用。项目删除/归档后留下的孤儿 id **不清理**，读侧对现存组取交集即可。
+    睡着的组**仍是拖拽落点与「放进…」候选，归入也不唤醒它**；代价是任务从收件箱消失后全屏没有落点，故两处归入 toast 补 ` · 在沉睡区`（`TodoPage` 的 `dormantSuffix`）——不唤醒就必须说清去了哪儿。
 
 <a id="project-zone-ownership-write"></a>
 
@@ -116,7 +123,7 @@ last-reviewed: 2026-08-21
 | `lib/goals.ts`（归 [goals](goals.md) covers） | 写侧四条归属通道 + `touchTasksInCurrentTransaction`（§4.2）；`assignTaskToProject` 单事务先摘后加（§4.1）+ `ProjectAssignError`；`createTaskForProject` 组合项目内创建；`prerequisiteLossOnAssign` 只读预测（见 [project-zone/presentation](project-zone/presentation.md) §2）；批量版三件套见 [project-zone/multi-select](project-zone/multi-select.md) §3、§4 |
 | `pages/todo/todoDnd.ts`（归 [todo](todo.md) covers） | `project:<goalId>` 容器域与 `assign-to-project` 操作、`project-row:` 行 id 域（`todoProjectRowIdPrefix` / `todoProjectRowId`）、组内 `move-to-parent` 与 `promote-to-project` 两条分支及其哨兵次序、三道守卫、`preferProjectCollisions` 碰撞策略含「本组来源优先认行」一档、落点解析纯函数 `resolveTodoDropTarget` + `TodoDropLookup`（`parent:` 容器按根行反查所属池 / 组，项目成员被排他扣出 inbox 桶，那一支不能省）（见 [project-zone/presentation](project-zone/presentation.md) §2–§3） |
 
-测试：`lib/tasks/goalMembership.test.ts`（两份索引口径、分组投影、近 7 天窗口上下界、`memberCount` 原始口径、组间排序、同挂多组仲裁、悬空 ref、上限阈值）、`lib/tasks/projectZone.test.ts`（成员四态、行动作两轴不互遮、组计数、四段排序、被挡沉底与「沉底优先于在手头」、`blockedIds` 缺省时逐字等价、recentTaskIds 覆盖、chip 索引、竖条裁剪）、`lib/tasks.test.ts`（`describe("listTasks projects 桶")`：归集/排他同源、手头正交、重复模板与 occurrence 挡在门外、组内排序接线）、`pages/todo/TodoProjectSection.test.tsx`（组展开折叠、标题文案、状态胶囊、被挡成员的「等 XX」胶囊与首个被挡成员的分界线、「下一步」徽章退役守卫（恒不渲染）、组内沉降切分与水下尾、沉睡段搬家与浮回、在飞的线插槽、升格按钮、组内新建后重排仍守沉底、成员行动作按真实状态渲染、退出项目、已完成零渲染、限高结构、`+` 创建输入、`⋯` 菜单、改名、上限预警、`revealGoals` 消费与「组还没渲染出来就留着、出现后补上」、chip）、`pages/TodoPage.test.tsx`（页面级：排他后成员离开收件箱、项目内创建成功/满员拒绝、菜单改名和跳转、零 project 不渲染、chip 回跳、回收件箱后展开归属组、红线 3 竖条不同屏，以及落点判据的三条反向用例——手头区取消勾选 / 抽屉清时间但已完成 / 抽屉选未来某天都**不**展开，外加「抽屉→页面」这根线本身）、`lib/goals.test.ts`（`createTaskForProject` 的同事务成功/满员/失效目标/裸行解析失败回滚，`describe("归属变更同事务刷新成员任务 updatedAt")` 与 `describe("assignTaskToProject")`：单一归属先摘后加、theme/归档组不被摘、目标组失效被拒、准入四拒、幂等重入不动钉点、事务原子性）。
+测试：`lib/tasks/goalMembership.test.ts`（两份索引口径、分组投影、近 7 天窗口上下界、`memberCount` 原始口径、组间排序、同挂多组仲裁、悬空 ref、上限阈值）、`lib/tasks/projectZone.test.ts`（成员四态、行动作两轴不互遮、组计数、四段排序、被挡沉底与「沉底优先于在手头」、`blockedIds` 缺省时逐字等价、recentTaskIds 覆盖、chip 索引、竖条裁剪、手动沉睡位四条——压过自动判定 / 压不住活跃轨道 / 对空 pending 与 `enabled=false` 同样生效 / `false` 与不传等价）、`lib/settings/dormantProjectsSetting.test.ts`（sanitize 去重去空、坏 JSON 读空、读-改-写只摘自己、值不变不写 syncLog）、`lib/tasks.test.ts`（`describe("listTasks projects 桶")`：归集/排他同源、手头正交、重复模板与 occurrence 挡在门外、组内排序接线）、`pages/todo/TodoProjectSection.test.tsx`（组展开折叠、标题文案、状态胶囊、被挡成员的「等 XX」胶囊与首个被挡成员的分界线、「下一步」徽章退役守卫（恒不渲染）、组内沉降切分与水下尾、沉睡段搬家与浮回、手动沉睡的 `⋯` 菜单三态与上抛、在飞的线插槽、升格按钮、组内新建后重排仍守沉底、成员行动作按真实状态渲染、退出项目、已完成零渲染、限高结构、`+` 创建输入、`⋯` 菜单、改名、上限预警、`revealGoals` 消费与「组还没渲染出来就留着、出现后补上」、chip）、`pages/TodoPage.test.tsx`（页面级：排他后成员离开收件箱、项目内创建成功/满员拒绝、菜单改名和跳转、零 project 不渲染、chip 回跳、回收件箱后展开归属组、红线 3 竖条不同屏，以及落点判据的三条反向用例——手头区取消勾选 / 抽屉清时间但已完成 / 抽屉选未来某天都**不**展开，外加「抽屉→页面」这根线本身；手动沉睡三条——按下后进沉睡段且重挂仍睡、唤回回活跃区、活跃轨道压过手动位且轨道归档后睡回；以及归入睡着的组时 toast 带 ` · 在沉睡区` 且不唤醒）、`lib/goals.test.ts`（`createTaskForProject` 的同事务成功/满员/失效目标/裸行解析失败回滚，`describe("归属变更同事务刷新成员任务 updatedAt")` 与 `describe("assignTaskToProject")`：单一归属先摘后加、theme/归档组不被摘、目标组失效被拒、准入四拒、幂等重入不动钉点、事务原子性）。
 
 多选建组 / 批量归入的用例三层分布见 [project-zone/multi-select](project-zone/multi-select.md) §5。
 
