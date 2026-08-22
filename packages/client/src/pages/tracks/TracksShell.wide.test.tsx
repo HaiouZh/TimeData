@@ -68,7 +68,7 @@ describe("TracksShell 宽屏 master-detail（调度台常驻）", () => {
   it("/tracks：左列调度台 + 右栏空态提示", async () => {
     await addTrack({ title: "写周报" });
     const { host } = await mountShell("/tracks");
-    await waitFor(() => host.querySelector('[data-testid="dispatch-stats"]') !== null, "调度台统计带");
+    await waitFor(() => host.querySelector('[data-testid="dispatch-board"]') !== null, "调度台");
     expect(host.querySelector('[aria-label="轨道调度台"]')).not.toBeNull();
     expect(host.textContent).toContain("从左侧选一条轨道查看");
   });

@@ -9,7 +9,7 @@ import { useAgentExecTags } from "../../lib/settings/trackAgentExecTagsSetting.j
 import { useResumeTags } from "../../lib/settings/trackResumeTagsSetting.js";
 import { useWaitExternalTags } from "../../lib/settings/trackWaitExternalTagsSetting.js";
 import { addTrack, appendUserStep, listAllTrackSteps, listTracks } from "../../lib/tracks.js";
-import { type DispatchGroupKey, dispatchItems, dispatchStats, groupDispatchItems } from "../../lib/tracksDispatch.js";
+import { type DispatchGroupKey, dispatchItems, groupDispatchItems } from "../../lib/tracksDispatch.js";
 import { groupStepsByTrack, partitionTracks } from "../../lib/tracksView.js";
 import { CollapsibleSection } from "../todo/CollapsibleSection.js";
 import { NewTrackComposer } from "./NewTrackComposer.js";
@@ -61,7 +61,6 @@ export function TracksBoard() {
     [active, byTrack, actionTags, agentExecTags, waitExternalTags, resumeTags],
   );
   const groups = useMemo(() => groupDispatchItems(items), [items]);
-  const stats = useMemo(() => dispatchStats(items), [items]);
 
   async function create(title: string): Promise<void> {
     // 建完直接进详情写第一步（宽屏=右栏出详情，窄屏=整页详情）。
@@ -74,13 +73,9 @@ export function TracksBoard() {
   }
 
   return (
-    <div className="min-h-full bg-page text-ink">
+    <div data-testid="dispatch-board" className="min-h-full bg-page text-ink">
       <div className="mx-auto w-full max-w-2xl px-4 py-4 pb-24">
         <NewTrackComposer onCreate={(title) => create(title)} />
-        <p data-testid="dispatch-stats" className="td-num mb-3 td-text-caption text-ink-2">
-          等我接 {stats.awaiting} · agent 在跑 {stats.agentRunning} · 等外部 {stats.waitingExternal} · 停滞{" "}
-          {stats.stalled}
-        </p>
         {items.length === 0 ? (
           <EmptyState variant="card" title="还没有进行中的轨道" />
         ) : (

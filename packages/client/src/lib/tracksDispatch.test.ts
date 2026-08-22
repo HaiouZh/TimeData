@@ -1,6 +1,6 @@
 import type { Track, TrackStep } from "@timedata/shared";
 import { describe, expect, it } from "vitest";
-import { dispatchItems, dispatchStats, groupDispatchItems, STALL_THRESHOLD_MS } from "./tracksDispatch.js";
+import { dispatchItems, groupDispatchItems, STALL_THRESHOLD_MS } from "./tracksDispatch.js";
 
 const NOW = new Date("2026-07-09T12:00:00.000Z");
 const DAY = 86_400_000;
@@ -132,7 +132,7 @@ describe("恢复推进信号", () => {
   });
 });
 
-describe("groupDispatchItems / dispatchStats", () => {
+describe("groupDispatchItems", () => {
   it("固定显示序、空组剔除、组内最后动静倒序", () => {
     const items = itemsOf([
       [makeTrack("stale"), [makeStep("stale", 9 * DAY)]],
@@ -145,15 +145,5 @@ describe("groupDispatchItems / dispatchStats", () => {
     expect(groups.map((g) => g.key)).toEqual(["awaiting-me", "agent-running", "wait-external", "in-progress"]);
     expect(groups[0].items.map((i) => i.track.id)).toEqual(["waitNew", "waitOld"]);
     expect(groups[0].label).toBe("等我接");
-  });
-
-  it("统计带四数：等我接 / agent在跑 / 等外部 / 停滞提醒计数（跨组）", () => {
-    const items = itemsOf([
-      [makeTrack("a"), [makeStep("a", DAY, ["待我处理"])]],
-      [makeTrack("b"), [makeStep("b", 13 * DAY, ["agent在做"])]],
-      [makeTrack("c"), [makeStep("c", DAY, ["等外部"])]],
-      [makeTrack("d"), [makeStep("d", 9 * DAY)]],
-    ]);
-    expect(dispatchStats(items)).toEqual({ awaiting: 1, agentRunning: 1, waitingExternal: 1, stalled: 2 });
   });
 });

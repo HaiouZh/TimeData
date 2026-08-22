@@ -197,18 +197,6 @@ describe("TracksListPage", () => {
     expect(host.querySelector(`a[href="/tracks/${track.id}"]`)).not.toBeNull();
   });
 
-  it("统计带显示 等我接/agent在跑/等外部/停滞 计数", async () => {
-    await seedDispatchScenario();
-    const host = await renderList();
-    // 统计带依赖 steps 的 useLiveQuery 结算，锚点必须等 steps 派生文本，不能等卡片标题（tracks 查询先到会读到 0/0/0）。
-    await waitForText(host, "等我接 1");
-    const stats = host.querySelector('[data-testid="dispatch-stats"]');
-    expect(stats?.textContent).toContain("等我接 1");
-    expect(stats?.textContent).toContain("agent 在跑 1");
-    expect(stats?.textContent).toContain("等外部 1");
-    expect(stats?.textContent).toContain("停滞 1");
-  });
-
   it("卡片按分组落位：等我接组在最上，推进中组沉底", async () => {
     await seedDispatchScenario();
     const host = await renderList();
@@ -302,7 +290,7 @@ describe("TracksListPage", () => {
 
   it("窄屏 /tracks 渲染调度台整页而非宽屏空态（jsdom 无 matchMedia，useIsWideScreen 天然 false）", async () => {
     const host = await renderList();
-    expect(host.querySelector('[data-testid="dispatch-stats"]')).not.toBeNull();
+    expect(host.querySelector('[data-testid="dispatch-board"]')).not.toBeNull();
     expect(host.textContent).not.toContain("从左侧选一条轨道查看");
   });
 
@@ -364,5 +352,13 @@ describe("TracksListPage", () => {
     expect(normalLi).toBeDefined();
     expect(droppedLi?.querySelector('[data-testid="segment-progress-bar"]')).toBeNull();
     expect(normalLi?.querySelector('[data-testid="segment-progress-bar"]')).not.toBeNull();
+  });
+
+  it("不再渲染统计带", async () => {
+    await seedDispatchScenario();
+    const host = await renderList();
+    // 等调度台渲染完成再断言"没有统计带"，否则空 DOM 也会让断言成立（假绿）。
+    await waitForElement(host, '[data-testid="dispatch-board"]');
+    expect(host.querySelector('[data-testid="dispatch-stats"]')).toBeNull();
   });
 });

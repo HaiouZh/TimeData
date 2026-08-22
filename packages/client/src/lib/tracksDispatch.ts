@@ -102,22 +102,3 @@ export function groupDispatchItems(items: readonly DispatchItem[]): DispatchGrou
       }),
   })).filter((group) => group.items.length > 0);
 }
-
-export function dispatchStats(items: readonly DispatchItem[]): {
-  awaiting: number;
-  agentRunning: number;
-  waitingExternal: number;
-  stalled: number;
-} {
-  let awaiting = 0;
-  let agentRunning = 0;
-  let waitingExternal = 0;
-  let stalled = 0;
-  for (const item of items) {
-    if (item.group === "awaiting-me") awaiting += 1;
-    else if (item.group === "agent-running") agentRunning += 1;
-    else if (item.group === "wait-external") waitingExternal += 1;
-    if (item.stalledDays !== null) stalled += 1;
-  }
-  return { awaiting, agentRunning, waitingExternal, stalled };
-}
