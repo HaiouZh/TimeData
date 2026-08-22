@@ -26,12 +26,12 @@ covers:
 contracts:
   - packages/shared/src/trackBoardSignals.ts
   - packages/server/src/routes/agent-tracks.ts
-last-reviewed: 2026-08-21
+last-reviewed: 2026-08-23
 ---
 
 # 任务轨道
 
-> 轨道把复杂、易分支的任务升成一条可监控的人机接力线。数据地基 + agent 受控 ingest API + 列表与详情监控面 + 步骤共编与跨轨道聚合。步骤标签默认是检索辅助；其中少数配置为“看板信号”的标签进入 `/tracks` 顶部聚合。详情时间线仍用开口步高亮执行中的段落。
+> 轨道把复杂、易分支的任务升成一条可监控的人机接力线。数据地基 + agent 受控 ingest API + 列表与详情监控面 + 步骤共编与跨轨道聚合。步骤标签默认是检索辅助；其中少数配置为“看板信号”的标签决定轨道落进 `/tracks` 的哪个调度分组。详情时间线仍用开口步高亮执行中的段落。
 
 ## 承上启下
 
@@ -123,7 +123,7 @@ agent 续写上下文另有只读 API：`GET /api/agent/tracks/context` 返回 a
 
 看板信号计算在 `packages/shared/src/trackBoardSignals.ts`，client `tracksView.ts` 与 server agent context API 共用同一纯函数：按语义时间倒序找最近一条含已配置看板信号的 step；同一步多个信号时按 `boardSignals` 顺序取第一个；无标签步骤和普通检索标签不清空已有信号。语义时间比较器在 `packages/shared/src/trackStepOrder.ts`，client/server 的当前步、最新步和看板信号都走同一口径。
 
-`/tracks` 列表的分组、统计带与状态卡展示见 §8（调度台按判定优先级分组，不再是扁平列表+顶部 chip OR 筛选）。
+`/tracks` 列表的分组与状态卡展示见 §8（调度台按判定优先级分组，不再是扁平列表+顶部 chip OR 筛选）。
 
 agent 接力协议：派活时给 agent `trackId` 和当前看板信号词表；人手可先 append 一步打 `agent在做`。agent 完成或需要人接手后经 `/api/agent/tracks/:id/steps` append 一步，打 `待我处理` 或用户当前配置中的等价看板信号。append 自动闭合全部旧开口步；该步成为看板当前信号，直到后续步骤写入新的已配置看板信号。
 
@@ -137,9 +137,11 @@ agent 接力协议：派活时给 agent `trackId` 和当前看板信号词表；
 
 ## 8. 状态卡与调度台（含宽屏 master-detail）
 
-track 定位 = 每条工作流的存档点（状态卡）+ /tracks 调度台；当前帧 = 最新一步的投影（写新步=覆盖当前帧、编辑最新步=修正当前帧），零 schema 改动。/tracks 顶部统计带「等我接 N · agent 在跑 M · 等外部 W · 停滞 K」答"此刻几条在并发"（停滞 K 是跨组提醒计数=`stalledDays !== null` 的条目数，不是组）；每条 active 轨道一张状态卡（标题+最新步内容 2-3 行+信号徽章+最后动静，计时弱化不显历时/步数；卡上保留行内「写一步」composer——appendUserStep 就地追加），按调度语义分组：判定优先级=等我接（信号命中 actionTags[0]）> agent在跑（信号命中 agentExecTags）> 等外部（信号命中 waitExternalTags，settings `track.waitExternalTags.v1` 默认 `等外部`）> 推进中；**停滞退出分组判定**（[ADR 0035](../adr/0035-track-milestones-and-signal-priority.md)），降为行上提醒 `stalledDays`（最后动静>7 天给整天数、无步轨道用 createdAt 兜底，各组都标"N 天没动静"）——信号是用户宣告的，系统只提醒不改判；显示序=等我接→agent在跑→等外部→推进中，组内最后动静倒序，空组不渲染。信号口径=`latestTrackBoardSignal`（最近一个带信号的步，同导航 badge / goals 候选——中途补无信号步不清除信号）。agent 在跑消费独立 Track signal tone；它不是动作色、模块署名色或 Goal 色，本文不复制具体 hex/className（见 [design-language](design-language.md#design-language-s1)）。纯函数层 `packages/client/src/lib/tracksDispatch.ts`（node 快桶单测）。详情页倒置：顶部当前帧卡（最新步全文+就地编辑/删除，只显示"X 前"）→ StepComposer（写入即成为新当前帧）→ 闭合当前步（次要）→「历史 N 步」默认折叠（hash 锚点命中历史步时自动展开；折叠/中段折叠语义在 TrackTimeline 内不变）。宽屏（≥1024px）`TracksShell`：左列调度台常驻（400px、独立滚动）+ 右栏随路由（/tracks=空态提示、/tracks/:id=详情），选中卡 accent 边框；窄屏壳纯透传。并发甘特（2026-07-08~09）已整体退役：甘特回答"什么时候有动静"、适合规划未来的并发，本场景要的是"此刻横切面"，由调度台分组+统计带承接。todo 行徽章与勾选联动归档消费同一信号口径与 `setTrackStatus`（入口在 todo 侧，见 [todo](todo.md)）。**todo 轨道桶**（2026-08-21 阶段3）是调度台口径的第二个消费方：`TrackBucketSection` 直接复用 `dispatchItems`/`groupDispatchItems` 分组（不自造判定），桶行 `TrackBucketRow` 复用 workbench 的 `SignalSwitcher`/`SegmentProgressBar`（跨页共享组件目录属既定设计）；被抓进手头的轨道经 `Session.trackIds` 排他不进桶（见 [todo/at-hand](todo/at-hand.md)）。/tracks 页零改动——桶是消费方不是第二真相源。
+track 定位 = 每条工作流的存档点（状态卡）+ /tracks 调度台；当前帧 = 最新一步的投影（写新步=覆盖当前帧、编辑最新步=修正当前帧），零 schema 改动。「此刻几条在并发」由**各组标题右侧的计数**答，页面不另设顶部统计带（同一个数会在一屏出现两遍，而分组标题那份离对应卡片更近）；「哪条卡住了」由卡片行的「N 天没动静」承接并染 `text-warn`；每条 active 轨道一张状态卡，**只答三个问题**：这条是什么（标题，`font-medium`）/ 现在到哪（最新步内容至多 2 行 + 信号徽章）/ 多久没动（最后动静），不显摘要（那是详情页的信息，列表里只塞得下半句）、不显历时/步数；卡上行内「写一步」composer 在**宽屏 hover 才浮出、窄屏常驻**（触摸设备没有 hover，隐身了就再也浮不出来）——appendUserStep 就地追加。按调度语义分组：判定优先级=等我接（信号命中 actionTags[0]）> agent在跑（信号命中 agentExecTags）> 等外部（信号命中 waitExternalTags，settings `track.waitExternalTags.v1` 默认 `等外部`）> 推进中；**停滞退出分组判定**（[ADR 0035](../adr/0035-track-milestones-and-signal-priority.md)），降为行上提醒 `stalledDays`（最后动静>7 天给整天数、无步轨道用 createdAt 兜底，各组都标"N 天没动静"）——信号是用户宣告的，系统只提醒不改判；显示序=等我接→agent在跑→等外部→推进中，组内最后动静倒序，空组不渲染。信号口径=`latestTrackBoardSignal`（最近一个带信号的步，同导航 badge / goals 候选——中途补无信号步不清除信号）。agent 在跑消费独立 Track signal tone；它不是动作色、模块署名色或 Goal 色，本文不复制具体 hex/className（见 [design-language](design-language.md#design-language-s1)）。纯函数层 `packages/client/src/lib/tracksDispatch.ts`（node 快桶单测）。详情页从上到下：**页眉**（状态圆点 + 标题 + 状态文字 + `⋯` 菜单收纳编辑轨道/归档/删除轨道；状态在整页只出现一次）→ **顶部工具带**（`SignalSwitcher` 信号切换 ｜ `MilestoneBar` 阶段骨架条，段明细按需展开）→ **当前帧**（最新步全文 + 就地编辑/删除，只显示"X 前"；左侧 accent 竖线成流，**不是卡片**）→ **StepComposer**（整页唯一的表单卡与唯一的实心主按钮「加入这一步」，「闭合当前步」在它的动作行里做弱按钮）→ **「历史 N 步」默认展开**（左侧 border 竖线，当前步那行竖线加粗成 accent；hash 锚点命中历史步时自动展开；折叠/中段折叠语义在 TrackTimeline 内不变）。宽屏（≥1024px）`TracksShell`：左列调度台常驻（400px、独立滚动）+ 右栏随路由（/tracks=空态提示、/tracks/:id=详情），选中卡 accent 边框；窄屏壳纯透传。并发甘特（2026-07-08~09）已整体退役：甘特回答"什么时候有动静"、适合规划未来的并发，本场景要的是"此刻横切面"，由调度台分组承接。todo 行徽章与勾选联动归档消费同一信号口径与 `setTrackStatus`（入口在 todo 侧，见 [todo](todo.md)）。**todo 轨道桶**（2026-08-21 阶段3）是调度台口径的第二个消费方：`TrackBucketSection` 直接复用 `dispatchItems`/`groupDispatchItems` 分组（不自造判定），桶行 `TrackBucketRow` 复用 workbench 的 `SignalSwitcher`/`SegmentProgressBar`（跨页共享组件目录属既定设计）；被抓进手头的轨道经 `Session.trackIds` 排他不进桶（见 [todo/at-hand](todo/at-hand.md)）。/tracks 页零改动——桶是消费方不是第二真相源。
 
-详情页即**工作台**（编排面组件在 `pages/tracks/workbench/`）：≥1280px 详情内部双栏 `grid-cols-[minmax(300px,380px)_1fr]`——左编排面（`SignalSwitcher` 信号切换 + `MilestonePanel` 阶段骨架），右叙事面（当前帧卡 + StepComposer + 历史折叠）；<1280 纵向堆叠、编排面在上且收进「阶段骨架」折叠段（默认展开，实现为 xl:hidden/hidden xl:block 两份渲染）。`SignalSwitcher`：四胶囊（等我接/agent在做/等外部/恢复推进，各取组内首标签，组空不渲染），点按写一条 `mode:"instant"`、正文「→ 组名」、tags 带该标签的用户步——信号步覆盖旧信号；当前组高亮、再点不写（幂等）；非 active 轨道不渲染。**恢复推进是信号棘轮的出口**：resumeTags（settings `track.resumeTags.v1`，默认 `推进中`）并入 boardSignals 并集（并集在 client 侧做，shared `latestTrackBoardSignal` 不动），命中它的信号在 `classify` 里不进任何显式组、自然落兜底 in-progress——显式 `[]` 即关闭出口。`MilestonePanel`：空态立骨架 textarea（一行一段批量 `addMilestones`）、段列表（`MilestoneRow`：checkbox 勾 done/pending、行内改题、⋯菜单上移/下移（`moveMilestone`）/加塞/砍掉留痕带 note/dropped 行恢复为待办/解挂任务）、尾部加一段；全部写入失败经 onError 落页面 StatusBanner。非 active 轨道 readOnly（checkbox 禁用、编辑入口不渲染）。调度台状态卡标题下有迷你分段条（`SegmentProgressBar size="mini"`，无段不渲染）；分段条 done 实心/pending 空心/dropped 不占格，total=0 显「未立骨架」空态、不显 0/0。
+详情页即**工作台**（编排面组件在 `pages/tracks/workbench/`）：**无内部双栏，宽窄屏同一套单份渲染**——编排面是页眉下方的一条横向工具带（`SignalSwitcher` ｜ `MilestoneBar`），段明细 `MilestonePanel` 由工具带上的「阶段」/「立骨架」按钮按需展开在其下方。`MilestoneBar` 只在**只读且无段**时才彻底藏掉入口：归档轨道若已有骨架，仍要能展开查看。`SignalSwitcher`：四胶囊（等我接/agent在做/等外部/恢复推进，各取组内首标签，组空不渲染），点按写一条 `mode:"instant"`、正文「→ 组名」、tags 带该标签的用户步——信号步覆盖旧信号；当前组高亮、再点不写（幂等）；非 active 轨道不渲染。**恢复推进是信号棘轮的出口**：resumeTags（settings `track.resumeTags.v1`，默认 `推进中`）并入 boardSignals 并集（并集在 client 侧做，shared `latestTrackBoardSignal` 不动），命中它的信号在 `classify` 里不进任何显式组、自然落兜底 in-progress——显式 `[]` 即关闭出口。`MilestonePanel`：空态立骨架 textarea（一行一段批量 `addMilestones`）、段列表（`MilestoneRow`：checkbox 勾 done/pending、行内改题、⋯菜单上移/下移（`moveMilestone`）/加塞/砍掉留痕带 note/dropped 行恢复为待办/解挂任务）、尾部加一段；全部写入失败经 onError 落页面 StatusBanner。非 active 轨道 readOnly（checkbox 禁用、编辑入口不渲染）。调度台状态卡标题下有迷你分段条（`SegmentProgressBar size="mini"`，无段不渲染）；分段条 done 实心/pending 空心/dropped 不占格，total=0 显「未立骨架」空态、不显 0/0。
+
+**两道结构闸守着 `pages/tracks/**` 的视觉规则**（跑在 node 快桶）：`focusRing.test.ts` 禁 `focus:ring`（1px 环与静息边框同粗同色、`focus:` 让鼠标点击也画环）、要求 `focus-visible:ring-2` 与 `ring-offset-2` 计数配对；`spacingScale.test.ts` 禁 `.5` 档与纵向/外边距/间隙的 12px 档，横向 `px-3`（输入控件内边距的全项目惯例）与页面级大留白 `pb-24`/`py-16` 显式豁免。**两道闸各自带一条自证用例**：先断言扫描范围覆盖得到 `workbench/` 子目录，再断言无违规——tracks 一半的组件在那个子目录里，递归没生效的话闸会静默漏掉它们、扫出一份与真绿灯完全同形的假结论。
 
 ## 9. 后续阶段
 

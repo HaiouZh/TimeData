@@ -12,7 +12,7 @@ covers:
   - scripts/check-design-language.mjs
 contracts:
   - packages/client/src/components/ui/**
-last-reviewed: 2026-08-13
+last-reviewed: 2026-08-23
 ---
 
 # 设计语言 · 控件库
@@ -45,6 +45,7 @@ last-reviewed: 2026-08-13
 | `TimeField.tsx` | `type="time"` | 时间字段 + Sheet 滚轮 |
 | `ConfirmSheet.tsx` | `window.alert` / 危险确认 | 确认弹层 |
 | `Sheet.tsx` | — | 底部抽屉基元（其它弹层复用） |
+| `OverflowMenu.tsx` | — | 溢出动作菜单（`⋯` 收纳低频与危险动作） |
 | `ActionToastBar.tsx` | — | 轻提示条（toast 视觉 + 动作按钮），非原生控件替代件 |
 
 控件本身在棘轮豁免目录内（它们是对原生元素的合法封装），可以内部使用原生元素。
@@ -58,6 +59,8 @@ last-reviewed: 2026-08-13
 `StatusBanner` 四档 tone 分工：`info`（中性提示）、`ok`（成功）、`warn`（警告）、`danger`（错误/冲突/危险）。`card` 是缺省形态（`rounded-card border px-3 py-2`），`bar` 是贴边横条（`border-b px-4 py-2`，如日记页顶部两条）。`actions` 传入时文字与动作按钮排成一行（`flex-wrap`、文字 `flex-1`），如日记冲突条的「刷新重载 / 仍然覆盖」、回顾页错误条的「重试」；不传则纯文字。组件恒定输出 `data-tone={tone}`，且 `data-*` 透传展开在 `data-tone` **之前**——调用方盖不掉它，迁移过来各页测试的断言全挂在 `data-tone` 上（如 `data-connect-sheet-error` 这种测试钩子）。`role`（缺省不设，显式传 `alert`/`status` 才进播报）与 `style` 同样透传；`style` 的承重点是速记页两条浮动横条，靠 `--bottom-offset` + `calc(… + var(--safe-bottom))` 实时定位，不传会静默丢位置。
 
 **`className` 与 `actions` 之间有一处会互相作用**：不传 `actions` 时 `children` 直接落在根 div 下；一传 `actions`，组件会在中间插一层 `flex` 包装、把 `children` 收进一个 `<span className="flex-1">`。于是**作用于直接子元素的 `className`（`space-y-*`、`divide-*` 这类）在加了 `actions` 之后会静默失效**——它管的对象从原本那几个子元素变成了那层包装的唯一子元素。同步问题条（`SettingsPage` 的 `SyncIssueList`）正是靠 `className="space-y-1"` 给多行 `<p>` 拉间距，给它加动作按钮时这条会一起塌掉。传 `className` 的一律走定位 / 外边距 / flex 收缩这类**只作用于自身**的类，别用作用于子元素的类。
+
+`OverflowMenu` 收纳低频与危险动作：`items: {key,label,onSelect,danger?,disabled?}[]`，触发钮是 `⋯`（`aria-haspopup="menu"` + `aria-expanded`），展开的 `role="menu"` 里每项是 `role="menuitem"`；`danger: true` 的项染 `text-danger`。三条关闭路径：Escape、外部点击、选中一项。**外部点击关闭判的是「点击目标在不在根节点内」（`rootRef.current.contains(e.target)`），不是靠触发钮 `stopPropagation`**——触发钮本身就在根节点内，用阻止冒泡那种写法会让展开的那一下立刻自关。它答的是「这个动作重要到该一直占着位置吗」：**每屏至多一个实心主按钮**，够不上主次按钮的动作（改标题、归档、删除这类一天点不到一次的）收进 `⋯`，把视线留给高频动作。
 
 `ConfirmDeleteButton` 是「就地二次确认删除」：第一次点变成「确认删除」文字，第二次点才执行 `onConfirm`。`resetKey` 值变化即复位确认态（`useEffect(() => setConfirming(false), [resetKey])`）——用户切走干别的时，那个半按下的确认态不该留着（轨道两处传 `editing`，进编辑态要撤销待确认）。`aria-label` 随确认态在「删除{target}」/「确认删除{target}」间切换。它与 `ConfirmSheet` 的分工按「频次 × 后果」判据（[invariants](invariants.md) 第 16 条）：删掉完整对象走 `ConfirmSheet` 弹层，删对象内部的一条走本件就地确认。
 
