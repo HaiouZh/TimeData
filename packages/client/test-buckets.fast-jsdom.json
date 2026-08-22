@@ -12,6 +12,7 @@
   "src/components/ui/SegmentedControl.test.tsx",
   "src/components/ui/SelectSheet.test.tsx",
   "src/components/ui/Sheet.test.tsx",
+  "src/components/ui/OverflowMenu.test.tsx",
   "src/components/ui/Switch.test.tsx",
   "src/components/ui/TimeField.test.tsx",
   "src/contexts/BottomNavContext.test.tsx",
