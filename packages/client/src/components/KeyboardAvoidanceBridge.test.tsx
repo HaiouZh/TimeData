@@ -264,6 +264,61 @@ describe("KeyboardAvoidanceBridge — 键盘落下时释放输入焦点", () => 
     await unmount(root);
   });
 
+  // iOS resize:none 下 WebKit 为露出聚焦框会平移/滚动窗口，收起后可能残留 window.scrollY——
+  // h-dvh 布局整体被顶上去，底栏「整体向上移动」（用户真机实测）。收起那一跳显式归零，
+  // 对应 Telegram 的「收起与弹起同管线 + 强制归零防护」。
+  it("ios：键盘在场→不在场时，window 残留滚动位移滚回 0", async () => {
+    platformMock.mockReturnValue("ios");
+    keyboardVisibleMock.mockReturnValue(true);
+    Object.defineProperty(window, "scrollY", { configurable: true, value: 120 });
+    const scrollToSpy = vi.fn();
+    Object.defineProperty(window, "scrollTo", { configurable: true, value: scrollToSpy });
+
+    const { root } = await renderDom(createElement(KeyboardAvoidanceBridge));
+    expect(scrollToSpy).not.toHaveBeenCalled();
+
+    keyboardVisibleMock.mockReturnValue(false);
+    await rerenderBridge(root);
+
+    expect(scrollToSpy).toHaveBeenCalledWith(0, 0);
+
+    Object.defineProperty(window, "scrollY", { configurable: true, value: 0 });
+    await unmount(root);
+  });
+
+  it("ios：无残留（scrollY=0）时不调用 scrollTo", async () => {
+    platformMock.mockReturnValue("ios");
+    keyboardVisibleMock.mockReturnValue(true);
+    Object.defineProperty(window, "scrollY", { configurable: true, value: 0 });
+    const scrollToSpy = vi.fn();
+    Object.defineProperty(window, "scrollTo", { configurable: true, value: scrollToSpy });
+
+    const { root } = await renderDom(createElement(KeyboardAvoidanceBridge));
+    keyboardVisibleMock.mockReturnValue(false);
+    await rerenderBridge(root);
+
+    expect(scrollToSpy).not.toHaveBeenCalled();
+
+    await unmount(root);
+  });
+
+  it("非 ios 平台：即使有残留滚动也不碰（桌面 / 安卓滚动位置不归 Bridge 管）", async () => {
+    platformMock.mockReturnValue("web");
+    keyboardVisibleMock.mockReturnValue(true);
+    Object.defineProperty(window, "scrollY", { configurable: true, value: 120 });
+    const scrollToSpy = vi.fn();
+    Object.defineProperty(window, "scrollTo", { configurable: true, value: scrollToSpy });
+
+    const { root } = await renderDom(createElement(KeyboardAvoidanceBridge));
+    keyboardVisibleMock.mockReturnValue(false);
+    await rerenderBridge(root);
+
+    expect(scrollToSpy).not.toHaveBeenCalled();
+
+    Object.defineProperty(window, "scrollY", { configurable: true, value: 0 });
+    await unmount(root);
+  });
+
   it("键盘落下时焦点在按钮上（非可输入元素）则不动它", async () => {
     keyboardVisibleMock.mockReturnValue(true);
     const button = document.createElement("button");

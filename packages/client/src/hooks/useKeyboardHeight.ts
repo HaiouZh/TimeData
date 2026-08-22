@@ -99,8 +99,35 @@ export function useKeyboardVisible(): boolean {
     viewport?.addEventListener("resize", handleViewportChange);
     viewport?.addEventListener("scroll", handleViewportChange);
 
+    // 预测性在场（Telegram 式「预测先行、实测校正」）：用户聚焦可编辑元素那一刻就知道键盘要来，
+    // 不等壳缩 webview（与 IME 动画同步）更不等插件事件（安卓键盘显示完毕才发）——消费方
+    // （收底栏 / composer 定位）首帧即到位。只挂 native：桌面浏览器聚焦输入框不许收底栏。
+    // focusout 到非可编辑目标即离场：换输入框（去向仍可编辑）不闪落；这同时是插件事件缺席 /
+    // 外接键盘（willShow 永不来）时把在场信号收回来的唯一自愈出口。
+    const isEditableTarget = (target: EventTarget | null): boolean =>
+      target instanceof HTMLElement && target.matches("input, textarea, [contenteditable]");
+    const handleFocusIn = (event: FocusEvent) => {
+      if (!isEditableTarget(event.target)) return;
+      shrinkSuppressed = false;
+      setVisible(true);
+    };
+    const handleFocusOut = (event: FocusEvent) => {
+      if (!isEditableTarget(event.target)) return;
+      if (isEditableTarget(event.relatedTarget)) return;
+      // 与 keyboardWillHide 同款竞态：离场先到、壳恢复 webview 在后，恢复途中的中间帧缩量
+      // 仍超阈值，不压会被「只升不降」分支顶回 true。按缩量解除（handleViewportChange 里），
+      // 不猜动画时长。
+      shrinkSuppressed = true;
+      setVisible(false);
+    };
+    const nativePlatform = Capacitor.getPlatform() !== "web";
+    if (nativePlatform) {
+      window.addEventListener("focusin", handleFocusIn);
+      window.addEventListener("focusout", handleFocusOut);
+    }
+
     let removeNative = () => {};
-    if (Capacitor.getPlatform() !== "web") {
+    if (nativePlatform) {
       try {
         const showListener = Keyboard.addListener("keyboardWillShow", () => {
           shrinkSuppressed = false;
@@ -127,6 +154,10 @@ export function useKeyboardVisible(): boolean {
       window.removeEventListener("resize", handleViewportChange);
       viewport?.removeEventListener("resize", handleViewportChange);
       viewport?.removeEventListener("scroll", handleViewportChange);
+      if (nativePlatform) {
+        window.removeEventListener("focusin", handleFocusIn);
+        window.removeEventListener("focusout", handleFocusOut);
+      }
       removeNative();
     };
   }, []);

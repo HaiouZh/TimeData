@@ -135,6 +135,12 @@ export function KeyboardAvoidanceBridge() {
     const prev = prevVisibleRef.current;
     prevVisibleRef.current = keyboardVisible;
     if (keyboardVisible || !prev) return;
+    // iOS resize:none 下 WebKit 为露出聚焦框会平移/滚动窗口，收起后可能残留 window.scrollY——
+    // h-dvh 布局整体被顶上去，底栏「整体向上移动」。收起那一跳显式归零（收起与弹起同管线的
+    // 强制归零防护）；窗口滚动在本应用里没有合法来源（滚动全在内层容器），归零无副作用。
+    if (Capacitor.getPlatform() === "ios" && window.scrollY !== 0) {
+      window.scrollTo(0, 0);
+    }
     const active = document.activeElement;
     if (!(active instanceof HTMLElement)) return;
     if (!active.matches("input, textarea, [contenteditable]")) return;

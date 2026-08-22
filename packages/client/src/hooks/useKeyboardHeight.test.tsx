@@ -488,6 +488,134 @@ describe("useKeyboardVisible — 键盘在不在场，与「还挡着多少」�
   });
 });
 
+describe("useKeyboardVisible — focusin 预测性在场（聚焦即在场，不等滞后信号）", () => {
+  // Telegram Android 的核心原则「预测先行、实测校正」：用户点输入框那一刻就知道键盘要来了，
+  // 不必等壳缩 webview（与 IME 动画同步）更不必等插件事件（键盘显示完毕才发）。在场信号
+  // 提前到 focusin，消费方（收底栏、composer 定位）首帧即到位，输入条不再「上蹿下跳找位置」。
+  it("native：可编辑元素 focusin 那一刻即在场，不等插件事件与壳缩", async () => {
+    getPlatformMock.mockReturnValue("android");
+    addListenerMock.mockImplementation(() => Promise.resolve({ remove: vi.fn() }));
+
+    const { host, root } = await renderDom(createElement(VisibleProbe));
+    expect(readVisible(host)).toBe("false");
+
+    const input = document.createElement("input");
+    document.body.appendChild(input);
+    await act(async () => {
+      input.dispatchEvent(new FocusEvent("focusin", { bubbles: true }));
+    });
+    expect(readVisible(host)).toBe("true");
+
+    input.remove();
+    await unmount(root);
+  });
+
+  it("native：focusout 切到另一个可编辑元素（换输入框）不闪落", async () => {
+    getPlatformMock.mockReturnValue("android");
+    addListenerMock.mockImplementation(() => Promise.resolve({ remove: vi.fn() }));
+
+    const { host, root } = await renderDom(createElement(VisibleProbe));
+    const inputA = document.createElement("input");
+    const inputB = document.createElement("textarea");
+    document.body.append(inputA, inputB);
+
+    await act(async () => {
+      inputA.dispatchEvent(new FocusEvent("focusin", { bubbles: true }));
+    });
+    expect(readVisible(host)).toBe("true");
+
+    // 键盘在两个输入框之间保持弹起：focusout 的去向仍是可编辑元素，不得闪落。
+    await act(async () => {
+      inputA.dispatchEvent(new FocusEvent("focusout", { bubbles: true, relatedTarget: inputB }));
+    });
+    expect(readVisible(host)).toBe("true");
+
+    inputA.remove();
+    inputB.remove();
+    await unmount(root);
+  });
+
+  it("native：focusout 到非可编辑目标时离场（外接键盘 / 插件事件缺席时的自愈出口）", async () => {
+    getPlatformMock.mockReturnValue("android");
+    addListenerMock.mockImplementation(() => Promise.resolve({ remove: vi.fn() }));
+
+    const { host, root } = await renderDom(createElement(VisibleProbe));
+    const input = document.createElement("input");
+    document.body.appendChild(input);
+
+    await act(async () => {
+      input.dispatchEvent(new FocusEvent("focusin", { bubbles: true }));
+    });
+    expect(readVisible(host)).toBe("true");
+
+    await act(async () => {
+      input.dispatchEvent(new FocusEvent("focusout", { bubbles: true, relatedTarget: null }));
+    });
+    expect(readVisible(host)).toBe("false");
+
+    input.remove();
+    await unmount(root);
+  });
+
+  // willHide 那条竞态的 focusout 同款：离场事件先到、壳恢复 webview 在后，恢复途中的中间帧
+  // 缩量仍超阈值，「只升不降」分支会把刚落下的在场状态顶回 true。focusout 也要竖起压制。
+  it("native：focusout 离场后，壳恢复途中的 resize 不把在场状态顶回来", async () => {
+    getPlatformMock.mockReturnValue("android");
+    addListenerMock.mockImplementation(() => Promise.resolve({ remove: vi.fn() }));
+    Object.defineProperty(window, "innerHeight", { value: 800, configurable: true });
+    const viewport = createViewportMock({ height: 800, offsetTop: 0 });
+    (window as unknown as { visualViewport?: unknown }).visualViewport = viewport;
+
+    const { host, root } = await renderDom(createElement(VisibleProbe));
+    const input = document.createElement("input");
+    document.body.appendChild(input);
+
+    await act(async () => {
+      input.dispatchEvent(new FocusEvent("focusin", { bubbles: true }));
+    });
+    // 壳让位（IME 动画同步缩 webview）。
+    Object.defineProperty(window, "innerHeight", { value: 500, configurable: true });
+    viewport.height = 500;
+    await act(async () => {
+      viewport.fire("resize");
+    });
+    expect(readVisible(host)).toBe("true");
+
+    // 焦点离开：离场先于壳恢复。
+    await act(async () => {
+      input.dispatchEvent(new FocusEvent("focusout", { bubbles: true, relatedTarget: null }));
+    });
+    expect(readVisible(host)).toBe("false");
+
+    // 壳恢复途中的中间帧：缩量 800-600=200 仍超阈值，不得顶回。
+    Object.defineProperty(window, "innerHeight", { value: 600, configurable: true });
+    viewport.height = 600;
+    await act(async () => {
+      viewport.fire("resize");
+    });
+    expect(readVisible(host)).toBe("false");
+
+    input.remove();
+    await unmount(root);
+  });
+
+  it("web（桌面浏览器）：focusin 不置在场——桌面敲字不许收底栏", async () => {
+    getPlatformMock.mockReturnValue("web");
+
+    const { host, root } = await renderDom(createElement(VisibleProbe));
+    const input = document.createElement("input");
+    document.body.appendChild(input);
+
+    await act(async () => {
+      input.dispatchEvent(new FocusEvent("focusin", { bubbles: true }));
+    });
+    expect(readVisible(host)).toBe("false");
+
+    input.remove();
+    await unmount(root);
+  });
+});
+
 describe("useKeyboardHeight — web 兜底", () => {
   it("visualViewport 差值超过阈值出正值，回落到阈值以下归零", async () => {
     getPlatformMock.mockReturnValue("web");
