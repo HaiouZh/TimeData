@@ -236,6 +236,37 @@ describe("useKeyboardHeight — 壳已经让过位时不再重复避让", () => 
     await unmount(root);
   });
 
+  it("壳逐帧缩 webview（IME 动画同步）期间基线不漂移：插件事件最后到达时不叠成双倍", async () => {
+    // 安卓壳改逐帧让位（WindowInsetsAnimationCompat.onProgress）后，动画期间每帧一个 resize、
+    // 且插件高度尚为 0。基线若在这些帧里被「顺手校准」到缩小中的值，动画结束插件报 300 时
+    // 壳缩量会算成 0，JS 再叠 300 = 双倍避让（输入条飞到键盘上方一个键盘高）。
+    // 键盘在不在场 recompute 无从直接知道，但「可编辑元素持焦点」时禁校准即可挡住整段动画窗口。
+    getPlatformMock.mockReturnValue("android");
+    setInnerHeight(800);
+    const callbacks = mockNativeKeyboard();
+    const input = document.createElement("input");
+    document.body.appendChild(input);
+    input.focus();
+
+    const { host, root } = await renderDom(createElement(Probe));
+
+    // IME 动画逐帧缩：每帧 resize 时插件高度仍为 0。
+    for (const frameHeight of [740, 660, 580, 500]) {
+      setInnerHeight(frameHeight);
+      await act(async () => {
+        window.dispatchEvent(new Event("resize"));
+      });
+    }
+    // 动画结束插件事件才到：壳已让掉 300（基线 800 - 现值 500），JS 必须收敛为 0。
+    await act(async () => {
+      callbacks.keyboardWillShow?.({ keyboardHeight: 300 });
+    });
+    expect(readHeight(host)).toBe("0");
+
+    input.remove();
+    await unmount(root);
+  });
+
   it("native 平台上 visualViewport 实测到的遮挡量优先于插件高度", async () => {
     // 壳把视口整体上移（WKWebView 的 scroll-to-focus）而非缩小时，innerHeight 不变、
     // 实测 gap 才说得出真相；插件高度此时是过量的。

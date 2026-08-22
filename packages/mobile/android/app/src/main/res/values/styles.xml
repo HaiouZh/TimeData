@@ -13,6 +13,8 @@
         <item name="windowActionBar">false</item>
         <item name="windowNoTitle">true</item>
         <item name="android:background">@null</item>
+        <!-- 窗口背景与页面底色同源：IME 动画期间 WebView 未覆盖的缝隙露它，默认白色即真机「白框」。 -->
+        <item name="android:windowBackground">@color/pageBackground</item>
     </style>
 
 

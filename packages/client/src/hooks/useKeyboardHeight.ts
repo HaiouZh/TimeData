@@ -16,6 +16,15 @@ function readInnerHeight(): number {
   return typeof window === "undefined" ? 0 : window.innerHeight;
 }
 
+// 「键盘八成在场/在路上」的粗判据：可编辑元素持焦点。安卓壳逐帧让位（WindowInsetsAnimationCompat
+// 的 onProgress）后，IME 动画期间每帧一个 resize 且插件高度仍为 0——基线若在这些帧里被顺手校准到
+// 缩小中的值，动画结束插件报高时壳缩量会算成 0，JS 再叠一个键盘高 = 双倍避让。焦点期禁校准即可
+// 挡住整段动画窗口；键盘真正收起时 Bridge 会 blur 焦点，校准随之恢复。
+function isEditableFocused(): boolean {
+  const active = document.activeElement;
+  return active instanceof HTMLElement && active.matches("input, textarea, [contenteditable]");
+}
+
 /**
  * 实测「布局视口底部被遮住多少」——正是 `position: fixed; bottom: 0` 的元素要额外抬起的量。
  * 壳无论用哪种方式让位（缩 webview / 整体上移视口 / 什么都不做），这个差值都如实反映剩余遮挡。
@@ -195,7 +204,9 @@ export function useKeyboardHeight(): number {
       if (rawKeyboardPx <= 0) {
         // 键盘收起且实测无遮挡：此刻 innerHeight 就是没有键盘时的真实值，顺手刷新基线
         //（壳缩过 webview 的话，它恢复全高时会再触发一次 resize，基线随之回到全高）。
-        baselineInnerHeight = readInnerHeight();
+        // 例外：可编辑元素持焦点时不校准——壳逐帧让位的 IME 动画期间插件高度仍为 0，
+        // 把缩小中的 innerHeight 当基线会让随后的壳缩量算成 0、叠成双倍避让（见 isEditableFocused）。
+        if (!isEditableFocused()) baselineInnerHeight = readInnerHeight();
         setHeight(0);
         return;
       }

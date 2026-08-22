@@ -43,7 +43,7 @@ last-reviewed: 2026-08-22
 12. **底部避让量单一来源**：速记页（QuickNotesPage）与待办页（TodoPage）喂进上一条 `calc()` 组成式的 px 项，由 `lib/bottomInset.ts` 的 `composeBottomInset({ barHeightPx, navOffsetPx, keyboardHeightPx })` = `Math.ceil(三者之和)` 单一合成，是两页共用的唯一入口。各页私有的"此刻底部站着谁"（QuickNotes 的 selectionMode/searchOpen 分支、Todo 的多选/滚动收起分支）仍留在各页自己算，只把结果当 `barHeightPx` 喂给合成函数——合成函数本身不判断"底部站着谁"。`keyboardHeightPx` 由 `hooks/useKeyboardHeight.ts` 的 `useKeyboardHeight()` 给出，语义是**「键盘还挡着页面底部多少」**（= JS 还需要额外让开的量），**不是键盘自身的高度**：壳自己已经让过位时它就是 0。口径是**实测优先、插件兜底**，两步：
 
     1. `visualViewport` 与 `innerHeight` 的差值（`innerHeight - viewport.height - viewport.offsetTop`）实测布局视口底部被遮多少，差值 > 80px 才算数（避免地址栏收合等抖动误报）。这一步自动涵盖壳的两种让位方式——壳缩了 webview 则实测为 0，壳整体上移视口则实测已扣掉挪动量——不需要事先知道壳会怎么做。
-    2. 实测报不出遮挡时，回落到 `@capacitor/keyboard` 的 `keyboardWillShow` 高度，再减去壳实际缩掉的高度（`innerHeight` 相对「键盘收起时基线」的落差）。壳的 reflow 晚于 `keyboardWillShow`，首帧无从判断，故记住上一次实测到的缩量、下次弹起直接预扣，避免"先冲高再落回"（**首次**弹起仍会收敛一次，是已知界限）。
+    2. 实测报不出遮挡时，回落到 `@capacitor/keyboard` 的 `keyboardWillShow` 高度，再减去壳实际缩掉的高度（`innerHeight` 相对「键盘收起时基线」的落差）。壳的 reflow 晚于 `keyboardWillShow`，首帧无从判断，故记住上一次实测到的缩量、下次弹起直接预扣，避免"先冲高再落回"（**首次**弹起仍会收敛一次，是已知界限）。基线校准带焦点守卫：可编辑元素持焦点时不刷新基线——安卓壳逐帧让位（见 [android](../android.md#android-s2)）的 IME 动画期间每帧一个 resize 且插件高度仍为 0，把缩小中的 `innerHeight` 当基线会让随后的壳缩量算成 0、叠成双倍避让。
 
     **收起走插件事件优先**：`keyboardWillHide` 一到立即归零，并在 450ms 窗口内压制实测路径——iOS 的 `visualViewport` 要等键盘收起动画结束才恢复，动画期间实测仍报遮挡，不压会把高度顶住不落，输入条比键盘晚落一拍（用户实测「收起输入法后输入框有个下滑动作」）。窗口只压「实测优先」分支：重新弹起（`keyboardWillShow`）立即清窗，web / PWA 没有插件事件、窗口恒不生效，实测路径行为不变。
 

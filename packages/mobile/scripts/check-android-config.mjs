@@ -52,6 +52,15 @@ if (!/WindowInsetsCompat\.Type\.ime\(\)/.test(mainActivityText)) {
       "edge-to-edge 下 adjustResize 不自动缩 view，键盘让位全靠这里的 ime inset padding",
   );
 }
+// IME 让位必须逐帧驱动（WindowInsetsAnimationCompat.Callback 的 onProgress），不许退回「静态
+// insets 一次到位」：静态回调在键盘动画开始时就带终态 inset，一次性缩掉整个键盘高，WebView 底边
+// 与还在上升的键盘之间露出一条窗口背景（真机「先拉起一块白框、输入条等键盘就位才出现」）。
+if (!/setWindowInsetsAnimationCallback/.test(mainActivityText) || !/onProgress/.test(mainActivityText)) {
+  throw new Error(
+    "[android-config] MainActivity.java 必须用 WindowInsetsAnimationCompat.Callback（含 onProgress）逐帧驱动 ime inset——" +
+      "静态 insets 一次到位会在键盘动画期间露出窗口背景白框，见 docs/evergreen/android.md §键盘让位",
+  );
+}
 
 // === Manifest snapshot ===
 const manifestText = readFileSync(new URL("../android/app/src/main/AndroidManifest.xml", import.meta.url), "utf8");
