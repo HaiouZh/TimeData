@@ -8,7 +8,7 @@ covers:
   - packages/mobile/ios-assets/**
 contracts:
   - .github/workflows/mobile-release.yml
-last-reviewed: 2026-08-16
+last-reviewed: 2026-08-22
 ---
 
 # iOS 壳
@@ -82,6 +82,8 @@ iOS、Android 与 Windows 共用一个 `v<code>` tag 与同一个 Release（`mob
 ## 5. 装机与数据边界
 
 IPA 未签名，不能直接安装。手机上用 SideStore（推荐，可离机自行续签）或 AltStore 导入，安装时用你自己的 Apple ID 签名。免费 Apple ID 的签名 **7 天到期**，到期重签即可，应用数据不丢；同时最多 3 个自签应用。付费开发者账号（$99/年）才能走 TestFlight / App Store。
+
+**设置页「IPA 更新」入口**（与 Android 的「APK 更新」同一套 `lib/mobileUpdate.ts`，按平台显示）：扫 Release 列表取第一个带 `.ipa` 资产且 tag 能解析出 versionCode 的，发现新版本直接打开 `.ipa` **直链**——Safari 下载进文件，SideStore / AltStore 导入重签即装。版本号注入依赖 `mobile-release.yml` iOS job 的 `build:web` 带 `TIMEDATA_ANDROID_VERSION_CODE`（两壳共用的移动端版本号，名字带 ANDROID 是历史遗留）；机制细节与 Android 侧的直链取舍统一见 [android](android.md) §1。
 
 **原生壳与 Safari 里的 PWA 不同源**：Capacitor iOS 默认 `capacitor://localhost`，Safari PWA 是站点自己的 https 源，两者的 IndexedDB 互不可见。装上原生壳后是一份空数据，要靠服务器同步把数据拉下来——首次进入先在设置里填 API 地址与 Token。同一台设备上两个入口各存各的数据，不互通。
 

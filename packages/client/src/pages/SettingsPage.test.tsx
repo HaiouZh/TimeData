@@ -8,6 +8,11 @@ import SettingsPage, { getServerConnectionState } from "./SettingsPage.js";
 import { click, renderDom, unmount } from "../test/domHarness.tsx";
 
 const useSyncContextMock = vi.hoisted(() => vi.fn());
+const getPlatformMock = vi.hoisted(() => vi.fn(() => "web"));
+
+vi.mock("@capacitor/core", () => ({
+  Capacitor: { getPlatform: getPlatformMock },
+}));
 const forceRefreshMock = vi.hoisted(() => vi.fn());
 const fetchServerVersionMock = vi.hoisted(() => vi.fn());
 const triggerServerUpdateMock = vi.hoisted(() => vi.fn());
@@ -65,7 +70,8 @@ vi.mock("../lib/serverVersion.ts", () => ({
 }));
 
 vi.mock("../lib/mobileUpdate.ts", () => ({
-  fetchAndroidApkUpdate: vi.fn(),
+  fetchMobileAppUpdate: vi.fn(),
+  openMobileAppUpdate: vi.fn(),
 }));
 
 const localStorageMock = (() => {
@@ -132,6 +138,7 @@ describe("SettingsPage", () => {
     Reflect.deleteProperty(window, "__TAURI_INTERNALS__");
     localStorage.clear();
     localStorage.setItem("timedata_api_url", "https://example.com");
+    getPlatformMock.mockReturnValue("web");
     useSyncContextMock.mockReturnValue(defaultSyncState());
     fetchServerVersionMock.mockReset();
     triggerServerUpdateMock.mockReset();
@@ -188,7 +195,9 @@ describe("SettingsPage", () => {
     expect(html).toContain('href="/settings/data"');
     expect(html).toContain("服务端数据洞察");
     expect(html).toContain('href="/settings/admin-insights"');
-    expect(html).toContain("APK 更新");
+    // 移动端更新入口按平台显示：web / 桌面不渲染（桌面有自己的更新行）。
+    expect(html).not.toContain("APK 更新");
+    expect(html).not.toContain("IPA 更新");
     expect(html).toContain("服务端更新");
     expect(html).toContain("刷新到最新前端");
   });
@@ -495,5 +504,25 @@ describe("getServerConnectionState", () => {
       color: "gray",
       subtitle: "未配置服务器",
     });
+  });
+});
+
+describe("移动端更新入口按平台显示", () => {
+  beforeEach(() => {
+    useSyncContextMock.mockReturnValue(defaultSyncState());
+  });
+
+  it("android 壳显示「APK 更新」，不显示 IPA 行", () => {
+    getPlatformMock.mockReturnValue("android");
+    const html = renderToStaticMarkup(createElement(MemoryRouter, null, createElement(SettingsPage)));
+    expect(html).toContain("APK 更新");
+    expect(html).not.toContain("IPA 更新");
+  });
+
+  it("ios 壳显示「IPA 更新」，不显示 APK 行", () => {
+    getPlatformMock.mockReturnValue("ios");
+    const html = renderToStaticMarkup(createElement(MemoryRouter, null, createElement(SettingsPage)));
+    expect(html).toContain("IPA 更新");
+    expect(html).not.toContain("APK 更新");
   });
 });

@@ -37,58 +37,93 @@ function isGitHubRelease(value: unknown): value is GitHubRelease {
   );
 }
 
-// 一次 CI 产出单个 Release（APK + IPA 同页）；30 条足够回溯最近的 Android 版本。
+// 一次 CI 产出单个 Release（APK + IPA 同页）；30 条足够回溯最近的移动端版本。
 const RELEASES_PAGE_SIZE = 30;
 
-export interface AndroidApkUpdate {
+export type MobilePlatform = "android" | "ios";
+
+export interface MobileAppUpdate {
   versionCode: string;
   pageUrl: string;
-  apkName: string;
-  apkUrl: string;
+  assetName: string;
+  assetUrl: string;
   hasUpdate: boolean;
 }
 
-export function getAndroidVersionCodeFromReleaseTag(tagName: string): string | null {
+const PLATFORM_ASSET_EXT: Record<MobilePlatform, string> = {
+  android: ".apk",
+  ios: ".ipa",
+};
+
+export function getMobileVersionCodeFromReleaseTag(tagName: string): string | null {
   // 8 位 = 现行 yymmddNN；放宽到 9 位给未来版本号格式升位留门。
-  // 收窄这个正则前要先确认所有已分发 APK 都带着放宽后的解析逻辑。
-  const match = tagName.match(/^(?:android-|v)?(\d{8,9})$/);
+  // 收窄这个正则前要先确认所有已分发 APK/IPA 都带着放宽后的解析逻辑。
+  // 前缀齐收 v / android- / ios-：现行 tag 是 v*（APK + IPA 同页），android-*/ios-* 是历史
+  // 分立发布的遗留；平台归属不由 tag 前缀定，由下面的资产扩展名定。
+  const match = tagName.match(/^(?:android-|ios-|v)?(\d{8,9})$/);
   return match?.[1] ?? null;
 }
 
-export function getAndroidApkUpdateFromRelease(
+export function getMobileUpdateFromRelease(
   release: GitHubRelease,
   currentVersionCode: string,
-): AndroidApkUpdate | null {
-  const versionCode = getAndroidVersionCodeFromReleaseTag(release.tag_name);
+  platform: MobilePlatform,
+): MobileAppUpdate | null {
+  const versionCode = getMobileVersionCodeFromReleaseTag(release.tag_name);
   if (!versionCode) return null;
 
-  const apk = release.assets.find((asset) => asset.name.toLowerCase().endsWith(".apk"));
-  if (!apk) return null;
+  const ext = PLATFORM_ASSET_EXT[platform];
+  const asset = release.assets.find((a) => a.name.toLowerCase().endsWith(ext));
+  if (!asset) return null;
 
   return {
     versionCode,
     pageUrl: release.html_url,
-    apkName: apk.name,
-    apkUrl: apk.browser_download_url,
+    assetName: asset.name,
+    assetUrl: asset.browser_download_url,
     hasUpdate: Number(versionCode) > Number(currentVersionCode),
   };
 }
 
-export type AndroidApkUpdateOpener = (url: string) => Promise<void> | void;
-
-export function getAndroidApkUpdateUrl(update: AndroidApkUpdate): string {
-  // 故意返回 Release 页（HTML）而不是 .apk 直链：Android Intent.ACTION_VIEW
-  // 收到 .apk URL 时浏览器通常静默甩给下载管理器，部分机型 / 浏览器组合下
-  // 表现为"选了浏览器但什么都没发生"。Release 页是普通 HTML，任何浏览器都能
-  // 正常渲染，用户在页面上点 APK 资产开始下载，链路确定性最强。
-  return update.pageUrl;
+export interface MobileUpdateOpeners {
+  /** 应用内浏览器（Android = Chrome Custom Tabs）。 */
+  browserOpen: (url: string) => Promise<void>;
+  /** 通用外链通道（AppLauncher → Browser → window.open 三级兜底）。 */
+  external: (url: string) => Promise<void> | void;
 }
 
-export async function openAndroidApkUpdate(
-  update: AndroidApkUpdate,
-  opener: AndroidApkUpdateOpener = openExternalUrl,
+const defaultOpeners: MobileUpdateOpeners = {
+  browserOpen: async (url) => {
+    await Browser.open({ url });
+  },
+  external: openExternalUrl,
+};
+
+/**
+ * 打开更新下载：**直链优先**（用户点了就该开始下载，不是落到 Release 页再找资产）。
+ *
+ * - iOS：外链通道直接开 `.ipa` 直链——Safari 下载进文件，SideStore/AltStore 导入即装，无历史坑。
+ * - Android：**跳过 AppLauncher、直接用应用内浏览器（Custom Tabs）开 `.apk` 直链**。历史坑：
+ *   ACTION_VIEW 把 .apk URL 交系统分发时，部分机型/浏览器组合被静默甩给下载管理器，表现为
+ *   「选了浏览器但什么都没发生」（这曾是改跳 Release 页的原因）。Custom Tabs 在应用内直接触发
+ *   下载、不经系统分发；它不可用（插件缺席等）时兜底回 Release 页——普通 HTML 谁都能渲染，
+ *   链路确定性最强的老路。
+ */
+export async function openMobileAppUpdate(
+  update: MobileAppUpdate,
+  platform: MobilePlatform,
+  openers: MobileUpdateOpeners = defaultOpeners,
 ): Promise<void> {
-  await opener(getAndroidApkUpdateUrl(update));
+  if (platform === "android") {
+    try {
+      await openers.browserOpen(update.assetUrl);
+      return;
+    } catch {
+      await openers.external(update.pageUrl);
+      return;
+    }
+  }
+  await openers.external(update.assetUrl);
 }
 
 async function openExternalUrl(url: string): Promise<void> {
@@ -109,11 +144,13 @@ async function openExternalUrl(url: string): Promise<void> {
   }
 }
 
-export async function fetchAndroidApkUpdate(currentVersionCode: string): Promise<AndroidApkUpdate | null> {
-  // 故意扫列表而不用 /releases/latest：Android 与 iOS 的 release 由同一次 CI 几乎同时创建，
-  // 而 "latest" 取创建时间最晚的那个——iOS 晚一秒就顶掉 Android，此时 tag 是 ios-*、
-  // 资产只有 .ipa，Android 侧会误判成「没有可下载的 APK」。列表按创建时间倒序，
-  // 取第一个能解析出 Android version code 且带 .apk 资产的 release 才与发布先后无关。
+export async function fetchMobileAppUpdate(
+  currentVersionCode: string,
+  platform: MobilePlatform,
+): Promise<MobileAppUpdate | null> {
+  // 故意扫列表而不用 /releases/latest：历史上 Android 与 iOS 是两个独立 release（android-* /
+  // ios-*），"latest" 取创建时间最晚的那个、资产可能不含本平台的包。列表按创建时间倒序，
+  // 取第一个能解析出版本号且带本平台资产的 release 才与发布先后无关。
   const res = await fetch(`https://api.github.com/repos/HaiouZh/TimeData/releases?per_page=${RELEASES_PAGE_SIZE}`, {
     headers: { Accept: "application/vnd.github+json" },
   });
@@ -127,7 +164,7 @@ export async function fetchAndroidApkUpdate(currentVersionCode: string): Promise
   if (payload.length > 0 && releases.length === 0) throw new Error("GitHub Release 响应格式无效");
 
   for (const release of releases) {
-    const update = getAndroidApkUpdateFromRelease(release, currentVersionCode);
+    const update = getMobileUpdateFromRelease(release, currentVersionCode, platform);
     if (update) return update;
   }
   return null;

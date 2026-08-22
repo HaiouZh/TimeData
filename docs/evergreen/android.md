@@ -16,12 +16,14 @@ covers:
   - packages/mobile/android/capacitor.settings.gradle
   - packages/mobile/android/app/src/main/AndroidManifest.xml
   - packages/mobile/android/app/src/main/java/app/timedata/mobile/MainActivity.java
+  - packages/mobile/android/app/src/main/res/values/styles.xml
+  - packages/mobile/android/app/src/main/res/values/colors.xml
   - packages/client/src/lib/mobileUpdate.ts
   - scripts/mobile-version.mjs
 contracts:
   - .github/workflows/mobile-release.yml
   - packages/mobile/capacitor.config.ts
-last-reviewed: 2026-08-14
+last-reviewed: 2026-08-22
 ---
 
 # Android 壳
@@ -59,7 +61,7 @@ packages/mobile/android/app/build/outputs/apk/release/app-release.apk
 
 构建完成后，workflow 先上传 APK artifact，再用 `gh release` 上传到 `v<versionCode>` GitHub Release（Release 本体由 `prepare` 创建，含三个平台的装机说明），并对 GitHub Release API 的临时超时做最多 3 次重试。Release 上传失败不代表 APK 编译失败；排查时先看 `Build signed release APK` 和 `Upload release APK` 两步是否成功，再看 `Publish APK to release` 的 GitHub API 错误。
 
-设置页的「APK 更新」拉 `GET /releases?per_page=30`（列表按创建时间倒序），取第一个 tag 能解析出 Android versionCode 且带 `.apk` 资产的 Release，发现新版本时打开**该 Release 的 HTML 页面**（`html_url`），由用户在页面上自己点 APK 资产下载。**仍不能改用 `/releases/latest`**：`latest` 只由带 APK 的发布步骤打，指向的 Release 必然有 `.apk`，但客户端继续扫列表是为了兼容历史遗留的 `android-*` / `ios-*` Release（`ios-*` tag 解析不出 versionCode、`android-*` 资产结构是旧的）——合并前「iOS 顶掉 latest」的成因已消失，扫列表的理由不再是躲 latest。**刻意打 Release 页而不是 `.apk` 直链**（`getAndroidApkUpdateUrl` 只返回 `pageUrl`，虽然 `AndroidApkUpdate` 里 `apkUrl` 也存着）：Android `Intent.ACTION_VIEW` 收到 `.apk` URL 时浏览器通常静默甩给下载管理器，部分机型 / 浏览器组合下表现为「选了浏览器但什么都没发生」；Release 页是普通 HTML，任何浏览器都能渲染，链路确定性最强。打开这个 URL 时，Android 原生环境优先通过 `@capacitor/app-launcher` 交给系统处理，失败时再 fallback 到 `@capacitor/browser` / Web `window.open`。Android 仍会要求用户确认安装，首次从旧 debug 签名包迁移到 release 签名包时不能覆盖安装，需要先备份数据、卸载旧包，再安装 release 包；后续 release 包之间可以覆盖安装。
+设置页的移动端更新入口**按平台显示**（android 壳「APK 更新」、iOS 壳「IPA 更新」，web / 桌面不渲染——桌面有自己的更新行），共用 `lib/mobileUpdate.ts`：拉 `GET /releases?per_page=30`（列表按创建时间倒序），取第一个 tag 能解析出 versionCode（`v*` 现行、`android-*` / `ios-*` 历史遗留均可解析，平台归属由资产扩展名定）且带**本平台资产**（`.apk` / `.ipa`）的 Release。**仍不能改用 `/releases/latest`**：客户端扫列表是为了兼容历史分立发布的 `android-*` / `ios-*` Release（各自只有单平台资产）。发现新版本时**直链优先**（点了就开始下载，不落到 Release 页再找资产）：iOS 走通用外链通道直接开 `.ipa` 直链（Safari 下载进文件，SideStore 导入即装）；Android **跳过 `AppLauncher`、直接用 `@capacitor/browser`（Chrome Custom Tabs）开 `.apk` 直链**——历史坑：`Intent.ACTION_VIEW` 把 `.apk` URL 交系统分发时，部分机型 / 浏览器组合被静默甩给下载管理器，表现为「选了浏览器但什么都没发生」（这曾是一度改跳 Release 页的原因）；Custom Tabs 在应用内直接触发下载、不经系统分发，它不可用时兜底回 Release 页（普通 HTML 谁都能渲染的老路）。iOS 版本号注入依赖 `mobile-release.yml` iOS job 的 `build:web` 带 `TIMEDATA_ANDROID_VERSION_CODE`（名字带 ANDROID 是历史遗留、实为两壳共用）——漏了它 IPA 里的版本比对拿开发默认值，永远判不出新版本。Android 仍会要求用户确认安装，首次从旧 debug 签名包迁移到 release 签名包时不能覆盖安装，需要先备份数据、卸载旧包，再安装 release 包；后续 release 包之间可以覆盖安装。
 
 <a id="android-s2"></a>
 
@@ -80,6 +82,8 @@ Android 生产 Manifest 显式设置 `android:usesCleartextTraffic="false"`，�
 Android 壳入口是 `packages/mobile/android/app/src/main/java/app/timedata/mobile/MainActivity.java`。Activity 启动时关闭 decor 自动适配，并在根内容视图上应用 inset padding，让 Capacitor WebView 避开状态栏与刘海区域，避免 APK 在全面屏设备上把页面顶部绘制到通知栏下面。**顶部与左右照 `systemBars() | displayCutout()` 让位；底部只让键盘（IME），不让手势条**：`setPadding` 第四个参数传 `ime()` 的 bottom——键盘收起时它是 0（产品取向是内容延伸到手势条之下、横条浮在其上，照搬 systemBars 的 bottom 会在底栏下方留一条空带），键盘弹起时它就是键盘高，WebView 整体变矮、网页层 `useKeyboardHeight` 实测归零，贴底输入条以 `bottom:0` 自然贴住键盘上沿。
 
 **键盘让位是「manifest + insets」两件套，缺一即回到双倍避让**：`AndroidManifest.xml` 的 MainActivity 声明 `android:windowSoftInputMode="adjustResize"` 禁掉系统 adjustPan（此前 manifest 没声明，系统落 pan——整个窗口被平移，`visualViewport` 对此无感，网页层实测失明后按插件高度再抬一次，速记页输入条飞到屏幕顶、时间轴编辑页被推出屏外就是这个）；而 edge-to-edge（`setDecorFitsSystemWindows(false)`）下 `adjustResize` 本身不缩任何 view，真正的让位靠上一段的 `ime()` inset padding。两条均由 `check-android-config.mjs` 棘轮住。
+
+**ime inset 必须逐帧驱动，不许退回静态一次到位**：静态 insets 回调在键盘动画**开始**时就带着终态 inset 到来，直接套用会一次性缩掉整个键盘高——WebView 底边与还在上升的键盘之间露出一条窗口背景（真机「先拉起一块输入法区域的白框、输入条等键盘就位才出现」）。MainActivity 挂 `WindowInsetsAnimationCompat.Callback`：`onPrepare` 竖起进行中标记（静态回调期间不套用、只存值），`onProgress` 逐帧用插值 inset `setPadding`（WebView 底边全程贴键盘上沿，bottom 锚定的输入条零滞后跟随），`onEnd` 落下标记并补一次终态。androidx.core 对 API < 30 有 IME 动画兼容模拟，退化路径只是回到一次到位。配套：`AppTheme.NoActionBar` 的 `android:windowBackground` 与页面底色同源（`values/colors.xml` 的 `pageBackground` = `#0e1320`）——任何时刻 WebView 未覆盖的缝隙露出的是它，默认主题是白色。逐帧回调由 `check-android-config.mjs` 棘轮住。网页层侧的配套运动机制（抬升走 transform 过渡、壳一次性跳变的附加动画补偿兜底）见 [invariants 第 12 条](design-language/invariants.md)。
 
 **该原生 padding 是 Android 壳顶部与左右的唯一让位机制**：edge-to-edge 下 WebView 的 `env(safe-area-inset-*)` 会照常报非零值、与原生 padding 叠加成双倍留白，故 client 在 Android 壳把 `<html data-platform="android">` 标记置上，CSS 随之把 `--safe-top` / `--safe-right` / `--safe-left` 清零（机制见 [design-language §1](design-language.md#design-language-s1) 与 [invariants 第 11 条](design-language/invariants.md)），iOS / 桌面 / PWA 仍走 `env()` 值。**底部不在这套清零里**：`--safe-bottom` 本就在所有平台固定为 `0px`，与原生层传 0 同源；真正需要底部安全区的底部弹层单独走 `--safe-bottom-sheet`（它照常取 `env()`）。
 

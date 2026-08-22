@@ -1,25 +1,50 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
-  fetchAndroidApkUpdate,
-  getAndroidApkUpdateFromRelease,
-  getAndroidApkUpdateUrl,
-  getAndroidVersionCodeFromReleaseTag,
-  openAndroidApkUpdate,
+  fetchMobileAppUpdate,
+  getMobileUpdateFromRelease,
+  getMobileVersionCodeFromReleaseTag,
+  openMobileAppUpdate,
 } from "./mobileUpdate.js";
 
 const originalFetch = globalThis.fetch;
 
 const release = {
-  tag_name: "android-26050801",
-  html_url: "https://github.com/HaiouZh/TimeData/releases/tag/android-26050801",
+  tag_name: "v26050802",
+  html_url: "https://github.com/HaiouZh/TimeData/releases/tag/v26050802",
   assets: [
     {
       name: "notes.txt",
       browser_download_url: "https://example.com/notes.txt",
     },
     {
+      name: "timedata-release.apk",
+      browser_download_url: "https://example.com/timedata-release.apk",
+    },
+    {
+      name: "TimeData-unsigned.ipa",
+      browser_download_url: "https://example.com/TimeData-unsigned.ipa",
+    },
+  ],
+};
+
+const legacyAndroidRelease = {
+  tag_name: "android-26050801",
+  html_url: "https://github.com/HaiouZh/TimeData/releases/tag/android-26050801",
+  assets: [
+    {
       name: "timedata-debug.apk",
       browser_download_url: "https://example.com/timedata-debug.apk",
+    },
+  ],
+};
+
+const legacyIosRelease = {
+  tag_name: "ios-26050801",
+  html_url: "https://github.com/HaiouZh/TimeData/releases/tag/ios-26050801",
+  assets: [
+    {
+      name: "TimeData-unsigned.ipa",
+      browser_download_url: "https://example.com/legacy.ipa",
     },
   ],
 };
@@ -29,80 +54,104 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-describe("getAndroidVersionCodeFromReleaseTag", () => {
-  it("accepts eight-digit Android release tags with same-day sequence", () => {
-    expect(getAndroidVersionCodeFromReleaseTag("android-26050801")).toBe("26050801");
-    expect(getAndroidVersionCodeFromReleaseTag("v26050802")).toBe("26050802");
-    expect(getAndroidVersionCodeFromReleaseTag("26050803")).toBe("26050803");
+describe("getMobileVersionCodeFromReleaseTag", () => {
+  it("accepts eight-digit release tags with same-day sequence（v / android- / ios- / 裸数字）", () => {
+    expect(getMobileVersionCodeFromReleaseTag("android-26050801")).toBe("26050801");
+    expect(getMobileVersionCodeFromReleaseTag("ios-26050801")).toBe("26050801");
+    expect(getMobileVersionCodeFromReleaseTag("v26050802")).toBe("26050802");
+    expect(getMobileVersionCodeFromReleaseTag("26050803")).toBe("26050803");
   });
 
-  it("accepts nine-digit Android version codes reserved for future format upgrades", () => {
-    expect(getAndroidVersionCodeFromReleaseTag("android-126050801")).toBe("126050801");
+  it("accepts nine-digit version codes reserved for future format upgrades", () => {
+    expect(getMobileVersionCodeFromReleaseTag("android-126050801")).toBe("126050801");
   });
 
-  it("rejects seven-digit and ten-digit Android release tags", () => {
-    expect(getAndroidVersionCodeFromReleaseTag("android-2605081")).toBeNull();
-    expect(getAndroidVersionCodeFromReleaseTag("android-1260508011")).toBeNull();
+  it("rejects seven-digit and ten-digit release tags", () => {
+    expect(getMobileVersionCodeFromReleaseTag("android-2605081")).toBeNull();
+    expect(getMobileVersionCodeFromReleaseTag("android-1260508011")).toBeNull();
   });
 
-  it("rejects tags that are not Android version codes", () => {
-    expect(getAndroidVersionCodeFromReleaseTag("android-debug-latest")).toBeNull();
-    expect(getAndroidVersionCodeFromReleaseTag("v0.1.0")).toBeNull();
+  it("rejects tags that are not version codes", () => {
+    expect(getMobileVersionCodeFromReleaseTag("android-debug-latest")).toBeNull();
+    expect(getMobileVersionCodeFromReleaseTag("v0.1.0")).toBeNull();
   });
 });
 
-describe("getAndroidApkUpdateFromRelease", () => {
-  it("returns APK update details when the release is newer", () => {
-    expect(getAndroidApkUpdateFromRelease(release, "26050701")).toEqual({
-      versionCode: "26050801",
-      pageUrl: "https://github.com/HaiouZh/TimeData/releases/tag/android-26050801",
-      apkName: "timedata-debug.apk",
-      apkUrl: "https://example.com/timedata-debug.apk",
+describe("getMobileUpdateFromRelease — 按平台挑资产", () => {
+  it("android 取 .apk 资产，返回直链", () => {
+    expect(getMobileUpdateFromRelease(release, "26050701", "android")).toEqual({
+      versionCode: "26050802",
+      pageUrl: "https://github.com/HaiouZh/TimeData/releases/tag/v26050802",
+      assetName: "timedata-release.apk",
+      assetUrl: "https://example.com/timedata-release.apk",
       hasUpdate: true,
     });
   });
 
-  it("returns APK details without update when the version is not newer", () => {
-    expect(getAndroidApkUpdateFromRelease(release, "26050801")?.hasUpdate).toBe(false);
-  });
-
-  it("returns null when the release has no APK asset", () => {
-    expect(getAndroidApkUpdateFromRelease({ ...release, assets: release.assets.slice(0, 1) }, "26050701")).toBeNull();
-  });
-});
-
-describe("getAndroidApkUpdateUrl", () => {
-  it("opens the GitHub release page (not the .apk asset) for browser compatibility", () => {
-    const update = getAndroidApkUpdateFromRelease(release, "26050701");
-
-    expect(update).not.toBeNull();
-    expect(getAndroidApkUpdateUrl(update!)).toBe("https://github.com/HaiouZh/TimeData/releases/tag/android-26050801");
-  });
-});
-
-describe("openAndroidApkUpdate", () => {
-  it("delegates opening the release page URL to the provided opener", async () => {
-    const update = getAndroidApkUpdateFromRelease(release, "26050701");
-    const opened: string[] = [];
-
-    await openAndroidApkUpdate(update!, async (url) => {
-      opened.push(url);
+  it("ios 取 .ipa 资产，返回直链", () => {
+    expect(getMobileUpdateFromRelease(release, "26050701", "ios")).toEqual({
+      versionCode: "26050802",
+      pageUrl: "https://github.com/HaiouZh/TimeData/releases/tag/v26050802",
+      assetName: "TimeData-unsigned.ipa",
+      assetUrl: "https://example.com/TimeData-unsigned.ipa",
+      hasUpdate: true,
     });
+  });
 
-    expect(opened).toEqual(["https://github.com/HaiouZh/TimeData/releases/tag/android-26050801"]);
+  it("版本不更新时 hasUpdate=false", () => {
+    expect(getMobileUpdateFromRelease(release, "26050802", "android")?.hasUpdate).toBe(false);
+    expect(getMobileUpdateFromRelease(release, "26050802", "ios")?.hasUpdate).toBe(false);
+  });
+
+  it("release 缺该平台资产时返回 null（.ipa 不会被当成 APK，反之亦然）", () => {
+    expect(getMobileUpdateFromRelease(legacyIosRelease, "26050701", "android")).toBeNull();
+    expect(getMobileUpdateFromRelease(legacyAndroidRelease, "26050701", "ios")).toBeNull();
   });
 });
 
-const iosRelease = {
-  tag_name: "ios-26050801",
-  html_url: "https://github.com/HaiouZh/TimeData/releases/tag/ios-26050801",
-  assets: [
-    {
-      name: "TimeData-unsigned.ipa",
-      browser_download_url: "https://example.com/TimeData-unsigned.ipa",
-    },
-  ],
-};
+describe("openMobileAppUpdate — 直链优先", () => {
+  const update = getMobileUpdateFromRelease(release, "26050701", "android")!;
+  const iosUpdate = getMobileUpdateFromRelease(release, "26050701", "ios")!;
+
+  it("ios：外链通道直接打开 .ipa 直链（Safari 下载、SideStore 导入）", async () => {
+    const opened: string[] = [];
+    await openMobileAppUpdate(iosUpdate, "ios", {
+      browserOpen: async (url) => {
+        opened.push(`browser:${url}`);
+      },
+      external: (url) => {
+        opened.push(`external:${url}`);
+      },
+    });
+    expect(opened).toEqual(["external:https://example.com/TimeData-unsigned.ipa"]);
+  });
+
+  it("android：应用内浏览器（Custom Tabs）打开 .apk 直链——不经系统 ACTION_VIEW 分发（那条链路部分机型静默无反应）", async () => {
+    const opened: string[] = [];
+    await openMobileAppUpdate(update, "android", {
+      browserOpen: async (url) => {
+        opened.push(`browser:${url}`);
+      },
+      external: (url) => {
+        opened.push(`external:${url}`);
+      },
+    });
+    expect(opened).toEqual(["browser:https://example.com/timedata-release.apk"]);
+  });
+
+  it("android：直链通道失败时兜底打开 Release 页（历史坑保底，链路确定性最强）", async () => {
+    const opened: string[] = [];
+    await openMobileAppUpdate(update, "android", {
+      browserOpen: async () => {
+        throw new Error("Browser plugin unavailable");
+      },
+      external: (url) => {
+        opened.push(`external:${url}`);
+      },
+    });
+    expect(opened).toEqual(["external:https://github.com/HaiouZh/TimeData/releases/tag/v26050802"]);
+  });
+});
 
 function mockReleasesResponse(body: unknown, status = 200) {
   globalThis.fetch = vi.fn(
@@ -110,50 +159,57 @@ function mockReleasesResponse(body: unknown, status = 200) {
   ) as unknown as typeof fetch;
 }
 
-describe("fetchAndroidApkUpdate", () => {
-  it("parses a valid GitHub release list", async () => {
+describe("fetchMobileAppUpdate", () => {
+  it("parses a valid GitHub release list (android)", async () => {
     mockReleasesResponse([release]);
 
-    await expect(fetchAndroidApkUpdate("26050701")).resolves.toMatchObject({
-      versionCode: "26050801",
+    await expect(fetchMobileAppUpdate("26050701", "android")).resolves.toMatchObject({
+      versionCode: "26050802",
       hasUpdate: true,
     });
   });
 
-  // 2026-07-30 线上事故：Android 与 iOS 的 release 由同一次 CI 几乎同时创建,
-  // GitHub 的 /releases/latest 取创建时间最晚的那个。iOS 晚 1 秒顶掉 Android 后,
-  // tag 变成 ios-*、资产只剩 .ipa,APK 检查直接报「还没有可下载的 Android APK Release」。
-  it("跳过排在前面的 iOS release，仍能找到 Android 的 APK", async () => {
-    mockReleasesResponse([iosRelease, release]);
+  // 2026-07-30 线上事故的泛化版：历史上 Android 与 iOS 是两个独立 release（android-* / ios-*），
+  // 列表顺序与发布先后相关。按平台扫列表：跳过缺本平台资产的 release，直到找到能用的。
+  it("android：跳过只有 .ipa 的 legacy iOS release，仍能找到带 APK 的", async () => {
+    mockReleasesResponse([legacyIosRelease, legacyAndroidRelease]);
 
-    await expect(fetchAndroidApkUpdate("26050701")).resolves.toMatchObject({
+    await expect(fetchMobileAppUpdate("26050701", "android")).resolves.toMatchObject({
       versionCode: "26050801",
-      apkName: "timedata-debug.apk",
-      hasUpdate: true,
+      assetName: "timedata-debug.apk",
     });
   });
 
-  it("列表里只有 iOS release 时返回 null，而不是把 .ipa 当成 APK", async () => {
-    mockReleasesResponse([iosRelease]);
+  it("ios：跳过只有 .apk 的 legacy Android release，仍能找到带 IPA 的", async () => {
+    mockReleasesResponse([legacyAndroidRelease, legacyIosRelease]);
 
-    await expect(fetchAndroidApkUpdate("26050701")).resolves.toBeNull();
+    await expect(fetchMobileAppUpdate("26050701", "ios")).resolves.toMatchObject({
+      versionCode: "26050801",
+      assetName: "TimeData-unsigned.ipa",
+    });
+  });
+
+  it("列表里没有本平台资产时返回 null", async () => {
+    mockReleasesResponse([legacyAndroidRelease]);
+
+    await expect(fetchMobileAppUpdate("26050701", "ios")).resolves.toBeNull();
   });
 
   it("returns null when the repository has no releases yet", async () => {
     mockReleasesResponse([]);
 
-    await expect(fetchAndroidApkUpdate("26050701")).resolves.toBeNull();
+    await expect(fetchMobileAppUpdate("26050701", "android")).resolves.toBeNull();
   });
 
   it("rejects GitHub rate-limit JSON", async () => {
     mockReleasesResponse({ message: "API rate limit exceeded", documentation_url: "https://docs.github.com" });
 
-    await expect(fetchAndroidApkUpdate("26050701")).rejects.toThrow("GitHub Release 响应格式无效");
+    await expect(fetchMobileAppUpdate("26050701", "android")).rejects.toThrow("GitHub Release 响应格式无效");
   });
 
   it("rejects release JSON with missing fields", async () => {
     mockReleasesResponse([{ tag_name: "android-26050801" }]);
 
-    await expect(fetchAndroidApkUpdate("26050701")).rejects.toThrow("GitHub Release 响应格式无效");
+    await expect(fetchMobileAppUpdate("26050701", "android")).rejects.toThrow("GitHub Release 响应格式无效");
   });
 });

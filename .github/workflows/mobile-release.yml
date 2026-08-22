@@ -311,6 +311,11 @@ jobs:
           pnpm --filter @timedata/mobile add "@capacitor/ios@${CORE_VERSION}"
 
       - name: Build web assets (mobile mode)
+        env:
+          # iOS 侧同样要把版本号注进网页代码（vite 的 __TIMEDATA_ANDROID_VERSION_CODE__，
+          # 名字带 ANDROID 是历史遗留、实为两壳共用的移动端版本号）：漏注入时 IPA 里的
+          # 「IPA 更新」检查拿开发默认值比对，永远判不出新版本。
+          TIMEDATA_ANDROID_VERSION_CODE: ${{ needs.prepare.outputs.code }}
         run: pnpm --filter @timedata/mobile build:web
 
       - name: Generate iOS project

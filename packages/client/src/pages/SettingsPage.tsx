@@ -1,3 +1,4 @@
+import { Capacitor } from "@capacitor/core";
 import type { VersionInfo } from "@timedata/shared";
 import { useEffect, useState } from "react";
 import { Link } from "react-router";
@@ -13,7 +14,12 @@ import {
   type DesktopUpdaterStatus,
 } from "../lib/desktop/api.js";
 import { isDesktopShell } from "../lib/desktop/shell.js";
-import { type AndroidApkUpdate, fetchAndroidApkUpdate, openAndroidApkUpdate } from "../lib/mobileUpdate.ts";
+import {
+  fetchMobileAppUpdate,
+  type MobileAppUpdate,
+  type MobilePlatform,
+  openMobileAppUpdate,
+} from "../lib/mobileUpdate.ts";
 import { fetchServerVersion, pollServerUpdate, triggerServerUpdate } from "../lib/serverVersion.ts";
 import type { SyncStreamState } from "../lib/syncStream.js";
 import { formatAppDateTime } from "../lib/time.ts";
@@ -208,9 +214,15 @@ export default function SettingsPage() {
   const [serverVersion, setServerVersion] = useState<ServerVersionState | null>(null);
   const [serverUpdating, setServerUpdating] = useState(false);
   const [serverUpdateStatus, setServerUpdateStatus] = useState("");
-  const [apkChecking, setApkChecking] = useState(false);
-  const [apkUpdate, setApkUpdate] = useState<AndroidApkUpdate | null>(null);
-  const [apkStatus, setApkStatus] = useState("");
+  const [mobileChecking, setMobileChecking] = useState(false);
+  const [mobileUpdate, setMobileUpdate] = useState<MobileAppUpdate | null>(null);
+  const [mobileStatus, setMobileStatus] = useState("");
+  // 按平台显示移动端更新入口：android → APK、ios → IPA，web / 桌面壳不渲染（桌面有自己的
+  // 更新行）。版本号两个壳共用同一个注入值（yymmddNN 单点生成，见 scripts/mobile-version.mjs）。
+  const capacitorPlatform = Capacitor.getPlatform();
+  const mobilePlatform: MobilePlatform | null =
+    capacitorPlatform === "android" || capacitorPlatform === "ios" ? capacitorPlatform : null;
+  const mobilePackageLabel = mobilePlatform === "ios" ? "IPA" : "APK";
 
   useEffect(() => {
     let cancelled = false;
@@ -228,27 +240,28 @@ export default function SettingsPage() {
 
   const connectionState = getServerConnectionState(apiUrl, connection, cloudSyncEnabled);
 
-  async function handleCheckApkUpdate() {
-    setApkChecking(true);
-    setApkStatus("正在检查 APK 更新…");
+  async function handleCheckMobileUpdate() {
+    if (!mobilePlatform) return;
+    setMobileChecking(true);
+    setMobileStatus(`正在检查 ${mobilePackageLabel} 更新…`);
     try {
-      const update = await fetchAndroidApkUpdate(__TIMEDATA_ANDROID_VERSION_CODE__);
-      setApkUpdate(update);
+      const update = await fetchMobileAppUpdate(__TIMEDATA_ANDROID_VERSION_CODE__, mobilePlatform);
+      setMobileUpdate(update);
       if (!update) {
-        setApkStatus("还没有可下载的 Android APK Release。");
+        setMobileStatus(`还没有可下载的 ${mobilePackageLabel} Release。`);
         return;
       }
       if (update.hasUpdate) {
-        setApkStatus(`发现新 APK：${update.versionCode}`);
-        await openAndroidApkUpdate(update);
+        setMobileStatus(`发现新 ${mobilePackageLabel}：${update.versionCode}，正在打开下载…`);
+        await openMobileAppUpdate(update, mobilePlatform);
         return;
       }
-      setApkStatus(`当前 APK 已是最新版本：${__TIMEDATA_ANDROID_VERSION_CODE__}`);
+      setMobileStatus(`当前 ${mobilePackageLabel} 已是最新版本：${__TIMEDATA_ANDROID_VERSION_CODE__}`);
     } catch (e: unknown) {
-      setApkStatus(e instanceof Error ? e.message : "检查 APK 更新失败");
-      setApkUpdate(null);
+      setMobileStatus(e instanceof Error ? e.message : `检查 ${mobilePackageLabel} 更新失败`);
+      setMobileUpdate(null);
     } finally {
-      setApkChecking(false);
+      setMobileChecking(false);
     }
   }
 
@@ -451,15 +464,17 @@ export default function SettingsPage() {
           title="服务端数据洞察"
           subtitle="只读查看服务器数据、同步、备份、健康检查和请求审计"
         />
-        <SettingsRow
-          icon={<Icon icon={DeviceMobile} size={20} />}
-          tone="accent"
-          title="APK 更新"
-          subtitle={apkStatus || `当前版本：${__TIMEDATA_ANDROID_VERSION_CODE__}`}
-          accessory={apkUpdate?.hasUpdate ? apkUpdate.versionCode : undefined}
-          disabled={apkChecking}
-          onClick={handleCheckApkUpdate}
-        />
+        {mobilePlatform && (
+          <SettingsRow
+            icon={<Icon icon={DeviceMobile} size={20} />}
+            tone="accent"
+            title={`${mobilePackageLabel} 更新`}
+            subtitle={mobileStatus || `当前版本：${__TIMEDATA_ANDROID_VERSION_CODE__}`}
+            accessory={mobileUpdate?.hasUpdate ? mobileUpdate.versionCode : undefined}
+            disabled={mobileChecking}
+            onClick={handleCheckMobileUpdate}
+          />
+        )}
         <SettingsRow
           icon={<Icon icon={ArrowsClockwise} size={20} />}
           tone="accent"
