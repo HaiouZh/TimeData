@@ -39,6 +39,7 @@
   "dirty-in-clean-bucket:components/ui/EmptyState.test.tsx",
   "dirty-in-clean-bucket:components/ui/LoadingState.test.tsx",
   "dirty-in-clean-bucket:components/ui/MonthCalendar.test.tsx",
+  "dirty-in-clean-bucket:components/ui/OverflowMenu.test.tsx",
   "dirty-in-clean-bucket:components/ui/PageBackButton.test.tsx",
   "dirty-in-clean-bucket:components/ui/PageHeader.test.tsx",
   "dirty-in-clean-bucket:components/ui/SegmentedControl.test.tsx",
