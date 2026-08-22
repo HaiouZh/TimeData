@@ -7,6 +7,7 @@ import { db, resetDb } from "../../test/dbReset.js";
 import { addTask, toggleTaskDone } from "../../lib/tasks.js";
 import type { Goal } from "@timedata/shared";
 import { addTaskRelation } from "../../lib/taskRelations.js";
+import { occurrenceChildId } from "../../lib/tasks/occurrenceChildId.js";
 import { click, renderDom, unmount } from "../../test/domHarness.js";
 import { TaskWaitingRow } from "./TaskWaitingRow.js";
 
@@ -608,20 +609,44 @@ describe("TaskWaitingRow picker 修复（过滤/搜索/上下文）", () => {
     await unmount(root);
   });
 
-  it("重复发次的子步骤候选带上父发次的日期", async () => {
+  it("自己没排期的子任务候选带上父的日期", async () => {
     const self = await addTask({ title: "自己" });
-    const occurrence = await addTask({ title: "每日习惯【必做】" });
+    const parent = await addTask({ title: "装修主线" });
     const scheduledAt = "2026-08-20T00:00:00.000Z";
-    await db.tasks.update(occurrence.id, { scheduledAt });
-    const child = await addTask({ title: "RQ签到" });
-    // 镜像子步骤自己的 scheduledAt 恒为 null（materializeOccurrenceChildren），日期只在父身上
-    await db.tasks.update(child.id, { parentId: occurrence.id, scheduledAt: null });
+    await db.tasks.update(parent.id, { scheduledAt });
+    const child = await addTask({ title: "买瓷砖" });
+    await db.tasks.update(child.id, { parentId: parent.id, scheduledAt: null });
     const d = new Date(scheduledAt);
     const { host, root } = await renderRow(self.id);
     await click(host.querySelector('button[aria-label="添加前置"]'));
-    const btn = host.querySelector('button[aria-label="添加前置 RQ签到"]') as HTMLElement;
+    const btn = host.querySelector('button[aria-label="添加前置 买瓷砖"]') as HTMLElement;
     expect(btn).not.toBeNull();
-    expect(btn.textContent).toContain(`每日习惯【必做】 · ${d.getMonth() + 1}月${d.getDate()}日`);
+    expect(btn.textContent).toContain(`装修主线 · ${d.getMonth() + 1}月${d.getDate()}日`);
+    await unmount(root);
+  });
+
+  it("重复发次的镜像子步骤不进候选，同名手建子任务照进", async () => {
+    const self = await addTask({ title: "自己" });
+    const occurrence = await addTask({ title: "每日习惯【必做】" });
+    await db.tasks.update(occurrence.id, { scheduledAt: "2026-08-20T00:00:00.000Z" });
+    // 真实形态：id 由 occurrenceChildId 生成、parentId 指向那一发、自己无排期
+    const seed = await addTask({ title: "RQ签到" });
+    const row = await db.tasks.get(seed.id);
+    await db.tasks.delete(seed.id);
+    await db.tasks.add({
+      ...(row as NonNullable<typeof row>),
+      id: occurrenceChildId(occurrence.id, "tmpl-rq"),
+      parentId: occurrence.id,
+      scheduledAt: null,
+    });
+    // 对照：同名但用户手建的子任务不受影响，避免过滤写成「按 parentId 排除」
+    const handMade = await addTask({ title: "RQ签到（手建）" });
+    await db.tasks.update(handMade.id, { parentId: occurrence.id });
+
+    const { host, root } = await renderRow(self.id);
+    await click(host.querySelector('button[aria-label="添加前置"]'));
+    expect(host.querySelector('button[aria-label="添加前置 RQ签到"]')).toBeNull();
+    expect(host.querySelector('button[aria-label="添加前置 RQ签到（手建）"]')).not.toBeNull();
     await unmount(root);
   });
 

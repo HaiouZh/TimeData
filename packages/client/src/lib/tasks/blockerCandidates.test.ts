@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { Task, Track } from "@timedata/shared";
 import { blockerCandidateContext, filterBlockerCandidates } from "./blockerCandidates.js";
+import { occurrenceChildId } from "./occurrenceChildId.js";
 
 function task(patch: Partial<Task> & Pick<Task, "id">): Task {
   return {
@@ -193,6 +194,36 @@ describe("filterBlockerCandidates", () => {
     expect(() => filterBlockerCandidates({ tasks, tracks, selfTaskId: "self", existingBlockerKeys: new Set(), query: "(" })).not.toThrow();
   });
 
+  it("排除重复发次的镜像子步骤（系统物化的行，不是用户建的任务）", () => {
+    // id 形如 `{occurrenceId}:child:{templateChildId}`，与 todoStats 的 creationEvents 同一判据。
+    // 它们 recurrence/ruleId 都是 null，前面两道重复过滤拦不住；每天克隆一份，攒起来能淹掉整屏候选。
+    const tasks = [
+      task({ id: occurrenceChildId("occ-0820", "tmpl-rq"), title: "RQ签到" }),
+      task({ id: "normal", title: "普通任务" }),
+    ];
+    const result = filterBlockerCandidates({
+      tasks,
+      tracks: [],
+      selfTaskId: "self",
+      existingBlockerKeys: new Set(),
+      query: "",
+    });
+    expect(result.tasks.map((t) => t.id)).toEqual(["normal"]);
+  });
+
+  it("普通子任务照常是候选——排除的只是发次镜像那一类", () => {
+    // 反证：别把「有 parentId」当成排除判据，用户自己建的子步骤仍然可以当前置。
+    const tasks = [task({ id: "hand-made-child", parentId: "p1", title: "手建子步骤" })];
+    const result = filterBlockerCandidates({
+      tasks,
+      tracks: [],
+      selfTaskId: "self",
+      existingBlockerKeys: new Set(),
+      query: "",
+    });
+    expect(result.tasks.map((t) => t.id)).toEqual(["hand-made-child"]);
+  });
+
   it("带日期的候选整体沉底，无日期的排在前面", () => {
     const tasks = [
       task({ id: "dated", scheduledAt: "2026-08-20T00:00:00.000Z", updatedAt: "2026-08-20T00:00:00.000Z" }),
@@ -209,9 +240,9 @@ describe("filterBlockerCandidates", () => {
     expect(result.tasks.map((t) => t.id)).toEqual(["plain", "dated"]);
   });
 
-  it("重复发次的子步骤跟着父发次的排期一起沉底", () => {
-    // 习惯子步骤自己 scheduledAt 恒为 null（materializeOccurrenceChildren），日期只挂在父发次上。
-    // 不往上取一层，它们就是「无日期」，会把真正有用的候选挤到一屏之外。
+  it("自己没排期的子任务跟着父的排期一起沉底", () => {
+    // 子任务的日期常常只挂在父身上（自己 scheduledAt 为 null）。不往上取一层，
+    // 它们就被当成「无日期」留在列表最前，把真正没排期的活挤下去。
     const occurrence = task({ id: "occ", ruleId: "r1", scheduledAt: "2026-08-20T00:00:00.000Z" });
     const child = task({ id: "child", parentId: "occ", updatedAt: "2026-08-20T00:00:00.000Z" });
     const plain = task({ id: "plain", updatedAt: "2026-06-01T00:00:00.000Z" });

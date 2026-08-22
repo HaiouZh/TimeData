@@ -1,4 +1,5 @@
 import type { Task, Track } from "@timedata/shared";
+import { isOccurrenceChildId } from "./occurrenceChildId.js";
 
 function matchesQuery(title: string, query: string): boolean {
   const trimmed = query.trim();
@@ -45,6 +46,11 @@ export function filterBlockerCandidates(args: {
         !args.existingBlockerKeys.has(`task:${task.id}`) &&
         (task.ruleId ?? null) === null &&
         (task.recurrence ?? null) === null &&
+        // 重复发次的镜像子步骤不进候选：它们由 materializeOccurrenceChildren 每天克隆一份，
+        // recurrence/ruleId 都写 null，上面两道重复过滤拦不住，攒起来能淹掉整屏候选。
+        // 判据与 todoStats 的 creationEvents 同源——那边同样用它把这类行剔出「用户创建的任务」。
+        // 把「今天那一发的某个子步骤」设成前置本来也没意义：明天换新的一份，边就指向历史残骸。
+        !isOccurrenceChildId(task.id) &&
         matchesQuery(task.title, args.query),
     )
     // 带时间的整体沉底：一次性的「哪天该干的活」和习惯发次的子步骤都归到列表末尾，
