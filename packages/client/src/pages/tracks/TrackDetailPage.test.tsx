@@ -232,11 +232,9 @@ describe("TrackDetailPage", () => {
 
     const detailsList = [...host.querySelectorAll("details")] as HTMLDetailsElement[];
     const details = detailsList.find((d) => d.textContent?.includes("历史")) ?? detailsList[0] ?? null;
-    expect(details?.open).toBe(false);
+    expect(details?.open).toBe(true);
     expect(host.textContent).toContain("历史");
     expect(details?.textContent).toContain("2");
-
-    await openHistory(host);
     expect(host.textContent).toContain("决定开练");
   });
 
@@ -798,4 +796,31 @@ describe("详情页页眉", () => {
     });
     expect(host.textContent).toContain("删除轨道");
   });
+});
+
+it("历史区默认展开，与 hash 锚点无关", async () => {
+  const track = await addTrack({ title: "历史展开" });
+  await addTrackStep({
+    trackId: track.id,
+    source: "user",
+    content: "第一步",
+    startedAt: "2026-06-21T00:00:00.000Z",
+    endedAt: "2026-06-21T01:00:00.000Z",
+    seq: 0,
+    now,
+  });
+  await addTrackStep({
+    trackId: track.id,
+    source: "user",
+    content: "第二步",
+    startedAt: "2026-06-21T01:00:00.000Z",
+    endedAt: null,
+    seq: 1,
+    now,
+  });
+  const host = await renderDetail(track.id);
+  await waitForText(host, "第二步");
+  const details = host.querySelector('[data-testid="detail-narrative"] details');
+  expect(details).not.toBeNull();
+  expect((details as HTMLDetailsElement).open).toBe(true);
 });

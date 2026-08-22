@@ -40,7 +40,7 @@ export function TrackTimeline({
   const hiddenCount = folded ? ordered.length - HEAD_COUNT - TAIL_COUNT : 0;
 
   return (
-    <ol className="flex flex-col gap-2" aria-label="轨道时间线">
+    <ol className="flex flex-col gap-4 border-l border-border pl-4" aria-label="轨道时间线">
       {head.map((step) => (
         <TrackStepRow
           key={step.id}
@@ -57,7 +57,7 @@ export function TrackTimeline({
           <button
             type="button"
             onClick={() => setShowAll(true)}
-            className="min-h-11 w-full rounded-card border border-border bg-surface px-3 py-2 td-text-caption text-ink-2 hover:border-accent hover:text-accent"
+            className="min-h-11 w-full rounded-ctl border border-border px-4 py-2 td-text-label text-ink-2 hover:border-accent hover:text-accent"
           >
             显示其余 {hiddenCount} 步
           </button>

@@ -56,11 +56,12 @@ describe("TrackStepRow", () => {
     const host = await mount({ step: step({ id: "s-anchor" }), isCurrent: false, now: NOW, highlighted: true });
     const li = host.querySelector("#step-s-anchor");
     expect(li).not.toBeNull();
-    expect(li?.className).toContain("ring-accent");
+    expect(li?.className).toContain("border-l-2");
+    expect(li?.className).toContain("border-accent");
     if (mounted) await unmount(mounted.root);
     const plain = await mount({ step: step({ id: "s-plain" }), isCurrent: false, now: NOW });
     expect(plain.querySelector("#step-s-plain")).not.toBeNull();
-    expect(plain.querySelector("#step-s-plain")?.className).not.toContain("ring-accent");
+    expect(plain.querySelector("#step-s-plain")?.className).not.toContain("border-accent");
   });
 
   it("shows sourceLabel chip for agent steps but no source chip for user steps (TK 我 去重)", async () => {

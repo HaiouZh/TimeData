@@ -54,7 +54,6 @@ export default function TrackDetailPage() {
   const highlightStepId = location.hash.startsWith("#step-") ? location.hash.slice("#step-".length) : null;
   const latest = latestStep(steps);
   const history = useMemo(() => steps.filter((s) => s.id !== latest?.id), [steps, latest?.id]);
-  const historyHighlighted = highlightStepId !== null && history.some((s) => s.id === highlightStepId);
 
   useEffect(() => {
     if (!highlightStepId || steps.length === 0) return;
@@ -272,7 +271,7 @@ export default function TrackDetailPage() {
                   </button>
                 )}
                 {history.length > 0 && (
-                  <CollapsibleSection title="历史" count={history.length} defaultOpen={historyHighlighted}>
+                  <CollapsibleSection title="历史" count={history.length} defaultOpen>
                     <TrackTimeline
                       steps={history}
                       highlightStepId={highlightStepId}

@@ -36,17 +36,17 @@ export function CurrentFrameCard({
     <section
       id={`step-${step.id}`}
       data-testid="current-frame-card"
-      className="mb-3 rounded-card border border-accent/40 bg-surface p-4 shadow-elev1"
+      className="mb-6 border-l-2 border-accent pl-4"
     >
-      <div className="flex flex-wrap items-center gap-2 td-text-caption text-ink-3">
-        <span className="font-medium text-ink-2">当前帧 · 第{step.seq + 1}步</span>
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="td-eyebrow text-accent">当前帧 · 第{step.seq + 1}步</span>
         {step.source !== "user" && (
-          <span data-source={step.source} className="rounded-pill bg-surface-elevated px-2 py-0.5 text-ink-2">
+          <span data-source={step.source} className="rounded-pill bg-surface-elevated px-2 py-1 td-text-caption text-ink-2">
             {stepSourceText(step)}
           </span>
         )}
-        <span title={formatAppDateTime(activityAt)}>{formatRelativeTime(activityAt, now)}</span>
-        {step.editedAt && <span title={formatAppDateTime(step.editedAt)}>已编辑</span>}
+        <span title={formatAppDateTime(activityAt)} className="td-text-caption text-ink-3">{formatRelativeTime(activityAt, now)}</span>
+        {step.editedAt && <span title={formatAppDateTime(step.editedAt)} className="td-text-caption text-ink-3">已编辑</span>}
         {(canEdit || canDelete) && (
           <span className="ml-auto flex shrink-0 items-center gap-1">
             {canEdit && (
@@ -57,7 +57,7 @@ export function CurrentFrameCard({
                   setDraft(step.content);
                   setEditing(true);
                 }}
-                className="inline-flex h-7 w-7 items-center justify-center rounded-ctl bg-surface-elevated text-ink-2 hover:text-accent"
+                className="inline-flex h-7 w-7 items-center justify-center rounded-ctl text-ink-2 hover:text-accent"
               >
                 <Icon icon={PencilSimple} size={15} />
               </button>
@@ -75,7 +75,7 @@ export function CurrentFrameCard({
             value={draft}
             onChange={(event) => setDraft(event.target.value)}
             rows={5}
-            className="w-full resize-y rounded-ctl border border-border bg-surface-elevated px-3 py-2 text-ink focus:outline-none focus:ring-1 focus:ring-accent"
+            className="w-full resize-y rounded-ctl border border-border bg-surface-elevated px-3 py-2 text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-page focus-visible:border-accent"
           />
           <div className="flex justify-end gap-2">
             <button
@@ -84,14 +84,14 @@ export function CurrentFrameCard({
                 setDraft(step.content);
                 setEditing(false);
               }}
-              className="rounded-ctl border border-border px-3 py-1.5 td-text-label text-ink-2 hover:text-ink"
+              className="rounded-ctl border border-border px-4 py-2 td-text-label text-ink-2 hover:text-ink"
             >
               取消
             </button>
             <button
               type="button"
               onClick={() => void saveEdit()}
-              className="rounded-ctl bg-accent px-3 py-1.5 td-text-label text-page"
+              className="rounded-ctl bg-accent px-4 py-2 td-text-label text-accent-contrast"
             >
               保存
             </button>
@@ -101,9 +101,9 @@ export function CurrentFrameCard({
         <p className="mt-2 whitespace-pre-wrap break-words td-text-body text-ink">{step.content || "无内容步骤"}</p>
       )}
       {(step.tags.length > 0 || step.refs.length > 0) && (
-        <div className="mt-2 flex flex-wrap items-center gap-1.5">
+        <div className="mt-2 flex flex-wrap items-center gap-2">
           {step.tags.map((tag) => (
-            <span key={tag} className="rounded-pill bg-surface-hover px-2 py-0.5 td-text-caption text-ink-2">
+            <span key={tag} className="rounded-pill bg-surface-hover px-2 py-1 td-text-caption text-ink-2">
               #{tag}
             </span>
           ))}

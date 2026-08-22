@@ -11,8 +11,9 @@ import { RefChip } from "./RefChip.js";
 const LONG_CONTENT_CHARS = 280;
 
 function rowClass(isCurrent: boolean): string {
-  if (isCurrent) return "border-accent bg-accent-soft shadow-elev1";
-  return "border-border bg-surface";
+  // 只读内容不做成卡片：当前步用左侧 accent 竖线压在列表竖线上，普通步靠留白分区。
+  if (isCurrent) return "-ml-4 border-l-2 border-accent pl-4";
+  return "";
 }
 
 export function TrackStepRow({
@@ -56,17 +57,17 @@ export function TrackStepRow({
     <li
       id={`step-${step.id}`}
       data-current={isCurrent ? "true" : "false"}
-      className={`rounded-card border p-3 transition ${rowClass(isCurrent)}${highlighted ? " ring-1 ring-accent" : ""}`}
+      className={`transition ${rowClass(isCurrent)}${highlighted ? " -ml-4 border-l-2 border-accent pl-4" : ""}`}
     >
-      <div className="flex flex-wrap items-center gap-2 td-text-caption text-ink-3">
+      <div className="flex flex-wrap items-center gap-2">
         <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
           {step.source !== "user" && (
-            <span data-source={step.source} className="rounded-pill bg-surface-elevated px-2 py-0.5 text-ink-2">
+            <span data-source={step.source} className="rounded-pill bg-surface-elevated px-2 py-1 td-text-caption text-ink-2">
               {stepSourceText(step)}
             </span>
           )}
-          {!isNegligibleDuration && <span className="td-duration">{durationLabel}</span>}
-          <span data-testid="step-relative-time" title={formatAppDateTime(activityAt)}>
+          {!isNegligibleDuration && <span className="td-duration td-text-caption text-ink-3">{durationLabel}</span>}
+          <span data-testid="step-relative-time" title={formatAppDateTime(activityAt)} className="td-text-caption text-ink-3">
             {formatRelativeTime(activityAt, now)}
           </span>
           {step.editedAt && (
@@ -85,7 +86,7 @@ export function TrackStepRow({
                   setDraft(step.content);
                   setEditing(true);
                 }}
-                className="inline-flex h-7 w-7 items-center justify-center rounded-ctl bg-surface-elevated text-ink-2 hover:text-accent"
+                className="inline-flex h-7 w-7 items-center justify-center rounded-ctl text-ink-2 hover:text-accent"
               >
                 <Icon icon={PencilSimple} size={15} />
               </button>
@@ -103,7 +104,7 @@ export function TrackStepRow({
             value={draft}
             onChange={(event) => setDraft(event.target.value)}
             rows={4}
-            className="w-full resize-y rounded-ctl border border-border bg-surface-elevated px-3 py-2 text-ink focus:outline-none focus:ring-1 focus:ring-accent"
+            className="w-full resize-y rounded-ctl border border-border bg-surface-elevated px-3 py-2 text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-page focus-visible:border-accent"
           />
           <div className="flex justify-end gap-2">
             <button
@@ -112,14 +113,14 @@ export function TrackStepRow({
                 setDraft(step.content);
                 setEditing(false);
               }}
-              className="rounded-ctl border border-border px-3 py-1.5 td-text-label text-ink-2 hover:text-ink"
+              className="rounded-ctl border border-border px-4 py-2 td-text-label text-ink-2 hover:text-ink"
             >
               取消
             </button>
             <button
               type="button"
               onClick={() => void saveEdit()}
-              className="rounded-ctl bg-accent px-3 py-1.5 td-text-label text-page"
+              className="rounded-ctl bg-accent px-4 py-2 td-text-label text-accent-contrast"
             >
               保存
             </button>
@@ -136,7 +137,7 @@ export function TrackStepRow({
             <button
               type="button"
               onClick={() => setExpanded((value) => !value)}
-              className="mt-1 td-text-caption text-accent hover:underline"
+              className="mt-2 td-text-caption text-accent hover:underline"
             >
               {expanded ? "收起" : "展开"}
             </button>
@@ -144,9 +145,9 @@ export function TrackStepRow({
         </>
       ) : null}
       {(step.tags.length > 0 || step.refs.length > 0) && (
-        <div className="mt-2 flex flex-wrap items-center gap-1.5">
+        <div className="mt-2 flex flex-wrap items-center gap-2">
           {step.tags.map((tag) => (
-            <span key={tag} className="rounded-pill bg-surface-hover px-2 py-0.5 td-text-caption text-ink-2">
+            <span key={tag} className="rounded-pill bg-surface-hover px-2 py-1 td-text-caption text-ink-2">
               #{tag}
             </span>
           ))}
