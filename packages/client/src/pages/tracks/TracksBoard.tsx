@@ -80,9 +80,9 @@ export function TracksBoard() {
           <EmptyState variant="card" title="还没有进行中的轨道" />
         ) : (
           groups.map((group) => (
-            <section key={group.key} data-testid={`dispatch-group-${group.key}`} className="mb-4">
-              <h2 className={`mb-2 td-text-caption ${GROUP_HEADER_CLASSES[group.key]}`}>
-                {group.label} <span className="td-num">{group.items.length}</span>
+            <section key={group.key} data-testid={`dispatch-group-${group.key}`} className="mb-6">
+              <h2 className={`mb-2 td-eyebrow ${GROUP_HEADER_CLASSES[group.key]}`}>
+                {group.label} <span className="td-num td-text-caption text-ink-3">{group.items.length}</span>
               </h2>
               <ul className="flex flex-col gap-2">
                 {group.items.map((item) => {
@@ -100,7 +100,7 @@ export function TracksBoard() {
                         onSubmitStep={(draft) => addStep(item.track.id, draft)}
                       />
                       {milestoneProgress(milestones).total > 0 && (
-                        <div className="mt-1 px-1">
+                        <div className="mt-2 px-1">
                           <SegmentProgressBar milestones={milestones} size="mini" />
                         </div>
                       )}
@@ -112,7 +112,7 @@ export function TracksBoard() {
           ))
         )}
         {archived.length > 0 && (
-          <div className="mt-4">
+          <div className="mt-6">
             <CollapsibleSection title="已归档" count={archived.length}>
               <ul className="flex flex-col gap-2">
                 {archived.map((track) => {
@@ -126,7 +126,7 @@ export function TracksBoard() {
                         compact
                       />
                       {milestoneProgress(milestones).total > 0 && (
-                        <div className="mt-1 px-1">
+                        <div className="mt-2 px-1">
                           <SegmentProgressBar milestones={milestones} size="mini" />
                         </div>
                       )}
