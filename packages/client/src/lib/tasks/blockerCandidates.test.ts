@@ -193,6 +193,53 @@ describe("filterBlockerCandidates", () => {
     expect(() => filterBlockerCandidates({ tasks, tracks, selfTaskId: "self", existingBlockerKeys: new Set(), query: "(" })).not.toThrow();
   });
 
+  it("带日期的候选整体沉底，无日期的排在前面", () => {
+    const tasks = [
+      task({ id: "dated", scheduledAt: "2026-08-20T00:00:00.000Z", updatedAt: "2026-08-20T00:00:00.000Z" }),
+      task({ id: "plain", updatedAt: "2026-06-01T00:00:00.000Z" }),
+    ];
+    const result = filterBlockerCandidates({
+      tasks,
+      tracks: [],
+      selfTaskId: "self",
+      existingBlockerKeys: new Set(),
+      query: "",
+    });
+    // 按 updatedAt 倒序 dated 本该在前——沉底规则要压过它
+    expect(result.tasks.map((t) => t.id)).toEqual(["plain", "dated"]);
+  });
+
+  it("重复发次的子步骤跟着父发次的排期一起沉底", () => {
+    // 习惯子步骤自己 scheduledAt 恒为 null（materializeOccurrenceChildren），日期只挂在父发次上。
+    // 不往上取一层，它们就是「无日期」，会把真正有用的候选挤到一屏之外。
+    const occurrence = task({ id: "occ", ruleId: "r1", scheduledAt: "2026-08-20T00:00:00.000Z" });
+    const child = task({ id: "child", parentId: "occ", updatedAt: "2026-08-20T00:00:00.000Z" });
+    const plain = task({ id: "plain", updatedAt: "2026-06-01T00:00:00.000Z" });
+    const result = filterBlockerCandidates({
+      tasks: [occurrence, child, plain],
+      tracks: [],
+      selfTaskId: "self",
+      existingBlockerKeys: new Set(),
+      query: "",
+    });
+    expect(result.tasks.map((t) => t.id)).toEqual(["plain", "child"]);
+  });
+
+  it("带日期的组内按日期倒序（近的在前），与 updatedAt 无关", () => {
+    const tasks = [
+      task({ id: "aug18", scheduledAt: "2026-08-18T00:00:00.000Z", updatedAt: "2026-08-18T00:00:00.000Z" }),
+      task({ id: "aug22", scheduledAt: "2026-08-22T00:00:00.000Z", updatedAt: "2026-06-01T00:00:00.000Z" }),
+    ];
+    const result = filterBlockerCandidates({
+      tasks,
+      tracks: [],
+      selfTaskId: "self",
+      existingBlockerKeys: new Set(),
+      query: "",
+    });
+    expect(result.tasks.map((t) => t.id)).toEqual(["aug22", "aug18"]);
+  });
+
   it("existingBlockerKeys 含悬空 id 无影响", () => {
     const tasks = [task({ id: "a" }), task({ id: "b" })];
     const tracks = [track({ id: "tr1" }), track({ id: "tr2" })];
@@ -219,23 +266,41 @@ describe("filterBlockerCandidates", () => {
   });
 });
 
+function dateLabel(iso: string): string {
+  const d = new Date(iso);
+  return `${d.getMonth() + 1}月${d.getDate()}日`;
+}
+
 describe("blockerCandidateContext", () => {
-  it("项目名优先", () => {
-    const t = task({ id: "t1", parentId: "p1", scheduledAt: "2026-07-20T00:00:00.000Z" });
+  it("项目名优先于父标题，日期照常缀在后面", () => {
+    const scheduledAt = "2026-07-20T00:00:00.000Z";
+    const t = task({ id: "t1", parentId: "p1", scheduledAt });
     const ctx = {
       projectNameByTaskId: new Map([["t1", "项目A"]]),
-      taskTitleById: new Map([["p1", "父标题"]]),
+      taskById: new Map([["p1", task({ id: "p1", title: "父标题" })]]),
     };
-    expect(blockerCandidateContext(t, ctx)).toBe("项目A");
+    expect(blockerCandidateContext(t, ctx)).toBe(`项目A · ${dateLabel(scheduledAt)}`);
   });
 
   it("无项目有父 → 父标题", () => {
     const t = task({ id: "t1", parentId: "p1" });
     const ctx = {
       projectNameByTaskId: new Map<string, string>(),
-      taskTitleById: new Map([["p1", "父任务标题"]]),
+      taskById: new Map([["p1", task({ id: "p1", title: "父任务标题" })]]),
     };
     expect(blockerCandidateContext(t, ctx)).toBe("父任务标题");
+  });
+
+  it("重复发次的子步骤 → 父标题 · 父发次的日期", () => {
+    // 用户看到一屏「RQ签到 每日习惯【必做】」，条条同名、分不出是哪天的——日期得从父发次取。
+    const scheduledAt = "2026-08-20T00:00:00.000Z";
+    const occurrence = task({ id: "occ", title: "每日习惯【必做】", ruleId: "r1", scheduledAt });
+    const child = task({ id: "c1", parentId: "occ", title: "RQ签到" });
+    const ctx = {
+      projectNameByTaskId: new Map<string, string>(),
+      taskById: new Map([["occ", occurrence]]),
+    };
+    expect(blockerCandidateContext(child, ctx)).toBe(`每日习惯【必做】 · ${dateLabel(scheduledAt)}`);
   });
 
   it("无父有排期 → M月d日", () => {
@@ -243,10 +308,9 @@ describe("blockerCandidateContext", () => {
     const t = task({ id: "t1", parentId: null, scheduledAt });
     const ctx = {
       projectNameByTaskId: new Map<string, string>(),
-      taskTitleById: new Map<string, string>(),
+      taskById: new Map<string, Task>(),
     };
-    const d = new Date(scheduledAt);
-    const expected = `${d.getMonth() + 1}月${d.getDate()}日`;
+    const expected = dateLabel(scheduledAt);
     expect(blockerCandidateContext(t, ctx)).toBe(expected);
     // 具体值在 UTC 环境下为 "3月15日"
     // 为保证可复现，也硬断一次本地计算结果
@@ -257,29 +321,37 @@ describe("blockerCandidateContext", () => {
     const t = task({ id: "t1", parentId: null, scheduledAt: null });
     const ctx = {
       projectNameByTaskId: new Map<string, string>(),
-      taskTitleById: new Map<string, string>(),
+      taskById: new Map<string, Task>(),
     };
     expect(blockerCandidateContext(t, ctx)).toBeNull();
   });
 
-  it("有 parentId 但 taskTitleById 缺失则回落到 scheduledAt", () => {
+  it("有 parentId 但 taskById 缺失则回落到自己的 scheduledAt", () => {
     const scheduledAt = "2026-12-01T08:00:00.000Z";
     const t = task({ id: "t1", parentId: "p1", scheduledAt });
     const ctx = {
       projectNameByTaskId: new Map<string, string>(),
-      taskTitleById: new Map<string, string>(),
+      taskById: new Map<string, Task>(),
     };
-    const d = new Date(scheduledAt);
-    const expected = `${d.getMonth() + 1}月${d.getDate()}日`;
-    expect(blockerCandidateContext(t, ctx)).toBe(expected);
+    expect(blockerCandidateContext(t, ctx)).toBe(dateLabel(scheduledAt));
   });
 
   it("非法 scheduledAt → null（不渲染 NaN月NaN日）", () => {
     const t = task({ id: "t1", parentId: null, scheduledAt: "not-a-date" });
     const ctx = {
       projectNameByTaskId: new Map<string, string>(),
-      taskTitleById: new Map<string, string>(),
+      taskById: new Map<string, Task>(),
     };
     expect(blockerCandidateContext(t, ctx)).toBeNull();
+  });
+
+  it("父的 scheduledAt 非法时只显示父标题，不渲染 NaN月NaN日", () => {
+    const occurrence = task({ id: "occ", title: "每日习惯【必做】", scheduledAt: "not-a-date" });
+    const child = task({ id: "c1", parentId: "occ", title: "RQ签到" });
+    const ctx = {
+      projectNameByTaskId: new Map<string, string>(),
+      taskById: new Map([["occ", occurrence]]),
+    };
+    expect(blockerCandidateContext(child, ctx)).toBe("每日习惯【必做】");
   });
 });

@@ -67,6 +67,10 @@ export interface TaskWaitingRowProps {
 /**
  * 任务详情里的「在等」行：列出挡着这条任务的前置（任务/轨道），可加可删。
  * 候选 = 未完成的任务与 active 轨道，排除自己与已是前置的（未完成口径与 listTasks 的 completedKeys 一致）。
+ *
+ * 候选的排列：轨道在最前，任务在后；任务里「带日期的」再整体沉到末尾（见 blockerCandidates）。
+ * 起因是每日习惯的发次子步骤——它们 recurrence/ruleId 都是 null，两道重复过滤拦不住，
+ * 每天攒四条、updatedAt 又新，旧口径下把整屏候选占满且条条同名看不出是哪天的。
  */
 export function TaskWaitingRow({ taskId }: TaskWaitingRowProps) {
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -136,7 +140,8 @@ export function TaskWaitingRow({ taskId }: TaskWaitingRowProps) {
     return map;
   }, [goals]);
 
-  const taskTitleById = useMemo(() => new Map(tasks.map((t) => [t.id, t.title])), [tasks]);
+  // 整行而不是只留标题：候选的上下文列还要读父的 scheduledAt（重复发次的子步骤日期挂在父身上）。
+  const taskById = useMemo(() => new Map(tasks.map((t) => [t.id, t])), [tasks]);
 
   const { tasks: taskCandidates, tracks: trackCandidates } = filterBlockerCandidates({
     tasks,
@@ -249,26 +254,8 @@ export function TaskWaitingRow({ taskId }: TaskWaitingRowProps) {
             </p>
           ) : (
             <div className="space-y-2">
-              {taskCandidates.length > 0 && (
-                <div className="space-y-1">
-                  <p className="px-1 td-text-caption text-ink-3">任务</p>
-                  {taskCandidates.map((task) => {
-                    const context = blockerCandidateContext(task, { projectNameByTaskId, taskTitleById });
-                    return (
-                      <button
-                        key={task.id}
-                        type="button"
-                        aria-label={`添加前置 ${task.title}`}
-                        onClick={() => void addBlocker({ kind: "task", id: task.id })}
-                        className="flex min-h-9 w-full items-center gap-2 rounded-row border border-border bg-surface-elevated px-2 td-text-body text-ink hover:bg-surface-hover"
-                      >
-                        <span className="min-w-0 flex-1 truncate text-left">{task.title}</span>
-                        {context !== null && <span className="shrink-0 td-text-caption text-ink-3">{context}</span>}
-                      </button>
-                    );
-                  })}
-                </div>
-              )}
+              {/* 轨道在前：轨道是少数几条长期主线，任务候选动辄几十条（还带着习惯发次的子步骤），
+                  排后面的话轨道要翻很久才够得着。 */}
               {trackCandidates.length > 0 && (
                 <div className="space-y-1">
                   <p className="px-1 td-text-caption text-ink-3">轨道</p>
@@ -283,6 +270,26 @@ export function TaskWaitingRow({ taskId }: TaskWaitingRowProps) {
                       <span className="min-w-0 flex-1 truncate text-left">{track.title}</span>
                     </button>
                   ))}
+                </div>
+              )}
+              {taskCandidates.length > 0 && (
+                <div className="space-y-1">
+                  <p className="px-1 td-text-caption text-ink-3">任务</p>
+                  {taskCandidates.map((task) => {
+                    const context = blockerCandidateContext(task, { projectNameByTaskId, taskById });
+                    return (
+                      <button
+                        key={task.id}
+                        type="button"
+                        aria-label={`添加前置 ${task.title}`}
+                        onClick={() => void addBlocker({ kind: "task", id: task.id })}
+                        className="flex min-h-9 w-full items-center gap-2 rounded-row border border-border bg-surface-elevated px-2 td-text-body text-ink hover:bg-surface-hover"
+                      >
+                        <span className="min-w-0 flex-1 truncate text-left">{task.title}</span>
+                        {context !== null && <span className="shrink-0 td-text-caption text-ink-3">{context}</span>}
+                      </button>
+                    );
+                  })}
                 </div>
               )}
             </div>

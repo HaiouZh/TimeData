@@ -587,4 +587,56 @@ describe("TaskWaitingRow picker 修复（过滤/搜索/上下文）", () => {
     expect(btn2.querySelector("span.shrink-0")).toBeNull();
     await unmount(r2.root);
   });
+
+  it("轨道分组排在任务分组前面", async () => {
+    const self = await addTask({ title: "自己" });
+    await addTask({ title: "普通任务" });
+    await db.tracks.add({
+      id: "tr-order",
+      title: "轨道甲",
+      status: "active",
+      refs: [],
+      createdAt: now,
+      updatedAt: now,
+    } as never);
+    const { host, root } = await renderRow(self.id);
+    await click(host.querySelector('button[aria-label="添加前置"]'));
+    const groupLabels = [...host.querySelectorAll("p")]
+      .map((p) => p.textContent?.trim())
+      .filter((text) => text === "任务" || text === "轨道");
+    expect(groupLabels).toEqual(["轨道", "任务"]);
+    await unmount(root);
+  });
+
+  it("重复发次的子步骤候选带上父发次的日期", async () => {
+    const self = await addTask({ title: "自己" });
+    const occurrence = await addTask({ title: "每日习惯【必做】" });
+    const scheduledAt = "2026-08-20T00:00:00.000Z";
+    await db.tasks.update(occurrence.id, { scheduledAt });
+    const child = await addTask({ title: "RQ签到" });
+    // 镜像子步骤自己的 scheduledAt 恒为 null（materializeOccurrenceChildren），日期只在父身上
+    await db.tasks.update(child.id, { parentId: occurrence.id, scheduledAt: null });
+    const d = new Date(scheduledAt);
+    const { host, root } = await renderRow(self.id);
+    await click(host.querySelector('button[aria-label="添加前置"]'));
+    const btn = host.querySelector('button[aria-label="添加前置 RQ签到"]') as HTMLElement;
+    expect(btn).not.toBeNull();
+    expect(btn.textContent).toContain(`每日习惯【必做】 · ${d.getMonth() + 1}月${d.getDate()}日`);
+    await unmount(root);
+  });
+
+  it("带日期的候选排在无日期的候选后面", async () => {
+    const self = await addTask({ title: "自己", toInbox: true });
+    const dated = await addTask({ title: "带日期的活", toInbox: true });
+    await db.tasks.update(dated.id, { scheduledAt: "2026-08-20T00:00:00.000Z" });
+    // 后建的无日期任务 updatedAt 更新，旧口径下它会排在前面——这里要的是「与谁更新无关」
+    await addTask({ title: "没日期的活", toInbox: true });
+    const { host, root } = await renderRow(self.id);
+    await click(host.querySelector('button[aria-label="添加前置"]'));
+    const titles = [...host.querySelectorAll("button[aria-label^='添加前置 ']")].map((b) =>
+      b.getAttribute("aria-label"),
+    );
+    expect(titles).toEqual(["添加前置 没日期的活", "添加前置 带日期的活"]);
+    await unmount(root);
+  });
 });
