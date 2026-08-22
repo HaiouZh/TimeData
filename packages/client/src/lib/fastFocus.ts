@@ -1,3 +1,4 @@
+import { Capacitor } from "@capacitor/core";
 import type { PointerEvent } from "react";
 
 /**
@@ -10,6 +11,11 @@ import type { PointerEvent } from "react";
  */
 export function focusOnPointerDown(event: PointerEvent<HTMLElement>): void {
   if (event.pointerType === "mouse") return;
+  // iOS 不抢跑：pointerdown 里 preventDefault + focus() 会让 WKWebView 的 WebKit 把整条触摸序列判成
+  // cancelled，touchend 的手势仲裁随即 resign firstResponder——键盘闪现即收回、无法唤出
+  //（2026-08-22 真机一致复现；根因对抗验证见 .dispatch/20260822-ios-flash）。iOS 交还原生
+  // touchend 聚焦路径，快聚焦只在安卓等平台生效。
+  if (Capacitor.getPlatform() === "ios") return;
   const el = event.currentTarget;
   if (document.activeElement === el) return;
   event.preventDefault();

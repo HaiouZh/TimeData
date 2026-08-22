@@ -1,7 +1,7 @@
+import { Capacitor } from "@capacitor/core";
 import { Suspense, useEffect } from "react";
 import { createBrowserRouter, useLocation } from "react-router";
 import { RouterProvider } from "react-router/dom";
-import { Capacitor } from "@capacitor/core";
 import AndroidBackButtonHandler from "./components/AndroidBackButtonHandler.tsx";
 import AppUpdatePrompt from "./components/AppUpdatePrompt.tsx";
 import { AppRoutes } from "./components/app-shell/AppRoutes.tsx";
@@ -12,10 +12,9 @@ import { DesktopBridge } from "./components/desktop/DesktopBridge.tsx";
 import EdgeSwipeBack from "./components/EdgeSwipeBack.tsx";
 import { ErrorBoundary, RouteErrorFallback } from "./components/ErrorBoundary.tsx";
 import { KeyboardAvoidanceBridge } from "./components/KeyboardAvoidanceBridge.tsx";
+import { KeyboardDebugOverlay } from "./components/KeyboardDebugOverlay.tsx";
 import { SchedulerWatchdog } from "./components/SchedulerWatchdog.tsx";
 import { TotpPromptDialog } from "./components/TotpPromptDialog.tsx";
-import { isDesktopShell } from "./lib/desktop/shell.ts";
-import { markFirstPaint } from "./lib/recovery/probe.ts";
 import { BottomNavProvider } from "./contexts/BottomNavContext.tsx";
 import { SyncProvider } from "./contexts/SyncContext.tsx";
 import { TrackAttentionProvider } from "./contexts/TrackAttentionContext.tsx";
@@ -23,7 +22,9 @@ import { useDocumentTitle } from "./hooks/useDocumentTitle.ts";
 import { useFavicon } from "./hooks/useFavicon.ts";
 import { useHideBottomNavOnScroll } from "./hooks/useHideBottomNavOnScroll.ts";
 import { useScrollRestore } from "./hooks/useScrollRestore.ts";
+import { isDesktopShell } from "./lib/desktop/shell.ts";
 import { layoutHidesBottomNav } from "./lib/navigation/navRegistry.ts";
+import { markFirstPaint } from "./lib/recovery/probe.ts";
 import { useIsWideScreen } from "./lib/useIsWideScreen.ts";
 
 // Android 壳由 MainActivity 在原生层做唯一安全区让位（systemBars+displayCutout 的 inset padding），
@@ -60,6 +61,8 @@ export function AppShell() {
       <EdgeSwipeBack />
       {/* 键盘遮挡量 → 全局 CSS 变量 + 聚焦跟随滚动，两条渲染路径共用（见组件注释）。 */}
       <KeyboardAvoidanceBridge />
+      {/* 临时诊断浮层：native 常显、web 需 td.kbdDebug=1；键盘根因钉死后整体移除。 */}
+      <KeyboardDebugOverlay />
       {/* 回前台时探一枚 transition 探针，卡住即判定调度器死锁并自救；正常路径永不触发。 */}
       <SchedulerWatchdog />
       {isWideScreen && <DesktopSidebar />}
