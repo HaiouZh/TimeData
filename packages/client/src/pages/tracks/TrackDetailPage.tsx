@@ -1,8 +1,9 @@
-import { Check, PencilSimple, X } from "@phosphor-icons/react";
+import { Check, X } from "@phosphor-icons/react";
 import { useLiveQuery } from "dexie-react-hooks";
 import { type FormEvent, useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router";
 import { Icon } from "../../components/Icon.js";
+import { OverflowMenu } from "../../components/ui/OverflowMenu.js";
 import { LoadingState } from "../../components/ui/LoadingState.js";
 import { PageBackButton } from "../../components/ui/PageBackButton.js";
 import { StatusBanner } from "../../components/ui/StatusBanner.js";
@@ -163,7 +164,7 @@ export default function TrackDetailPage() {
           <p className="rounded-card bg-surface px-3 py-6 text-center td-text-body text-ink-3">轨道不存在</p>
         ) : (
           <>
-            <header className="mb-3 rounded-card border border-border bg-surface p-4">
+            <header className="mb-6 border-b border-border pb-4">
               {editingMeta ? (
                 <form onSubmit={(event) => void saveMeta(event)} className="space-y-2">
                   <input
@@ -183,14 +184,14 @@ export default function TrackDetailPage() {
                     <button
                       type="button"
                       onClick={cancelMetaEdit}
-                      className="inline-flex items-center gap-1 rounded-ctl border border-border px-3 py-1.5 td-text-label text-ink-2 hover:text-ink"
+                      className="inline-flex items-center gap-1 rounded-ctl border border-border px-4 py-2 td-text-label text-ink-2 hover:text-ink"
                     >
                       <Icon icon={X} size={16} />
                       取消
                     </button>
                     <button
                       type="submit"
-                      className="inline-flex items-center gap-1 rounded-ctl bg-accent px-3 py-1.5 td-text-label text-page"
+                      className="inline-flex items-center gap-1 rounded-ctl bg-accent px-4 py-2 td-text-label text-accent-contrast"
                     >
                       <Icon icon={Check} size={16} />
                       保存轨道
@@ -199,32 +200,27 @@ export default function TrackDetailPage() {
                 </form>
               ) : (
                 <>
-                  <div className="flex items-start gap-2">
-                    <div className="min-w-0 flex-1">
-                      <h1 className="td-text-title break-words text-ink">{track.title}</h1>
-                      {track.summary && <p className="mt-1 td-text-body text-ink-2">{track.summary}</p>}
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => setEditingMeta(true)}
-                      className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-ctl bg-surface-elevated text-ink-2 hover:text-accent"
-                      aria-label="编辑轨道"
-                    >
-                      <Icon icon={PencilSimple} size={16} />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => void removeTrack()}
-                      className="inline-flex h-8 shrink-0 items-center justify-center rounded-ctl bg-surface-elevated px-2 td-text-caption text-ink-2 hover:text-danger"
-                    >
-                      删除轨道
-                    </button>
-                    <span className="rounded-pill bg-surface-hover px-2 py-0.5 td-text-caption text-ink-2">
-                      {STATUS_LABEL[track.status] ?? track.status}
-                    </span>
+                  <div className="flex items-center gap-2">
+                    <span
+                      aria-hidden="true"
+                      className={`h-2 w-2 shrink-0 rounded-pill ${track.status === "active" ? "bg-accent" : "bg-ink-3"}`}
+                    />
+                    <h1 className="min-w-0 flex-1 td-text-title break-words text-ink">{track.title}</h1>
+                    <span className="shrink-0 td-text-caption text-ink-2">{STATUS_LABEL[track.status] ?? track.status}</span>
+                    <OverflowMenu
+                      ariaLabel="轨道操作"
+                      items={[
+                        { key: "edit", label: "编辑轨道", onSelect: () => setEditingMeta(true) },
+                        track.status === "active"
+                          ? { key: "archive", label: "归档", onSelect: () => void changeStatus("concluded") }
+                          : { key: "resume", label: "重新推进", onSelect: () => void changeStatus("active") },
+                        { key: "remove", label: "删除轨道", onSelect: () => void removeTrack(), danger: true },
+                      ]}
+                    />
                   </div>
+                  {track.summary && <p className="mt-2 td-text-body text-ink-2">{track.summary}</p>}
                   {track.refs.length > 0 && (
-                    <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                    <div className="mt-2 flex flex-wrap items-center gap-2">
                       {track.refs.map((refItem) => (
                         <RefChip key={`${refItem.kind}:${refItem.id}`} refItem={refItem} />
                       ))}
@@ -232,28 +228,6 @@ export default function TrackDetailPage() {
                   )}
                 </>
               )}
-              <div className="mt-3 flex flex-wrap items-center gap-2">
-                <span className="rounded-ctl bg-surface-elevated px-2.5 py-1 td-text-caption text-ink-2">
-                  状态 · {STATUS_LABEL[track.status] ?? track.status}
-                </span>
-                {track.status === "active" ? (
-                  <button
-                    type="button"
-                    onClick={() => void changeStatus("concluded")}
-                    className="rounded-ctl border border-border px-3 py-1.5 td-text-label text-ink-2 hover:border-accent hover:text-accent"
-                  >
-                    归档
-                  </button>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={() => void changeStatus("active")}
-                    className="rounded-ctl bg-accent px-3 py-1.5 td-text-label text-page"
-                  >
-                    重新推进
-                  </button>
-                )}
-              </div>
             </header>
             {actionError && (
               <StatusBanner tone="danger" role="alert" className="mb-3">

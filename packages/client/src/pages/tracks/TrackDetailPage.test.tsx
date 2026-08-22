@@ -143,6 +143,20 @@ async function clickButton(host: HTMLElement, text: string): Promise<void> {
   await flush();
 }
 
+async function clickMenuItem(host: HTMLElement, label: string): Promise<void> {
+  const trigger = await waitForElement<HTMLButtonElement>(host, "[aria-haspopup='menu']");
+  await act(async () => {
+    trigger.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+  });
+  await flush();
+  const item = [...host.querySelectorAll("[role='menuitem']")].find((el) => el.textContent?.trim() === label);
+  if (!item) throw new Error(`menu item ${label} not found`);
+  await act(async () => {
+    (item as HTMLElement).dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+  });
+  await flush();
+}
+
 async function submitComposer(host: HTMLElement): Promise<void> {
   const form = await waitForElement<HTMLFormElement>(host, "form");
   await act(async () => {
@@ -421,7 +435,7 @@ describe("TrackDetailPage", () => {
     const host = await renderDetail(track.id);
     await waitForText(host, "全马破三");
 
-    await clickButton(host, "编辑轨道");
+    await clickMenuItem(host, "编辑轨道");
     await typeInput(host, "轨道标题", "标签体系退役");
     await typeInput(host, "轨道摘要", "沉淀为 agent 轨道");
     await clickButton(host, "保存轨道");
@@ -482,7 +496,7 @@ describe("TrackDetailPage", () => {
     const host = await renderDetail(track.id);
     await waitForText(host, "base→build→peak");
 
-    await clickButton(host, "编辑轨道");
+    await clickMenuItem(host, "编辑轨道");
     await typeInput(host, "轨道摘要", "   ");
     await clickButton(host, "保存轨道");
 
@@ -515,12 +529,20 @@ describe("TrackDetailPage", () => {
   it("shows lifecycle as active or archived and archives through concluded", async () => {
     const track = await seedTrack();
     const host = await renderDetail(track.id);
-    await waitForText(host, "状态 · 推进中");
-    expect(buttonByText(host, "归档")).not.toBeNull();
+    await waitForText(host, "推进中");
+    const trigger = await waitForElement<HTMLButtonElement>(host, "[aria-haspopup='menu']");
+    await act(async () => {
+      trigger.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+    });
+    await flush();
+    expect([...host.querySelectorAll("[role='menuitem']")].some((el) => el.textContent?.trim() === "归档")).toBe(true);
     expect(buttonByText(host, "收束")).toBeNull();
     expect(buttonByText(host, "搁置")).toBeNull();
-
-    await clickButton(host, "归档");
+    const archiveItem = [...host.querySelectorAll("[role='menuitem']")].find((el) => el.textContent?.trim() === "归档");
+    await act(async () => {
+      (archiveItem as HTMLElement)?.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+    });
+    await flush();
 
     const updated = await getTrack(track.id);
     const steps = await listTrackSteps(track.id);
@@ -532,8 +554,8 @@ describe("TrackDetailPage", () => {
     await addTrack({ title: "已搁置轨道", status: "parked", now });
     const [track] = await listTracks("parked");
     const host = await renderDetail(track.id);
-    await waitForText(host, "状态 · 已归档");
-    await clickButton(host, "重新推进");
+    await waitForText(host, "已归档");
+    await clickMenuItem(host, "重新推进");
     const updated = await getTrack(track.id);
     expect(updated?.status).toBe("active");
   });
@@ -543,11 +565,16 @@ describe("TrackDetailPage", () => {
     const [track] = await listTracks("concluded");
     const host = await renderDetail(track.id);
     await waitForText(host, "已收束轨道");
-    await waitForText(host, "状态 · 已归档");
+    await waitForText(host, "已归档");
 
     expect(host.querySelector('textarea[aria-label="步骤内容"]')).toBeNull();
     expect(buttonByText(host, "闭合当前步")).toBeNull();
-    expect(buttonByText(host, "重新推进")).not.toBeNull();
+    const menuTrigger = await waitForElement<HTMLButtonElement>(host, "[aria-haspopup='menu']");
+    await act(async () => {
+      menuTrigger.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+    });
+    await flush();
+    expect([...host.querySelectorAll("[role='menuitem']")].some((el) => el.textContent?.trim() === "重新推进")).toBe(true);
   });
 
   it("删除轨道需确认并跳回 /tracks", async () => {
@@ -568,7 +595,7 @@ describe("TrackDetailPage", () => {
     const host = mounted.host;
     await waitForText(host, "全马破三");
 
-    await clickButton(host, "删除轨道");
+    await clickMenuItem(host, "删除轨道");
     expect(await getTrack(track.id)).toBeDefined();
     // 升档后点一下只是开弹层，真删要在弹层里再确认一次。
     expect(host.querySelector('[role="dialog"]')).toBeInstanceOf(HTMLElement);
@@ -585,7 +612,7 @@ describe("TrackDetailPage", () => {
     const host = await renderDetail(track.id);
     await waitForText(host, "全马破三");
 
-    await clickButton(host, "编辑轨道");
+    await clickMenuItem(host, "编辑轨道");
     await typeInput(host, "轨道标题", "   ");
     await clickButton(host, "保存轨道");
 
@@ -712,5 +739,28 @@ describe("TrackDetailPage", () => {
     if (checkbox) expect(checkbox.disabled).toBe(true);
     // 操作菜单在 readOnly 下不渲染
     expect(host.querySelector('[data-testid="milestone-menu"]')).toBeNull();
+  });
+});
+
+describe("详情页页眉", () => {
+  it("状态文案只出现一次", async () => {
+    const track = await addTrack({ title: "状态去重" });
+    const host = await renderDetail(track.id);
+    await waitForText(host, "状态去重");
+    const hits = host.textContent?.match(/推进中/g) ?? [];
+    expect(hits.length).toBe(1);
+  });
+
+  it("删除轨道不裸露在页面上，须先开 ⋯ 菜单", async () => {
+    const track = await addTrack({ title: "删除收纳" });
+    const host = await renderDetail(track.id);
+    await waitForText(host, "删除收纳");
+    expect(host.textContent).not.toContain("删除轨道");
+
+    const trigger = await waitForElement<HTMLButtonElement>(host, "[aria-haspopup='menu']");
+    await act(async () => {
+      trigger.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+    });
+    expect(host.textContent).toContain("删除轨道");
   });
 });
