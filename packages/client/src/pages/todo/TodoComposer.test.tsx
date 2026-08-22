@@ -132,3 +132,55 @@ describe("TodoComposer 底部操作栏", () => {
     await unmount(root);
   });
 });
+
+describe("TodoComposer — 指按即聚焦（fastFocus）", () => {
+  function firePointerDown(el: Element, pointerType: string): MouseEvent {
+    const ev = new MouseEvent("pointerdown", { bubbles: true, cancelable: true });
+    Object.defineProperty(ev, "pointerType", { value: pointerType });
+    el.dispatchEvent(ev);
+    return ev;
+  }
+
+  it("触摸 pointerdown 即聚焦输入框（不等 touchend 的默认聚焦链），并掐掉默认路径", async () => {
+    const { host, root } = await renderDom(<Harness />);
+    const input = host.querySelector('input[placeholder^="做什么"]') as HTMLInputElement;
+    expect(document.activeElement).not.toBe(input);
+
+    let ev: MouseEvent | null = null;
+    await act(async () => {
+      ev = firePointerDown(input, "touch");
+    });
+    expect(document.activeElement).toBe(input);
+    expect(ev!.defaultPrevented).toBe(true);
+
+    await unmount(root);
+  });
+
+  it("鼠标 pointerdown 不拦（桌面保留原生拖选/caret 语义）", async () => {
+    const { host, root } = await renderDom(<Harness />);
+    const input = host.querySelector('input[placeholder^="做什么"]') as HTMLInputElement;
+
+    let ev: MouseEvent | null = null;
+    await act(async () => {
+      ev = firePointerDown(input, "mouse");
+    });
+    expect(ev!.defaultPrevented).toBe(false);
+
+    await unmount(root);
+  });
+
+  it("已聚焦的输入框再按不拦（保留原生 caret 点位）", async () => {
+    const { host, root } = await renderDom(<Harness />);
+    const input = host.querySelector('input[placeholder^="做什么"]') as HTMLInputElement;
+    input.focus();
+
+    let ev: MouseEvent | null = null;
+    await act(async () => {
+      ev = firePointerDown(input, "touch");
+    });
+    expect(ev!.defaultPrevented).toBe(false);
+    expect(document.activeElement).toBe(input);
+
+    await unmount(root);
+  });
+});

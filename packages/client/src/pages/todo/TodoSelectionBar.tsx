@@ -1,4 +1,5 @@
 import { type CSSProperties, useRef, useState } from "react";
+import { focusOnPointerDown } from "../../lib/fastFocus.js";
 import { useShellResizeGlide } from "../../lib/keyboardMotion.js";
 import { Z } from "../../lib/zLayers.js";
 
@@ -95,6 +96,7 @@ export function TodoSelectionBar({
             aria-label="项目名"
             value={title}
             placeholder="新项目名"
+            onPointerDown={focusOnPointerDown}
             onChange={(event) => setTitle(event.target.value)}
             onKeyDown={(event) => {
               if (event.key !== "Enter") return;

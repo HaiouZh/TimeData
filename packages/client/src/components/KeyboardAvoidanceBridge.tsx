@@ -27,13 +27,13 @@ function readVisualBottom(keyboardHeightFallback: number): number {
   const vv = window.visualViewport;
   const innerHeight = window.innerHeight;
   if (!vv) return innerHeight - keyboardHeightFallback;
-  // iOS resize:none 下 WebKit 可能既不缩视口也不更新 visualViewport（useKeyboardHeight 同款口径）：
-  // vv 报得出遮挡就用它的底，报不出回落插件高度。iOS 的 innerHeight 不随键盘变，回落不会混到 stale 视口高。
-  if (Capacitor.getPlatform() === "ios") {
+  // native 两端统一 overlay 模型（iOS resize:none / Android 壳不消费 ime inset）：键盘盖在
+  // WebView 上，引擎可能既不缩视口也不更新 visualViewport——vv 报得出遮挡就用它的底，报不出
+  // 回落插件高度（innerHeight 不随键盘变，回落不会混到 stale 视口高）。
+  if (Capacitor.getPlatform() !== "web") {
     return readViewportBottomGap() > 0 ? vv.offsetTop + vv.height : innerHeight - keyboardHeightFallback;
   }
-  // Android / web：vv 是实时权威值。壳缩 WebView 的瞬间 resize 事件先到、React 提交在后，
-  // 若在此回落 state 里的键盘高，会把底线压低一个键盘高（多滚一截且只补不回滚），故恒信 vv。
+  // web：vv 是实时权威值，恒信它。
   return vv.offsetTop + vv.height;
 }
 

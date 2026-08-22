@@ -376,6 +376,116 @@ describe("useKeyboardHeight — 壳已经让过位时不再重复避让", () => 
     }
   });
 
+  it("android overlay 模型：壳不动、视口无任何变化，插件高度即遮挡量（willShow 动画起点即发）", async () => {
+    // 安卓壳不再消费 ime inset（键盘直接盖在 WebView 上，见 MainActivity.java）：innerHeight 与
+    // visualViewport 全程不变，实测恒 0；插件在 IME 动画开始那一刻带最终高度发 willShow——
+    // 高度必须全额生效，composer 的 transform 过渡与键盘动画同步滑动。
+    getPlatformMock.mockReturnValue("android");
+    setInnerHeight(800);
+    const viewport = createViewportMock({ height: 800, offsetTop: 0 });
+    (window as unknown as { visualViewport?: unknown }).visualViewport = viewport;
+    const callbacks = mockNativeKeyboard();
+
+    const { host, root } = await renderDom(createElement(Probe));
+
+    await act(async () => {
+      callbacks.keyboardWillShow?.({ keyboardHeight: 300 });
+    });
+    expect(readHeight(host)).toBe("300");
+
+    await act(async () => {
+      callbacks.keyboardWillHide?.();
+    });
+    expect(readHeight(host)).toBe("0");
+
+    await unmount(root);
+  });
+
+  // TG kbd_height 式预测：插件事件要过 JS 桥（几十 ms），等它到才抬 = 用户看见「后加载痕迹」。
+  // focusin 那一刻先按记忆值抬到位，事件到达后校正并回写缓存；预测值与实测通常相同，校正不可见。
+  it("focusin 预测抬升：有缓存用缓存值，willShow 到达后校正并回写", async () => {
+    getPlatformMock.mockReturnValue("android");
+    setInnerHeight(800);
+    // 缓存按横竖屏分键：钉死竖屏口径（jsdom 默认 innerWidth 1024 会被判成横屏）。
+    Object.defineProperty(window, "innerWidth", { value: 390, configurable: true });
+    localStorage.setItem("td.kbdHeightPx.portrait", "287");
+    const callbacks = mockNativeKeyboard();
+    const input = document.createElement("input");
+    document.body.appendChild(input);
+
+    const { host, root } = await renderDom(createElement(Probe));
+
+    await act(async () => {
+      input.dispatchEvent(new FocusEvent("focusin", { bubbles: true }));
+    });
+    // 事件未到，先按缓存预测。
+    expect(readHeight(host)).toBe("287");
+
+    await act(async () => {
+      callbacks.keyboardWillShow?.({ keyboardHeight: 301 });
+    });
+    expect(readHeight(host)).toBe("301");
+    // 实测值回写缓存，下次预测用它。
+    expect(localStorage.getItem("td.kbdHeightPx.portrait")).toBe("301");
+
+    input.remove();
+    localStorage.removeItem("td.kbdHeightPx.portrait");
+    await unmount(root);
+  });
+
+  it("focusin 预测：无缓存用保守默认值；focusout 到非可编辑目标即归零（预测的自愈出口）", async () => {
+    getPlatformMock.mockReturnValue("ios");
+    setInnerHeight(800);
+    const callbacks = mockNativeKeyboard();
+    void callbacks;
+    const input = document.createElement("input");
+    document.body.appendChild(input);
+
+    const { host, root } = await renderDom(createElement(Probe));
+
+    await act(async () => {
+      input.dispatchEvent(new FocusEvent("focusin", { bubbles: true }));
+    });
+    const predicted = Number(readHeight(host));
+    expect(predicted).toBeGreaterThan(0);
+
+    await act(async () => {
+      input.dispatchEvent(new FocusEvent("focusout", { bubbles: true, relatedTarget: null }));
+    });
+    expect(readHeight(host)).toBe("0");
+
+    input.remove();
+    await unmount(root);
+  });
+
+  it("focusin 预测不覆盖已有的真实高度（切输入框时键盘还在，别把 301 冲回预测值）", async () => {
+    getPlatformMock.mockReturnValue("android");
+    setInnerHeight(800);
+    localStorage.setItem("td.kbdHeightPx.portrait", "287");
+    const callbacks = mockNativeKeyboard();
+    const inputA = document.createElement("input");
+    const inputB = document.createElement("textarea");
+    document.body.append(inputA, inputB);
+
+    const { host, root } = await renderDom(createElement(Probe));
+
+    await act(async () => {
+      inputA.dispatchEvent(new FocusEvent("focusin", { bubbles: true }));
+      callbacks.keyboardWillShow?.({ keyboardHeight: 301 });
+    });
+    expect(readHeight(host)).toBe("301");
+
+    await act(async () => {
+      inputB.dispatchEvent(new FocusEvent("focusin", { bubbles: true }));
+    });
+    expect(readHeight(host)).toBe("301");
+
+    inputA.remove();
+    inputB.remove();
+    localStorage.removeItem("td.kbdHeightPx.portrait");
+    await unmount(root);
+  });
+
   it("visualViewport 报不出遮挡（gap 在阈值内）时，回落到插件高度", async () => {
     // iOS resize:none 下 WebKit 可能既不缩 webview 也不更新 visualViewport，
     // 此时实测为 0 而键盘确实在遮——必须由插件高度兜底，否则输入条被键盘盖住。

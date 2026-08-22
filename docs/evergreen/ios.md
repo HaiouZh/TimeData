@@ -65,7 +65,7 @@ last-reviewed: 2026-08-22
 
 **这条配置的作用范围比字面小，别当成两平台的护栏**：`resize` 只有 iOS 端读，Android 端插件根本不解析它（`KeyboardPlugin.java` 只读 `resizeOnFullScreen`，`setResizeMode` 是 `unimplemented()`）；iOS 端的 `none` 也只拦住插件自己 resize，拦不住 WebKit 因聚焦输入框而挪视口。故网页层的避让口径不建立在"壳一定不动"之上，而是实测布局视口底部被遮多少（同上第 12 条）。`check-android-config.mjs` 仍棘轮住这条配置，守的是 iOS 侧行为不被配置漂移改掉。
 
-**两平台键盘让位分工**：iOS = 壳不动（本节 `resize: none`）+ 网页层 JS 避让（fixed 输入条走 `useKeyboardHeight`，文档流表单 / 弹层走 `KeyboardAvoidanceBridge` 的全局 CSS 变量与显式差值滚动，见 invariants 第 12 条）；Android = 壳层让位（manifest `adjustResize` + `MainActivity` 消费 `ime()` inset，见 [android](android.md#android-s2)），壳缩掉 webview 后网页层实测归零、同一套 JS 自动歇业——两端共用同一份网页层代码，靠「实测还挡着多少」这一个口径分流。
+**两平台键盘让位统一 overlay 模型**：壳完全不动、键盘盖在 WebView 上，网页层 JS 按插件高度抬升（fixed 输入条走 `useKeyboardHeight` + transform 过渡，文档流表单 / 弹层走 `KeyboardAvoidanceBridge` 的全局 CSS 变量与显式差值滚动，见 invariants 第 12 条）。iOS 的「壳不动」= 本节 `resize: none`；Android 的「壳不动」= manifest `adjustResize` 禁 pan + `MainActivity` 不消费 `ime()` inset（壳层让位两条老路的淘汰理由见 [android](android.md#android-s2)）——两端共用同一份网页层代码与同一个口径。
 
 <a id="ios-s4"></a>
 

@@ -39,6 +39,7 @@ import { useEntryMutations } from "../hooks/useEntries.js";
 import { useKeyboardHeight, useKeyboardVisible } from "../hooks/useKeyboardHeight.ts";
 import { useLongPress } from "../hooks/useLongPress.ts";
 import { composeBottomInset } from "../lib/bottomInset.ts";
+import { focusOnPointerDown } from "../lib/fastFocus.ts";
 import { useShellResizeGlide } from "../lib/keyboardMotion.ts";
 import { hapticDestructive } from "../lib/haptics.ts";
 import { punchNow } from "../lib/punch.js";
@@ -1706,6 +1707,7 @@ export default function QuickNotesPage() {
                   onChange={(event) => setDraftText(event.target.value)}
                   onInput={(event) => setDraftText(event.currentTarget.value)}
                   onKeyDown={handleKeyDown}
+                  onPointerDown={focusOnPointerDown}
                   onFocus={() => setComposerFocused(true)}
                   onBlur={() => setComposerFocused(false)}
                   rows={1}

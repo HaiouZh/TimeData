@@ -16,6 +16,7 @@ covers:
   - packages/client/src/hooks/useKeyboardHeight.ts
   - packages/client/src/lib/bottomInset.ts
   - packages/client/src/lib/keyboardMotion.ts
+  - packages/client/src/lib/fastFocus.ts
   - packages/client/src/components/KeyboardAvoidanceBridge.tsx
   - packages/client/src/App.tsx
   - packages/client/src/contexts/BottomNavContext.tsx

@@ -16,13 +16,51 @@ function readInnerHeight(): number {
   return typeof window === "undefined" ? 0 : window.innerHeight;
 }
 
+// —— TG kbd_height 式键盘高度记忆（预测先行、实测校正）——
+// 插件事件要过 JS 桥（几十 ms），等它到才抬升 = 真机可见的「后加载痕迹」。focusin 那一刻先按
+// 记忆值抬到位；插件 willShow 带真实高度到达后校正并回写。横竖屏分开记（TG 同款），无记忆时
+// 用保守默认值（预测偏差由 transform 过渡在 200ms 内消化，通常不可见）。
+const KEYBOARD_HEIGHT_CACHE_KEY_PORTRAIT = "td.kbdHeightPx.portrait";
+const KEYBOARD_HEIGHT_CACHE_KEY_LANDSCAPE = "td.kbdHeightPx.landscape";
+const KEYBOARD_HEIGHT_FALLBACK_PX = 300;
+// 面板类高度污染护栏（TG 的 >50dp 同款）：小于它的实测值不进缓存。
+const KEYBOARD_HEIGHT_CACHE_MIN_PX = 80;
+
+function keyboardHeightCacheKey(): string {
+  return window.innerWidth > window.innerHeight
+    ? KEYBOARD_HEIGHT_CACHE_KEY_LANDSCAPE
+    : KEYBOARD_HEIGHT_CACHE_KEY_PORTRAIT;
+}
+
+function readPredictedKeyboardHeight(): number {
+  try {
+    const cached = Number(localStorage.getItem(keyboardHeightCacheKey()));
+    if (Number.isFinite(cached) && cached >= KEYBOARD_HEIGHT_CACHE_MIN_PX) return cached;
+  } catch {
+    // localStorage 不可用（隐私模式等）：退默认值。
+  }
+  return KEYBOARD_HEIGHT_FALLBACK_PX;
+}
+
+function writeMeasuredKeyboardHeight(heightPx: number): void {
+  if (heightPx < KEYBOARD_HEIGHT_CACHE_MIN_PX) return;
+  try {
+    localStorage.setItem(keyboardHeightCacheKey(), String(Math.round(heightPx)));
+  } catch {
+    // 写不进就算了，下次仍用默认值。
+  }
+}
+
 // 「键盘八成在场/在路上」的粗判据：可编辑元素持焦点。安卓壳逐帧让位（WindowInsetsAnimationCompat
 // 的 onProgress）后，IME 动画期间每帧一个 resize 且插件高度仍为 0——基线若在这些帧里被顺手校准到
 // 缩小中的值，动画结束插件报高时壳缩量会算成 0，JS 再叠一个键盘高 = 双倍避让。焦点期禁校准即可
 // 挡住整段动画窗口；键盘真正收起时 Bridge 会 blur 焦点，校准随之恢复。
+function isEditableTarget(target: EventTarget | null): boolean {
+  return target instanceof HTMLElement && target.matches("input, textarea, [contenteditable]");
+}
+
 function isEditableFocused(): boolean {
-  const active = document.activeElement;
-  return active instanceof HTMLElement && active.matches("input, textarea, [contenteditable]");
+  return isEditableTarget(document.activeElement);
 }
 
 /**
@@ -113,8 +151,6 @@ export function useKeyboardVisible(): boolean {
     // （收底栏 / composer 定位）首帧即到位。只挂 native：桌面浏览器聚焦输入框不许收底栏。
     // focusout 到非可编辑目标即离场：换输入框（去向仍可编辑）不闪落；这同时是插件事件缺席 /
     // 外接键盘（willShow 永不来）时把在场信号收回来的唯一自愈出口。
-    const isEditableTarget = (target: EventTarget | null): boolean =>
-      target instanceof HTMLElement && target.matches("input, textarea, [contenteditable]");
     const handleFocusIn = (event: FocusEvent) => {
       if (!isEditableTarget(event.target)) return;
       shrinkSuppressed = false;
@@ -222,8 +258,31 @@ export function useKeyboardHeight(): number {
     viewport?.addEventListener("resize", handleViewportChange);
     viewport?.addEventListener("scroll", handleViewportChange);
 
+    // 预测先行（TG kbd_height 式）：focusin 那一刻按记忆值抬到位，不等插件事件过桥；
+    // willShow 到达后用真实值校正并回写缓存。键盘已在场（切输入框）时不冲掉真实值。
+    // focusout 到非可编辑目标 = 镜像 willHide（含实测残影压制窗口），也是预测的自愈出口。
+    const handlePredictFocusIn = (event: FocusEvent) => {
+      if (!isEditableTarget(event.target)) return;
+      if (rawKeyboardPx > 0) return;
+      rawKeyboardPx = readPredictedKeyboardHeight();
+      suppressMeasureUntilMs = 0;
+      recompute();
+    };
+    const handlePredictFocusOut = (event: FocusEvent) => {
+      if (!isEditableTarget(event.target)) return;
+      if (isEditableTarget(event.relatedTarget)) return;
+      rawKeyboardPx = 0;
+      suppressMeasureUntilMs = Date.now() + HIDE_MEASURE_SUPPRESS_MS;
+      recompute();
+    };
+    const nativePlatform = Capacitor.getPlatform() !== "web";
+    if (nativePlatform) {
+      window.addEventListener("focusin", handlePredictFocusIn);
+      window.addEventListener("focusout", handlePredictFocusOut);
+    }
+
     let removeNative = () => {};
-    if (Capacitor.getPlatform() !== "web") {
+    if (nativePlatform) {
       try {
         // 插件缺席时 addListener **不是同步抛**而是返回 rejected promise（web 桥 UNIMPLEMENTED /
         // native 壳未注册同理），外层 try/catch 逮不住——必须在返回处同步 .catch 接住，否则是
@@ -231,6 +290,7 @@ export function useKeyboardHeight(): number {
         // 没 mock 插件的测试整文件炸掉，App.keptStack.test.tsx 曾如此）。接住后静默降级到实测路径。
         const showListener = Keyboard.addListener("keyboardWillShow", (info: KeyboardInfo) => {
           rawKeyboardPx = Number.isFinite(info.keyboardHeight) ? info.keyboardHeight : 0;
+          writeMeasuredKeyboardHeight(rawKeyboardPx);
           suppressMeasureUntilMs = 0;
           recompute();
         }).catch(() => null);
@@ -254,6 +314,10 @@ export function useKeyboardHeight(): number {
       window.removeEventListener("resize", handleViewportChange);
       viewport?.removeEventListener("resize", handleViewportChange);
       viewport?.removeEventListener("scroll", handleViewportChange);
+      if (nativePlatform) {
+        window.removeEventListener("focusin", handlePredictFocusIn);
+        window.removeEventListener("focusout", handlePredictFocusOut);
+      }
       removeNative();
     };
   }, []);

@@ -139,6 +139,22 @@ describe("KeyboardAvoidanceBridge - 显式差值滚动", () => {
     await unmount(root);
   });
 
+  it("android overlay（壳不动、vv 报不出遮挡）：底线回落插件高度，滚出差值（与 iOS 同款）", async () => {
+    // 安卓壳不再消费 ime inset：键盘盖在 WebView 上，vv 全程满高、报不出遮挡——
+    // 恒信 vv 会把底线算成整个视口高、差值恒负、聚焦滚动整层失明（日记等文档流表单被键盘盖住）。
+    platformMock.mockReturnValue("android");
+    setViewport(800, { offsetTop: 0, height: 800 });
+    const f = mountInputFixture({ rectBottom: 550 });
+    keyboardHeightMock.mockReturnValue(0);
+    const { root } = await renderDom(createElement(KeyboardAvoidanceBridge));
+
+    keyboardHeightMock.mockReturnValue(300);
+    await rerenderBridge(root);
+    expect(f.scroller.scrollTop).toBe(146);
+
+    await unmount(root);
+  });
+
   it("高度正->正（120->300，键盘动画中间值 / 拼音候选条加高）持续补足，已到位不回滚", async () => {
     setViewport(800);
     const f = mountInputFixture({ rectBottom: 550 });

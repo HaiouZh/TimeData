@@ -32,33 +32,30 @@ if (!/Keyboard:\s*\{\s*resize:\s*(?:KeyboardResize\.None|["']none["'])/.test(cap
   );
 }
 
-// Android 键盘让位走壳层标准路径：manifest 声明 adjustResize 禁掉系统 adjustPan（pan 对
-// visualViewport 无感，网页层实测失明后插件兜底会再抬一次 = 双倍避让，速记页输入条飞到顶上）。
-// edge-to-edge（MainActivity setDecorFitsSystemWindows(false)）下 adjustResize 本身不缩 view，
-// 还必须由 MainActivity 的 insets listener 消费 Type.ime() 才真正让位——两条缺一即回到双倍避让。
+// Android 键盘让位走 overlay 模型（与 iOS resize:none 同一套）：壳完全不动、键盘盖在 WebView 上，
+// 输入条由网页层按插件高度用 transform 抬起。manifest 仍必须声明 adjustResize——它禁掉系统
+// adjustPan（pan 会平移整个窗口，visualViewport 无感、网页层再抬一次 = 双倍避让，速记页输入条
+// 飞到顶上）；edge-to-edge（setDecorFitsSystemWindows(false)）下 adjustResize 本身不缩任何 view，
+// 正是 overlay 需要的「壳不动」。
 if (!/android:name="\.MainActivity"[\s\S]{0,400}?android:windowSoftInputMode="adjustResize"/.test(manifest)) {
   throw new Error(
     "[android-config] AndroidManifest.xml 的 MainActivity 必须声明 android:windowSoftInputMode=\"adjustResize\"——" +
-      "缺失时系统落 adjustPan，与网页层避让叠成双倍（键盘弹起输入条飞到屏幕顶）",
+      "缺失时系统落 adjustPan，窗口被平移后与网页层避让叠成双倍（键盘弹起输入条飞到屏幕顶）",
   );
 }
 const mainActivityText = readFileSync(
   new URL("../android/app/src/main/java/app/timedata/mobile/MainActivity.java", import.meta.url),
   "utf8",
 );
-if (!/WindowInsetsCompat\.Type\.ime\(\)/.test(mainActivityText)) {
+// overlay 模型的另一半：MainActivity **不许消费 ime inset**。两条被淘汰的老路都实测过：
+// 一次性 setPadding = 键盘动画期间露窗口背景白框（WebView 底边先缩、键盘后到）；逐帧 setPadding
+// 被 @capacitor/keyboard 在 decorView 上的 DISPATCH_MODE_STOP 动画回调拦停、根本不触发，
+// 且 WebView 内容异步重画、缩的每一帧底部都先空后画。回退任何一条都会把白框带回来。
+if (/WindowInsetsCompat\.Type\.ime\(\)/.test(mainActivityText)) {
   throw new Error(
-    "[android-config] MainActivity.java 的 insets 处理必须消费 WindowInsetsCompat.Type.ime()——" +
-      "edge-to-edge 下 adjustResize 不自动缩 view，键盘让位全靠这里的 ime inset padding",
-  );
-}
-// IME 让位必须逐帧驱动（WindowInsetsAnimationCompat.Callback 的 onProgress），不许退回「静态
-// insets 一次到位」：静态回调在键盘动画开始时就带终态 inset，一次性缩掉整个键盘高，WebView 底边
-// 与还在上升的键盘之间露出一条窗口背景（真机「先拉起一块白框、输入条等键盘就位才出现」）。
-if (!/setWindowInsetsAnimationCallback/.test(mainActivityText) || !/onProgress/.test(mainActivityText)) {
-  throw new Error(
-    "[android-config] MainActivity.java 必须用 WindowInsetsAnimationCompat.Callback（含 onProgress）逐帧驱动 ime inset——" +
-      "静态 insets 一次到位会在键盘动画期间露出窗口背景白框，见 docs/evergreen/android.md §键盘让位",
+    "[android-config] MainActivity.java 不许消费 WindowInsetsCompat.Type.ime()——键盘让位走 overlay 模型" +
+      "（壳不动 + 网页层 transform 抬升），壳侧任何 ime padding 都会带回「键盘动画期白框」，" +
+      "见 docs/evergreen/android.md §键盘让位",
   );
 }
 

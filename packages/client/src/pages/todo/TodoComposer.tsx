@@ -1,6 +1,7 @@
 import { MagnifyingGlass, Tag, X } from "@phosphor-icons/react";
 import { type CSSProperties, type FormEvent, type MutableRefObject, type Ref, useCallback, useRef, useState } from "react";
 import { Icon } from "../../components/Icon.js";
+import { focusOnPointerDown } from "../../lib/fastFocus.js";
 import { useShellResizeGlide } from "../../lib/keyboardMotion.js";
 import { useTodoDefaultDestination } from "../../lib/settings/todoDefaultDestinationSetting.js";
 import { addTask } from "../../lib/tasks.js";
@@ -150,6 +151,7 @@ export function TodoComposer({
                 <input
                   value={composerText}
                   onChange={(event) => onComposerTextChange(event.currentTarget.value)}
+                  onPointerDown={focusOnPointerDown}
                   placeholder="做什么？怎样算做完…"
                   className="min-h-11 w-full rounded-ctl border border-border bg-surface px-3 pr-9 text-ink outline-none focus:border-accent"
                 />
