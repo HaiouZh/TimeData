@@ -117,14 +117,15 @@ describe("TodoComposer 底部操作栏", () => {
     await unmount(root);
   });
 
-  it("底栏 tab 收起时 composer 一起滑出屏幕（bottom 归零 + translateY 100%）", async () => {
+  it("底栏 tab 收起时 composer 一起滑出屏幕（抬升归零 + translateY 100%）", async () => {
     const { host, root } = await render();
     const form = host.querySelector("form") as HTMLFormElement;
-    expect(form.style.bottom).toBe(`calc(${BOTTOM_NAV_HEIGHT_PX}px + var(--safe-bottom))`);
-    expect(form.style.transform).toBe("translateY(0)");
+    // 载体迁移（键盘运动波）：bottom 只装安全区恒定不动，抬升走 transform。
+    expect(form.style.bottom).toBe("calc(0px + var(--safe-bottom))");
+    expect(form.style.transform).toBe(`translateY(-${BOTTOM_NAV_HEIGHT_PX}px)`);
     expect(form.style.zIndex).toBe("40");
     await clickAndFlush(host.querySelector('[data-testid="hide-nav"]'));
-    // 下滑收起底栏时，输入框落到贴底再整体下移自身高度 → 完全移出视口，让长列表阅读区最大化
+    // 下滑收起底栏时，整体下移自身高度 → 完全移出视口，让长列表阅读区最大化
     expect(form.style.bottom).toBe("calc(0px + var(--safe-bottom))");
     expect(form.style.transform).toBe("translateY(100%)");
     expect(form.style.zIndex).toBe("40");

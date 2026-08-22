@@ -15,6 +15,7 @@ covers:
   - packages/client/src/lib/contentTint.ts
   - packages/client/src/hooks/useKeyboardHeight.ts
   - packages/client/src/lib/bottomInset.ts
+  - packages/client/src/lib/keyboardMotion.ts
   - packages/client/src/components/KeyboardAvoidanceBridge.tsx
   - packages/client/src/App.tsx
   - packages/client/src/contexts/BottomNavContext.tsx
@@ -23,7 +24,7 @@ covers:
 contracts:
   - packages/client/src/index.css
   - packages/client/src/lib/navigation/navRegistry.ts
-last-reviewed: 2026-08-16
+last-reviewed: 2026-08-22
 ---
 
 # 设计语言

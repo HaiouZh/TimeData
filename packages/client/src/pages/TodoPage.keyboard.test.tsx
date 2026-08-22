@@ -160,26 +160,31 @@ describe("TodoPage 键盘弹起时收起底部导航栏", () => {
   });
 });
 
-describe("TodoPage 底部输入条键盘避让（fix round 1）", () => {
-  it("键盘弹起时，composer 输入条 bottom 稳贴键盘上沿——nav 让位，不与 navOffsetPx 叠加", async () => {
+describe("TodoPage 底部输入条键盘避让（fix round 1；抬升载体自 bottom 迁至 transform）", () => {
+  // 载体迁移（键盘运动波）：bottom 只装安全区、恒为 calc(0px + var(--safe-bottom))，动态抬升
+  // （navOffset / 键盘高）走 transform: translateY(-抬升量)——吃 transition-transform 的过渡，
+  // 位移变滑动（合成器线程），等效总位移与迁移前逐值相等。
+  it("键盘弹起时，composer 抬升 = 键盘高稳贴键盘上沿——nav 让位，不与 navOffsetPx 叠加", async () => {
     mockKeyboardShown(300);
     const { host, root } = await renderPage();
 
     const form = composerForm(host);
     expect(form).not.toBeNull();
     // navOffsetPx 被键盘高守卫归零，fixedBarBottomPx = 0 + 0 + 300 = 300。
-    expect(form?.style.bottom).toBe("calc(300px + var(--safe-bottom))");
+    expect(form?.style.transform).toBe("translateY(-300px)");
+    expect(form?.style.bottom).toBe("calc(0px + var(--safe-bottom))");
 
     await unmount(root);
   });
 
-  it("键盘收起（keyboardHeightPx=0）时，输入条 bottom 与本轮前完全一致（= navOffsetPx）", async () => {
+  it("键盘收起（keyboardHeightPx=0）时，输入条抬升与本轮前完全一致（= navOffsetPx）", async () => {
     keyboardHeightMock.mockReturnValue(0);
     const { host, root } = await renderPage();
 
     const form = composerForm(host);
     expect(form).not.toBeNull();
-    expect(form?.style.bottom).toBe(`calc(${BOTTOM_NAV_HEIGHT_PX}px + var(--safe-bottom))`);
+    expect(form?.style.transform).toBe(`translateY(-${BOTTOM_NAV_HEIGHT_PX}px)`);
+    expect(form?.style.bottom).toBe("calc(0px + var(--safe-bottom))");
 
     await unmount(root);
   });
@@ -195,7 +200,8 @@ describe("TodoPage 底部输入条键盘避让（fix round 1）", () => {
 
     const form = composerForm(host);
     expect(form).not.toBeNull();
-    expect(form?.style.transform).toBe("translateY(0)");
+    // 载体迁移后正常态是抬升值而非 translateY(0)：钉「不是 100% 自藏」+「抬升在位」。
+    expect(form?.style.transform).toBe("translateY(-300px)");
 
     await unmount(root);
   });
@@ -214,9 +220,9 @@ describe("TodoPage 底部输入条键盘避让（fix round 1）", () => {
 
     const form = composerForm(host);
     expect(form).not.toBeNull();
-    // composer 不被 navHidden 联动藏掉。
-    expect(form?.style.transform).toBe("translateY(0)");
-    // 壳已让位：JS 不叠加避让（height=0、nav 已收 → navOffset 0），bottom 恒 0 贴 webview 底。
+    // composer 不被 navHidden 联动藏掉；壳已让位：JS 不叠加抬升（height=0、nav 已收 → navOffset 0），
+    // 抬升 0、bottom 恒贴 webview 底。
+    expect(form?.style.transform).toBe("translateY(0px)");
     expect(form?.style.bottom).toBe("calc(0px + var(--safe-bottom))");
 
     await unmount(root);
@@ -249,9 +255,9 @@ describe("TodoPage 底部输入条键盘避让（fix round 1）", () => {
 
     const form = composerForm(host);
     expect(form).not.toBeNull();
-    // 若 fixedBarBottomPx 误把 composerHeightPx（这里量出 148）当 barHeightPx 传，结果会是
-    // calc(448px + ...)；正确口径下 composer 自身不叠自身高度，仍是 calc(300px + ...)。
-    expect(form?.style.bottom).toBe("calc(300px + var(--safe-bottom))");
+    // 若 fixedBarBottomPx 误把 composerHeightPx（这里量出 148）当 barHeightPx 传，抬升会是
+    // translateY(-448px)；正确口径下 composer 自身不叠自身高度，仍是 -300px。
+    expect(form?.style.transform).toBe("translateY(-300px)");
 
     await unmount(root);
   });
@@ -269,7 +275,8 @@ describe("TodoPage 多选态操作栏键盘避让", () => {
     expect(bar).not.toBeNull();
     // 多选态项目名输入框会弹键盘（B2 修正的那条注释）：fixedBarBottomPx 走同一合成，
     // navOffsetPx 被键盘高守卫归零，= 0（barHeightPx）+ 0（navOffsetPx）+ 300（键盘高）。
-    expect((bar as HTMLElement).style.bottom).toBe("calc(300px + var(--safe-bottom))");
+    expect((bar as HTMLElement).style.transform).toBe("translateY(-300px)");
+    expect((bar as HTMLElement).style.bottom).toBe("calc(0px + var(--safe-bottom))");
 
     await unmount(root);
   });
@@ -282,7 +289,8 @@ describe("TodoPage 多选态操作栏键盘避让", () => {
     await enterSelection(host);
     const bar = selectionBar(host);
     expect(bar).not.toBeNull();
-    expect((bar as HTMLElement).style.bottom).toBe(`calc(${BOTTOM_NAV_HEIGHT_PX}px + var(--safe-bottom))`);
+    expect((bar as HTMLElement).style.transform).toBe(`translateY(-${BOTTOM_NAV_HEIGHT_PX}px)`);
+    expect((bar as HTMLElement).style.bottom).toBe("calc(0px + var(--safe-bottom))");
 
     await unmount(root);
   });

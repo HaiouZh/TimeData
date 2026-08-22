@@ -55,7 +55,9 @@ last-reviewed: 2026-08-22
 
     同一底座还管**键盘落下时释放输入焦点**：`useKeyboardVisible()` 由真转假的那一跳，`document.activeElement` 仍是 `input / textarea / [contenteditable]` 时 `blur()` 它。iOS 上按输入法自带的收起键只收键盘、不摘网页焦点，输入框仍是 `activeElement`、WKWebView 的内容视图仍是 first responder——此后触摸屏上任何元素，WebKit 都把键盘重新弹起（真机表现为「点什么都先弹一次输入法」）。切 tab 时这一弹紧接着被保留层的 `inert` 打断（规范要求 blur 掉 inert 子树内的焦点元素），键盘随即又落下，叠上目标页 `React.lazy` 的 chunk 加载延迟，表现为「输入法唤起收起走一遍才换页」。判据是**那一跳**而非「不在场即 blur」：桌面浏览器该信号恒假，后者会在 Bridge 挂载时把光标从用户正敲的输入框里踢出去（该边沿守卫的真闸是「挂载时不碰已聚焦输入框」那条用例——写成「挂载后聚焦再重渲染」时依赖没变、effect 不重跑，守卫拆了也不红）。焦点停在按钮上时不动它，免得白丢键盘用户的焦点环。同一跳上还有 **iOS 收起归零**：resize:none 下 WebKit 为露出聚焦框会平移/滚动窗口，收起后可能残留 `window.scrollY`，`h-dvh` 布局整体被顶上去（真机「收起键盘后底栏整体上移」）——在场转不在场时若 `scrollY !== 0` 即 `window.scrollTo(0, 0)`。只 iOS 生效；窗口滚动在本应用没有合法来源（滚动全在内层容器），归零无副作用。
 
-    闸：`indexCssTokens.test.ts`（CSS 规则）、`KeyboardAvoidanceBridge.test.tsx`（变量写入、聚焦滚动、焦点释放）、`App.keyboardInset.test.tsx`（AppShell 接线）。
+    **键盘运动（位移全走动画，Telegram 式）**：底部固定条（Todo composer / Todo 多选栏 / 速记 composer）的载体分工——`bottom` 只装安全区、恒定不动，动态抬升（navOffset / 键盘高的合成值）走 `transform: translateY(-抬升量)` 吃 `transition-transform duration-200 ease-out` 的过渡（合成器线程、无重排；等效终点位置与迁移前逐值相等），iOS 键盘弹起/收起的位移因此是滑动而非瞬跳。安卓壳缩/恢复 webview 是单帧跳变、transform 过渡管不到，由 `lib/keyboardMotion.ts` 的 `useShellResizeGlide` 抹平：`innerHeight` 每变化一个键盘量级（≥80px，与实测阈值同源同值）就给固定条叠一段「从跳变量滑回 0」的**附加**动画（`composite: "add"`，不打断基础 transform 的抬升/滚动隐藏；即 Telegram Android 用 ValueAnimator 平移 parent 的 Web 等价物）——首帧视觉位置不变、随后 200ms 滑到新位置。web 平台不补偿（桌面拖窗不该看到内容滑动），`el.animate` 缺席（旧 WebView / jsdom）时静默退回瞬跳。
+
+    闸：`indexCssTokens.test.ts`（CSS 规则）、`KeyboardAvoidanceBridge.test.tsx`（变量写入、聚焦滚动、焦点释放）、`App.keyboardInset.test.tsx`（AppShell 接线）、`keyboardMotion.test.tsx`（跳变补偿）、`TodoPage.keyboard.test.tsx` / `QuickNotesPage.keyboard.test.tsx` / `TodoComposer.test.tsx`（载体分工：bottom 恒装安全区、抬升在 transform）。
 
     回归护栏：web / PWA 没有插件桥接、插件高度恒 0，结果等于纯实测值，与引入实测口径前的 web 路径逐值相等；`keyboardHeightPx = 0`（桌面浏览器 / 键盘收起）时合成结果与合成前逐值相等，见 `bottomInset.test.ts`。安全区值不参与本次合成，仍按上一条经 CSS 变量单独叠加。
 

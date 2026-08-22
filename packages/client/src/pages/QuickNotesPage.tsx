@@ -39,6 +39,7 @@ import { useEntryMutations } from "../hooks/useEntries.js";
 import { useKeyboardHeight, useKeyboardVisible } from "../hooks/useKeyboardHeight.ts";
 import { useLongPress } from "../hooks/useLongPress.ts";
 import { composeBottomInset } from "../lib/bottomInset.ts";
+import { useShellResizeGlide } from "../lib/keyboardMotion.ts";
 import { hapticDestructive } from "../lib/haptics.ts";
 import { punchNow } from "../lib/punch.js";
 import { formatLocalClock, groupQuickNotesForDisplay, quickNoteAriaLabel } from "../lib/quickNoteDisplay.ts";
@@ -158,6 +159,8 @@ export default function QuickNotesPage() {
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const composerRef = useRef<HTMLFormElement>(null);
+  // 壳缩/恢复 webview 的单帧跳变抹成滑动（安卓；见 keyboardMotion.ts），复用量高用的同一个 ref。
+  useShellResizeGlide(composerRef);
   const scrollRef = useRef<HTMLDivElement>(null);
   const composeDraftRef = useRef("");
   // 进入编辑时快照被编辑那条的原文，用来判「用户改过没」。
@@ -1627,17 +1630,20 @@ export default function QuickNotesPage() {
         <form
           ref={composerRef}
           aria-label="速记输入区"
-          className="fixed left-0 right-0 border-t border-border bg-page/95 p-2 shadow-elev2 backdrop-blur transition-[bottom] duration-200 [bottom:var(--bottom-offset)] sm:p-3"
+          className="fixed left-0 right-0 border-t border-border bg-page/95 p-2 shadow-elev2 backdrop-blur transition-transform duration-200 ease-out will-change-transform [bottom:var(--bottom-offset)] sm:p-3"
+          // 载体分工（键盘运动波，与 TodoComposer 同款）：bottom 只装安全区、恒定不动，动态抬升
+          //（navOffset / 键盘高）走 transform: translateY(-抬升量) 吃 transition-transform 的过渡
+          //（合成器线程；此前是 transition-[bottom]，主线程逐帧重排）。等效终点位置逐值不变。
           // 兜底类 [bottom:var(--bottom-offset)]：env() 未定义环境（Firefox 桌面 / 旧 WebView）里 calc
-          // 整条失效、内联 bottom 被丢弃，由它还原批次前的纯数值位置（composerBarBottomPx，原口径
-          // navOffsetPx，现加键盘高——这是用户敲字的输入条本身，键盘弹起须浮到其上方，见文件头注释）。
+          // 整条失效、内联 bottom 被丢弃，由它落回 0px；抬升在 transform 上不受影响。
           // zIndex 显式给 backdrop(40)、与待办页两条固定条同层：列表里的日期气泡是 z-10、顶栏是 z-20，
           // 同一层叠上下文里带 z-index 的永远压过 z-index:auto 的，与 DOM 顺序无关——不写就会被气泡
           // 盖住（闸在 QuickNotesPage.layering.test.tsx）。低于详情抽屉 / 长按菜单 / 置顶面板（modal=50）。
           style={
             {
-              "--bottom-offset": `${composerBarBottomPx}px`,
-              bottom: `calc(${composerBarBottomPx}px + var(--safe-bottom))`,
+              "--bottom-offset": "0px",
+              bottom: "calc(0px + var(--safe-bottom))",
+              transform: `translateY(${-composerBarBottomPx}px)`,
               zIndex: Z.backdrop,
             } as CSSProperties
           }

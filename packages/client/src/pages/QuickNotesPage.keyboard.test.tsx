@@ -75,7 +75,9 @@ describe("QuickNotesPage 底部避让接线（键盘高并入合成）", () => {
     expect(form).not.toBeNull();
     // composerBarBottomPx：键盘高>0 时 inputInteractionActive 恒真，navHidden effect 结算后
     // navOffsetPx 归零，故 = 0（barHeightPx）+ 0（navOffsetPx）+ 300（键盘高）= 300。
-    expect(form?.style.bottom).toBe("calc(300px + var(--safe-bottom))");
+    // 载体迁移（键盘运动波）：抬升走 transform 吃过渡，bottom 只装安全区。
+    expect(form?.style.transform).toBe("translateY(-300px)");
+    expect(form?.style.bottom).toBe("calc(0px + var(--safe-bottom))");
 
     await unmount(root);
   });
@@ -89,7 +91,8 @@ describe("QuickNotesPage 底部避让接线（键盘高并入合成）", () => {
     const form = composerForm(host);
     // navHidden 未被触发，保持初始 false；窄屏（jsdom 默认 matchMedia 判宽屏为假）下
     // navOffsetPx = BOTTOM_NAV_HEIGHT_PX，composerBarBottomPx = 0 + BOTTOM_NAV_HEIGHT_PX + 0。
-    expect(form?.style.bottom).toBe(`calc(${BOTTOM_NAV_HEIGHT_PX}px + var(--safe-bottom))`);
+    expect(form?.style.transform).toBe(`translateY(-${BOTTOM_NAV_HEIGHT_PX}px)`);
+    expect(form?.style.bottom).toBe("calc(0px + var(--safe-bottom))");
 
     await unmount(root);
   });
@@ -104,7 +107,8 @@ describe("QuickNotesPage 底部避让接线（键盘高并入合成）", () => {
 
     const form = composerForm(host);
     expect(form).not.toBeNull();
-    // inputInteractionActive 恒真 → navHidden 结算 → navOffsetPx 0；height=0 无 JS 避让叠加。
+    // inputInteractionActive 恒真 → navHidden 结算 → navOffsetPx 0；height=0 无 JS 抬升叠加。
+    expect(form?.style.transform).toBe("translateY(0px)");
     expect(form?.style.bottom).toBe("calc(0px + var(--safe-bottom))");
 
     await unmount(root);
