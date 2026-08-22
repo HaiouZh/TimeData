@@ -32,7 +32,8 @@ const GROUP_BADGE_TONES: Record<DispatchGroupKey, TrackBadgeTone> = {
   "in-progress": "default",
 };
 
-// 调度台：一线一卡，按 等我接/agent在跑/等外部/推进中 分组；顶部统计带答「此刻几条在并发」。
+// 调度台：一线一卡，按 等我接/agent在跑/等外部/推进中 分组；「此刻几条在并发」由各组标题的计数答
+// （顶部统计带 2026-08-23 删除——它与分组计数重复，唯一多出的「停滞 N」由卡片行的「N 天没动静」承接）。
 // 同时服务窄屏路由页与宽屏壳左列（TracksShell）。
 export function TracksBoard() {
   const tracks = useLiveQuery(() => listTracks(), [], []);
