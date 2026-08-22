@@ -92,7 +92,6 @@ describe("TrackListItem", () => {
       step({ id: "b", seq: 1, content: "初具雏形，等确认", source: "user", sourceLabel: "codex" }),
     ]);
     expect(host.textContent).toContain("轨道派活");
-    expect(host.textContent).toContain("把轨道变成接力线");
     expect(host.querySelector('[data-testid="track-current-frame"]')?.textContent).toContain("初具雏形");
     expect(host.textContent).not.toContain("旧步骤");
     expect(host.textContent).not.toContain("当前:第");
@@ -161,7 +160,7 @@ describe("TrackListItem", () => {
     expect(host.querySelector('[role="alert"]')?.textContent).toContain("写不进去");
   });
 
-  it("compact=true 时收成单行：无来源 chip、无 summary、无信号徽章、无写一步按钮", async () => {
+  it("compact=true 时收成单行：无来源 chip、无信号徽章、无写一步按钮", async () => {
     const host = await mount(track(), [step({ id: "a", seq: 0, content: "归档前最后一步", source: "user" })], {
       compact: true,
       signal: { tag: "复盘", stepId: "a" },
@@ -171,8 +170,32 @@ describe("TrackListItem", () => {
     expect(host.textContent).toContain("轨道派活");
     expect(host.querySelector('[data-testid="track-current-frame"]')?.textContent).toContain("归档前最后一步");
     expect(host.querySelector('[data-source]')).toBeNull();
-    expect(host.textContent).not.toContain("把轨道变成接力线");
     expect(host.querySelector('[data-testid="track-signal-badge"]')).toBeNull();
     expect(buttonByText(host, "写一步")).toBeNull();
+  });
+
+  it("卡片不再渲染轨道摘要（那是详情页的信息）", async () => {
+    const host = await mount(track({ summary: "这段摘要只该出现在详情页" }), [
+      step({ id: "a", seq: 0, content: "最近一步" }),
+    ]);
+    expect(host.textContent).not.toContain("这段摘要只该出现在详情页");
+    // 同时确认卡片本身渲染出来了，否则空 DOM 也让上面那句成立（假绿）。
+    expect(host.textContent).toContain("轨道派活");
+  });
+
+  it("写一步按钮宽屏 hover 才浮出，但键盘可达且聚焦时可见", async () => {
+    const host = await mount(track(), [step({ id: "a", seq: 0, content: "最近一步" })], {
+      onSubmitStep: () => undefined,
+    });
+    const btn = buttonByText(host, "写一步");
+    expect(btn).not.toBeNull();
+    // 隐身靠 opacity 不靠 hidden/display:none——后两者会让键盘 tab 不到它。
+    expect((btn as HTMLButtonElement).hidden).toBe(false);
+    const cls = (btn as HTMLButtonElement).className;
+    expect(cls).toContain("md:opacity-0");
+    expect(cls).toContain("md:group-hover:opacity-100");
+    // 这三个变体都必须带 md: 前缀，理由见 TASK 第 3 步 3e 的说明。
+    expect(cls).toContain("md:focus-visible:opacity-100");
+    expect(cls).toContain("md:group-focus-within:opacity-100");
   });
 });

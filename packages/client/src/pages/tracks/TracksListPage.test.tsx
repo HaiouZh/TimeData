@@ -192,7 +192,6 @@ describe("TracksListPage", () => {
     await waitForText(host, "全马破三");
     await waitForText(host, "base 期");
     expect(host.textContent).toContain("#待我处理");
-    expect(host.textContent).toContain("base 到 build");
     expect(host.querySelector('[data-testid="track-current-frame"]')?.textContent).toContain("base 期");
     expect(host.querySelector(`a[href="/tracks/${track.id}"]`)).not.toBeNull();
   });

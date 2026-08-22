@@ -76,29 +76,32 @@ export function TrackListItem({
 
   return (
     <article
-      className={`rounded-card border bg-surface transition hover:bg-surface-hover ${
+      className={`group rounded-card border bg-surface transition hover:bg-surface-hover ${
         selected ? "border-accent" : "border-border"
       }`}
     >
-      <Link to={`/tracks/${track.id}`} className="block px-3 py-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface">
-        <span className="flex items-start gap-3">
+      <Link to={`/tracks/${track.id}`} className="block px-4 py-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface">
+        <span className="flex items-start gap-4">
           <span
             aria-hidden="true"
-            className={`mt-1.5 content-dot rounded-pill ${STATUS_DOT[track.status] ?? "bg-ink-3"}`}
+            className={`mt-2 content-dot rounded-pill ${STATUS_DOT[track.status] ?? "bg-ink-3"}`}
           />
           <span className="min-w-0 flex-1">
             <span className="flex min-w-0 flex-wrap items-center gap-2">
-              <span className="min-w-0 flex-1 truncate td-text-body text-ink">{track.title}</span>
+              <span className="min-w-0 flex-1 truncate td-text-body font-medium text-ink">{track.title}</span>
               {signal && (
                 <span
                   data-testid="track-signal-badge"
-                  className={`inline-flex shrink-0 items-center rounded-pill border px-2 py-0.5 td-text-caption ${BADGE_TONE_CLASSES[badgeTone]}`}
+                  className={`inline-flex shrink-0 items-center rounded-pill border px-2 py-1 td-text-caption ${BADGE_TONE_CLASSES[badgeTone]}`}
                 >
                   #{signal.tag}
                 </span>
               )}
               {activityAt !== null || stalledDays !== null ? (
-                <span data-testid="track-last-activity" className="shrink-0 td-text-caption text-ink-3">
+                <span
+                  data-testid="track-last-activity"
+                  className={`shrink-0 td-text-caption ${stalledDays !== null ? "text-warn" : "text-ink-3"}`}
+                >
                   {stalledDays !== null
                     ? `${stalledDays} 天没动静`
                     : activityAt !== null
@@ -108,36 +111,37 @@ export function TrackListItem({
               ) : null}
             </span>
             {latest ? (
-              <span className="mt-1.5 flex items-start gap-1.5">
+              <span className="mt-2 flex items-start gap-2">
                 {latest.source !== "user" && (
                   <span
                     data-source={latest.source}
-                    className="shrink-0 rounded-pill bg-surface-elevated px-1.5 py-0.5 td-text-caption text-ink-3"
+                    className="shrink-0 rounded-pill bg-surface-elevated px-2 py-1 td-text-caption text-ink-3"
                   >
                     {stepSourceText(latest)}
                   </span>
                 )}
-                <span data-testid="track-current-frame" className="line-clamp-3 min-w-0 td-text-caption text-ink-2">
+                <span data-testid="track-current-frame" className="line-clamp-2 min-w-0 td-text-caption text-ink-2">
                   {latest.content || "无内容步骤"}
                 </span>
               </span>
             ) : (
-              <span data-testid="track-current-frame" className="mt-1.5 block td-text-caption text-ink-3">
+              <span data-testid="track-current-frame" className="mt-2 block td-text-caption text-ink-3">
                 尚无步骤
               </span>
             )}
-            {track.summary && <span className="mt-1 block truncate td-text-caption text-ink-3">{track.summary}</span>}
           </span>
         </span>
       </Link>
       {track.status === "active" && onSubmitStep && (
         <div>
-          <div className="flex justify-end px-3 pb-2 pt-0">
+          <div className="flex justify-end px-4 pb-2">
             <button
               type="button"
               aria-label="写一步"
               onClick={() => setExpanded((current) => !current)}
-              className="td-text-label text-ink-3 transition hover:text-accent"
+              className={`td-text-label text-ink-3 transition hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100 md:focus-visible:opacity-100 ${
+                expanded ? "md:opacity-100" : ""
+              }`}
             >
               写一步
             </button>
