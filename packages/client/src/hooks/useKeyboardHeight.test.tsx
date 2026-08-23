@@ -277,6 +277,41 @@ describe("useKeyboardHeight — 壳已经让过位时不再重复避让", () => 
     await unmount(root);
   });
 
+  it("引擎 reveal-pan（vv.offsetTop > 0）按几何扣除：抬升 = 插件高度 - 平移量", async () => {
+    // interactive-widget=overlays-content（index.html）已叫引擎撒手；个别不认该参数的 WebView
+    // 仍会为露出聚焦框平移视觉视口——fixed 元素随之整体视觉上移一个平移量，JS 再抬全额
+    // 就叠成「输入框飞到屏幕中间、tab 栏也上移」（2026-08-23 真机）。offsetTop 是锚点几何
+    // 校正、不是第二个键盘尺寸信源；平移归零（引擎收手）时全额恢复。
+    getPlatformMock.mockReturnValue("android");
+    setInnerHeight(800);
+    const viewport = createViewportMock({ height: 800, offsetTop: 0 });
+    (window as unknown as { visualViewport?: unknown }).visualViewport = viewport;
+    const callbacks = mockNativeKeyboard();
+
+    const { host, root } = await renderDom(createElement(Probe));
+
+    await act(async () => {
+      callbacks.keyboardWillShow?.({ keyboardHeight: 300 });
+    });
+    expect(readHeight(host)).toBe("300");
+
+    // 引擎平移视口 280px 露出聚焦框：fixed 元素已被视觉抬走 280，JS 只需再补 20。
+    viewport.offsetTop = 280;
+    await act(async () => {
+      viewport.fire("scroll");
+    });
+    expect(readHeight(host)).toBe("20");
+
+    // 引擎收手（平移归零）：恢复全额。
+    viewport.offsetTop = 0;
+    await act(async () => {
+      viewport.fire("scroll");
+    });
+    expect(readHeight(host)).toBe("300");
+
+    await unmount(root);
+  });
+
   it("native 不拿 visualViewport 实测与插件高度互相校正（TG 单源）", async () => {
     // 旧版「实测优先于插件」让三个信号源互相校正，正是「飞半空 / 收起悬空」竞态的温床
     //（对抗验证报告 .dispatch/20260822-kbd-statemachine）。新口径：native 只信插件事件，

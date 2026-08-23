@@ -179,7 +179,12 @@ export function useKeyboardHeight(): number {
       // 键盘在场：插件高度减去壳已让掉的量。壳不动（overlay，本仓配置）时 shrink 恒 0、
       // 全额生效；壳缩了的设备逐次 resize 跟随，不留跨次记忆（记忆值曾是「飞半空」的温床）。
       const shellShrinkPx = Math.max(0, baselineInnerHeight - readInnerHeight());
-      setHeight(Math.max(0, rawKeyboardPx - shellShrinkPx));
+      // 引擎 reveal-pan 几何校正（不是第二个键盘尺寸信源）：index.html 的
+      // interactive-widget=overlays-content 已叫 Chromium 不平移视口；不认该参数的 WebView 仍会
+      // 为露出聚焦框把视觉视口上移 offsetTop——fixed 元素随之被视觉抬走同量，JS 再抬全额就叠成
+      // 「输入框飞到屏幕中间、tab 栏也上移」（2026-08-23 真机）。把平移量扣掉，引擎收手时恢复全额。
+      const pannedPx = Math.max(0, Math.round(window.visualViewport?.offsetTop ?? 0));
+      setHeight(Math.max(0, rawKeyboardPx - shellShrinkPx - pannedPx));
     };
 
     const viewport = window.visualViewport;

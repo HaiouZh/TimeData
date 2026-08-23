@@ -2,7 +2,15 @@
 <html lang="zh-CN">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <!-- interactive-widget=overlays-content（Chromium 108+）：键盘弹起时引擎不缩 visualViewport、
+         更不为露出聚焦框平移视口——没有它，引擎的 reveal-pan 会把所有 fixed 元素（输入条、tab 栏）
+         视觉整体上移一个键盘高，与 JS 自己的抬升叠成「输入框飞到屏幕中间」（2026-08-23 真机）。
+         overlay 模型下键盘让位全权归 JS（useKeyboardHeight 单源），引擎必须撒手。iOS WebKit 不识别
+         此参数，忽略无害。 -->
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=overlays-content"
+    />
     <meta name="theme-color" content="#0e1320" />
     <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png" />
     <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16.png" />
