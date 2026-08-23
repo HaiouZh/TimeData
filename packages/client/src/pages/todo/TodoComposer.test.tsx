@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { act, useState } from "react";
 import { beforeEach, describe, expect, it } from "vitest";
-import { BOTTOM_NAV_HEIGHT_PX } from "../../contexts/BottomNavContext.js";
+import { BOTTOM_NAV_HEIGHT_PX, BottomNavProvider } from "../../contexts/BottomNavContext.js";
 import { SyncProvider } from "../../contexts/SyncContext.tsx";
 import { db, resetDb } from "../../test/dbReset.js";
 import { click, renderDom, unmount } from "../../test/domHarness.js";
@@ -42,7 +42,6 @@ function Harness({ tags = [] as TagOption[], includeTags = [] as string[] }) {
         onToggleMode={() => {}}
         onToggleNotMode={() => {}}
         onClear={() => {}}
-        bottomOffsetPx={hiddenByScroll ? 0 : BOTTOM_NAV_HEIGHT_PX}
         hiddenByScroll={hiddenByScroll}
       />
     </div>
@@ -50,9 +49,12 @@ function Harness({ tags = [] as TagOption[], includeTags = [] as string[] }) {
 }
 
 async function render(props: { tags?: TagOption[]; includeTags?: string[] } = {}) {
+  // KeyboardDock（统一驻坞壳）读 useBottomNav，渲染须包 BottomNavProvider。
   return renderDom(
     <SyncProvider>
-      <Harness {...props} />
+      <BottomNavProvider>
+        <Harness {...props} />
+      </BottomNavProvider>
     </SyncProvider>,
   );
 }
@@ -142,7 +144,7 @@ describe("TodoComposer — 指按即聚焦（fastFocus）", () => {
   }
 
   it("触摸 pointerdown 即聚焦输入框（不等 touchend 的默认聚焦链），并掐掉默认路径", async () => {
-    const { host, root } = await renderDom(<Harness />);
+    const { host, root } = await render();
     const input = host.querySelector('input[placeholder^="做什么"]') as HTMLInputElement;
     expect(document.activeElement).not.toBe(input);
 
@@ -157,7 +159,7 @@ describe("TodoComposer — 指按即聚焦（fastFocus）", () => {
   });
 
   it("鼠标 pointerdown 不拦（桌面保留原生拖选/caret 语义）", async () => {
-    const { host, root } = await renderDom(<Harness />);
+    const { host, root } = await render();
     const input = host.querySelector('input[placeholder^="做什么"]') as HTMLInputElement;
 
     let ev: MouseEvent | null = null;
@@ -170,7 +172,7 @@ describe("TodoComposer — 指按即聚焦（fastFocus）", () => {
   });
 
   it("已聚焦的输入框再按不拦（保留原生 caret 点位）", async () => {
-    const { host, root } = await renderDom(<Harness />);
+    const { host, root } = await render();
     const input = host.querySelector('input[placeholder^="做什么"]') as HTMLInputElement;
     input.focus();
 

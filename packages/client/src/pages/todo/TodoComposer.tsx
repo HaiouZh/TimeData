@@ -1,11 +1,10 @@
 import { MagnifyingGlass, Tag, X } from "@phosphor-icons/react";
-import { type CSSProperties, type FormEvent, type MutableRefObject, type Ref, useCallback, useRef, useState } from "react";
+import { type FormEvent, type MutableRefObject, type Ref, useCallback, useState } from "react";
 import { Icon } from "../../components/Icon.js";
+import { KeyboardDock } from "../../components/KeyboardDock.js";
 import { focusOnPointerDown } from "../../lib/fastFocus.js";
-import { useShellResizeGlide } from "../../lib/keyboardMotion.js";
 import { useTodoDefaultDestination } from "../../lib/settings/todoDefaultDestinationSetting.js";
 import { addTask } from "../../lib/tasks.js";
-import { Z } from "../../lib/zLayers.js";
 import { TagFilterPanel } from "./TagFilterPanel.js";
 
 export interface TodoComposerProps {
@@ -22,7 +21,6 @@ export interface TodoComposerProps {
   onToggleMode: () => void;
   onToggleNotMode: () => void;
   onClear: () => void;
-  bottomOffsetPx: number;
   hiddenByScroll: boolean;
   formRef?: Ref<HTMLFormElement>;
 }
@@ -41,21 +39,18 @@ export function TodoComposer({
   onToggleMode,
   onToggleNotMode,
   onClear,
-  bottomOffsetPx,
   hiddenByScroll,
   formRef,
 }: TodoComposerProps) {
   const destination = useTodoDefaultDestination();
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  // 壳缩/恢复 webview 的单帧跳变抹成滑动（安卓；见 keyboardMotion.ts）。与外部 formRef 合流。
-  const glideRef = useRef<HTMLFormElement | null>(null);
-  useShellResizeGlide(glideRef);
+  // 定位/抬升/运动全在 KeyboardDock；这里只把外部量高用的 formRef 接到驻坞元素上。
   const setFormRef = useCallback(
-    (el: HTMLFormElement | null) => {
-      glideRef.current = el;
-      if (typeof formRef === "function") formRef(el);
-      else if (formRef) (formRef as MutableRefObject<HTMLFormElement | null>).current = el;
+    (el: HTMLElement | null) => {
+      const form = el as HTMLFormElement | null;
+      if (typeof formRef === "function") formRef(form);
+      else if (formRef) (formRef as MutableRefObject<HTMLFormElement | null>).current = form;
     },
     [formRef],
   );
@@ -63,7 +58,7 @@ export function TodoComposer({
   const hasTags = tags.length > 0;
   const searching = !filterOpen && composerText.trim() !== "";
 
-  async function submit(event: FormEvent<HTMLFormElement>) {
+  async function submit(event: FormEvent<HTMLElement>) {
     event.preventDefault();
     setSaving(true);
     setError(null);
@@ -109,28 +104,14 @@ export function TodoComposer({
   );
 
   return (
-    <form
-      ref={setFormRef}
+    <KeyboardDock
+      as="form"
+      dockRef={setFormRef}
       onSubmit={submit}
-      // 实心底 + td-kbd-motion（250ms TG 曲线）：backdrop-blur 与 transform 位移动画同帧是
-      // 移动端掉帧经典组合（TG 输入条也是实心的），键盘运动期间不能挂模糊。
-      className="td-kbd-motion fixed left-0 right-0 border-t border-border bg-page p-2 [bottom:var(--bottom-offset)] sm:p-3"
-      // 载体分工（键盘运动波）：bottom 只装安全区、恒定不动；动态抬升（navOffset / 键盘高）走
-      // transform: translateY(-抬升量)——吃上面 transition-transform 的过渡，键盘弹起/收起、底栏
-      // 显隐的位移全部变成滑动（合成器线程，无重排），等效终点位置与迁移前逐值相等。
-      // 下滑收起底栏时（hidden）整体下移自身高度（translateY 100%）滑出视口，回位走同一条过渡。
-      // zIndex backdrop(40) 压过任务行内部交互层，低于详情抽屉/系统弹层。
-      // 安全区经 var(--safe-bottom) 流入（:root 默认 env()，Android 壳清零，见 index.css）。
-      // env() 未定义的环境（Firefox 桌面 bug 1505842 / 旧 WebView）里 calc 整条声明在计算值时失效、
-      // 内联 bottom 被丢弃，由兜底类落回 --bottom-offset（恒 0px）；抬升在 transform 上不受影响。
-      style={
-        {
-          "--bottom-offset": "0px",
-          bottom: "calc(0px + var(--safe-bottom))",
-          transform: hiddenByScroll ? "translateY(100%)" : `translateY(${-bottomOffsetPx}px)`,
-          zIndex: Z.backdrop,
-        } as CSSProperties
-      }
+      hiddenByScroll={hiddenByScroll}
+      // 实心底：backdrop-blur 与 transform 位移动画同帧是移动端掉帧经典组合（TG 输入条也是
+      // 实心的）。定位 / 抬升 / 运动曲线 / zIndex 全在 KeyboardDock，这里只有内容外观。
+      className="border-t border-border bg-page p-2 sm:p-3"
     >
       <div className="mx-auto w-full max-w-2xl space-y-2 lg:max-w-none">
         <div className="flex items-start gap-2">
@@ -180,6 +161,6 @@ export function TodoComposer({
         </div>
         {error && <p className="td-text-label text-danger">{error}</p>}
       </div>
-    </form>
+    </KeyboardDock>
   );
 }

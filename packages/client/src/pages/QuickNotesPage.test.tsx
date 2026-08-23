@@ -580,27 +580,49 @@ describe("QuickNotesPage", () => {
     await unmount(root);
   });
 
-  it("hides the bottom nav while the composer input is focused", async () => {
-    const { host, root } = await renderPage();
-    const composerInput = input(host);
+  it("键盘在场信号收起底栏；聚焦本身不收（TG 口径：聚焦到键盘出现之间一切原地不动）", async () => {
+    // 收底栏统一由 useKeyboardNavCollapse 按「键盘在不在场」驱动（components/KeyboardDock.tsx）。
+    // web 平台的在场信号是 visualViewport 实测遮挡——装一个可控 viewport，缩一个键盘高即在场。
+    const viewport = {
+      height: 768,
+      offsetTop: 0,
+      addEventListener: () => {},
+      removeEventListener: () => {},
+    };
+    (window as unknown as { visualViewport?: unknown }).visualViewport = viewport;
+    try {
+      const { host, root } = await renderPage();
+      const composerInput = input(host);
 
-    expect(bottomNavHidden(host)).toBe("false");
+      expect(bottomNavHidden(host)).toBe("false");
 
-    await act(async () => {
-      composerInput.dispatchEvent(new FocusEvent("focusin", { bubbles: true }));
-    });
-    await flush();
+      // 聚焦本身不收（此前的 composerFocused 预收已按 TG 口径去除——预收正是两页时序不一致的来源）。
+      await act(async () => {
+        composerInput.dispatchEvent(new FocusEvent("focusin", { bubbles: true }));
+      });
+      await flush();
+      expect(bottomNavHidden(host)).toBe("false");
 
-    expect(bottomNavHidden(host)).toBe("true");
+      // 键盘在场（视口被遮超阈值）→ 收起。
+      viewport.height = 400;
+      await act(async () => {
+        window.dispatchEvent(new Event("resize"));
+      });
+      await flush();
+      expect(bottomNavHidden(host)).toBe("true");
 
-    await act(async () => {
-      composerInput.dispatchEvent(new FocusEvent("focusout", { bubbles: true }));
-    });
-    await flush();
+      // 键盘离场 → 恢复。
+      viewport.height = 768;
+      await act(async () => {
+        window.dispatchEvent(new Event("resize"));
+      });
+      await flush();
+      expect(bottomNavHidden(host)).toBe("false");
 
-    expect(bottomNavHidden(host)).toBe("false");
-
-    await unmount(root);
+      await unmount(root);
+    } finally {
+      (window as unknown as { visualViewport?: unknown }).visualViewport = undefined;
+    }
   });
 
   it("edits a note through the popover menu into the bottom input", async () => {

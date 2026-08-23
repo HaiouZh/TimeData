@@ -21,6 +21,7 @@
   "dirty-in-clean-bucket:components/Icon.test.tsx",
   "dirty-in-clean-bucket:components/KeyboardAvoidanceBridge.test.tsx",
   "dirty-in-clean-bucket:components/KeyboardDebugOverlay.test.tsx",
+  "dirty-in-clean-bucket:components/KeyboardDock.test.tsx",
   "dirty-in-clean-bucket:components/SchedulerWatchdog.test.tsx",
   "dirty-in-clean-bucket:components/SyncIndicator.test.tsx",
   "dirty-in-clean-bucket:components/SyncTimingsPanel.test.tsx",

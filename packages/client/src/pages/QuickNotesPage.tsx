@@ -18,6 +18,7 @@ import {
   type KeyboardEvent,
   type MouseEvent,
   type PointerEvent,
+  useCallback,
   useEffect,
   useLayoutEffect,
   useMemo,
@@ -26,26 +27,24 @@ import {
 } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router";
 import { Icon } from "../components/Icon.js";
+import { KeyboardDock, useKeyboardNavCollapse } from "../components/KeyboardDock.tsx";
 import { ActionToastBar } from "../components/ui/ActionToastBar.tsx";
 import { DateField } from "../components/ui/DateField.js";
 import { EmptyState } from "../components/ui/EmptyState.js";
 import { LoadingState } from "../components/ui/LoadingState.js";
 import { StatusBanner } from "../components/ui/StatusBanner.js";
 import { BOTTOM_NAV_HEIGHT_PX, useBottomNav } from "../contexts/BottomNavContext.tsx";
+import { useActionToast } from "../hooks/useActionToast.ts";
 import { useConfirm } from "../hooks/useConfirm.tsx";
 import { useDebouncedValue } from "../hooks/useDebouncedValue.ts";
-import { useActionToast } from "../hooks/useActionToast.ts";
 import { useEntryMutations } from "../hooks/useEntries.js";
 import { useKeyboardHeight, useKeyboardVisible } from "../hooks/useKeyboardHeight.ts";
 import { useLongPress } from "../hooks/useLongPress.ts";
 import { composeBottomInset } from "../lib/bottomInset.ts";
 import { focusOnPointerDown } from "../lib/fastFocus.ts";
-import { useShellResizeGlide } from "../lib/keyboardMotion.ts";
 import { hapticDestructive } from "../lib/haptics.ts";
 import { punchNow } from "../lib/punch.js";
 import { formatLocalClock, groupQuickNotesForDisplay, quickNoteAriaLabel } from "../lib/quickNoteDisplay.ts";
-import { useIsWideScreen } from "../lib/useIsWideScreen.js";
-import { Z } from "../lib/zLayers.ts";
 import {
   addQuickNote,
   deleteQuickNote,
@@ -58,8 +57,15 @@ import {
 import { readTodoDefaultDestination } from "../lib/settings/todoDefaultDestinationSetting.js";
 import { addTask, deleteTask } from "../lib/tasks.js";
 import { formatTime, getDateString, isValidDateString } from "../lib/time.ts";
+import { useIsWideScreen } from "../lib/useIsWideScreen.js";
+import { Z } from "../lib/zLayers.ts";
 import { copyText } from "../quick-notes/clipboard.ts";
-import { clearComposerDraft, isEditDraftDirty, readComposerDraft, writeComposerDraft } from "../quick-notes/composerDraft.ts";
+import {
+  clearComposerDraft,
+  isEditDraftDirty,
+  readComposerDraft,
+  writeComposerDraft,
+} from "../quick-notes/composerDraft.ts";
 import { findStuckDivider } from "../quick-notes/currentDate.ts";
 import { groupDisplayItemsByDay } from "../quick-notes/dayGroups.ts";
 import { deleteQuickNotesByIds } from "../quick-notes/deleteQuickNotesByIds.ts";
@@ -106,7 +112,8 @@ const NOTE_CARD_AGENT = "border-accent/40 bg-accent-soft hover:bg-surface-hover"
 const NOTE_CARD_SELECTED = "ring-2 ring-accent";
 const NOTE_CARD_LOCATED = "ring-2 ring-inset ring-accent";
 const MENU_PANEL_CLASS = "overflow-hidden rounded-card border border-border bg-surface-elevated py-1 shadow-elev2";
-const MENU_ITEM_CLASS = "block w-full px-4 py-3 text-left td-text-label text-ink-2 transition hover:bg-surface-hover hover:text-ink";
+const MENU_ITEM_CLASS =
+  "block w-full px-4 py-3 text-left td-text-label text-ink-2 transition hover:bg-surface-hover hover:text-ink";
 
 interface MenuTarget {
   note: QuickNote;
@@ -151,7 +158,6 @@ export default function QuickNotesPage() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [exportMenuOpen, setExportMenuOpen] = useState(false);
   const [pinnedOpen, setPinnedOpen] = useState(false);
-  const [composerFocused, setComposerFocused] = useState(false);
   // 宽屏（≥1024px）回车发送；窄屏（手机）回车交给 textarea 默认换行，靠「记录」按钮发送。
   const isWideScreen = useIsWideScreen();
   const keyboardHeight = useKeyboardHeight();
@@ -159,9 +165,11 @@ export default function QuickNotesPage() {
 
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
-  const composerRef = useRef<HTMLFormElement>(null);
-  // 壳缩/恢复 webview 的单帧跳变抹成滑动（安卓；见 keyboardMotion.ts），复用量高用的同一个 ref。
-  useShellResizeGlide(composerRef);
+  // 驻坞元素本体（量高 / ResizeObserver 用）；glide 与定位由 KeyboardDock 统一负责。
+  const composerRef = useRef<HTMLElement | null>(null);
+  const setComposerEl = useCallback((el: HTMLElement | null) => {
+    composerRef.current = el;
+  }, []);
   const scrollRef = useRef<HTMLDivElement>(null);
   const composeDraftRef = useRef("");
   // 进入编辑时快照被编辑那条的原文，用来判「用户改过没」。
@@ -216,9 +224,6 @@ export default function QuickNotesPage() {
   const timeline = useQuickNoteTimeline();
   const unsyncedQuickNoteIds = useUnsyncedQuickNoteIds();
   const pinnedNotes = useLiveQuery(() => listPinnedQuickNotes(), []) ?? [];
-  // 在场判断用 keyboardVisible 而非 keyboardHeight > 0：安卓壳层让位后 height 恒 0（JS 无需再
-  // 让位），键盘弹着 nav 也得收，否则缩短的视口里输入条与键盘之间杵一条 tab 行。
-  const inputInteractionActive = composerFocused || searchOpen || keyboardVisible;
   // !keyboardVisible 守卫与待办页同款（TodoPage.tsx）：键盘在场时 nav 不占避让空间。没有它，
   // willShow 置起 visible 到 navHidden effect 提交之间的一帧里，composer 会按「键盘高 + 49」
   // 定位——高出键盘一个底栏位（真机「飞半空」存活候选 C5-1，对抗验证报告
@@ -230,14 +235,23 @@ export default function QuickNotesPage() {
   //（keyboardHeight 是「键盘还挡着多少」，壳自己让过位时为 0，见 useKeyboardHeight）。
   // keyboardHeightPx=0（桌面浏览器 / 键盘收起）时逐值等于合成前的批 1 值，见该文件回归护栏测试。
   // 内容留白：原口径只有 bottomInsetPx（不含 navOffsetPx），故 navOffsetPx 传 0，只加键盘遮挡量。
-  const contentBottomInsetPx = composeBottomInset({ barHeightPx: bottomInsetPx, navOffsetPx: 0, keyboardHeightPx: keyboardHeight });
+  const contentBottomInsetPx = composeBottomInset({
+    barHeightPx: bottomInsetPx,
+    navOffsetPx: 0,
+    keyboardHeightPx: keyboardHeight,
+  });
   // 贴 composer 上沿的浮层（跳到最新按钮 / 错误 / 状态提示）：原口径 navOffsetPx + bottomInsetPx。
-  const floatBottomInsetPx = composeBottomInset({ barHeightPx: bottomInsetPx, navOffsetPx, keyboardHeightPx: keyboardHeight });
-  // composer 输入条自身：原口径只有 navOffsetPx（自身高度已在 bottomInsetPx 里量过，不重复计入）。
-  // 它就是用户敲字的那条框，键盘弹起时必须浮到键盘之上才可用，故加键盘高。
-  const composerBarBottomPx = composeBottomInset({ barHeightPx: 0, navOffsetPx, keyboardHeightPx: keyboardHeight });
+  const floatBottomInsetPx = composeBottomInset({
+    barHeightPx: bottomInsetPx,
+    navOffsetPx,
+    keyboardHeightPx: keyboardHeight,
+  });
   const displayItems = useMemo(
-    () => groupQuickNotesForDisplay(timeline.notes.filter((note) => !note.pinned), { today }),
+    () =>
+      groupQuickNotesForDisplay(
+        timeline.notes.filter((note) => !note.pinned),
+        { today },
+      ),
     [timeline.notes, today],
   );
   // 渲染吃的是按天折过的结构而不是扁平数组：每天必须各自成一个 sticky 包含块，理由见 dayGroups.ts。
@@ -269,12 +283,8 @@ export default function QuickNotesPage() {
     }
     return map;
   }, [displayItems]);
-  const allLoadedSelected =
-    loadedUnpinnedIds.length > 0 && loadedUnpinnedIds.every((id) => selectedIds.has(id));
-  const selectedPinnedCount = pinnedNotes.reduce(
-    (count, note) => (selectedIds.has(note.id) ? count + 1 : count),
-    0,
-  );
+  const allLoadedSelected = loadedUnpinnedIds.length > 0 && loadedUnpinnedIds.every((id) => selectedIds.has(id));
+  const selectedPinnedCount = pinnedNotes.reduce((count, note) => (selectedIds.has(note.id) ? count + 1 : count), 0);
   const debouncedQuery = useDebouncedValue(searchQuery, 200);
   const searchTerms = useMemo(() => parseSearchTerms(debouncedQuery), [debouncedQuery]);
   const searchResults = useLiveQuery(() => searchQuickNotes(debouncedQuery), [debouncedQuery]) ?? [];
@@ -338,14 +348,16 @@ export default function QuickNotesPage() {
 
   useEffect(() => () => setNavHidden(false), [setNavHidden]);
 
+  // 键盘引起的底栏收起统一走两页共用的记账式 hook（components/KeyboardDock.tsx）；
+  // 搜索态是本页私有的第二个收起原因，单独一条 effect（关搜索即恢复）。
+  // 此前聚焦（composerFocused）也立即收底栏——TG 口径下聚焦到键盘出现之间一切原地不动，
+  // 且该差异正是两页时序不一致的来源之一，已去除。
+  useKeyboardNavCollapse();
   useEffect(() => {
-    if (inputInteractionActive) {
-      setNavHidden(true);
-      return;
-    }
-
-    setNavHidden(false);
-  }, [inputInteractionActive, setNavHidden]);
+    if (!searchOpen) return;
+    setNavHidden(true);
+    return () => setNavHidden(false);
+  }, [searchOpen, setNavHidden]);
 
   // 多选与搜索互斥；置顶浮层在多选态保留（QN-09「通」：选中的置顶必须可见可反选）。
   useEffect(() => {
@@ -545,9 +557,7 @@ export default function QuickNotesPage() {
     if (pickerOpen || selecting || menuShowing) return;
 
     const containerTop = el.getBoundingClientRect().top;
-    const nodes = Array.from(
-      el.querySelectorAll<HTMLElement>(searching ? "[data-search-date]" : "[data-date-label]"),
-    );
+    const nodes = Array.from(el.querySelectorAll<HTMLElement>(searching ? "[data-search-date]" : "[data-date-label]"));
     const candidates = nodes.map((node) => {
       const rect = node.getBoundingClientRect();
       return {
@@ -1032,7 +1042,11 @@ export default function QuickNotesPage() {
       title: `删除 ${viewingDateLabel} 的速记？`,
       body: (
         <div className="space-y-1">
-          {viewingDate !== today && <p className="font-medium text-danger">这不是今天，你正要删除 {viewingDateLabel}（{viewingDate}）的记录。</p>}
+          {viewingDate !== today && (
+            <p className="font-medium text-danger">
+              这不是今天，你正要删除 {viewingDateLabel}（{viewingDate}）的记录。
+            </p>
+          )}
           <p>
             将删除 <strong>{deletableCount}</strong> 条速记
             {pinnedCount > 0 ? `（另有 ${pinnedCount} 条置顶会保留）` : ""}，不影响时间记录。
@@ -1166,11 +1180,12 @@ export default function QuickNotesPage() {
               </button>
               {exportMenuOpen && (
                 <>
-                  <div role="presentation" className="fixed inset-0 z-[var(--z-backdrop)]" onClick={() => setExportMenuOpen(false)} />
                   <div
-                    role="menu"
-                    className={`absolute right-0 z-[var(--z-modal)] mt-2 w-40 ${MENU_PANEL_CLASS}`}
-                  >
+                    role="presentation"
+                    className="fixed inset-0 z-[var(--z-backdrop)]"
+                    onClick={() => setExportMenuOpen(false)}
+                  />
+                  <div role="menu" className={`absolute right-0 z-[var(--z-modal)] mt-2 w-40 ${MENU_PANEL_CLASS}`}>
                     <button
                       type="button"
                       role="menuitem"
@@ -1469,15 +1484,14 @@ export default function QuickNotesPage() {
               )}
 
               {timeline.loading && (
-                <LoadingState label="正在读取速记..." className="rounded-card border border-border bg-surface/60 px-4 py-8" />
+                <LoadingState
+                  label="正在读取速记..."
+                  className="rounded-card border border-border bg-surface/60 px-4 py-8"
+                />
               )}
 
               {!timeline.loading && displayItems.length === 0 && pinnedNotes.length === 0 && (
-                <EmptyState
-                  variant="card"
-                  title="还没有速记"
-                  description="写下一个想法、线索或待办，稍后再回来看。"
-                />
+                <EmptyState variant="card" title="还没有速记" description="写下一个想法、线索或待办，稍后再回来看。" />
               )}
 
               {/* 每天一个包裹 div：它就是这一天日期条的 sticky 包含块，下一天的包裹上来时
@@ -1632,28 +1646,14 @@ export default function QuickNotesPage() {
         </StatusBanner>
       )}
       {!searchOpen && !selectionMode && (
-        <form
-          ref={composerRef}
+        <KeyboardDock
+          as="form"
+          dockRef={setComposerEl}
           aria-label="速记输入区"
-          // 实心底 + td-kbd-motion（250ms TG 曲线）：backdrop-blur 与 transform 位移动画同帧
-          // 是移动端掉帧经典组合（TG 输入条也是实心的），键盘运动期间不能挂模糊。
-          className="td-kbd-motion fixed left-0 right-0 border-t border-border bg-page p-2 shadow-elev2 [bottom:var(--bottom-offset)] sm:p-3"
-          // 载体分工（键盘运动波，与 TodoComposer 同款）：bottom 只装安全区、恒定不动，动态抬升
-          //（navOffset / 键盘高）走 transform: translateY(-抬升量) 吃 transition-transform 的过渡
-          //（合成器线程；此前是 transition-[bottom]，主线程逐帧重排）。等效终点位置逐值不变。
-          // 兜底类 [bottom:var(--bottom-offset)]：env() 未定义环境（Firefox 桌面 / 旧 WebView）里 calc
-          // 整条失效、内联 bottom 被丢弃，由它落回 0px；抬升在 transform 上不受影响。
-          // zIndex 显式给 backdrop(40)、与待办页两条固定条同层：列表里的日期气泡是 z-10、顶栏是 z-20，
-          // 同一层叠上下文里带 z-index 的永远压过 z-index:auto 的，与 DOM 顺序无关——不写就会被气泡
-          // 盖住（闸在 QuickNotesPage.layering.test.tsx）。低于详情抽屉 / 长按菜单 / 置顶面板（modal=50）。
-          style={
-            {
-              "--bottom-offset": "0px",
-              bottom: "calc(0px + var(--safe-bottom))",
-              transform: `translateY(${-composerBarBottomPx}px)`,
-              zIndex: Z.backdrop,
-            } as CSSProperties
-          }
+          // 实心底：backdrop-blur 与 transform 位移动画同帧是移动端掉帧经典组合（TG 输入条也是
+          // 实心的）。定位 / 抬升 / 运动曲线 / zIndex（backdrop=40，闸在 QuickNotesPage.layering.
+          // test.tsx）全在 KeyboardDock，与待办页两条固定条同一个壳，这里只有内容外观。
+          className="border-t border-border bg-page p-2 shadow-elev2 sm:p-3"
           onSubmit={(event) => {
             event.preventDefault();
             void handleSubmit();
@@ -1714,8 +1714,6 @@ export default function QuickNotesPage() {
                   onInput={(event) => setDraftText(event.currentTarget.value)}
                   onKeyDown={handleKeyDown}
                   onPointerDown={focusOnPointerDown}
-                  onFocus={() => setComposerFocused(true)}
-                  onBlur={() => setComposerFocused(false)}
                   rows={1}
                   placeholder={editingId ? "修改这条速记..." : "捕捉一个当下想法..."}
                   className="max-h-40 min-h-11 flex-1 resize-none bg-transparent px-3 py-2 leading-relaxed text-ink placeholder:text-ink-3 outline-none"
@@ -1742,7 +1740,7 @@ export default function QuickNotesPage() {
               </div>
             </div>
           </div>
-        </form>
+        </KeyboardDock>
       )}
 
       {menu && (

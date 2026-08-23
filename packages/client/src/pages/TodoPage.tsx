@@ -25,6 +25,7 @@ import {
   useState,
 } from "react";
 import { useNavigate, useSearchParams } from "react-router";
+import { useKeyboardNavCollapse } from "../components/KeyboardDock.tsx";
 import { ActionToastBar } from "../components/ui/ActionToastBar.js";
 import { BOTTOM_NAV_HEIGHT_PX, useBottomNav } from "../contexts/BottomNavContext.tsx";
 import { db } from "../db/index.js";
@@ -70,8 +71,8 @@ import {
   landsInCollapsedProjectGroup,
   projectChipIndex,
 } from "../lib/tasks/projectZone.js";
-import { buildTrackProjectIndex, groupTracksByProject } from "../lib/tasks/trackProjectIndex.js";
 import { applyOptimisticOrder } from "../lib/tasks/reorderDisplay.js";
+import { buildTrackProjectIndex, groupTracksByProject } from "../lib/tasks/trackProjectIndex.js";
 import { allTags, filterTasks } from "../lib/tasks/turnTags.js";
 import {
   getDoneCollapsed,
@@ -95,7 +96,11 @@ import {
   type TodoBuckets,
   unscheduleTask,
 } from "../lib/tasks.js";
-import { buildTrackConcludeUndo, promoteTaskToTrack, toggleTaskDoneWithTrackConclude } from "../lib/taskTrackPromote.js";
+import {
+  buildTrackConcludeUndo,
+  promoteTaskToTrack,
+  toggleTaskDoneWithTrackConclude,
+} from "../lib/taskTrackPromote.js";
 import { useIsWideScreen } from "../lib/useIsWideScreen.js";
 import { AtHandSection } from "./todo/AtHandSection.js";
 import { CollapsibleSection } from "./todo/CollapsibleSection.js";
@@ -112,6 +117,7 @@ import { TodoComposer } from "./todo/TodoComposer.js";
 import { TodoDragDock } from "./todo/TodoDragDock.js";
 import { ProjectNameChip, TodoProjectSection } from "./todo/TodoProjectSection.js";
 import { TodoSelectionBar } from "./todo/TodoSelectionBar.js";
+import { HandTrackRows, ProjectTrackRows, TrackBucketSection } from "./todo/TrackBucketSection.js";
 import {
   clampTodoIndentPreview,
   hoveredRootIdFromOver,
@@ -129,7 +135,6 @@ import {
 } from "./todo/todoDnd.js";
 import { applyTodoDockDrop } from "./todo/todoDockDrop.js";
 import { useTaskTrackIndex } from "./todo/useTaskTrackIndex.js";
-import { HandTrackRows, ProjectTrackRows, TrackBucketSection } from "./todo/TrackBucketSection.js";
 import { WaitingSection } from "./todo/WaitingSection.js";
 
 const EMPTY: TodoBuckets = {
@@ -259,7 +264,7 @@ export function TodoPage() {
   }, [buckets]);
   const composerRef = useRef<HTMLFormElement>(null);
   const [composerHeightPx, setComposerHeightPx] = useState(0);
-  const { hidden: navHidden, setHidden: setNavHidden } = useBottomNav();
+  const { hidden: navHidden } = useBottomNav();
   const wide = useIsWideScreen();
   // 避让量（还挡着多少，进合成）与在场信号（键盘弹没弹，管收底栏/守 composer）分开取：
   // 安卓壳层让位后 height 恒 0 而键盘确实在场，在场判断混用 height 会让底栏不收、composer 误藏。
@@ -306,13 +311,9 @@ export function TodoPage() {
   // navOffsetPx)，与合成前的批 1 值逐值相等，见 bottomInset.test.ts 回归护栏。
   const composerAvoidancePx = composeBottomInset({ barHeightPx: bottomBarHeightPx, navOffsetPx, keyboardHeightPx });
   const contentBottomPaddingPx = Math.max(192, composerAvoidancePx + TODO_COMPOSER_CONTENT_GAP_PX);
-  // TodoComposer/TodoSelectionBar 自身的 bottom 定位（fix round 1）：这两个元素就是底部固定条本身，
-  // 不需要再叠一层 barHeightPx，故传 0；navOffsetPx 已被上方守卫（键盘弹起时归 0），键盘弹起时
-  // fixedBarBottomPx = keyboardHeightPx，输入条稳贴键盘上沿；keyboard=0 时 = navOffsetPx，与本轮前
-  // 完全一致。TodoSelectionBar 内有「项目名」输入框，多选态点它同样会弹键盘（见
-  // todo/TodoSelectionBar.tsx 的 `<input aria-label="项目名">`），故这里走同一合成、计入
-  // keyboardHeightPx 是必要的——不是「反正不会有文字输入所以不变」。
-  const fixedBarBottomPx = composeBottomInset({ barHeightPx: 0, navOffsetPx, keyboardHeightPx });
+  // TodoComposer/TodoSelectionBar 自身的 bottom 定位由 KeyboardDock 统一计算（navOffset 守卫 +
+  // 键盘高，components/KeyboardDock.tsx），本页不再自算——「两页各持一份手工时序」正是每轮
+  // 修一处坏另一处的结构性根源（docs/notes/keyboard-pipeline-saga.md §二）。
   const deepLinkedTask = useLiveQuery(
     async () => {
       if (!taskIdParam) return null;
@@ -334,21 +335,10 @@ export function TodoPage() {
   // 的 inputInteractionActive effect），本页此前漏了。信号用「在场」而非 height：安卓壳让位后
   // height 恒 0，键盘弹着底栏也不收。
   //
-  // 用 ref 记「这次隐藏是键盘引起的」，而不是无条件 setNavHidden(keyboardVisible)：挂载时键盘
-  // 恒不在场，无条件写会把进场时已有的隐藏态冲掉——App 层滚动驱动（useHideBottomNavOnScroll）刚藏
-  // 起来的底栏会瞬间弹回。TodoPage.test.tsx 的 hideBottomNav 用例正是钉这条。
-  const navHiddenByKeyboardRef = useRef(false);
-  useEffect(() => {
-    if (keyboardVisible) {
-      navHiddenByKeyboardRef.current = true;
-      setNavHidden(true);
-      return;
-    }
-    // 键盘收起：只有当初是自己藏的才恢复，否则不碰——底栏归滚动驱动管。
-    if (!navHiddenByKeyboardRef.current) return;
-    navHiddenByKeyboardRef.current = false;
-    setNavHidden(false);
-  }, [keyboardVisible, setNavHidden]);
+  // 记账式收起/恢复的实现提升为两页共用的 useKeyboardNavCollapse（components/KeyboardDock.tsx），
+  // 语义不变：只有键盘引起的隐藏才在收起时恢复，滚动驱动的隐藏不碰。
+  // TodoPage.test.tsx 的 hideBottomNav 用例仍钉「挂载时不冲掉已有隐藏态」。
+  useKeyboardNavCollapse();
 
   const measureComposer = useCallback(() => {
     const composer = composerRef.current;
@@ -1770,7 +1760,6 @@ export function TodoPage() {
           <TodoSelectionBar
             selectedCount={selectedIds.size}
             projects={selectableProjects}
-            bottomOffsetPx={fixedBarBottomPx}
             onCreate={(title) => void submitCreateProject(title)}
             onAssign={(goalId) => void submitAssignToProject(goalId)}
             onCancel={exitSelection}
@@ -1790,7 +1779,6 @@ export function TodoPage() {
             onToggleMode={toggleMode}
             onToggleNotMode={toggleNotMode}
             onClear={clearTags}
-            bottomOffsetPx={fixedBarBottomPx}
             hiddenByScroll={composerHiddenByScroll}
             formRef={composerRef}
           />

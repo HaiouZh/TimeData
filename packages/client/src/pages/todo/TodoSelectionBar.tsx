@@ -1,14 +1,11 @@
-import { type CSSProperties, useRef, useState } from "react";
+import { useState } from "react";
+import { KeyboardDock } from "../../components/KeyboardDock.js";
 import { focusOnPointerDown } from "../../lib/fastFocus.js";
-import { useShellResizeGlide } from "../../lib/keyboardMotion.js";
-import { Z } from "../../lib/zLayers.js";
 
 export interface TodoSelectionBarProps {
   selectedCount: number;
   /** 可选的已有项目组；空数组时不渲染「放进…」。 */
   projects: readonly { goalId: string; goalTitle: string }[];
-  /** 底部固定条的 bottom 偏移：导航条高 + 键盘高的合成（见 TodoPage composeBottomInset）。 */
-  bottomOffsetPx: number;
   onCreate: (title: string) => void;
   onAssign: (goalId: string) => void;
   onCancel: () => void;
@@ -20,20 +17,9 @@ export interface TodoSelectionBarProps {
  * 命名就地输入而不是弹对话框（design §动作一 拍板）：少一次跳转，且弹窗会盖住刚选好的那几行——
  * 用户正需要看着它们确认选对了没有。
  */
-export function TodoSelectionBar({
-  selectedCount,
-  projects,
-  bottomOffsetPx,
-  onCreate,
-  onAssign,
-  onCancel,
-}: TodoSelectionBarProps) {
+export function TodoSelectionBar({ selectedCount, projects, onCreate, onAssign, onCancel }: TodoSelectionBarProps) {
   const [title, setTitle] = useState("");
   const [pickerOpen, setPickerOpen] = useState(false);
-  // 壳缩/恢复 webview 的单帧跳变抹成滑动（安卓；见 keyboardMotion.ts）。多选态点「项目名」
-  // 输入框同样弹键盘，本栏与 TodoComposer 同一套运动待遇。
-  const glideRef = useRef<HTMLDivElement | null>(null);
-  useShellResizeGlide(glideRef);
   const trimmed = title.trim();
   const hasSelection = selectedCount > 0;
   const canCreate = hasSelection && trimmed !== "";
@@ -44,29 +30,16 @@ export function TodoSelectionBar({
   }
 
   return (
-    <div
-      ref={glideRef}
+    <KeyboardDock
       data-testid="todo-selection-bar"
-      className="td-kbd-motion fixed inset-x-0 px-4 [bottom:var(--bottom-offset)]"
-      // 与被顶替的 TodoComposer 同一个常量：同一个位置、同一个角色，就该在同一层。
-      //
+      className="px-4"
+      // 定位/抬升/运动/zIndex 全在 KeyboardDock（与被顶替的 TodoComposer 同一个壳：同一个位置、
+      // 同一个角色，天然同层）。层级契约不变：
       // **本栏与待办页的 toast 容器同层（都是 z-backdrop=40）、且在 DOM 里排它之后 → 后绘制的本栏赢。**
       // 所以本栏（含向上展开的「放进…」列表）绝不许压到 toast 那条带上，而多选态里 toast 是唯一的
       // 失败反馈通道（两种提交失败都不退出多选、只靠它说原因），压住就等于「点了没反应」。
-      // 两处各自让路，别改这个数字：页面用 composerAvoidancePx 把 toast 顶到操作栏上沿之外
+      // 两处各自让路，别改层级：页面用 composerAvoidancePx 把 toast 顶到操作栏上沿之外
       //（TodoPage 的 bottomBarHeightPx），列表则「选完即收起」（见下面 onClick）。
-      // 调 z 层级只会把这两个各自自洽的决定改成互相打架的两个数字，下一个人还会撞。
-      // 载体分工（键盘运动波，与 TodoComposer 同款）：bottom 只装安全区，抬升走 transform 吃过渡。
-      // 兜底类 [bottom:var(--bottom-offset)]：env() 未定义环境里 calc 整条失效、内联 bottom 被丢弃，
-      // 由它落回 0px；抬升在 transform 上不受影响（见 TodoComposer 同款注释）。
-      style={
-        {
-          "--bottom-offset": "0px",
-          bottom: "calc(0px + var(--safe-bottom))",
-          transform: `translateY(${-bottomOffsetPx}px)`,
-          zIndex: Z.backdrop,
-        } as CSSProperties
-      }
     >
       <div className="mx-auto w-full max-w-2xl">
         {pickerOpen && projects.length > 0 && (
@@ -135,6 +108,6 @@ export function TodoSelectionBar({
           </button>
         </div>
       </div>
-    </div>
+    </KeyboardDock>
   );
 }
