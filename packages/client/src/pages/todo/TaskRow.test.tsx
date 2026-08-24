@@ -600,6 +600,30 @@ describe("TaskRow", () => {
     await unmount(root);
   });
 
+  it("展开后点子任务的详情按钮：把那条子任务交给 onEdit，父任务不占位", async () => {
+    const onEdit = vi.fn();
+    const parent = await addTask({ title: "父" });
+    const child = await createChildTask(parent.id, "子任务甲");
+    const fresh = (await db.tasks.get(parent.id))!;
+    const handle = { setActivatorNodeRef: vi.fn(), attributes: {}, listeners: {} };
+
+    const { host, root } = await renderDom(
+      <TaskRow task={fresh} pool="today" onToggle={noop} onEdit={onEdit} dragHandle={handle} />,
+    );
+    await settle();
+    await click(host.querySelector('[data-testid="task-row-grab-area"]'));
+    await waitForText(host, "子任务甲");
+
+    const detailBtn = host.querySelector('button[aria-label="打开子任务详情 子任务甲"]');
+    expect(detailBtn).not.toBeNull();
+    await click(detailBtn);
+    await settle();
+
+    expect(onEdit).toHaveBeenCalledTimes(1);
+    expect(onEdit.mock.calls[0][0]).toMatchObject({ id: child.id, title: "子任务甲" });
+    await unmount(root);
+  });
+
   it("点左 2/5 抓取区:无子任务时展开草稿输入框，不打开详情", async () => {
     const onEdit = vi.fn();
     const handle = { setActivatorNodeRef: vi.fn(), attributes: {}, listeners: {} };

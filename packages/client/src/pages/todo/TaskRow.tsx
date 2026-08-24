@@ -525,6 +525,10 @@ export function TaskRow({
             onCopyTitle={onCopyTitle}
             onEmptyDismiss={childTotal === 0 ? () => setExpanded(false) : undefined}
             dndIdPrefix={dndIdPrefix}
+            // 子任务的详情走父行同一个 onEdit——抽屉认 task 而非「根任务」，子任务打开后是它自己
+            // 那一份（日期只给一次性、不嵌下一层子任务）。多选态照给：那时子行的删除入口也还在，
+            // 单独禁掉详情就分叉了；抽屉与 selectionMode 是两份独立 state，开了不动选择态。
+            onOpenDetail={onEdit}
           />
         </div>
       )}

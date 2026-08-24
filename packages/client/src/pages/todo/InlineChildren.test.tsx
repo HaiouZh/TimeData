@@ -707,3 +707,64 @@ describe("InlineChildren mode 行为矩阵", () => {
     await unmount(root);
   });
 });
+
+describe("子任务详情入口", () => {
+  it("draggable：点详情按钮上抛该子任务", async () => {
+    const onOpenDetail = vi.fn();
+    const parent = await seedParentWithChildren();
+    const { host, root } = await renderDom(
+      createElement(SyncProvider, null, createElement(InlineChildren, { parentId: parent.id, mode: "draggable", onOpenDetail })),
+    );
+    await settle();
+
+    const btn = host.querySelector('button[aria-label="打开子任务详情 子任务0"]') as HTMLButtonElement | null;
+    expect(btn).not.toBeNull();
+    await act(async () => {
+      btn?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    await settle();
+
+    expect(onOpenDetail).toHaveBeenCalledTimes(1);
+    expect(onOpenDetail.mock.calls[0][0]).toMatchObject({ title: "子任务0" });
+    await unmount(root);
+  });
+
+  it("static：重复模板的子任务也给详情入口——模板那份标签只有这一条路能删", async () => {
+    const onOpenDetail = vi.fn();
+    const parent = await seedParentWithChildren();
+    const { host, root } = await renderDom(
+      createElement(SyncProvider, null, createElement(InlineChildren, { parentId: parent.id, mode: "static", onOpenDetail })),
+    );
+    await settle();
+
+    const btn = host.querySelector('button[aria-label="打开子任务详情 子任务0"]') as HTMLButtonElement | null;
+    expect(btn).not.toBeNull();
+    await act(async () => {
+      btn?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    await settle();
+
+    expect(onOpenDetail).toHaveBeenCalledTimes(1);
+    await unmount(root);
+  });
+
+  it("readonly：快照不给详情入口", async () => {
+    const onOpenDetail = vi.fn();
+    const parent = await seedParentWithChildren();
+    const { host, root } = await renderDom(
+      createElement(SyncProvider, null, createElement(InlineChildren, { parentId: parent.id, mode: "readonly", onOpenDetail })),
+    );
+    await settle();
+
+    expect(host.querySelector('button[aria-label^="打开子任务详情"]')).toBeNull();
+    await unmount(root);
+  });
+
+  it("宿主没给回调时不渲染详情按钮", async () => {
+    const parent = await seedParentWithChildren();
+    const { host, root } = await renderChildren(parent.id, "draggable");
+
+    expect(host.querySelector('button[aria-label^="打开子任务详情"]')).toBeNull();
+    await unmount(root);
+  });
+});

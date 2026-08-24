@@ -22,6 +22,8 @@ export interface InlineChildrenProps {
   onCopyTitle?: (child: Task) => void;
   /** 宿主在多选态断掉子行复制：置 true 时 Shift+单击子任务标题回落为普通单击（进编辑）。 */
   copyDisabled?: boolean;
+  /** 打开某条子任务的详情抽屉；不给就不渲染那个入口（readonly 快照恒不渲染）。 */
+  onOpenDetail?: (child: Task) => void;
   /**
    * 子任务行的 dnd id 前缀（默认空 = 用裸 task id）。项目区要传——组内某个成员同时在手头 /
    * 今天区渲染时，它名下的子任务会被渲染两次，两处都用裸 id 会撞。
@@ -47,6 +49,7 @@ export function InlineChildren({
   onCopyTitle,
   copyDisabled = false,
   dndIdPrefix,
+  onOpenDetail,
 }: InlineChildrenProps) {
   const children = useTaskChildren(parentId);
   const [drafting, setDrafting] = useState(autoDraft);
@@ -108,6 +111,7 @@ export function InlineChildren({
         onEnter={() => setDrafting(true)}
         onCopyTitle={onCopyTitle}
         copyDisabled={copyDisabled}
+        onOpenDetail={onOpenDetail}
         doneOverride={projectionByChildId?.get(child.id)?.effectiveDone}
         toggleDisabled={projectionByChildId != null && projectionByChildId.get(child.id)?.targetOccChildId == null}
       />
@@ -125,6 +129,7 @@ export function InlineChildren({
         onEnter={() => setDrafting(true)}
         onCopyTitle={onCopyTitle}
         copyDisabled={copyDisabled}
+        onOpenDetail={onOpenDetail}
       />
     ),
   );

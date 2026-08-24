@@ -964,6 +964,10 @@ export async function listTasks(now: Date = new Date()): Promise<TodoBuckets> {
     else occurrencesByRule.set(t.ruleId, [t]);
   }
   const ruleDueKey = new Map<string, string>();
+  const byId = new Map(all.map((t) => [t.id, t]));
+  /** 这条任务会不会落进已完成区——已完成、或账本判定耗尽的规则，与下方分桶的两条 completed 入口同源。 */
+  const landsInCompleted = (t: Task): boolean =>
+    t.done || (t.recurrence !== null && isRuleExhausted(t, occurrencesByRule.get(t.id) ?? []));
   for (const t of all) {
     const isChild = (t.parentId ?? null) !== null;
     // 阶段3：子任务不再整行跳过。它可以带排期进 today/scheduled、被抓进手头，
@@ -999,6 +1003,16 @@ export async function listTasks(now: Date = new Date()): Promise<TodoBuckets> {
       ruleDueKey.set(t.id, nextDueDate(t, occurrences, now) ?? "9999-12-31");
       buckets.scheduled.push(t); // 重复模板退到 scheduled 管理区，不投影 today
       continue;
+    }
+    // 父任务也落已完成区时，已完成的子任务不再单列。同一个区里父子各铺一行是纯冗余——父行的
+    // 子任务进度（m/n）已经把全部信息说完了，而重复任务每发一次就多铺一屏（发次 + 它的每条镜像
+    // 子任务）。**只挡「父也在已完成区」这一种**：父任务还开着时，那条勾掉的子任务必须留在已完成
+    // 区，否则它是本日战果里唯一的痕迹，收掉就等于凭空消失。
+    // 上面那条 `isChild && t.ruleId !== null` 防的是另一件事（镜像子任务自带 ruleId），当前实现下
+    // 空转；漏进来的一直是**已完成的**子任务，这里补的就是它。
+    if (isChild) {
+      const parent = t.parentId === null ? undefined : byId.get(t.parentId);
+      if (t.done && parent && landsInCompleted(parent)) continue;
     }
     const p = placementForTask(t, now);
     if (p.pool === "completed") buckets.completed.push(t);

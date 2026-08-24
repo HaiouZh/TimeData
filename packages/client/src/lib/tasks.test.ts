@@ -1978,6 +1978,46 @@ describe("子任务分区口径（阶段3）", () => {
     expect(buckets.completed.map((t) => t.id)).toContain(child.id);
   });
 
+  it("父任务也在已完成区时，子任务不再单列——同一件事不铺两遍", async () => {
+    const parent = await addTask({ title: "装修" });
+    const child = await createChildTask(parent.id, "找工人");
+    await toggleTaskDone(child.id, { now: NOW });
+    await toggleTaskDone(parent.id, { now: NOW });
+
+    const buckets = await listTasks(NOW);
+    expect(buckets.completed.map((t) => t.id)).toContain(parent.id);
+    expect(buckets.completed.map((t) => t.id)).not.toContain(child.id);
+  });
+
+  it("父任务还没完成时，已完成的子任务照常单列——那条战果不能消失", async () => {
+    const parent = await addTask({ title: "装修" });
+    const child = await createChildTask(parent.id, "找工人");
+    await toggleTaskDone(child.id, { now: NOW });
+
+    const buckets = await listTasks(NOW);
+    expect(buckets.completed.map((t) => t.id)).toContain(child.id);
+    expect(buckets.completed.map((t) => t.id)).not.toContain(parent.id);
+  });
+
+  it("发次完成后，它的镜像子任务不再单列——重复任务不会每发都铺一屏", async () => {
+    const rule = await addTask({
+      title: "每日习惯",
+      recurrence: { freq: "daily", interval: 1, basis: "due" },
+      startAt: localDateOf(new Date(2026, 6, 8)),
+      now: new Date("2026-07-08T06:00:00.000Z"),
+    });
+    await createChildTask(rule.id, "RQ签到", new Date("2026-07-08T06:30:00.000Z"));
+    await runMaterialization(new Date("2026-07-08T07:00:00.000Z"));
+    const occ = (await db.tasks.where("ruleId").equals(rule.id).toArray()).find((o) => !o.skipped);
+    const occChild = (await db.tasks.where("parentId").equals(occ!.id).toArray())[0];
+    await toggleTaskDone(occChild!.id, { now: NOW });
+    await toggleTaskDone(occ!.id, { now: NOW });
+
+    const buckets = await listTasks(NOW);
+    expect(buckets.completed.map((t) => t.id)).toContain(occ!.id);
+    expect(buckets.completed.map((t) => t.id)).not.toContain(occChild!.id);
+  });
+
   it("重复模板的子任务仍不独立进桶", async () => {
     const rule = await addTask({
       title: "每周三倒垃圾",

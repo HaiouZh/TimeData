@@ -1,5 +1,6 @@
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
+import { DotsThree } from "@phosphor-icons/react";
 import type { Task } from "@timedata/shared";
 import {
   type CSSProperties,
@@ -11,6 +12,7 @@ import {
   useState,
 } from "react";
 import { copyText } from "../../quick-notes/clipboard.js";
+import { Icon } from "../../components/Icon.js";
 import { Checkbox } from "../../components/ui/Checkbox.js";
 import { ConfirmDeleteButton } from "../../components/ui/ConfirmDeleteButton.js";
 
@@ -25,6 +27,12 @@ export interface ChildRowCallbacks {
   onCopyTitle?: (child: Task) => void;
   /** 宿主在多选态断掉子行复制：置 true 时 Shift+单击回落为普通单击（进编辑）。 */
   copyDisabled?: boolean;
+  /**
+   * 打开这条子任务的详情抽屉。**不给就不渲染那个按钮**——只读快照与不接抽屉的宿主照旧无入口。
+   * 子任务身上的标签、日期、前置只有抽屉里改得动（行上单击已被就地改名占了），没有这条路时
+   * 重复模板子任务上的标签会一路复制给每一发、且永远删不掉。
+   */
+  onOpenDetail?: (child: Task) => void;
 }
 
 interface ChildRowBodyProps extends ChildRowCallbacks {
@@ -93,6 +101,7 @@ function ChildRowBody({
   toggleDisabled = false,
   onCopyTitle,
   copyDisabled = false,
+  onOpenDetail,
 }: ChildRowBodyProps) {
   const [draft, setDraft] = useState(child.title);
   const lastExternal = useRef(child.title);
@@ -229,6 +238,18 @@ function ChildRowBody({
         >
           {child.title}
         </span>
+      )}
+      {!readonly && onOpenDetail && (
+        // 与删除按钮同一种显现方式（悬停 / 键盘聚焦），不占常驻视觉——子任务行本来就窄。
+        // 触屏上没有 hover，但点一下行同样会让这一组按钮显出来，与删除按钮的既有行为一致。
+        <button
+          type="button"
+          aria-label={`打开子任务详情 ${child.title}`}
+          onClick={() => onOpenDetail(child)}
+          className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-ctl text-ink-3 opacity-0 transition-opacity hover:bg-surface-hover hover:text-ink-2 group-focus-within:opacity-100 group-hover:opacity-100"
+        >
+          <Icon icon={DotsThree} size={16} />
+        </button>
       )}
       {!readonly && (
         // 删子任务走就地二次确认：它调的 deleteTaskCascade 是单事务级联删（连子树、连重复模板的
