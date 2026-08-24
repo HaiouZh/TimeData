@@ -65,6 +65,21 @@ async function mountSwitcher(track: Track, steps: TrackStep[], onError?: (msg: s
   return mounted.host;
 }
 
+/**
+ * 预期 SignalSwitcher **不**渲染时用这个，别走 mountSwitcher。
+ *
+ * mountSwitcher 的等待循环靠「switcher 出现」break，永远不出现就把 200 轮 flush 跑满。
+ * 每轮是一次 setTimeout(0) 宏任务：单跑时机器空闲，200 轮几十毫秒；`pnpm gate` 里三个
+ * project 并发抢 CPU，每轮被拉到 20ms 量级，单条就顶穿 5s 默认超时——所以它只在全量里红、
+ * 单独跑必绿，看着像 flaky 其实是稳定的。这里给 20 轮：足够让 liveQuery 回流后的渲染现形
+ * （正常用例里 switcher 都在头几轮就出现），又不至于把时间烧在一个注定等不到的条件上。
+ */
+async function mountExpectingAbsent(track: Track, steps: TrackStep[]): Promise<HTMLElement> {
+  mounted = await renderDom(createElement(SignalSwitcher, { track, steps }));
+  for (let i = 0; i < 20; i += 1) await flush();
+  return mounted.host;
+}
+
 function hostHasSwitcher(host: HTMLElement): boolean {
   return host.querySelector('[data-testid="signal-switcher"]') !== null;
 }
@@ -195,10 +210,9 @@ describe("SignalSwitcher", () => {
   it("⑩ concluded 轨道 → 返回 null 不渲染", async () => {
     const track = trackFactory({ status: "concluded" });
     await db.tracks.add(track);
-    const host = await mountSwitcher(track, []);
-    // SignalSwitcher 返回 null，host 内应无 switcher 容器
-    await flush();
-    // 即使等待，也不应出现按钮
+    const host = await mountExpectingAbsent(track, []);
+    // SignalSwitcher 返回 null，host 内应无 switcher 容器；上面已经等过 20 轮，
+    // 「延迟出现」也会在这之前现形。
     expect(host.querySelector('[data-testid="signal-switcher"]')).toBeNull();
     expect(host.querySelector("button")).toBeNull();
   });
@@ -206,8 +220,7 @@ describe("SignalSwitcher", () => {
   it("非 active 时整行不渲染（parked）", async () => {
     const track = trackFactory({ status: "parked" as Track["status"] });
     await db.tracks.add(track);
-    const host = await mountSwitcher(track, []);
-    await flush();
+    const host = await mountExpectingAbsent(track, []);
     expect(host.querySelector('[data-testid="signal-switcher"]')).toBeNull();
   });
 
