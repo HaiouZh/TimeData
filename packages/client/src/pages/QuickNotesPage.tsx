@@ -1594,7 +1594,8 @@ export default function QuickNotesPage() {
         <button
           type="button"
           onClick={jumpToLatest}
-          className="fixed right-4 min-h-11 rounded-pill border border-border-strong bg-surface px-3 py-2 td-text-caption font-medium text-ink-2 shadow-elev1 transition hover:border-accent hover:text-ink [bottom:var(--bottom-offset)]"
+          aria-label="回到最新"
+          className="fixed right-4 flex size-11 items-center justify-center rounded-pill border border-border-strong bg-surface text-ink-2 shadow-elev1 transition hover:border-accent hover:text-ink [bottom:var(--bottom-offset)]"
           // 兜底类 [bottom:var(--bottom-offset)]：env() 未定义环境（Firefox 桌面 / 旧 WebView）里 calc
           // 整条失效、内联 bottom 被丢弃，由它还原批次前的纯数值位置（floatBottomInsetPx，原口径
           // navOffsetPx + bottomInsetPx，现走合成并计入键盘高）。
@@ -1607,10 +1608,7 @@ export default function QuickNotesPage() {
             } as CSSProperties
           }
         >
-          <span className="inline-flex items-center gap-1">
-            <Icon icon={ArrowDown} size={14} />
-            <span>最新</span>
-          </span>
+          <Icon icon={ArrowDown} size={18} />
         </button>
       )}
 
