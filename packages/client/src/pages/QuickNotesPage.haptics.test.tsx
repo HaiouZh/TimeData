@@ -8,7 +8,7 @@ import { flushSync } from "react-dom";
 import { MemoryRouter } from "react-router";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { BottomNavProvider } from "../contexts/BottomNavContext.js";
-import { addQuickNote, setQuickNotePinned } from "../lib/quickNotes.js";
+import { addQuickNote } from "../lib/quickNotes.js";
 import { renderDom, unmount } from "../test/domHarness.js";
 
 const destructiveMock = vi.hoisted(() => vi.fn());
@@ -91,57 +91,55 @@ beforeEach(async () => {
 });
 
 /**
- * `handleDeleteDate` 的注释承诺了一条**顺序**约束：「没东西可删」的早退与「用户取消确认」都要在
- * 震动之前 return 掉，整批只在真的开始删的那一刻震一次。这条约束原先零覆盖——把 hapticDestructive()
- * 挪到确认框之前，全部既有用例照样绿（终审实测）。下面三条把三个位置都钉住。
+ * 删除动作的**顺序**约束：用户取消确认时不能震，只有真的开始删的那一刻才震一次。
+ *
+ * 这条约束原先挂在整日清理（`handleDeleteDate`）上，那个功能已随速记页的按天菜单一起退役
+ * （按日期范围导出 / 删除在 设置 → 数据 里）。约束本身没走——速记页仍有一处 `hapticDestructive()`
+ * 在单条删除里，位置错了照样会在用户按「取消」时震，所以覆盖跟着迁到这里。
+ *
+ * 顺带记一笔已知缺口：多选批量删除（`handleBatchDelete`）**不震**。按 design-language/invariants
+ * 第 13 条它本该震（且整批只震一次），但那是独立于本次改动的既有行为，没在这里顺手改。
  */
-describe("整日清理的触感顺序", () => {
+describe("删除的触感顺序", () => {
+  async function openBubbleMenu(host: HTMLElement, label: string) {
+    const bubble = Array.from(host.querySelectorAll('[role="button"]')).find(
+      (element) => element.textContent?.includes(label) ?? false,
+    );
+    if (!(bubble instanceof HTMLElement)) throw new Error(`missing bubble ${label}`);
+    await act(async () => {
+      bubble.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, clientX: 10, clientY: 10 }));
+    });
+    await flush();
+  }
+
   it("用户在确认框点「取消」时不震", async () => {
-    await seedDay(2);
+    await seedDay(1);
     const { host, root } = await renderPage("/quick-notes?date=2026-06-01");
     try {
-      await click(host.querySelector('button[aria-label="更多操作"]'));
-      await click(menuItemContaining(host, "清理"));
+      await openBubbleMenu(host, "第 0 条");
+      await click(menuItemContaining(host, "删除"));
       // 确认框已经弹出来了，说明流程确实走到了「等用户拍板」这一步。
-      expect(host.querySelector('[role="dialog"]')?.textContent).toContain("删除 6月1日 的速记");
+      expect(host.querySelector('[role="dialog"]')?.textContent).toContain("删除这条速记");
 
       await click(lastButtonByText(host, "取消"));
 
       expect(destructiveMock).not.toHaveBeenCalled();
-      await expect(db.quickNotes.count()).resolves.toBe(2);
+      await expect(db.quickNotes.count()).resolves.toBe(1);
     } finally {
       await unmount(root);
     }
   });
 
-  it("确认删除时整批只震一次（不逐条震）", async () => {
-    await seedDay(3);
+  it("确认删除时震一次", async () => {
+    await seedDay(1);
     const { host, root } = await renderPage("/quick-notes?date=2026-06-01");
     try {
-      await click(host.querySelector('button[aria-label="更多操作"]'));
-      await click(menuItemContaining(host, "清理"));
+      await openBubbleMenu(host, "第 0 条");
+      await click(menuItemContaining(host, "删除"));
       await click(lastButtonByText(host, "删除"));
 
       expect(destructiveMock).toHaveBeenCalledTimes(1);
       await expect(db.quickNotes.count()).resolves.toBe(0);
-    } finally {
-      await unmount(root);
-    }
-  });
-
-  it("这一天没有可删的（只剩置顶）时连确认框都不弹，更不震", async () => {
-    const pinned = await addQuickNote("置顶", {
-      occurredAt: "2026-06-01T03:00:00.000Z",
-      now: new Date("2026-06-01T04:00:00.000Z"),
-    });
-    await setQuickNotePinned(pinned.id, true);
-    const { host, root } = await renderPage("/quick-notes?date=2026-06-01");
-    try {
-      await click(host.querySelector('button[aria-label="更多操作"]'));
-      await click(menuItemContaining(host, "清理"));
-
-      expect(host.querySelector('[role="dialog"]')).toBeNull();
-      expect(destructiveMock).not.toHaveBeenCalled();
     } finally {
       await unmount(root);
     }

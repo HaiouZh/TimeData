@@ -142,13 +142,6 @@ function menuItem(host: HTMLElement, text: string): HTMLButtonElement | null {
   return (match as HTMLButtonElement) ?? null;
 }
 
-function menuItemContaining(host: HTMLElement, text: string): HTMLButtonElement | null {
-  const match = Array.from(host.querySelectorAll('button[role="menuitem"]')).find(
-    (button) => button.textContent?.includes(text) ?? false,
-  );
-  return (match as HTMLButtonElement) ?? null;
-}
-
 function lastButtonByText(host: HTMLElement, text: string): HTMLButtonElement | null {
   const matches = Array.from(host.querySelectorAll("button")).filter((button) => button.textContent === text);
   return matches.at(-1) ?? null;
@@ -901,37 +894,6 @@ describe("QuickNotesPage", () => {
     await unmount(root);
   });
 
-  it("clears a selected date through the cleanup action", async () => {
-    await db.quickNotes.bulkAdd([
-      {
-        id: "today",
-        text: "当天",
-        occurredAt: "2026-06-01T04:00:00.000Z",
-        createdAt: "2026-06-01T04:00:00.000Z",
-        updatedAt: "2026-06-01T04:00:00.000Z",
-      },
-      {
-        id: "other",
-        text: "别天",
-        occurredAt: "2026-06-02T04:00:00.000Z",
-        createdAt: "2026-06-02T04:00:00.000Z",
-        updatedAt: "2026-06-02T04:00:00.000Z",
-      },
-    ]);
-    const { host, root } = await renderPage("/quick-notes?date=2026-06-01");
-
-    await click(host.querySelector('button[aria-label="更多操作"]'));
-    await click(menuItem(host, "清理 6月1日"));
-
-    expect(host.querySelector('[role="dialog"]')?.textContent).toContain("删除 6月1日 的速记");
-    await click(lastButtonByText(host, "删除"));
-
-    await expect(db.quickNotes.get("today")).resolves.toBeUndefined();
-    await expect(db.quickNotes.get("other")).resolves.toMatchObject({ text: "别天" });
-
-    await unmount(root);
-  });
-
   it("日期条跳转到选中的日期", async () => {
     // header 常驻跳转框已收掉（Task 5），入口改为当前日期条自身；先给目标日种一条速记
     // 才有分隔条可点——沿用「主线日期条」describe 里同一套 trigger 选择器。
@@ -1035,7 +997,7 @@ describe("QuickNotesPage", () => {
     }
   });
 
-  it("退出搜索后 viewingDate 与 URL 归位到今天", async () => {
+  it("退出搜索后 URL 日期归位到今天", async () => {
     const { host, root } = await renderPage("/quick-notes?date=2026-06-01");
     try {
       expect(host.querySelector('[data-testid="date-param"]')?.textContent).toBe("2026-06-01");
@@ -1044,120 +1006,14 @@ describe("QuickNotesPage", () => {
       await click(host.querySelector('button[aria-label="退出搜索"]'));
 
       expect(host.querySelector('[data-testid="date-param"]')?.textContent).toBe("");
-      await click(host.querySelector('button[aria-label="更多操作"]'));
-      const items = Array.from(host.querySelectorAll('[role="menuitem"]')).map((el) => el.textContent);
-      expect(items).toContain("清理今天");
     } finally {
       await unmount(root);
     }
   });
 
-  it("更多操作菜单文案带目标日期", async () => {
-    const { host, root } = await renderPage("/quick-notes?date=2026-06-01");
-    try {
-      await click(host.querySelector('button[aria-label="更多操作"]'));
-      const items = Array.from(host.querySelectorAll('[role="menuitem"]')).map((el) => el.textContent);
-      expect(items).toContain("导出 6月1日 Markdown");
-      expect(items).toContain("导出 6月1日 JSON");
-      expect(items).toContain("清理 6月1日");
-    } finally {
-      await unmount(root);
-    }
-  });
-
-  it("更多操作菜单文案将当前日期标为今天", async () => {
-    const { host, root } = await renderPage();
-    try {
-      await click(host.querySelector('button[aria-label="更多操作"]'));
-      const items = Array.from(host.querySelectorAll('[role="menuitem"]')).map((el) => el.textContent);
-      expect(items).toContain("导出今天 Markdown");
-      expect(items).toContain("导出今天 JSON");
-      expect(items).toContain("清理今天");
-    } finally {
-      await unmount(root);
-    }
-  });
-
-  it("清理确认框显示条数与置顶保留说明", async () => {
-    await addQuickNote("a", {
-      occurredAt: "2026-06-01T03:00:00.000Z",
-      now: new Date("2026-06-01T04:00:00.000Z"),
-    });
-    await addQuickNote("b", {
-      occurredAt: "2026-06-01T03:10:00.000Z",
-      now: new Date("2026-06-01T04:00:00.000Z"),
-    });
-    const pinned = await addQuickNote("pin", {
-      occurredAt: "2026-06-01T03:20:00.000Z",
-      now: new Date("2026-06-01T04:00:00.000Z"),
-    });
-    await setQuickNotePinned(pinned.id, true);
-
-    const { host, root } = await renderPage("/quick-notes?date=2026-06-01");
-    try {
-      await click(host.querySelector('button[aria-label="更多操作"]'));
-      await click(menuItemContaining(host, "清理"));
-
-      expect(host.textContent).toContain("将删除 2 条速记");
-      expect(host.textContent).toContain("另有 1 条置顶会保留");
-      expect(host.textContent).toContain("这不是今天");
-    } finally {
-      await unmount(root);
-    }
-  });
-
-  it("目标日为今天时确认框不出现非今天警示", async () => {
-    const today = getDateString(new Date());
-    await addQuickNote("today", { occurredAt: `${today}T03:00:00.000Z`, now: new Date(`${today}T04:00:00.000Z`) });
-
-    const { host, root } = await renderPage();
-    try {
-      await click(host.querySelector('button[aria-label="更多操作"]'));
-      await click(menuItemContaining(host, "清理"));
-
-      expect(host.textContent).toContain("将删除 1 条速记");
-      expect(host.textContent).not.toContain("这不是今天");
-    } finally {
-      await unmount(root);
-    }
-  });
-
-  it("目标日无可删速记时不弹确认框只提示", async () => {
-    const pinned = await addQuickNote("pin", {
-      occurredAt: "2026-06-01T03:20:00.000Z",
-      now: new Date("2026-06-01T04:00:00.000Z"),
-    });
-    await setQuickNotePinned(pinned.id, true);
-
-    const { host, root } = await renderPage("/quick-notes?date=2026-06-01");
-    try {
-      await click(host.querySelector('button[aria-label="更多操作"]'));
-      await click(menuItemContaining(host, "清理"));
-
-      expect(host.textContent).toContain("6月1日 没有可清理的速记");
-      expect(host.querySelector('[role="dialog"]')).toBeNull();
-      expect(host.textContent).not.toContain("将删除");
-    } finally {
-      await unmount(root);
-    }
-  });
-
-  it("空日导出不生成文件只提示", async () => {
-    const downloads = await import("../quick-notes/fileDownload.ts");
-    const { host, root } = await renderPage("/quick-notes?date=2026-06-01");
-    try {
-      await click(host.querySelector('button[aria-label="更多操作"]'));
-      await click(menuItemContaining(host, "Markdown"));
-
-      expect(host.textContent).toContain("6月1日 没有速记，未导出");
-      expect(downloads.downloadQuickNotesMarkdown).not.toHaveBeenCalled();
-      expect(downloads.downloadQuickNotesJson).not.toHaveBeenCalled();
-    } finally {
-      await unmount(root);
-    }
-  });
-
-  it("Markdown 导出成功提示带条数", async () => {
+  it("多选导出 Markdown 走到真正的下载", async () => {
+    // 按天导出退役后，速记页只剩多选这一条导出路径——它原先只有「菜单能打开」的覆盖，
+    // 没人守到落文件这一步，这里补上，别让整条链路随按天导出一起失去闸。
     const downloads = await import("../quick-notes/fileDownload.ts");
     const today = getDateString(new Date());
     await addQuickNote("a", { occurredAt: `${today}T03:00:00.000Z`, now: new Date(`${today}T04:00:00.000Z`) });
@@ -1165,10 +1021,15 @@ describe("QuickNotesPage", () => {
 
     const { host, root } = await renderPage();
     try {
-      await click(host.querySelector('button[aria-label="更多操作"]'));
-      await click(menuItemContaining(host, "Markdown"));
+      await openMenu(host, "a");
+      await click(menuItem(host, "选择"));
+      await click(lastButtonByText(host, "全选"));
+      expect(host.textContent).toContain("已选 2 条");
 
-      expect(host.textContent).toContain("已导出 2 条速记 Markdown");
+      await click(lastButtonByText(host, "导出"));
+      await click(menuItem(host, "Markdown"));
+
+      expect(host.textContent).toContain("已导出 Markdown");
       expect(downloads.downloadQuickNotesMarkdown).toHaveBeenCalledTimes(1);
     } finally {
       await unmount(root);
@@ -1465,11 +1326,14 @@ describe("QuickNotesPage", () => {
   });
 
   it("keeps secondary toolbar actions while search and punch move into the empty composer", async () => {
+    const todayStr = getDateString(new Date());
+    await addQuickNote("今日一条", {
+      occurredAt: `${todayStr}T03:00:00.000Z`,
+      now: new Date(`${todayStr}T04:00:00.000Z`),
+    });
     const { host, root } = await renderPage();
 
-    expect(host.querySelector('header button[aria-label="搜索速记"]')).toBeNull();
-    expect(host.querySelector('header button[aria-label="打点（记录到现在）"]')).toBeNull();
-    expect(host.querySelector('header button[aria-label="更多操作"]')).not.toBeNull();
+    expect(host.querySelector("header")).toBeNull();
     expect(composerButton(host, "搜索速记")).toBeInstanceOf(HTMLButtonElement);
     expect(composerButton(host, "打点（记录到现在）")).toBeInstanceOf(HTMLButtonElement);
 
@@ -2084,16 +1948,9 @@ describe("多选 × 置顶（QN-09/11）", () => {
   });
 
 
-  it("header 更多操作与导出菜单按 Escape 关闭（QN-16）", async () => {
+  it("多选态导出菜单按 Escape 关闭（QN-16）", async () => {
     await addNote("note-esc", "菜单条", "2026-06-01T04:00:00.000Z");
     const { host, root } = await renderPage();
-
-    await click(host.querySelector('button[aria-label="更多操作"]'));
-    expect(host.querySelector('[role="menu"][aria-label="速记导出与清理"]')).toBeInstanceOf(HTMLElement);
-    await act(async () => {
-      document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
-    });
-    expect(host.querySelector('[role="menu"][aria-label="速记导出与清理"]')).toBeNull();
 
     await openMenu(host, "菜单条");
     await click(menuItem(host, "选择"));
@@ -2617,346 +2474,45 @@ describe("停手隐身", () => {
   });
 }, PAGE_TEST_TIMEOUT_MS);
 
-describe("viewingDate 接管导出/清理", () => {
-  it("停手后导出/清理的目标日期跟随眼前那天，不再是「今天」", async () => {
-    await db.quickNotes.bulkAdd([
-      {
-        id: "v1",
-        text: "六月一日",
-        occurredAt: "2026-06-01T04:00:00.000Z",
-        createdAt: "2026-06-01T04:00:00.000Z",
-        updatedAt: "2026-06-01T04:00:00.000Z",
-      },
-      {
-        id: "v2",
-        text: "六月二日",
-        occurredAt: "2026-06-02T04:00:00.000Z",
-        createdAt: "2026-06-02T04:00:00.000Z",
-        updatedAt: "2026-06-02T04:00:00.000Z",
-      },
-    ]);
+describe("常态顶栏", () => {
+  it("常态不渲染顶栏，进多选才出现", async () => {
+    await addQuickNote("普通条", {
+      occurredAt: "2026-06-01T04:00:00.000Z",
+      now: new Date("2026-06-01T04:30:00.000Z"),
+    });
     const { host, root } = await renderPage();
-    const list = host.querySelector<HTMLElement>('[aria-label="速记列表"]');
-    if (!list) throw new Error("missing quick notes list");
-    const dividers = Array.from(host.querySelectorAll<HTMLElement>("[data-date-label]"));
 
-    list.getBoundingClientRect = () => ({ top: 0, height: 400 }) as DOMRect;
-    dividers[0].getBoundingClientRect = () => ({ top: -10, height: 28 }) as DOMRect;
-    dividers[1].getBoundingClientRect = () => ({ top: 300, height: 28 }) as DOMRect;
+    expect(host.querySelector("header")).toBeNull();
 
-    vi.useFakeTimers({ shouldAdvanceTime: true });
-    await act(async () => {
-      list.dispatchEvent(new Event("scroll", { bubbles: true }));
-    });
-    await act(async () => {
-      vi.advanceTimersByTime(1_500);
-    });
-    vi.useRealTimers();
-
-    await click(host.querySelector<HTMLButtonElement>('button[aria-label="更多操作"]'));
-
-    // 只认菜单项：host 里所有 button 也包括日期分隔条自身的 DateField trigger，它的 textContent
-    // 恒等于「6月1日」，用全量 button 收文案会让这条断言恒绿（扫描根本没写 viewingDate 也照过）。
-    const labels = Array.from(host.querySelectorAll('button[role="menuitem"]')).map((b) => b.textContent ?? "");
-    expect(labels.some((text) => text.includes("6月1日"))).toBe(true);
-    expect(labels.some((text) => text.includes("导出今天"))).toBe(false);
-
-    // 文案对了不等于目标对了——真按下去删的必须也是 6月1日。既有的清理用例走的是
-    // ?date= 初值那条路，停手扫描这条新链路的真实删除目标只有这里守得住。
-    await click(menuItem(host, "清理 6月1日"));
-    expect(host.querySelector('[role="dialog"]')?.textContent).toContain("删除 6月1日 的速记");
-    await click(lastButtonByText(host, "删除"));
-
-    await expect(db.quickNotes.get("v1")).resolves.toBeUndefined();
-    await expect(db.quickNotes.get("v2")).resolves.toMatchObject({ text: "六月二日" });
+    await openMenu(host, "普通条");
+    await click(menuItem(host, "选择"));
+    expect(host.querySelector("header")).toBeInstanceOf(HTMLElement);
 
     await unmount(root);
   });
 
-  it("搜索态滚动后立刻退出搜索，遗留的停手定时器不得改写刚归位的今天", async () => {
-    await db.quickNotes.bulkAdd([
-      {
-        id: "r1",
-        text: "六月一日可搜索",
-        occurredAt: "2026-06-01T04:00:00.000Z",
-        createdAt: "2026-06-01T04:00:00.000Z",
-        updatedAt: "2026-06-01T04:00:00.000Z",
-      },
-      {
-        id: "r2",
-        text: "六月二日可搜索",
-        occurredAt: "2026-06-02T04:00:00.000Z",
-        createdAt: "2026-06-02T04:00:00.000Z",
-        updatedAt: "2026-06-02T04:00:00.000Z",
-      },
-    ]);
-    const { host, root } = await renderPage();
-    const list = host.querySelector<HTMLElement>('[aria-label="速记列表"]');
-    if (!list) throw new Error("missing quick notes list");
-    list.getBoundingClientRect = () => ({ top: 0, height: 400 }) as DOMRect;
-
-    await click(host.querySelector<HTMLButtonElement>('button[aria-label="搜索速记"]'));
-    const searchBox = host.querySelector<HTMLInputElement>('input[placeholder="搜索速记…"]');
-    if (!searchBox) throw new Error("missing search input");
-
-    vi.useFakeTimers({ shouldAdvanceTime: true });
-    await act(async () => {
-      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
-      setter?.call(searchBox, "可搜索");
-      searchBox.dispatchEvent(new Event("input", { bubbles: true }));
-    });
-    await act(async () => {
-      vi.advanceTimersByTime(300); // 搜索 debounce 200ms
-    });
-    await flush();
-
-    // 搜索态里滚一下：种下停手定时器（此刻 searching 为真，回调本该只扫搜索结果）。
-    await act(async () => {
-      list.dispatchEvent(new Event("scroll", { bubbles: true }));
-    });
-    expect(vi.getTimerCount()).toBeGreaterThan(0);
-
-    // 1.2 秒内退出搜索：viewingDate 显式归位到今天。
-    await click(host.querySelector<HTMLButtonElement>('button[aria-label="退出搜索"]'));
-
-    // 主线子树是重新挂的，几何要在这里重新伪造：定时器若还在，它会扫到 6月1日 那条粘住。
-    const dividers = Array.from(host.querySelectorAll<HTMLElement>("[data-date-label]"));
-    expect(dividers.length).toBe(2);
-    dividers[0].getBoundingClientRect = () => ({ top: -10, height: 28 }) as DOMRect;
-    dividers[1].getBoundingClientRect = () => ({ top: 300, height: 28 }) as DOMRect;
-
-    await act(async () => {
-      vi.advanceTimersByTime(1_500);
-    });
-    vi.useRealTimers();
-
-    // 不清定时器的实现：回调 fire 时 searching 已是 false，于是去扫主线、把刚设成今天的
-    // viewingDate 改成 6月1日——用户根本没滚过主线，「清理今天」却变成「清理 6月1日」。
-    await click(host.querySelector<HTMLButtonElement>('button[aria-label="更多操作"]'));
-    const items = Array.from(host.querySelectorAll('[role="menuitem"]')).map((el) => el.textContent ?? "");
-    expect(items).toContain("清理今天");
-    expect(items.some((text) => text.includes("6月1日"))).toBe(false);
-
-    await unmount(root);
-  });
-
-  it("「更多操作」开着时停手扫描不改写 viewingDate——菜单项不在眼皮底下换目标日", async () => {
-    await db.quickNotes.bulkAdd([
-      {
-        id: "n1",
-        text: "六月一日",
-        occurredAt: "2026-06-01T04:00:00.000Z",
-        createdAt: "2026-06-01T04:00:00.000Z",
-        updatedAt: "2026-06-01T04:00:00.000Z",
-      },
-      {
-        id: "n2",
-        text: "六月二日",
-        occurredAt: "2026-06-02T04:00:00.000Z",
-        createdAt: "2026-06-02T04:00:00.000Z",
-        updatedAt: "2026-06-02T04:00:00.000Z",
-      },
-    ]);
-    const { host, root } = await renderPage();
-    const list = host.querySelector<HTMLElement>('[aria-label="速记列表"]');
-    if (!list) throw new Error("missing quick notes list");
-    const dividers = Array.from(host.querySelectorAll<HTMLElement>("[data-date-label]"));
-    list.getBoundingClientRect = () => ({ top: 0, height: 400 }) as DOMRect;
-    dividers[0].getBoundingClientRect = () => ({ top: -10, height: 28 }) as DOMRect;
-    dividers[1].getBoundingClientRect = () => ({ top: 300, height: 28 }) as DOMRect;
-
-    vi.useFakeTimers({ shouldAdvanceTime: true });
-    // 先滚动种下定时器，此刻菜单还没开——回调闭包冻结的就是这个值。
-    await act(async () => {
-      list.dispatchEvent(new Event("scroll", { bubbles: true }));
-    });
-    // 倒计时途中点开「更多操作」（不再滚动，所以定时器不会被重设）。
-    await click(host.querySelector<HTMLButtonElement>('button[aria-label="更多操作"]'));
-    expect(vi.getTimerCount()).toBeGreaterThan(0);
-    const before = Array.from(host.querySelectorAll('[role="menuitem"]')).map((el) => el.textContent ?? "");
-    expect(before).toContain("清理今天");
-
-    await act(async () => {
-      vi.advanceTimersByTime(1_500);
-    });
-    vi.useRealTimers();
-
-    // 无菜单守卫的实现会在这里把 viewingDate 改成 6月1日：同一个位置的按钮从「导出今天 Markdown」
-    // 变成「导出 6月1日 Markdown」，用户按视觉记忆按下去，导出的是另一天且导出没有二次确认。
-    const after = Array.from(host.querySelectorAll('[role="menuitem"]')).map((el) => el.textContent ?? "");
-    expect(after).toContain("清理今天");
-    expect(after.some((text) => text.includes("6月1日"))).toBe(false);
-
-    await unmount(root);
-  });
-
-  it("跳到没有速记的那天：落点回列表顶，停手 1.2 秒后目标日仍是它", async () => {
-    // 显式跳转之后还会发生一次**程序化**落点滚动，浏览器在滚完之后才异步派发 scroll，
-    // handleScroll 那时才排下扫描——setViewingDateExplicitly 清的是写入之前那个，压不到它。
-    // 目标日有速记时无害（落点就是目标日），一条都没有时落点退回列表顶（别的天的内容），
-    // 用户全程没滚过，1.2 秒后「清理 6月8日」静默变成「清理 6月7日」，而导出没有二次确认。
-    const originalScrollIntoView = Element.prototype.scrollIntoView;
-    Element.prototype.scrollIntoView = vi.fn();
-    await db.quickNotes.bulkAdd([
-      {
-        id: "d7",
-        text: "六月七日",
-        occurredAt: "2026-06-07T04:00:00.000Z",
-        createdAt: "2026-06-07T04:00:00.000Z",
-        updatedAt: "2026-06-07T04:00:00.000Z",
-      },
-      {
-        id: "d10",
-        text: "六月十日",
-        occurredAt: "2026-06-10T04:00:00.000Z",
-        createdAt: "2026-06-10T04:00:00.000Z",
-        updatedAt: "2026-06-10T04:00:00.000Z",
-      },
-    ]);
-    const { host, root } = await renderPage("/quick-notes?date=2026-06-10");
-
-    try {
-      await click(
-        host.querySelector('[data-local-date="2026-06-10"] button[aria-label*="点击跳转到其他日期"]'),
-      );
-      await click(document.body.querySelector('button[aria-label="2026-06-08"]'));
-      await flush();
-
-      const list = host.querySelector<HTMLElement>('[aria-label="速记列表"]');
-      if (!list) throw new Error("missing quick notes list");
-      list.getBoundingClientRect = () => ({ top: 0, height: 400 }) as DOMRect;
-
-      vi.useFakeTimers({ shouldAdvanceTime: true });
-      // jsdom 不会替程序化滚动派发 scroll，这里手动补上浏览器那一次（异步、滚动之后）。
-      await act(async () => {
-        list.dispatchEvent(new Event("scroll", { bubbles: true }));
-      });
-      await flush();
-
-      // 落点回顶顺带触发 loadOlder，6月7 那条随之进窗口——正是「列表顶是别的天」这个前提。
-      const dividers = Array.from(host.querySelectorAll<HTMLElement>("[data-date-label]"));
-      expect(dividers[0]?.dataset.localDate).toBe("2026-06-07");
-      for (const [index, node] of dividers.entries()) {
-        node.getBoundingClientRect = () => ({ top: index === 0 ? -10 : 300, height: 28 }) as DOMRect;
-      }
-
-      await act(async () => {
-        vi.advanceTimersByTime(1_500);
-      });
-      vi.useRealTimers();
-
-      await click(host.querySelector('button[aria-label="更多操作"]'));
-      const items = Array.from(host.querySelectorAll('[role="menuitem"]')).map((el) => el.textContent ?? "");
-      expect(items).toContain("清理 6月8日");
-      expect(items.some((text) => text.includes("6月7日"))).toBe(false);
-    } finally {
-      Element.prototype.scrollIntoView = originalScrollIntoView;
-      vi.useRealTimers();
-      await unmount(root);
-    }
-  });
-
-  it("日期条跳转把导出/清理的目标日换成选中那天", async () => {
-    const originalScrollIntoView = Element.prototype.scrollIntoView;
-    Element.prototype.scrollIntoView = vi.fn();
-    await db.quickNotes.bulkAdd([
-      {
-        id: "j1",
-        text: "六月一日",
-        occurredAt: "2026-06-01T04:00:00.000Z",
-        createdAt: "2026-06-01T04:00:00.000Z",
-        updatedAt: "2026-06-01T04:00:00.000Z",
-      },
-      {
-        id: "j2",
-        text: "六月二日",
-        occurredAt: "2026-06-02T04:00:00.000Z",
-        createdAt: "2026-06-02T04:00:00.000Z",
-        updatedAt: "2026-06-02T04:00:00.000Z",
-      },
-    ]);
-    const { host, root } = await renderPage("/quick-notes?date=2026-06-01");
-
-    try {
-      await click(
-        host.querySelector('[data-local-date="2026-06-01"] button[aria-label*="点击跳转到其他日期"]'),
-      );
-      await click(document.body.querySelector('button[aria-label="2026-06-02"]'));
-      await flush();
-
-      // 跳转只换 URL 不换 viewingDate 的实现：菜单仍写「清理 6月1日」，按下去删的是另一天。
-      await click(host.querySelector('button[aria-label="更多操作"]'));
-      const items = Array.from(host.querySelectorAll('[role="menuitem"]')).map((el) => el.textContent ?? "");
-      expect(items).toContain("清理 6月2日");
-      expect(items.some((text) => text.includes("6月1日"))).toBe(false);
-    } finally {
-      Element.prototype.scrollIntoView = originalScrollIntoView;
-      await unmount(root);
-    }
-  });
-
-  it("搜索结果定位到某天后，导出/清理的目标日跟着换到那天", async () => {
-    const originalScrollIntoView = Element.prototype.scrollIntoView;
-    Element.prototype.scrollIntoView = vi.fn();
-    const target = await addQuickNote("西瓜 目标", { occurredAt: "2026-06-01T04:00:00.000Z" });
-    await addQuickNote("今天无关", {});
-    const { host, root } = await renderPage();
-    vi.useFakeTimers({ shouldAdvanceTime: true });
-
-    try {
-      await click(composerButton(host, "搜索速记"));
-      await typeIntoSearch(searchInput(host), "西瓜");
-      await waitForSearchDebounce();
-      await click(locateButtonIn(host.querySelector(`[data-note-id="${target.id}"]`)));
-      vi.useRealTimers();
-
-      // 定位跳到 6月1日 却不改 viewingDate 的实现：导出/清理仍打在进搜索前那天（今天）。
-      await click(host.querySelector('button[aria-label="更多操作"]'));
-      const items = Array.from(host.querySelectorAll('[role="menuitem"]')).map((el) => el.textContent ?? "");
-      expect(items).toContain("清理 6月1日");
-      expect(items).not.toContain("清理今天");
-    } finally {
-      Element.prototype.scrollIntoView = originalScrollIntoView;
-      vi.useRealTimers();
-      await unmount(root);
-    }
-  });
-
-  it("「回到最新」把导出/清理的目标日拉回今天", async () => {
-    // 满 50 条同日 + 一条更新的，jumpToDate 才会离开「最新」窗口，发速记后才给「回到最新」入口。
-    await db.quickNotes.bulkAdd(
-      Array.from({ length: 50 }, (_, index) => {
-        const at = `2026-06-01T04:${String(index).padStart(2, "0")}:00.000Z`;
-        return { id: `old-${index}`, text: `旧记录 ${index}`, occurredAt: at, createdAt: at, updatedAt: at };
-      }),
-    );
-    await db.quickNotes.add({
-      id: "newer",
-      text: "更新的一条",
-      occurredAt: "2026-06-20T04:00:00.000Z",
-      createdAt: "2026-06-20T04:00:00.000Z",
-      updatedAt: "2026-06-20T04:00:00.000Z",
-    });
-    const { host, root } = await renderPage("/quick-notes?date=2026-06-01");
-
-    try {
-      await typeInto(input(host), "在历史里记一条");
-      await click(composerButton(host, "记录速记"));
-      await click(lastButtonByText(host, "回到最新"));
-
-      // 不显式归位的实现：人已经回到最新，导出/清理却还停在 6月1日。
-      await click(host.querySelector('button[aria-label="更多操作"]'));
-      const items = Array.from(host.querySelectorAll('[role="menuitem"]')).map((el) => el.textContent ?? "");
-      expect(items).toContain("清理今天");
-      expect(items.some((text) => text.includes("6月1日"))).toBe(false);
-    } finally {
-      await unmount(root);
-    }
-  });
-
-  it("header 不再有常驻的「跳转日期」输入框", async () => {
+  it("顶栏没了也不留常驻的「跳转日期」输入框", async () => {
     const { host, root } = await renderPage();
     expect(host.querySelector('[aria-label="跳转日期"]')).toBeNull();
+    await unmount(root);
+  });
+
+  it("日期条上不再挂任何按天操作入口", async () => {
+    // 按天导出 / 清理已由 设置 → 数据 覆盖，速记页不再重复一份。日期条只剩跳转，
+    // 多选态额外挂「选中这天」。
+    await addQuickNote("普通条", {
+      occurredAt: "2026-06-01T04:00:00.000Z",
+      now: new Date("2026-06-01T04:30:00.000Z"),
+    });
+    const { host, root } = await renderPage("/quick-notes?date=2026-06-01");
+
+    const divider = host.querySelector('[data-local-date="2026-06-01"]');
+    expect(divider).not.toBeNull();
+    const buttons = Array.from(divider?.querySelectorAll("button") ?? []).map(
+      (b) => b.getAttribute("aria-label") ?? "",
+    );
+    expect(buttons).toEqual(["6月1日，点击跳转到其他日期"]);
+
     await unmount(root);
   });
 }, PAGE_TEST_TIMEOUT_MS);

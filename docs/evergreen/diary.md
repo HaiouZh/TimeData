@@ -143,7 +143,7 @@ SettingsDiaryPage 保存模板 / 存档引导
 **但 `location.key === "default"` 这个哨兵会被 `replace` 打破**：`handleBack` 拿它判断「书签 / PWA 快捷方式 / 硬刷新直接落地，没有 app 内历史」，而本页的 `setSearchParams(..., { replace: true })`（切日期两处 + `?date=` 归一一处）会把 `location.key` 从 `"default"` 换成随机 key。所以必须在**挂载那一刻**把这个判断定下来存进 ref，不能每次渲染现读——否则直接落地后切一次日期，返回按钮就从「兜底回速记页」退化成 `navigate(-1)` 空转。
 
 > **已知缺口**：安卓返回键的执行层 `AndroidBackButtonHandler.tsx` 是 app 全局挂载的，在按键那一刻**现读** `location.key`，踩的是同一个坑。窄场景（直接落地 `/diary` + 切过日期 + 按安卓返回键）下它会 `navigate(-1)` 空转；页内返回按钮仍可用，所以不是死路。修它要动全局导航层，留待单独处理。
-- `components/DateNav.tsx` **一个字节不动**：它有 3 条 `check:design` 精确豁免，匹配是「rule + 文件 + trim 后整行文本」三元组，改一个字符就失配。要调间距在外面包容器。它自己每次渲染现算 `today`，跨零点会自动跟上，无需传 prop。
+- `components/DateNav.tsx` 与时间轴页**共用**，改它等于同时改两页。日记页**没有横滑切日**，所以绝不能给它传 `narrowSwipeSwitchesDate`——那个 prop 会把左右箭头在窄屏藏掉，只剩「点日期开月历」一条切日路径（`DiaryPage.test.tsx` 的「标题不再重复日期」用例断言前一天按钮的 className 不含 `hidden`，钉的就是这件事）。要调间距在外面包容器。它自己每次渲染现算 `today`，跨零点会自动跟上，无需传 prop。
 
 ## 4. 模块速查
 

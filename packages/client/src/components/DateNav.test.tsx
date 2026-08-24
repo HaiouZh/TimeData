@@ -86,6 +86,20 @@ describe("DateNav", () => {
     expect(findButton(container, "选择日期").textContent).toContain("1月15日");
   });
 
+  it("默认两端都留箭头；narrowSwipeSwitchesDate 只把窄屏那份藏起来", async () => {
+    // 藏箭头的前提是「本页窄屏另有横滑切日」。日记页没有横滑，所以它不传这个 prop，
+    // 箭头必须在窄屏照常渲染——两种形态在这里一起钉住，改错一边就红。
+    const plain = await mount("2026-06-03", () => {});
+    expect(findButton(plain, "前一天").className).not.toContain("hidden");
+
+    const { host } = await renderDom(
+      createElement(DateNav, { date: "2026-06-03", onDateChange: () => {}, narrowSwipeSwitchesDate: true }),
+    );
+    const arrow = findButton(host, "前一天");
+    expect(arrow.className).toContain("hidden");
+    expect(arrow.className).toContain("sm:inline-flex");
+  });
+
   it("传入 onSearch 时渲染搜索按钮并回调", async () => {
     const onSearch = vi.fn();
     const { host } = await renderDom(

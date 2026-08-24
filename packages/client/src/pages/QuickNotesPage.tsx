@@ -1,9 +1,7 @@
 import {
   ArrowDown,
-  BookOpen,
   Check,
   Crosshair,
-  DotsThree,
   MagnifyingGlass,
   NotePencil,
   Plus,
@@ -25,7 +23,7 @@ import {
   useRef,
   useState,
 } from "react";
-import { Link, useNavigate, useSearchParams } from "react-router";
+import { useNavigate, useSearchParams } from "react-router";
 import { Icon } from "../components/Icon.js";
 import { KeyboardDock, useKeyboardNavCollapse } from "../components/KeyboardDock.tsx";
 import { ActionToastBar } from "../components/ui/ActionToastBar.tsx";
@@ -49,8 +47,6 @@ import {
   addQuickNote,
   deleteQuickNote,
   listPinnedQuickNotes,
-  listQuickNotesByDate,
-  listQuickNotesByRange,
   setQuickNotePinned,
   updateQuickNote,
 } from "../lib/quickNotes.ts";
@@ -69,15 +65,12 @@ import {
 import { findStuckDivider } from "../quick-notes/currentDate.ts";
 import { groupDisplayItemsByDay } from "../quick-notes/dayGroups.ts";
 import { deleteQuickNotesByIds } from "../quick-notes/deleteQuickNotesByIds.ts";
-import { deleteQuickNotesByRange } from "../quick-notes/deleteQuickNotesRange.ts";
 import {
-  exportQuickNotesJsonByDate,
   exportQuickNotesJsonForNotes,
   quickNotesMarkdown,
 } from "../quick-notes/exportQuickNotes.ts";
 import { downloadQuickNotesJson, downloadQuickNotesMarkdown } from "../quick-notes/fileDownload.ts";
 import HighlightedText from "../quick-notes/HighlightedText.tsx";
-import { formatJumpDateLabel } from "../quick-notes/jumpDateLabel.ts";
 import { shouldShowJumpToLatest } from "../quick-notes/jumpToLatest.ts";
 import NoteBubble from "../quick-notes/NoteBubble.tsx";
 import QuickNoteActionMenu from "../quick-notes/QuickNoteActionMenu.tsx";
@@ -133,7 +126,6 @@ export default function QuickNotesPage() {
   // 「你眼前正在看的那天」——由停手扫描更新，导出/清理的唯一目标。
   // 刻意不让它写 URL：跟着滚动写 ?date= 会把浏览历史刷爆。
   // URL 同步由各跳转点直接调 setSearchParams 承担，深链初始跳转由 queryDate + didInitJumpRef 承担。
-  const [viewingDate, setViewingDate] = useState(queryDate ?? today);
   const [draftText, setDraftText] = useState(() => readComposerDraft());
   const [editingId, setEditingId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -141,7 +133,6 @@ export default function QuickNotesPage() {
   const [status, setStatus] = useState<string | null>(null);
   const { toast: actionToast, showToast: showActionToast, clearToast: clearActionToast } = useActionToast();
   const [menu, setMenu] = useState<MenuTarget | null>(null);
-  const [actionsOpen, setActionsOpen] = useState(false);
   const [composerInsetPx, setComposerInsetPx] = useState(DEFAULT_COMPOSER_INSET_PX);
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
@@ -201,14 +192,13 @@ export default function QuickNotesPage() {
   // 那一个，滚之前清的是别人的旧定时器，压不到它。见落点 effect 与 handleScroll 尾部。
   const skipNextScrollScanRef = useRef(false);
   // 停手定时器的回调捕获的是「创建定时器那一次渲染」的闭包：用户在那 1.2 秒内打开日历、
-  // 进多选、开搜索或点开「更多操作」，回调里读到的仍是旧值，照样会打上隐身类 / 改写
-  // viewingDate——日历失去锚点、「选中这天」被藏掉、菜单里的目标日在用户眼皮底下换掉。
-  // 同 draftTextRef / editingIdRef 的老问题，经这个随渲染同步的 ref 读最新值。
-  const menuOpen = actionsOpen || exportMenuOpen;
-  const scanGuardRef = useRef({ datePickerOpen, selectionMode, searchOpen, menuOpen });
+  // 进多选或开搜索，回调里读到的仍是旧值，照样会打上隐身类。同 draftTextRef / editingIdRef
+  // 的老问题，经这个随渲染同步的 ref 读最新值。
+  // 菜单开合不在守卫里：日期条上已经不挂任何菜单，多选态那个导出菜单由 selectionMode 一起挡住。
+  const scanGuardRef = useRef({ datePickerOpen, selectionMode, searchOpen });
   useEffect(() => {
-    scanGuardRef.current = { datePickerOpen, selectionMode, searchOpen, menuOpen };
-  }, [datePickerOpen, selectionMode, searchOpen, menuOpen]);
+    scanGuardRef.current = { datePickerOpen, selectionMode, searchOpen };
+  }, [datePickerOpen, selectionMode, searchOpen]);
   const pressedNoteRef = useRef<QuickNote | null>(null);
   const stickBottomRef = useRef(true);
   const prevScrollHeightRef = useRef(0);
@@ -321,10 +311,6 @@ export default function QuickNotesPage() {
       clearTimeout(timer);
     };
   }, []);
-  const viewingDateLabel = formatJumpDateLabel(viewingDate, today);
-  const exportMarkdownLabel = viewingDateLabel === "今天" ? "导出今天 Markdown" : `导出 ${viewingDateLabel} Markdown`;
-  const exportJsonLabel = viewingDateLabel === "今天" ? "导出今天 JSON" : `导出 ${viewingDateLabel} JSON`;
-  const deleteDateLabel = viewingDateLabel === "今天" ? "清理今天" : `清理 ${viewingDateLabel}`;
 
   const longPress = useLongPress(({ x, y }) => {
     const note = pressedNoteRef.current;
@@ -379,19 +365,18 @@ export default function QuickNotesPage() {
     clearStuckDivider();
   }, [selectionMode, searchOpen]);
 
-  // header 更多操作 / 导出菜单开着时 Escape 可关（QN-16）。气泡操作菜单的 Escape
-  // 在 QuickNoteActionMenu 内部处理，这里只管这两个内联菜单。
+  // 多选态导出菜单开着时 Escape 可关（QN-16）。气泡操作菜单的 Escape 在
+  // QuickNoteActionMenu 内部处理，这里只管这一个内联菜单。
   useEffect(() => {
-    if (!actionsOpen && !exportMenuOpen) return;
+    if (!exportMenuOpen) return;
     function onKeyDown(event: globalThis.KeyboardEvent) {
       if (event.key !== "Escape") return;
       event.preventDefault();
-      setActionsOpen(false);
       setExportMenuOpen(false);
     }
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
-  }, [actionsOpen, exportMenuOpen]);
+  }, [exportMenuOpen]);
 
   useEffect(() => {
     if (!focusNoteId) return;
@@ -421,11 +406,9 @@ export default function QuickNotesPage() {
     pendingJumpRef.current = null;
     const el = scrollRef.current;
     if (!el) return;
-    // 这次滚动是程序化落点，不算「用户在浏览」：viewingDate 刚被 setViewingDateExplicitly
-    // 显式设成目标日，紧随其后那次 scroll 排下的停手扫描会在 1.2 秒后按落点位置把它悄悄改掉。
-    // 目标日有速记时无害（落点就是目标日），**目标日一条速记都没有时就错了**：落点退回列表顶
-    // （那里是别的天），用户全程没滚过，「清理 6月8日」却静默变成「清理 6月7日」，而导出侧没有
-    // 二次确认，直接落下另一天的文件。用户真正手动滚动时会重新排扫描，跟随随即恢复。
+    // 这次滚动是程序化落点，不算「用户在浏览」：落点瞬间 sticky 位置还没稳定，紧随其后那次
+    // scroll 排下的停手扫描会把过渡态里的日期条判成粘顶条、给它打上隐身类。用户真正手动滚动
+    // 时会重新排扫描，跟随随即恢复。
     skipNextScrollScanRef.current = true;
     const divider = el.querySelector(`[data-local-date="${pending.localDate}"]`);
     if (divider instanceof HTMLElement) divider.scrollIntoView({ block: "start" });
@@ -545,16 +528,9 @@ export default function QuickNotesPage() {
     const el = scrollRef.current;
     if (!el) return;
     // 一律经 ref 读，别直接读 state——见 scanGuardRef 的注释。
-    const {
-      datePickerOpen: pickerOpen,
-      selectionMode: selecting,
-      searchOpen: searching,
-      menuOpen: menuShowing,
-    } = scanGuardRef.current;
-    // 日历开着时隐身会让月历失去锚点；多选态隐身会让「选中这天」点不到；「更多操作」/导出菜单
-    // 开着时改写 viewingDate 会让菜单项在用户眼皮底下换目标日——他按视觉记忆点下去，导出的是
-    // 另一天，而导出没有二次确认（清理那侧的 await confirm 前后读同一次渲染的常量，本来就干净）。
-    if (pickerOpen || selecting || menuShowing) return;
+    const { datePickerOpen: pickerOpen, selectionMode: selecting, searchOpen: searching } = scanGuardRef.current;
+    // 日历开着时隐身会让月历失去锚点；多选态隐身会让「选中这天」点不到。
+    if (pickerOpen || selecting) return;
 
     const containerTop = el.getBoundingClientRect().top;
     const nodes = Array.from(el.querySelectorAll<HTMLElement>(searching ? "[data-search-date]" : "[data-date-label]"));
@@ -572,9 +548,6 @@ export default function QuickNotesPage() {
     if (!stuck) return;
     stuck.node.classList.add("stuck");
     stuckElRef.current = stuck.node;
-    // 搜索态不更新：导出/清理在搜索态不可达，跟着搜索结果乱跳只会在退出搜索后留下错的目标日。
-    // 用上面从 scanGuardRef 解构出的 searching，不是 state 上的 searchOpen。
-    if (!searching) setViewingDate(stuck.localDate);
   }
 
   function clearStuckDivider() {
@@ -584,23 +557,19 @@ export default function QuickNotesPage() {
   }
 
   /**
-   * 显式设定「眼前那天」（退出搜索 / 回到最新 / 日历跳转 / 搜索结果定位）。
+   * 视图被显式挪走时（退出搜索 / 回到最新 / 日历跳转 / 搜索结果定位）取消待触发的停手扫描。
    *
-   * 必须连同待触发的停手定时器一起清掉：那个定时器是**写入之前**排下的，它扫的是旧位置、
-   * 甚至是另一棵子树（搜索态滚动后 1.2 秒内点「退出搜索」，定时器 fire 时 searching 已是 false，
-   * 于是去扫主线并把刚设成今天的 viewingDate 改成别的天——用户根本没滚过主线，「清理今天」
-   * 却变成「清理 6月X日」）。
-   *
-   * 这里只清「写入之前」那个。写入**之后**由程序化落点滚动排下的新扫描不归它管，也清不到
-   * （那次 scroll 是浏览器异步派发的，此刻还没发生）——那一支由 skipNextScrollScanRef 在落点
-   * 定位 effect 里单独压制，理由见那里：目标日没有速记时落点是别的天，跟随扫描会改错。
+   * 那个定时器是**挪走之前**排下的，它扫的是旧位置、甚至是另一棵子树（搜索态滚动后 1.2 秒内
+   * 点「退出搜索」，定时器 fire 时 searching 已是 false，于是去扫主线、给错的那条日期条打上
+   * 隐身类，表现为一条日期条凭空消失）。这里只清「挪走之前」那个；挪走**之后**由程序化落点
+   * 滚动排下的新扫描不归它管，也清不到（那次 scroll 是浏览器异步派发的，此刻还没发生）——
+   * 那一支由 skipNextScrollScanRef 在落点定位 effect 里单独压制。
    */
-  function setViewingDateExplicitly(nextDate: string) {
+  function cancelPendingStuckScan() {
     if (stuckTimerRef.current) {
       clearTimeout(stuckTimerRef.current);
       stuckTimerRef.current = null;
     }
-    setViewingDate(nextDate);
   }
 
   function focusInput() {
@@ -612,7 +581,6 @@ export default function QuickNotesPage() {
   }
 
   function openSearch() {
-    setActionsOpen(false);
     setPinnedOpen(false);
     setSearchOpen(true);
     if (typeof requestAnimationFrame === "function") {
@@ -629,7 +597,7 @@ export default function QuickNotesPage() {
     if (options.resetTimeline ?? true) {
       stickBottomRef.current = true;
       pendingJumpRef.current = null;
-      setViewingDateExplicitly(today);
+      cancelPendingStuckScan();
       setSearchParams({});
       void timeline.resetToLatest();
     }
@@ -637,7 +605,7 @@ export default function QuickNotesPage() {
 
   // 「回到最新」的唯一实现：浮标按钮与历史视图保存后的 toast 共用，避免两处各写一遍。
   function jumpToLatest() {
-    setViewingDateExplicitly(today);
+    cancelPendingStuckScan();
     setSearchParams({});
     stickBottomRef.current = true;
     pendingJumpRef.current = null;
@@ -658,7 +626,7 @@ export default function QuickNotesPage() {
       handleJumpDateChange(localDate);
       return;
     }
-    setViewingDateExplicitly(localDate);
+    cancelPendingStuckScan();
     setSearchParams(localDate === today ? {} : { date: localDate });
     stickBottomRef.current = false;
     // 定位交给 focusNoteId 的 scrollIntoView，别让残留的日期定位请求抢滚动。
@@ -878,7 +846,6 @@ export default function QuickNotesPage() {
 
   function enterSelection(note: QuickNote) {
     setMenu(null);
-    setActionsOpen(false);
     // 不关置顶浮层：从置顶长按进多选时，被选中的那条要留在眼前（QN-09）。
     setSearchOpen(false);
     setSelectionMode(true);
@@ -988,83 +955,12 @@ export default function QuickNotesPage() {
 
   function handleJumpDateChange(nextDate: string) {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(nextDate)) return;
-    setViewingDateExplicitly(nextDate);
+    cancelPendingStuckScan();
     setSearchParams(nextDate === today ? {} : { date: nextDate });
     stickBottomRef.current = false;
     pendingJumpRef.current = { localDate: nextDate, utcStart: localDateTimeToUtc(`${nextDate}T00:00:00`) };
     setPendingJumpSeq((seq) => seq + 1);
     void timeline.jumpToDate(nextDate);
-  }
-
-  async function handleExportJson() {
-    setError(null);
-    setStatus(null);
-    try {
-      const backup = await exportQuickNotesJsonByDate(viewingDate);
-      if (backup.notes.length === 0) {
-        showStatus(`${viewingDateLabel} 没有速记，未导出。`);
-        return;
-      }
-      await downloadQuickNotesJson(backup);
-      showStatus(`已导出 ${backup.notes.length} 条速记 JSON。`);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "导出失败");
-    }
-  }
-
-  async function handleExportMarkdown() {
-    setError(null);
-    setStatus(null);
-    try {
-      const notes = await listQuickNotesByDate(viewingDate);
-      if (notes.length === 0) {
-        showStatus(`${viewingDateLabel} 没有速记，未导出。`);
-        return;
-      }
-      const markdown = quickNotesMarkdown(`速记 ${viewingDate}`, notes);
-      await downloadQuickNotesMarkdown(markdown, viewingDate);
-      showStatus(`已导出 ${notes.length} 条速记 Markdown。`);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "导出失败");
-    }
-  }
-
-  async function handleDeleteDate() {
-    const dayNotes = await listQuickNotesByRange(viewingDate, viewingDate);
-    const pinnedCount = dayNotes.filter((note) => note.pinned === true).length;
-    const deletableCount = dayNotes.length - pinnedCount;
-    if (deletableCount === 0) {
-      showStatus(`${viewingDateLabel} 没有可清理的速记。`);
-      return;
-    }
-
-    const confirmed = await confirm({
-      title: `删除 ${viewingDateLabel} 的速记？`,
-      body: (
-        <div className="space-y-1">
-          {viewingDate !== today && (
-            <p className="font-medium text-danger">
-              这不是今天，你正要删除 {viewingDateLabel}（{viewingDate}）的记录。
-            </p>
-          )}
-          <p>
-            将删除 <strong>{deletableCount}</strong> 条速记
-            {pinnedCount > 0 ? `（另有 ${pinnedCount} 条置顶会保留）` : ""}，不影响时间记录。
-          </p>
-          <p>建议先导出需要保留的内容。</p>
-        </div>
-      ),
-      confirmLabel: "删除",
-      cancelLabel: "取消",
-      danger: true,
-    });
-    if (!confirmed) return;
-
-    // 整批只震一次：deletableCount === 0 的早退与用户取消确认都在上面 return 掉了，
-    // 到这里才是「真的开始删」。不逐条震——一天几十条会连成一串马达声。
-    hapticDestructive();
-    const result = await deleteQuickNotesByRange(viewingDate, viewingDate);
-    showStatus(`已删除 ${result.deleted} 条速记。`);
   }
 
   function noteInteractionProps(note: QuickNote) {
@@ -1111,276 +1007,222 @@ export default function QuickNotesPage() {
     };
   }
 
+  // 置顶面板：常态挂在右上角浮层里、多选态挂在 header 下方——两处同一份 DOM，
+  // 不复制第二份（复制过的那份迟早只改一边）。
+  function renderPinnedPanel() {
+    return (
+      <section
+        aria-label="置顶速记"
+        className="mx-auto flex max-h-[min(52vh,24rem)] w-full max-w-3xl flex-col gap-2 overflow-y-auto rounded-card border border-border bg-surface p-3 shadow-elev2"
+      >
+        <p className="px-1 td-text-caption font-semibold text-ink-3">
+          置顶 · <span className="td-num">{pinnedNotes.length}</span>
+        </p>
+        {pinnedNotes.map((note) => {
+          const isAgentNote = note.source === "agent";
+          const selected = selectedIds.has(note.id);
+          const pending = unsyncedQuickNoteIds.has(note.id);
+          return (
+            <div
+              key={note.id}
+              role="button"
+              tabIndex={0}
+              aria-label={quickNoteAriaLabel(note)}
+              aria-pressed={selectionMode ? selected : undefined}
+              {...noteInteractionProps(note)}
+              style={{ WebkitTouchCallout: "none" }}
+              className={`${NOTE_CARD_BASE} rounded-row td-text-body ${isAgentNote ? NOTE_CARD_AGENT : "border-border bg-page/70"} ${
+                selected ? NOTE_CARD_SELECTED : ""
+              }`}
+            >
+              <NoteBubble note={note} pending={pending} />
+            </div>
+          );
+        })}
+      </section>
+    );
+  }
+
+
   return (
     <div className="relative flex h-full min-h-0 flex-col bg-page text-ink">
       {/* 顶部间距走 --page-top-gap（原 pt-3 / sm:pt-4）：有系统安全区时归零，避免与安全区自带的
           呼吸位叠成刘海下方那条空带；桌面 / 无刘海设备上取值不变，见 index.css 的变量注释。 */}
-      <header className="sticky top-0 z-20 shrink-0 border-b border-border bg-page/95 px-4 pb-2 [padding-top:var(--page-top-gap)] backdrop-blur sm:pb-3 sm:[padding-top:var(--page-top-gap-lg)] sm:shadow-elev1">
-        {selectionMode ? (
-          <div className="mx-auto flex w-full max-w-3xl items-center gap-2">
-            <button
-              type="button"
-              aria-label="退出多选"
-              onClick={exitSelection}
-              className="flex size-9 shrink-0 items-center justify-center rounded-pill border border-border bg-surface text-ink-2"
-            >
-              <Icon icon={X} size={16} />
-            </button>
-            <span className="min-w-0 flex-1 truncate td-text-label font-medium text-ink">
-              已选 <span className="td-num">{selectedIds.size}</span> 条
-              {selectedPinnedCount > 0 && (
-                <span className="text-ink-3">
-                  {" "}
-                  · 含置顶 <span className="td-num">{selectedPinnedCount}</span>
-                </span>
-              )}
-            </span>
-            <button
-              type="button"
-              aria-pressed={allLoadedSelected}
-              disabled={loadedUnpinnedIds.length === 0}
-              onClick={toggleSelectAllLoaded}
-              className="td-text-label rounded-ctl border border-border bg-surface px-3 py-1.5 text-ink-2 disabled:cursor-not-allowed disabled:text-ink-3"
-            >
-              {allLoadedSelected ? "取消全选" : "全选"}
-            </button>
-            {pinnedNotes.length > 0 && (
+      {/* 常态不占一整条顶栏：这一行只在多选 / 搜索时现身——那两个态本来就要整行放工具条。
+          常态下「导出 / 清理这一天」跟着列表里那颗日期药丸走（目标日由药丸自己带着，不再靠滚动
+          位置猜），置顶与「历史」徽标走右上角浮层。顶部呼吸位原由本行的 --page-top-gap 提供，
+          现由列表自身的 py-5 承担；刘海让位一直在 AppShell 根 div 的 td-safe-top，与本行无关。 */}
+      {(selectionMode || searchOpen) && (
+        <header className="sticky top-0 z-20 shrink-0 border-b border-border bg-page/95 px-4 pb-2 [padding-top:var(--page-top-gap)] backdrop-blur sm:pb-3 sm:[padding-top:var(--page-top-gap-lg)] sm:shadow-elev1">
+          {selectionMode ? (
+            <div className="mx-auto flex w-full max-w-3xl items-center gap-2">
               <button
                 type="button"
-                aria-label={`${pinnedOpen ? "收起" : "查看"}置顶速记，${pinnedNotes.length} 条`}
-                aria-haspopup="dialog"
-                aria-expanded={pinnedOpen}
-                onClick={() => setPinnedOpen((open) => !open)}
-                className="relative flex size-9 shrink-0 items-center justify-center rounded-pill border border-border bg-surface text-ink-2"
+                aria-label="退出多选"
+                onClick={exitSelection}
+                className="flex size-9 shrink-0 items-center justify-center rounded-pill border border-border bg-surface text-ink-2"
               >
-                <Icon icon={PushPin} size={16} />
-                <span className="td-num td-text-caption absolute -right-1 -top-1 flex min-h-5 min-w-5 items-center justify-center rounded-pill bg-accent px-1 font-semibold text-page">
-                  {pinnedNotes.length}
-                </span>
+                <Icon icon={X} size={16} />
               </button>
-            )}
-            <button
-              type="button"
-              disabled={selectedIds.size === 0}
-              onClick={() => void handleBatchCopy()}
-              className="rounded-ctl border border-border bg-surface px-3 py-1.5 td-text-label text-ink-2 disabled:cursor-not-allowed disabled:text-ink-3"
-            >
-              复制
-            </button>
-            <div className="relative">
+              <span className="min-w-0 flex-1 truncate td-text-label font-medium text-ink">
+                已选 <span className="td-num">{selectedIds.size}</span> 条
+                {selectedPinnedCount > 0 && (
+                  <span className="text-ink-3">
+                    {" "}
+                    · 含置顶 <span className="td-num">{selectedPinnedCount}</span>
+                  </span>
+                )}
+              </span>
               <button
                 type="button"
-                aria-haspopup="menu"
-                aria-expanded={exportMenuOpen}
+                aria-pressed={allLoadedSelected}
+                disabled={loadedUnpinnedIds.length === 0}
+                onClick={toggleSelectAllLoaded}
+                className="td-text-label rounded-ctl border border-border bg-surface px-3 py-1.5 text-ink-2 disabled:cursor-not-allowed disabled:text-ink-3"
+              >
+                {allLoadedSelected ? "取消全选" : "全选"}
+              </button>
+              {pinnedNotes.length > 0 && (
+                <button
+                  type="button"
+                  aria-label={`${pinnedOpen ? "收起" : "查看"}置顶速记，${pinnedNotes.length} 条`}
+                  aria-haspopup="dialog"
+                  aria-expanded={pinnedOpen}
+                  onClick={() => setPinnedOpen((open) => !open)}
+                  className="relative flex size-9 shrink-0 items-center justify-center rounded-pill border border-border bg-surface text-ink-2"
+                >
+                  <Icon icon={PushPin} size={16} />
+                  <span className="td-num td-text-caption absolute -right-1 -top-1 flex min-h-5 min-w-5 items-center justify-center rounded-pill bg-accent px-1 font-semibold text-page">
+                    {pinnedNotes.length}
+                  </span>
+                </button>
+              )}
+              <button
+                type="button"
                 disabled={selectedIds.size === 0}
-                onClick={() => setExportMenuOpen((open) => !open)}
+                onClick={() => void handleBatchCopy()}
                 className="rounded-ctl border border-border bg-surface px-3 py-1.5 td-text-label text-ink-2 disabled:cursor-not-allowed disabled:text-ink-3"
               >
-                导出
+                复制
               </button>
-              {exportMenuOpen && (
-                <>
-                  <div
-                    role="presentation"
-                    className="fixed inset-0 z-[var(--z-backdrop)]"
-                    onClick={() => setExportMenuOpen(false)}
-                  />
-                  <div role="menu" className={`absolute right-0 z-[var(--z-modal)] mt-2 w-40 ${MENU_PANEL_CLASS}`}>
-                    <button
-                      type="button"
-                      role="menuitem"
-                      onClick={() => {
-                        setExportMenuOpen(false);
-                        void handleBatchExportMarkdown();
-                      }}
-                      className={MENU_ITEM_CLASS}
-                    >
-                      Markdown
-                    </button>
-                    <button
-                      type="button"
-                      role="menuitem"
-                      onClick={() => {
-                        setExportMenuOpen(false);
-                        void handleBatchExportJson();
-                      }}
-                      className={MENU_ITEM_CLASS}
-                    >
-                      JSON
-                    </button>
-                  </div>
-                </>
-              )}
+              <div className="relative">
+                <button
+                  type="button"
+                  aria-haspopup="menu"
+                  aria-expanded={exportMenuOpen}
+                  disabled={selectedIds.size === 0}
+                  onClick={() => setExportMenuOpen((open) => !open)}
+                  className="rounded-ctl border border-border bg-surface px-3 py-1.5 td-text-label text-ink-2 disabled:cursor-not-allowed disabled:text-ink-3"
+                >
+                  导出
+                </button>
+                {exportMenuOpen && (
+                  <>
+                    <div
+                      role="presentation"
+                      className="fixed inset-0 z-[var(--z-backdrop)]"
+                      onClick={() => setExportMenuOpen(false)}
+                    />
+                    <div role="menu" className={`absolute right-0 z-[var(--z-modal)] mt-2 w-40 ${MENU_PANEL_CLASS}`}>
+                      <button
+                        type="button"
+                        role="menuitem"
+                        onClick={() => {
+                          setExportMenuOpen(false);
+                          void handleBatchExportMarkdown();
+                        }}
+                        className={MENU_ITEM_CLASS}
+                      >
+                        Markdown
+                      </button>
+                      <button
+                        type="button"
+                        role="menuitem"
+                        onClick={() => {
+                          setExportMenuOpen(false);
+                          void handleBatchExportJson();
+                        }}
+                        className={MENU_ITEM_CLASS}
+                      >
+                        JSON
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
+              <button
+                type="button"
+                disabled={selectedIds.size === 0}
+                onClick={() => void handleBatchDelete()}
+                className="rounded-ctl border border-danger/40 bg-danger/10 px-3 py-1.5 td-text-label font-medium text-danger disabled:cursor-not-allowed disabled:text-ink-3"
+              >
+                删除
+              </button>
             </div>
-            <button
-              type="button"
-              disabled={selectedIds.size === 0}
-              onClick={() => void handleBatchDelete()}
-              className="rounded-ctl border border-danger/40 bg-danger/10 px-3 py-1.5 td-text-label font-medium text-danger disabled:cursor-not-allowed disabled:text-ink-3"
-            >
-              删除
-            </button>
-          </div>
-        ) : searchOpen ? (
-          <div className="mx-auto flex w-full max-w-3xl items-center gap-2">
-            <Icon icon={MagnifyingGlass} size={16} className="text-ink-3" />
-            <input
-              ref={searchInputRef}
-              type="search"
-              aria-label="搜索速记"
-              value={searchQuery}
-              onChange={(event) => {
-                setSearchQuery(event.target.value);
-                setSearchLimit(SEARCH_RESULT_PAGE_SIZE);
-              }}
-              placeholder="搜索速记…"
-              className="min-w-0 flex-1 bg-transparent text-ink placeholder:text-ink-3 outline-none"
-            />
-            <button
-              type="button"
-              aria-label="退出搜索"
-              onClick={() => closeSearch()}
-              className="shrink-0 rounded-pill px-3 py-1.5 td-text-label font-medium text-ink-2 transition hover:text-ink"
-            >
-              取消
-            </button>
-          </div>
-        ) : (
-          <div className="mx-auto flex w-full max-w-3xl items-center gap-3">
-            <div className="min-w-0 flex-1">
+          ) : (
+            <div className="mx-auto flex w-full max-w-3xl items-center gap-2">
+              <Icon icon={MagnifyingGlass} size={16} className="text-ink-3" />
+              <input
+                ref={searchInputRef}
+                type="search"
+                aria-label="搜索速记"
+                value={searchQuery}
+                onChange={(event) => {
+                  setSearchQuery(event.target.value);
+                  setSearchLimit(SEARCH_RESULT_PAGE_SIZE);
+                }}
+                placeholder="搜索速记…"
+                className="min-w-0 flex-1 bg-transparent text-ink placeholder:text-ink-3 outline-none"
+              />
+              <button
+                type="button"
+                aria-label="退出搜索"
+                onClick={() => closeSearch()}
+                className="shrink-0 rounded-pill px-3 py-1.5 td-text-label font-medium text-ink-2 transition hover:text-ink"
+              >
+                取消
+              </button>
+            </div>
+          )}
+          {selectionMode && pinnedOpen && pinnedNotes.length > 0 && (
+            <div className="absolute left-0 right-0 top-[calc(100%+0.5rem)] z-[var(--z-modal)] px-4">
+              {renderPinnedPanel()}
+            </div>
+          )}
+        </header>
+      )}
+
+      {/* 常态右上角浮层：容器整条通栏只为让内部与列表同宽对齐，故 pointer-events-none，
+          只有真正的按钮 / 面板收回点击——否则这层会盖住下面第一屏速记的长按与点选。 */}
+      {!selectionMode && !searchOpen && (pinnedNotes.length > 0 || !timeline.atLatest) && (
+        <div className="pointer-events-none absolute inset-x-0 top-2 z-[var(--z-dropdown)] px-4">
+          <div className="mx-auto w-full max-w-3xl">
+            <div className="flex items-start justify-between gap-2">
               {!timeline.atLatest && (
-                <span className="rounded-pill border border-border-strong bg-surface px-2 py-0.5 td-text-caption font-medium text-ink-3">
+                <span className="pointer-events-auto rounded-pill border border-border-strong bg-surface px-2 py-0.5 td-text-caption font-medium text-ink-3 shadow-elev1">
                   历史
                 </span>
               )}
-            </div>
-            <Link
-              to="/diary"
-              aria-label="日记"
-              className="flex size-9 shrink-0 items-center justify-center rounded-pill border border-border bg-surface text-ink-2 transition hover:border-accent hover:text-ink sm:size-11"
-            >
-              <Icon icon={BookOpen} size={16} />
-            </Link>
-
-            {pinnedNotes.length > 0 && (
-              <button
-                type="button"
-                aria-label={`${pinnedOpen ? "收起" : "查看"}置顶速记，${pinnedNotes.length} 条`}
-                aria-haspopup="dialog"
-                aria-expanded={pinnedOpen}
-                onClick={() => {
-                  setActionsOpen(false);
-                  setPinnedOpen((open) => !open);
-                }}
-                className="relative flex size-9 shrink-0 items-center justify-center rounded-pill border border-border bg-surface text-ink-2 transition hover:border-accent hover:text-ink sm:size-11"
-              >
-                <Icon icon={PushPin} size={16} />
-                <span className="td-num absolute -right-1 -top-1 flex min-h-5 min-w-5 items-center justify-center rounded-pill bg-accent px-1 td-text-caption font-semibold text-page">
-                  {pinnedNotes.length}
-                </span>
-              </button>
-            )}
-
-            <div className="relative shrink-0">
-              <button
-                type="button"
-                aria-label="更多操作"
-                aria-haspopup="menu"
-                aria-expanded={actionsOpen}
-                onClick={() => {
-                  setPinnedOpen(false);
-                  setActionsOpen((open) => !open);
-                }}
-                className="flex size-9 items-center justify-center rounded-pill border border-border bg-surface leading-none text-ink-2 transition hover:border-accent hover:text-ink sm:size-11"
-              >
-                <Icon icon={DotsThree} size={20} />
-              </button>
-              {actionsOpen && (
-                <>
-                  <div
-                    role="presentation"
-                    className="fixed inset-0 z-[var(--z-backdrop)]"
-                    onClick={() => setActionsOpen(false)}
-                  />
-                  <div
-                    role="menu"
-                    aria-label="速记导出与清理"
-                    className={`absolute right-0 z-[var(--z-modal)] mt-2 w-48 ${MENU_PANEL_CLASS}`}
-                  >
-                    <button
-                      type="button"
-                      role="menuitem"
-                      onClick={() => {
-                        setActionsOpen(false);
-                        void handleExportMarkdown();
-                      }}
-                      className={MENU_ITEM_CLASS}
-                    >
-                      {exportMarkdownLabel}
-                    </button>
-                    <button
-                      type="button"
-                      role="menuitem"
-                      onClick={() => {
-                        setActionsOpen(false);
-                        void handleExportJson();
-                      }}
-                      className={MENU_ITEM_CLASS}
-                    >
-                      {exportJsonLabel}
-                    </button>
-                    <div className="my-1 h-px bg-border" />
-                    <button
-                      type="button"
-                      role="menuitem"
-                      onClick={() => {
-                        setActionsOpen(false);
-                        void handleDeleteDate();
-                      }}
-                      className="block w-full px-4 py-3 text-left td-text-label font-medium text-danger transition hover:bg-danger/15"
-                    >
-                      {deleteDateLabel}
-                    </button>
-                  </div>
-                </>
+              {pinnedNotes.length > 0 && (
+                <button
+                  type="button"
+                  aria-label={`${pinnedOpen ? "收起" : "查看"}置顶速记，${pinnedNotes.length} 条`}
+                  aria-haspopup="dialog"
+                  aria-expanded={pinnedOpen}
+                  onClick={() => setPinnedOpen((open) => !open)}
+                  className="pointer-events-auto relative ml-auto flex size-9 shrink-0 items-center justify-center rounded-pill border border-border bg-surface text-ink-2 shadow-elev1 transition hover:border-accent hover:text-ink sm:size-11"
+                >
+                  <Icon icon={PushPin} size={16} />
+                  <span className="td-num absolute -right-1 -top-1 flex min-h-5 min-w-5 items-center justify-center rounded-pill bg-accent px-1 td-text-caption font-semibold text-page">
+                    {pinnedNotes.length}
+                  </span>
+                </button>
               )}
             </div>
+            {pinnedOpen && pinnedNotes.length > 0 && <div className="pointer-events-auto mt-2">{renderPinnedPanel()}</div>}
           </div>
-        )}
-        {!searchOpen && pinnedOpen && pinnedNotes.length > 0 && (
-          <div className="absolute left-0 right-0 top-[calc(100%+0.5rem)] z-[var(--z-modal)] px-4">
-            <section
-              aria-label="置顶速记"
-              className="mx-auto flex max-h-[min(52vh,24rem)] w-full max-w-3xl flex-col gap-2 overflow-y-auto rounded-card border border-border bg-surface p-3 shadow-elev2"
-            >
-              <p className="px-1 td-text-caption font-semibold text-ink-3">
-                置顶 · <span className="td-num">{pinnedNotes.length}</span>
-              </p>
-              {pinnedNotes.map((note) => {
-                const isAgentNote = note.source === "agent";
-                const selected = selectedIds.has(note.id);
-                const pending = unsyncedQuickNoteIds.has(note.id);
-                return (
-                  <div
-                    key={note.id}
-                    role="button"
-                    tabIndex={0}
-                    aria-label={quickNoteAriaLabel(note)}
-                    aria-pressed={selectionMode ? selected : undefined}
-                    {...noteInteractionProps(note)}
-                    style={{ WebkitTouchCallout: "none" }}
-                    className={`${NOTE_CARD_BASE} rounded-row td-text-body ${isAgentNote ? NOTE_CARD_AGENT : "border-border bg-page/70"} ${
-                      selected ? NOTE_CARD_SELECTED : ""
-                    }`}
-                  >
-                    <NoteBubble note={note} pending={pending} />
-                  </div>
-                );
-              })}
-            </section>
-          </div>
-        )}
-      </header>
+        </div>
+      )}
 
       <section
         ref={scrollRef}

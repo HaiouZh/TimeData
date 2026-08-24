@@ -7,22 +7,29 @@ interface DateNavProps {
   date: string;
   onDateChange: (date: string) => void;
   onSearch?: () => void;
+  /**
+   * 本页窄屏另有横滑切日时传 true：左右箭头改为只在宽屏出现，窄屏把那 72px 让给内容
+   * （桌面没有横滑，所以宽屏一定保留）。**没有横滑的页面绝不能传**——日记页就没有，
+   * 传了会让它窄屏只剩「点日期开月历」一条切日路径。
+   */
+  narrowSwipeSwitchesDate?: boolean;
 }
 
-const arrowClass =
+const ARROW_BASE =
   "hotarea-md rounded-ctl leading-none text-ink-3 transition-colors hover:bg-surface-hover hover:text-ink-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-ink-3";
+const ARROW_WIDE_ONLY = " hidden sm:inline-flex sm:items-center sm:justify-center";
 
-export default function DateNav({ date, onDateChange, onSearch }: DateNavProps) {
+export default function DateNav({ date, onDateChange, onSearch, narrowSwipeSwitchesDate }: DateNavProps) {
   const today = getDateString(new Date());
   const isToday = date === today;
   const weekday = formatWeekday(date);
+  const arrowClass = narrowSwipeSwitchesDate ? ARROW_BASE + ARROW_WIDE_ONLY : ARROW_BASE;
 
   return (
-    <div className="flex items-center justify-between bg-surface px-2 py-2">
-      <button onClick={() => onDateChange(addDays(date, -1))} className={arrowClass} aria-label="前一天">
-        <Icon icon={CaretLeft} size={18} />
-      </button>
-      <div className="min-w-0 flex-1 px-2">
+    // 整条不带纵向内边距：高度由 DateField 触发钮的 min-h-11 单独决定（44px 触控底线，
+    // invariants §2），再压就得牺牲可点性。原来的 py-2 是叠在这 44px 之上的净浪费。
+    <div className="flex items-center bg-surface px-2">
+      <div className="min-w-0 flex-1">
         <DateField
           value={date}
           max={today}
@@ -31,7 +38,7 @@ export default function DateNav({ date, onDateChange, onSearch }: DateNavProps) 
             if (next) onDateChange(next);
           }}
           portal
-          className="justify-center border-0 bg-transparent px-2 py-1 text-center shadow-none hover:bg-surface-hover"
+          className="justify-start border-0 bg-transparent px-2 py-1 text-left shadow-none hover:bg-surface-hover"
           formatValue={(value) => (
             <>
               <span className="td-time td-text-title font-medium text-ink">{formatMonthDay(value)}</span>
@@ -40,7 +47,7 @@ export default function DateNav({ date, onDateChange, onSearch }: DateNavProps) 
           )}
         />
       </div>
-      <div className="flex items-center">
+      <div className="flex shrink-0 items-center">
         {!isToday && (
           <button
             type="button"
@@ -50,6 +57,9 @@ export default function DateNav({ date, onDateChange, onSearch }: DateNavProps) 
             回到今天
           </button>
         )}
+        <button onClick={() => onDateChange(addDays(date, -1))} className={arrowClass} aria-label="前一天">
+          <Icon icon={CaretLeft} size={18} />
+        </button>
         <button onClick={() => onDateChange(addDays(date, 1))} className={arrowClass} disabled={isToday} aria-label="后一天">
           <Icon icon={CaretRight} size={18} />
         </button>

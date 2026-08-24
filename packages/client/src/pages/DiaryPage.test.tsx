@@ -1041,7 +1041,11 @@ describe("DiaryPage", () => {
 
     const heading = host.querySelector("h1");
     expect(heading?.textContent).toBe("日记");
-    expect(host.querySelector('button[aria-label="前一天"]')).not.toBeNull();
+    const prevDay = host.querySelector('button[aria-label="前一天"]');
+    expect(prevDay).not.toBeNull();
+    // 日记页没有横滑切日，所以它不能传 DateNav 的 narrowSwipeSwitchesDate——传了窄屏就只剩
+    // 「点日期开月历」一条路。这条断言守的正是「别顺手把时间轴那套紧凑形态抄过来」。
+    expect(prevDay?.className).not.toContain("hidden");
     await unmount(root);
   });
 
