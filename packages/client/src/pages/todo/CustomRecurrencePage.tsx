@@ -1,15 +1,15 @@
-import { useEffect, useState } from "react";
-import type { Recurrence } from "@timedata/shared";
 import { Check } from "@phosphor-icons/react";
+import type { Recurrence } from "@timedata/shared";
+import { useEffect, useState } from "react";
 import { Icon } from "../../components/Icon.js";
 import { DateField } from "../../components/ui/DateField.js";
 import { MonthCalendar } from "../../components/ui/MonthCalendar.js";
 import { TimeField } from "../../components/ui/TimeField.js";
 import Wheel from "../../components/Wheel.js";
 import {
-  customToRecurrence,
   type CustomRecurrenceEndMode,
   type CustomRecurrenceInput,
+  customToRecurrence,
 } from "../../lib/tasks/recurrencePresets.js";
 
 interface CustomRecurrencePageProps {
@@ -91,146 +91,153 @@ export function CustomRecurrencePage({ initial, onComplete, onBack }: CustomRecu
 
   return (
     <div className="fixed inset-0 z-[var(--z-top)] flex flex-col bg-page text-ink">
-      <div className="flex min-h-14 items-center justify-between border-b border-border px-4">
-        <button
-          type="button"
-          aria-label="返回"
-          onClick={onBack}
-          className="min-h-11 rounded-ctl px-2 py-1 td-text-label text-ink-2 hover:bg-surface-hover"
-        >
-          返回
-        </button>
-        <h2 className="td-text-label font-semibold text-ink">自定义重复</h2>
-        <button
-          type="button"
-          aria-label="完成"
-          onClick={() => onComplete(customToRecurrence(draft), draft.start)}
-          className="min-h-11 rounded-ctl px-2 py-1 td-text-label font-medium text-accent-ink hover:bg-accent/10"
-        >
-          完成
-        </button>
+      {/* 内容一律收进 max-w-2xl（与 TodoPage / TodoComposer / TaskDetailSheet 同口径）：
+          这是全屏页，不封顶时桌面宽度下滚轮、分段控件、月历会被整屏拉平。分隔线仍走满宽。 */}
+      <div className="border-b border-border">
+        <div className="mx-auto flex min-h-14 w-full max-w-2xl items-center justify-between px-4">
+          <button
+            type="button"
+            aria-label="返回"
+            onClick={onBack}
+            className="min-h-11 rounded-ctl px-2 py-1 td-text-label text-ink-2 hover:bg-surface-hover"
+          >
+            返回
+          </button>
+          <h2 className="td-text-label font-semibold text-ink">自定义重复</h2>
+          <button
+            type="button"
+            aria-label="完成"
+            onClick={() => onComplete(customToRecurrence(draft), draft.start)}
+            className="min-h-11 rounded-ctl px-2 py-1 td-text-label font-medium text-accent-ink hover:bg-accent/10"
+          >
+            完成
+          </button>
+        </div>
       </div>
 
-      <div className="flex-1 space-y-6 overflow-y-auto px-4 py-5">
-        <section className="space-y-3">
-          <div className="td-text-caption font-medium text-ink-3">频率</div>
-          <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)] gap-3">
-            <div>
-              <div className="mb-1 text-center td-text-caption text-ink-3">每</div>
-              <Wheel
-                ariaLabel="重复间隔"
-                value={String(draft.interval)}
-                options={INTERVAL_OPTIONS}
-                onChange={(value) => patch({ interval: normalizeCount(value) })}
-              />
+      {/* 滚动容器走满宽（滚动条贴屏幕边），收窄只作用在里层内容上。 */}
+      <div className="flex-1 overflow-y-auto">
+        <div className="mx-auto w-full max-w-2xl space-y-6 px-4 py-5">
+          <section className="space-y-3">
+            <div className="td-text-caption font-medium text-ink-3">频率</div>
+            <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)] gap-3">
+              <div>
+                <div className="mb-1 text-center td-text-caption text-ink-3">每</div>
+                <Wheel
+                  ariaLabel="重复间隔"
+                  value={String(draft.interval)}
+                  options={INTERVAL_OPTIONS}
+                  onChange={(value) => patch({ interval: normalizeCount(value) })}
+                />
+              </div>
+              <div>
+                <div className="mb-1 text-center td-text-caption text-ink-3">单位</div>
+                <Wheel
+                  ariaLabel="重复单位"
+                  value={unitToLabel(draft.unit)}
+                  options={unitLabels}
+                  onChange={(label) => setUnit(labelToUnit(label))}
+                />
+              </div>
             </div>
-            <div>
-              <div className="mb-1 text-center td-text-caption text-ink-3">单位</div>
-              <Wheel
-                ariaLabel="重复单位"
-                value={unitToLabel(draft.unit)}
-                options={unitLabels}
-                onChange={(label) => setUnit(labelToUnit(label))}
-              />
-            </div>
-          </div>
-        </section>
-
-        <section className="space-y-3">
-          <div className="td-text-caption font-medium text-ink-3">结束</div>
-          <div className="grid grid-cols-3 rounded-row bg-surface p-1">
-            {endModes.map((mode) => (
-              <button
-                key={mode.value}
-                type="button"
-                aria-label={mode.label}
-                onClick={() => patch({ endMode: mode.value })}
-                className={segmentedClass(draft.endMode === mode.value)}
-              >
-                {mode.label}
-              </button>
-            ))}
-          </div>
-          {draft.endMode === "count" && (
-            <Wheel
-              ariaLabel="重复次数"
-              value={String(draft.count ?? 1)}
-              options={COUNT_OPTIONS}
-              onChange={(value) => patch({ count: normalizeCount(value) })}
-            />
-          )}
-          {draft.endMode === "until" && (
-            <DateField
-              value={draft.until ?? draft.start}
-              min={draft.start}
-              ariaLabel="结束日期"
-              onChange={(next) => {
-                if (next) patch({ until: next });
-              }}
-            />
-          )}
-        </section>
-
-        <section className="space-y-3">
-          <div className="td-text-caption font-medium text-ink-3">时间</div>
-          <div className="grid grid-cols-[auto_minmax(0,1fr)] gap-2">
-            <button
-              type="button"
-              aria-label="无时间"
-              onClick={() => patch({ time: undefined })}
-              className={segmentedClass(!draft.time)}
-            >
-              无
-            </button>
-            <TimeField
-              value={draft.time ?? null}
-              ariaLabel="重复时间"
-              clearable
-              onChange={(next) => patch({ time: next ?? undefined })}
-            />
-          </div>
-        </section>
-
-        <section className="space-y-3">
-          <div className="td-text-caption font-medium text-ink-3">顺延基准</div>
-          <div className="grid grid-cols-2 rounded-row bg-surface p-1">
-            {basisOptions.map((option) => (
-              <button
-                key={option.value}
-                type="button"
-                aria-label={option.label}
-                onClick={() => patch({ basis: option.value })}
-                className={segmentedClass(draft.basis === option.value)}
-              >
-                {option.label}
-              </button>
-            ))}
-          </div>
-        </section>
-
-        {draft.unit === "monthly" && (
-          <section>
-            <button
-              type="button"
-              aria-label="每月最后一天"
-              aria-pressed={draft.monthEnd === true}
-              onClick={() => patch({ monthEnd: !draft.monthEnd })}
-              className={`flex min-h-11 w-full items-center justify-between rounded-row px-3 td-text-label ${
-                draft.monthEnd ? "bg-accent/15 text-accent-ink" : "bg-surface text-ink-2"
-              }`}
-            >
-              <span>每月最后一天</span>
-              <span className="inline-flex h-5 w-5 items-center justify-center">
-                {draft.monthEnd ? <Icon icon={Check} size={16} /> : null}
-              </span>
-            </button>
           </section>
-        )}
 
-        <section className="space-y-3">
-          <div className="td-text-caption font-medium text-ink-3">起始日期</div>
-          <MonthCalendar value={draft.start} onChange={setStart} />
-        </section>
+          <section className="space-y-3">
+            <div className="td-text-caption font-medium text-ink-3">结束</div>
+            <div className="grid grid-cols-3 rounded-row bg-surface p-1">
+              {endModes.map((mode) => (
+                <button
+                  key={mode.value}
+                  type="button"
+                  aria-label={mode.label}
+                  onClick={() => patch({ endMode: mode.value })}
+                  className={segmentedClass(draft.endMode === mode.value)}
+                >
+                  {mode.label}
+                </button>
+              ))}
+            </div>
+            {draft.endMode === "count" && (
+              <Wheel
+                ariaLabel="重复次数"
+                value={String(draft.count ?? 1)}
+                options={COUNT_OPTIONS}
+                onChange={(value) => patch({ count: normalizeCount(value) })}
+              />
+            )}
+            {draft.endMode === "until" && (
+              <DateField
+                value={draft.until ?? draft.start}
+                min={draft.start}
+                ariaLabel="结束日期"
+                onChange={(next) => {
+                  if (next) patch({ until: next });
+                }}
+              />
+            )}
+          </section>
+
+          <section className="space-y-3">
+            <div className="td-text-caption font-medium text-ink-3">时间</div>
+            <div className="grid grid-cols-[auto_minmax(0,1fr)] gap-2">
+              <button
+                type="button"
+                aria-label="无时间"
+                onClick={() => patch({ time: undefined })}
+                className={segmentedClass(!draft.time)}
+              >
+                无
+              </button>
+              <TimeField
+                value={draft.time ?? null}
+                ariaLabel="重复时间"
+                clearable
+                onChange={(next) => patch({ time: next ?? undefined })}
+              />
+            </div>
+          </section>
+
+          <section className="space-y-3">
+            <div className="td-text-caption font-medium text-ink-3">顺延基准</div>
+            <div className="grid grid-cols-2 rounded-row bg-surface p-1">
+              {basisOptions.map((option) => (
+                <button
+                  key={option.value}
+                  type="button"
+                  aria-label={option.label}
+                  onClick={() => patch({ basis: option.value })}
+                  className={segmentedClass(draft.basis === option.value)}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
+          </section>
+
+          {draft.unit === "monthly" && (
+            <section>
+              <button
+                type="button"
+                aria-label="每月最后一天"
+                aria-pressed={draft.monthEnd === true}
+                onClick={() => patch({ monthEnd: !draft.monthEnd })}
+                className={`flex min-h-11 w-full items-center justify-between rounded-row px-3 td-text-label ${
+                  draft.monthEnd ? "bg-accent/15 text-accent-ink" : "bg-surface text-ink-2"
+                }`}
+              >
+                <span>每月最后一天</span>
+                <span className="inline-flex h-5 w-5 items-center justify-center">
+                  {draft.monthEnd ? <Icon icon={Check} size={16} /> : null}
+                </span>
+              </button>
+            </section>
+          )}
+
+          <section className="space-y-3">
+            <div className="td-text-caption font-medium text-ink-3">起始日期</div>
+            <MonthCalendar value={draft.start} onChange={setStart} />
+          </section>
+        </div>
       </div>
     </div>
   );

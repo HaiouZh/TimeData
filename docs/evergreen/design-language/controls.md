@@ -72,6 +72,8 @@ last-reviewed: 2026-08-23
 
 `MonthCalendar` 的月历面板使用 `rounded-card`，日期格与导航按钮使用 `rounded-ctl`；圆角只表达控件与面板角色，不改变日期选择行为。
 
+日期格是 `aspect-square`——**宽度即高度**，所以面板自带 `max-w-sm` 上限并在容器内居中：没有这道上限时，放进宽容器（桌面宽度下的全屏页、`max-w-2xl` 的 Sheet）每格会被横向均分成两百像素级的方块。宽度封顶归月历自己管，调用方只提供横向容器即可，不必各自封宽。
+
 ### 控件排版档
 
 控件内文字一律用 `.td-text-*` 语义类，不写裸字号（由 `bare-text-size` 棘轮守，见 [ratchets](ratchets.md)）。档位分工：

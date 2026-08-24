@@ -84,7 +84,12 @@ export function MonthCalendar({ value, onChange, min, max, ariaLabel = "月历" 
   }
 
   return (
-    <section className="rounded-card border border-border bg-surface/80 p-3 text-ink" aria-label={ariaLabel}>
+    <section
+      // max-w-sm：日格是 aspect-square，宽度多少高度就多少。不封顶时放进宽容器（桌面版的自定义
+      // 重复页、宽 Sheet）每格会被拉成两百来像素的巨块。384px 上限让格子落在 ~48px 的触控尺寸。
+      className="mx-auto w-full max-w-sm rounded-card border border-border bg-surface/80 p-3 text-ink"
+      aria-label={ariaLabel}
+    >
       <div className="mb-3 flex items-center justify-between gap-3">
         <button type="button" aria-label="上个月" onClick={() => moveMonth(-1)} className={navButtonClass}>
           <Icon icon={CaretLeft} size={18} weight="bold" />
