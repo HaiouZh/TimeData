@@ -179,6 +179,9 @@ beforeEach(async () => {
 });
 
 afterEach(() => {
+  // 假时钟必须逐用例还原：Vitest 的假时钟是文件级的，某条用例 setSystemTime 之后不还原，
+  // 它后面新增的所有用例「现在」都停在那个时刻——症状是单条 -t 跑绿、全量跑红。
+  vi.useRealTimers();
   db.close();
   vi.doUnmock("../db/connection.js");
   vi.doUnmock("../sync/backup.js");
@@ -2739,6 +2742,9 @@ describe("sync route", () => {
   });
 
   it("pushes, pulls, and tombstones quick notes", async () => {
+    // 本例的载荷时间戳硬编码在 2026-06-01，而服务端 updated_at 取真实「现在」——
+    // 不钉时钟则 LWW 判 conflict。此前是靠上面某条用例泄漏的假时钟凑巧成立的。
+    vi.setSystemTime(new Date("2026-06-01T00:00:00.000Z"));
     const pushRes = await app.request("/api/sync/push", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -2817,6 +2823,8 @@ describe("sync route", () => {
   });
 
   it("pushes, pulls, and tombstones tracks and track_steps", async () => {
+    // 同上：载荷时间戳硬编码在 2026-06-21，时钟须钉在它之前。
+    vi.setSystemTime(new Date("2026-06-20T00:00:00.000Z"));
     const now = "2026-06-21T00:00:00.000Z";
     const pushRes = await app.request("/api/sync/push", {
       method: "POST",
@@ -3678,10 +3686,8 @@ describe("sync 路由 TOTP 闸", () => {
 describe("sync route additional guards", () => {
   beforeEach(() => {
     db.prepare("DELETE FROM totp_config").run();
-    // 本文件约 965 行处的既有用例 vi.setSystemTime("2026-05-17") 之后从不还原，
-    // 全量跑时"现在"会停在那一刻，本组用例的 2026-08-19 时间戳就成了未来时间、
-    // 被 entry 校验的 "endTime cannot be in the future" 拒成 409。显式钉住自己的时钟，
-    // 不依赖别处有没有还原。
+    // 本组用例的载荷时间戳是 2026-08-19，须显式钉住自己的时钟——不依赖真实「现在」，
+    // 也不依赖别处有没有还原（文件级 afterEach 现在会还原，但用例的时间语义应当自证）。
     vi.setSystemTime(new Date("2026-08-20T00:00:00.000Z"));
   });
 

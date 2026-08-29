@@ -197,8 +197,6 @@ describe("task_relations sync roundtrip", () => {
   }
 
   it("applies an upsert with server-assigned updated_at", () => {
-    const recordId = "task|a|track|b";
-
     expect(applyChange(change("create", relation())).status).toBe("applied");
     expect(db.prepare("SELECT blocker_kind, blocker_id, blocked_kind, blocked_id, type, created_at, updated_at FROM task_relations").get()).toEqual({
       blocker_kind: "task",

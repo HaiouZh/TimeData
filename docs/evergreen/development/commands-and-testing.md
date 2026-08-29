@@ -96,3 +96,5 @@ vi.useFakeTimers({ toFake: ["Date", "setTimeout", "clearTimeout", "setInterval",
 ```
 
 这不违反本仓「禁真实定时等待」的棘轮本意：棘轮防的是测试代码自己写 `setTimeout(fn, n>0)` 空等真实时间流逝，不防第三方库内部排队机制依赖的宏任务本身仍是真实的。实例见 `packages/client/src/pages/SearchPage.test.tsx` 的 `beforeEach`。
+
+**假时钟是文件级的，用完必须还原——不还原就是一颗定时炸弹**：某条用例 `vi.setSystemTime(X)` 之后不还原，它**后面新增的所有用例**「现在」都停在 X。危险在于症状具迷惑性——单条 `-t <用例名>` 跑是绿的（前面的用例被 skip、时钟没被污染），只有全量跑才红，第一反应会误判成测试间的 db 状态污染、往那个方向排查会全程走空。**判据：同一条用例 `-t` 绿 / 全量红，先查文件里有没有不还原的 `vi.setSystemTime`。**两条纪律：① 文件级 `afterEach` 里放 `vi.useRealTimers()`（client 三个 setup 都已有，server 端 `sync.test.ts` 2026-08-29 补上）；② **用例的时间语义应当自证**——载荷里写死绝对时间戳的用例，自己 `setSystemTime` 钉住依赖的「现在」，不靠别处泄漏。反例实录：`sync.test.ts` 有两条 tombstone 用例的时间戳硬编码在 2026-06，长期是靠上面一条用例泄漏的 2026-05-17 假时钟才绿的；堵住泄漏当场变红，它们本就注定随真实时间推移而失效。

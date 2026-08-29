@@ -178,7 +178,7 @@ describe("undoToggleWithTrackConclude", () => {
     const track = await addTrack({ title: "T-undo-milestone-2" });
     const milestones = await addMilestones(track.id, ["第一阶段", "第二阶段"]);
     await linkMilestoneTask(milestones[1].id, task.id);
-    const promoted = await promoteTaskToTrack(task);
+    await promoteTaskToTrack(task);
     const { task: done, concludedTrack } = await toggleTaskDoneWithTrackConclude(task.id);
     expect((await db.trackMilestones.get(milestones[1].id))?.status).toBe("done");
     // 用户没点撤销，而是直调 toggleTaskDone 取消勾选（绕过镜像，段仍停在 done）

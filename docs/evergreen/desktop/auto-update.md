@@ -7,7 +7,7 @@ contracts:
   - packages/desktop/src-tauri/src/updater.rs
   - scripts/updater-manifest.mjs
   - packages/desktop/scripts/check-desktop-config.mjs
-last-reviewed: 2026-08-14
+last-reviewed: 2026-08-29
 ---
 
 # Windows 桌面壳 · 自动更新

@@ -12,7 +12,7 @@ export function buildUpdaterManifest({ version, tag, repo, signature, pubDate })
   }
   if (!tag) throw new Error("tag 不能为空——URL 会拼成指不到任何 Release 的半截地址");
   if (!repo) throw new Error("repo 不能为空——URL 会拼成指不到任何 Release 的半截地址");
-  if (!signature || !signature.trim()) {
+  if (!signature?.trim()) {
     throw new Error("签名不能为空：读空的 .sig 会产出一份看着正常、装机验签必失败的 manifest");
   }
   if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/.test(pubDate ?? "")) {

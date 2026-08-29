@@ -92,7 +92,7 @@ describe("trackMilestones 写入层", () => {
 
   it("insertMilestoneAt 不传 beforeId：追加末尾，只 1 create、既有行零 update", async () => {
     const track = await addTrack({ title: "T1", now });
-    const initial = await addMilestones(track.id, ["第一阶段", "第二阶段"]);
+    await addMilestones(track.id, ["第一阶段", "第二阶段"]);
     await db.syncLog.clear();
 
     const inserted = await insertMilestoneAt(track.id, "末尾段");
@@ -270,7 +270,7 @@ describe("trackMilestones 写入层", () => {
     const track = await addTrack({ title: "T1", now });
     await expect(addMilestones(track.id, ["  ", "有效"])).rejects.toThrow();
     await expect(addMilestones(track.id, [""])).rejects.toThrow();
-    const [m1] = await addMilestones(track.id, ["有效"]);
+    await addMilestones(track.id, ["有效"]);
     await expect(insertMilestoneAt(track.id, "新段", "missing-id")).rejects.toThrow();
     await expect(updateMilestoneTitle("missing-id", "标题")).rejects.toThrow();
     await expect(setMilestoneStatus("missing-id", "done")).rejects.toThrow();

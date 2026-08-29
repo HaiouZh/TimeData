@@ -188,7 +188,7 @@ export function TodoPage() {
   const resumable = useLiveQuery(() => listResumableSessions(), []) ?? [];
   // biome-ignore lint/correctness/useExhaustiveDependencies: handSession.id 是触发器而非读取项——换了手头会话才重新自愈一次。删掉它，自愈就只在挂载时跑一次。
   useEffect(() => {
-    void healActiveSessions();
+    void healActiveSessions().catch((e) => console.warn("healActiveSessions", e));
   }, [buckets.handSession?.id]);
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();

@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
-// biome-ignore assist/source/organizeImports: dbReset must be before trackMilestones to register fake-indexeddb before Dexie
+// import 顺序有意义，别重排：dbReset must be before trackMilestones to register fake-indexeddb before Dexie。
+// organizeImports 已在 biome.json 全仓关掉（它会把 dbReset 挪到后面 → Dexie 捕获不到 fake-indexeddb）。
 import { db } from "../../../test/dbReset.js";
 import type { TrackMilestone } from "@timedata/shared";
 import { act, createElement } from "react";
