@@ -68,6 +68,65 @@ beforeEach(() => {
   Object.defineProperty(window, "innerHeight", { value: 768, configurable: true });
 });
 
+describe("单一信源：多个消费方不分叉", () => {
+  // 每个消费方各挂一整套监听时，「键盘不在场时的 innerHeight」这条基线各算各的。
+  // 键盘已经弹起之后才挂载的那个消费方，会把**被壳压缩过的**高度当成基线，
+  // 于是它算出的 shellShrink 恒为 0、报出的遮挡量比先挂载的那个多一整段——
+  // 两个固定在底部的条一个停在键盘上沿、另一个飞在半空。
+  it("键盘已弹起后才挂载的消费方，报的高度与先挂载的那个一致", async () => {
+    getPlatformMock.mockReturnValue("android");
+    const callbacks: Record<string, (arg?: unknown) => void> = {};
+    addListenerMock.mockImplementation((eventName: string, cb: (arg?: unknown) => void) => {
+      callbacks[eventName] = cb;
+      return Promise.resolve({ remove: vi.fn() });
+    });
+
+    // 先挂载的消费方：此刻键盘不在场，基线 = 768
+    const first = await renderDom(createElement(Probe));
+    expect(readHeight(first.host)).toBe("0");
+
+    // 键盘弹起，且壳把 webview 缩掉 200（安卓 OEM 兜底路径）
+    await act(async () => {
+      callbacks.keyboardWillShow?.({ keyboardHeight: 300 });
+      Object.defineProperty(window, "innerHeight", { value: 568, configurable: true });
+      window.dispatchEvent(new Event("resize"));
+    });
+    // 插件报 300、壳已让掉 200 → JS 还需让开 100
+    expect(readHeight(first.host)).toBe("100");
+
+    // 此刻才挂载第二个消费方（切页面、展开某个带输入条的面板都会这样）
+    const second = await renderDom(createElement(Probe));
+
+    expect(readHeight(second.host)).toBe(readHeight(first.host));
+
+    await unmount(second.root);
+    await unmount(first.root);
+  });
+
+  it("晚挂载的 useKeyboardVisible 立刻拿到当前在场状态，不等下一次事件", async () => {
+    getPlatformMock.mockReturnValue("ios");
+    const callbacks: Record<string, (arg?: unknown) => void> = {};
+    addListenerMock.mockImplementation((eventName: string, cb: (arg?: unknown) => void) => {
+      callbacks[eventName] = cb;
+      return Promise.resolve({ remove: vi.fn() });
+    });
+
+    const first = await renderDom(createElement(VisibleProbe));
+    await act(async () => {
+      callbacks.keyboardWillShow?.({ keyboardHeight: 300 });
+    });
+    expect(readVisible(first.host)).toBe("true");
+
+    // 后挂载者若各起炉灶，初值是 false，要等下一次 willShow 才对得上——
+    // 而键盘已经弹着，下一次事件可能永远不来。
+    const second = await renderDom(createElement(VisibleProbe));
+    expect(readVisible(second.host)).toBe("true");
+
+    await unmount(second.root);
+    await unmount(first.root);
+  });
+});
+
 describe("useKeyboardHeight — native", () => {
   it("keyboardWillShow 给出真实高度，keyboardWillHide 归零", async () => {
     getPlatformMock.mockReturnValue("ios");
