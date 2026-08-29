@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const NOW = "2026-06-22T01:00:00.000Z";
 
 let db: Database.Database;
-let applyChange: (change: SyncChange) => { status: string; reason: string };
+let applyChange: typeof import("./resolver.js").applyChange;
 let domains: typeof import("./domains.js");
 
 function goal(overrides: Partial<Goal> = {}): Goal {

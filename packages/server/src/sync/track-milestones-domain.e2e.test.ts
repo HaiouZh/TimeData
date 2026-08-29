@@ -7,7 +7,7 @@ const UPDATE_NOW = "2026-06-21T00:01:00.000Z";
 const DELETE_NOW = "2026-06-21T00:02:00.000Z";
 
 let db: Database.Database;
-let applyChange: (change: SyncChange, opts?: Record<string, unknown>) => { status: string; reason: string; skipReason?: string; serverUpdatedAt?: string };
+let applyChange: typeof import("./resolver.js").applyChange;
 let domains: typeof import("./domains.js");
 
 function track(overrides: Partial<Track> = {}): Track {

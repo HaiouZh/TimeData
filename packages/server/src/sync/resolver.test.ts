@@ -7,8 +7,7 @@ let db: Database.Database;
 // 类型直接取自被测模块，**不再手写一份影子签名**——手写那份漏掉了 unseenImpactRecords，
 // 于是 applyChange 的签名怎么改，这个文件的 typecheck 都不会红（守卫参数漏传正是它没能拦住的）。
 let applyChange: typeof import("./resolver.js").applyChange;
-let getChangesSinceSeq: (sinceSeq: number | null) => Array<{ tableName: string; recordId: string; action: string }>;
-
+let getChangesSinceSeq: typeof import("./seq.js").getChangesSinceSeq;
 beforeEach(async () => {
   db = new Database(":memory:");
   db.pragma("foreign_keys = ON");

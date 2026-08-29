@@ -7,15 +7,10 @@ const UPDATE_NOW = "2026-06-21T00:01:00.000Z";
 const DELETE_NOW = "2026-06-21T00:02:00.000Z";
 
 let db: Database.Database;
-let applyChange: (change: SyncChange) => { status: string; reason: string };
-let validateSyncChanges: (db: Database.Database, changes: SyncChange[]) => { valid: boolean };
-let orderPushChanges: (changes: SyncChange[]) => SyncChange[];
-let getChangesSinceSeq: (sinceSeq: number | null) => Array<{
-  id: number;
-  tableName: string;
-  recordId: string;
-  action: string;
-}>;
+let applyChange: typeof import("./resolver.js").applyChange;
+let validateSyncChanges: typeof import("./validation.js").validateSyncChanges;
+let orderPushChanges: typeof import("./order.js").orderPushChanges;
+let getChangesSinceSeq: typeof import("./seq.js").getChangesSinceSeq;
 let domains: typeof import("./domains.js");
 
 function track(overrides: Partial<Track> = {}): Track {

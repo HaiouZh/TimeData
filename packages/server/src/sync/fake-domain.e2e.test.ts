@@ -22,15 +22,10 @@ const fakeSharedDomain: SyncDomainConfig = {
 };
 
 let db: Database.Database;
-let applyChange: (change: SyncChange) => { status: string; reason: string };
-let validateSyncChanges: (
-  db: Database.Database,
-  changes: SyncChange[],
-  options?: Record<string, unknown>,
-  registry?: readonly SyncDomainConfig[],
-) => { valid: boolean };
-let orderPushChanges: (changes: SyncChange[], registry?: readonly SyncDomainConfig[]) => SyncChange[];
-let getChangesSinceSeq: (sinceSeq: number | null) => Array<{ id: number; tableName: string; recordId: string; action: string }>;
+let applyChange: typeof import("./resolver.js").applyChange;
+let validateSyncChanges: typeof import("./validation.js").validateSyncChanges;
+let orderPushChanges: typeof import("./order.js").orderPushChanges;
+let getChangesSinceSeq: typeof import("./seq.js").getChangesSinceSeq;
 let domains: typeof import("./domains.js");
 // 测试注册表 = 真实登记簿 + 假域，经注入参数传给纯函数（vitest 下 shared 会出现双实例，不能靠改模块单例）。
 let testRegistry: SyncDomainConfig[];

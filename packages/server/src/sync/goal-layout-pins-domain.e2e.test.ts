@@ -12,9 +12,9 @@ const NOW = "2026-06-24T00:00:00.000Z";
 const LATER = "2026-06-24T00:05:00.000Z";
 
 let db: Database.Database;
-let applyChange: (change: SyncChange) => { status: string; reason: string };
-let validateSyncChanges: (db: Database.Database, changes: SyncChange[]) => { valid: boolean };
-let getChangesSinceSeq: (sinceSeq: number | null) => Array<{ tableName: string; recordId: string; action: string }>;
+let applyChange: typeof import("./resolver.js").applyChange;
+let validateSyncChanges: typeof import("./validation.js").validateSyncChanges;
+let getChangesSinceSeq: typeof import("./seq.js").getChangesSinceSeq;
 let domains: typeof import("./domains.js");
 
 function pin(overrides: Partial<GoalLayoutPin> = {}): GoalLayoutPin {
