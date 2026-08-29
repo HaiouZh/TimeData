@@ -39,7 +39,7 @@ last-reviewed: 2026-08-20
 
 **syncLog 卫生**：未同步查询统一走索引（`where("synced").equals(0)` 或 `[tableName+synced]`），不做全表 `.filter()` 扫描。`synced` 用数字（`0|1|2`）正是为可索引而设。`synced=1/2` 历史行由每轮成功同步收尾的 `pruneSyncedLogs()` 按 7 天窗口清理；no-op 早退分支不清理，保持零写入。清理失败不算整轮同步失败，也不占同步窗口。
 
-**「待同步 0 条」不等于本地写入都已到达服务端**：`synced=1`（已放弃本地主张）与 `synced=2`（死信隔离）都已移出上传队列，两者都不计入 `unsyncedCount`。被[隐式删除守卫](../sync.md#sync-unseen-delete-guard)拦下的写入属这一类——它的内容快照落在 Dexie `pendingArbitrations`（`listPendingArbitrations()` 读取），`disposition` 区分两种归宿：`pending` 对应 `synced=2`、等用户裁决，`discarded` 对应 `synced=1`、主张已放弃而仅留内容备查。字段契约见 [data-model](../data-model.md) §Dexie schema。**`syncLog` 的 `synced=1/2` 行走 7 天回收窗口，而 `pendingArbitrations` 不参与该回收**：日志被回收之后，快照是唯一还留着原始 payload 的地方。
+**「待同步 0 条」不等于本地写入都已到达服务端**：`synced=1`（已放弃本地主张）与 `synced=2`（死信隔离）都已移出上传队列，两者都不计入 `unsyncedCount`。被[隐式删除守卫](../sync.md#sync-unseen-delete-guard)拦下的写入属这一类——它的内容快照落在 Dexie `arbitrations`（主键 `[tableName+recordId]`，`listPendingArbitrations()` 读取），`disposition` 区分两种归宿：`pending` 对应 `synced=2`、等用户裁决，`discarded` 对应 `synced=1`、主张已放弃而仅留内容备查。字段契约见 [data-model](../data-model.md) §Dexie schema。**`syncLog` 的 `synced=1/2` 行走 7 天回收窗口，而 `arbitrations` 不参与该回收**：日志被回收之后，快照是唯一还留着原始 payload 的地方。
 
 **服务端回执的 key 按两级匹配落到本地 change 上**：精确三元组（表名:记录 id:action）优先，落空后按「表名:记录 id」回退——`action` 那一位由服务端按落库结果改写是允许的（客户端推 `create`、服务端按已有行判成 `update`），精确匹配随之落空。回退只在唯一命中时才认；「一批 changes 里同一条记录至多一条」由 `compactSyncLogs` 的分组与 `beforePush` 的 `includedCategoryIds` 去重共同保证。**回执一条都对不上本地 change 时**（连回退也不中），409 原子拒收路径把这批就地隔离（`synced=2`）并存一份 `disposition="discarded"` 的快照，而不是让整条同步链停摆——排障时的表征是「待裁决区多出一批 discarded 存档、同步本身照常继续」。
 
@@ -47,7 +47,7 @@ last-reviewed: 2026-08-20
 
 ## 2. 被拦下的写入在界面上的出口
 
-时间轴页（`/`）在 `pendingArbitrations` 存在 `time_entries` 行时显示一条常驻横幅（`ArbitrationBanner`）。它的数据源是 `SyncContext` 的 live query，**与「上一轮同步的结果」无关**——因此不随同步轮次消失，这正是它与设置页那条依赖 `lastResult.pushIssues` 的提示的分工。横幅只呈现最近一条（按 `rejectedAt` 倒序），给两个动作：把时间轴切到该记录所在日期，以及清掉这一行存档（`clearPendingArbitration`，只清当前这条）。存档解不出 `startTime` / `endTime` 的行（含序列化失败留下的 `__serializeFailed` 存根）被跳过。
+时间轴页（`/`）在 `arbitrations` 存在 `time_entries` 行时显示一条常驻横幅（`ArbitrationBanner`）。它的数据源是 `SyncContext` 的 live query，**与「上一轮同步的结果」无关**——因此不随同步轮次消失，这正是它与设置页那条依赖 `lastResult.pushIssues` 的提示的分工。横幅只呈现最近一条（按 `rejectedAt` 倒序），给两个动作：把时间轴切到该记录所在日期，以及清掉这一行存档（`clearPendingArbitration(tableName, recordId)`，按复合主键只清当前这条——只传 recordId 会误删同 id 的别表行）。存档解不出 `startTime` / `endTime` 的行（含序列化失败留下的 `__serializeFailed` 存根）被跳过。
 
 **横幅必须写明「原样再保存会删掉云端记录」，这不是文案偏好而是机制**：拒收那一轮必然触发一次回声 pull（`canSkipEchoPull()` 遇到任何 issue 即返回 false），云端那些记录因此已经落到本地——设备「见过」它们了，而[隐式删除守卫](../sync.md#sync-unseen-delete-guard)的判据正是「见过没」。用户此后再保存同一时段的记录，判据不再命中，服务端放行并执行重叠删除。语义上这是用户的意图（看过冲突仍坚持保存），而横幅那句警告是它**唯一**的告知点。
 

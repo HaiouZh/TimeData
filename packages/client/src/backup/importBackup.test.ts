@@ -202,7 +202,7 @@ beforeEach(async () => {
   await db.quickNotes.clear();
   await db.syncLog.clear();
   await db.categories.clear();
-  if ("pendingArbitrations" in db) await db.pendingArbitrations.clear();
+  if ("arbitrations" in db) await db.arbitrations.clear();
   localStorage.clear();
 });
 
@@ -349,7 +349,7 @@ describe("importBackup", () => {
   });
 
   it("clears pending arbitrations when importing a backup", async () => {
-    await db.pendingArbitrations.put({
+    await db.arbitrations.put({
       recordId: "entry-offline",
       tableName: "time_entries",
       action: "create",
@@ -362,6 +362,6 @@ describe("importBackup", () => {
 
     await importBackup(backup());
 
-    expect(await db.pendingArbitrations.count()).toBe(0);
+    expect(await db.arbitrations.count()).toBe(0);
   });
 });

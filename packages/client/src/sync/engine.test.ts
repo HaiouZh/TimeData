@@ -71,7 +71,7 @@ beforeEach(async () => {
   await db.syncLog.clear();
   await db.categories.clear();
   await db.settings.clear();
-  if ("pendingArbitrations" in db) await db.pendingArbitrations.clear();
+  if ("arbitrations" in db) await db.arbitrations.clear();
   localStorage.clear();
   apiFetchMock.mockReset();
 });
@@ -1288,7 +1288,7 @@ describe("syncPush", () => {
   });
 
   it("stale_rejected for time_entries upsert stores a discarded snapshot", async () => {
-    await db.pendingArbitrations.clear();
+    await db.arbitrations.clear();
     await db.categories.add({
       id: "cat-1",
       name: "Work",
@@ -1355,7 +1355,7 @@ describe("syncPush", () => {
   });
 
   it("stale_rejected for quick_notes does not store a snapshot", async () => {
-    await db.pendingArbitrations.clear();
+    await db.arbitrations.clear();
     await db.quickNotes.add({
       id: "note-quick",
       text: "hello",
@@ -1402,7 +1402,7 @@ describe("syncPush", () => {
   });
 
   it("409 stale_rejected for time_entries also stores a discarded snapshot", async () => {
-    await db.pendingArbitrations.clear();
+    await db.arbitrations.clear();
     await db.categories.add({
       id: "cat-409",
       name: "Work",
@@ -4096,7 +4096,7 @@ describe("syncForceReplace", () => {
   });
 
   it("clears pending arbitrations when replacing local data with server data", async () => {
-    await db.pendingArbitrations.put({
+    await db.arbitrations.put({
       recordId: "entry-offline",
       tableName: "time_entries",
       action: "create",
@@ -4114,7 +4114,7 @@ describe("syncForceReplace", () => {
 
     await syncForceReplace();
 
-    expect(await db.pendingArbitrations.count()).toBe(0);
+    expect(await db.arbitrations.count()).toBe(0);
   });
 });
 
@@ -4375,7 +4375,7 @@ describe("applyPullChangesBatch 迁移前置边", () => {
 
 describe("needs_arbitration 拒收", () => {
   it("隔离本地主张并落库，下一轮同步不会把它自动重发", async () => {
-    await db.pendingArbitrations.clear();
+    await db.arbitrations.clear();
     await db.timeEntries.put({
       id: "entry-offline",
       categoryId: "cat-wash",
@@ -4452,7 +4452,7 @@ describe("needs_arbitration 拒收", () => {
   });
 
   const seedRejectedEntry = async (recordId: string) => {
-    await db.pendingArbitrations.clear();
+    await db.arbitrations.clear();
     await db.timeEntries.put({
       id: recordId,
       categoryId: "cat-wash",
@@ -4470,7 +4470,7 @@ describe("needs_arbitration 拒收", () => {
     const log = await seedRejectedEntry("entry-atomic-200");
     apiFetchMock.mockResolvedValue(arbitrationOutcome("entry-atomic-200", log.timestamp));
     const putSpy = vi
-      .spyOn(db.pendingArbitrations, "put")
+      .spyOn(db.arbitrations, "put")
       .mockRejectedValueOnce(new Error("QuotaExceededError"));
 
     await expect(syncPush()).rejects.toThrow();
@@ -4489,7 +4489,7 @@ describe("needs_arbitration 拒收", () => {
       new ApiErrorMock(409, "Conflict", "", arbitrationOutcome("entry-atomic-409", log.timestamp)),
     );
     const putSpy = vi
-      .spyOn(db.pendingArbitrations, "put")
+      .spyOn(db.arbitrations, "put")
       .mockRejectedValueOnce(new Error("QuotaExceededError"));
 
     await expect(syncPush()).rejects.toThrow();
@@ -4511,7 +4511,7 @@ describe("requeueQuarantinedSyncLogs 待裁决守卫", () => {
       timestamp: "2026-08-19T12:00:00.000Z",
       synced: 2,
     });
-    await db.pendingArbitrations.put({
+    await db.arbitrations.put({
       recordId: "entry-offline",
       tableName: "time_entries",
       action: "create",
@@ -4564,7 +4564,7 @@ describe("requeueQuarantinedSyncLogs 待裁决守卫", () => {
         synced: 2,
       },
     ]);
-    await db.pendingArbitrations.put({
+    await db.arbitrations.put({
       recordId: "entry-mixed-pending",
       tableName: "time_entries",
       action: "create",
@@ -4583,7 +4583,7 @@ describe("requeueQuarantinedSyncLogs 待裁决守卫", () => {
 
 describe("409 needs_arbitration 正常处置", () => {
   it("409 原子拒收的 unseen_record_deletion_rejected 隔离为死信并落库（支点排最前）", async () => {
-    await db.pendingArbitrations.clear();
+    await db.arbitrations.clear();
     await db.categories.add({
       id: "cat-409-arb",
       name: "Work",
@@ -4666,7 +4666,7 @@ describe("changeByKey 落空分支", () => {
   // 200 路径会让日志永远留在 synced=0 无限重推同一载荷，409 路径直接抛错阻断整条同步链。
   // 故 key 匹配分两级：精确三元组优先，落空后按「表名:记录 id」回退——且只在唯一命中时才认。
   it("200 路径：服务端改写了 action，按记录 id 回退匹配后隔离并存档", async () => {
-    await db.pendingArbitrations.clear();
+    await db.arbitrations.clear();
     await db.categories.add({
       id: "cat-mismatch",
       name: "Work",
@@ -4732,7 +4732,7 @@ describe("changeByKey 落空分支", () => {
   });
 
   it("409 路径：服务端改写了 action，按记录 id 回退匹配后隔离并存档，不再抛错", async () => {
-    await db.pendingArbitrations.clear();
+    await db.arbitrations.clear();
     await db.categories.add({
       id: "cat-mismatch-409",
       name: "Work",
@@ -4809,7 +4809,7 @@ describe("changeByKey 落空分支", () => {
   });
 
   it("409 路径：回执的记录 id 也对不上时，整批隔离并存档而不是抛错阻断同步", async () => {
-    await db.pendingArbitrations.clear();
+    await db.arbitrations.clear();
     await db.categories.add({
       id: "cat-mismatch-orphan",
       name: "Work",

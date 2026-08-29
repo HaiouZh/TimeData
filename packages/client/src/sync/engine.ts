@@ -491,7 +491,7 @@ async function applyPushResponse(
     || arbitrationChanges.length > 0
     || discardedChanges.length > 0
   ) {
-    await db.transaction("rw", [db.syncLog, db.pendingArbitrations], async () => {
+    await db.transaction("rw", [db.syncLog, db.arbitrations], async () => {
       // 顺序不是随意的：存档一律排在任何「放弃主张 / 移出队列」的标记之前。若将来被拆开，
       // 失败时留下的是「有存档没标记」（安全的一侧：内容还在、下轮会重推被再次拦下，put 幂等覆盖），
       // 而不是「标记了没存档」（危险：本地主张已放弃且内容无处找回）。
@@ -594,7 +594,7 @@ async function applyAtomicRejectedPushResponse(
     || arbitrationChanges.length > 0
     || discardedChanges.length > 0
   ) {
-    await db.transaction("rw", [db.syncLog, db.pendingArbitrations], async () => {
+    await db.transaction("rw", [db.syncLog, db.arbitrations], async () => {
       // 顺序不是随意的：存档一律排在任何「放弃主张 / 移出队列」的标记之前。若将来被拆开，
       // 失败时留下的是「有存档没标记」（安全的一侧：内容还在、下轮会重推被再次拦下，put 幂等覆盖），
       // 而不是「标记了没存档」（危险：本地主张已放弃且内容无处找回）。
@@ -635,7 +635,7 @@ async function applyAtomicRejectedPushResponse(
         ),
       ),
     ];
-    await db.transaction("rw", [db.syncLog, db.pendingArbitrations], async () => {
+    await db.transaction("rw", [db.syncLog, db.arbitrations], async () => {
       // 存档先于标记，同 200 路径：失败时留下的是「有存档没标记」（安全的一侧）。
       for (const change of changes) {
         await recordPendingArbitration(
@@ -967,13 +967,13 @@ export async function syncForceReplace(): Promise<number> {
 
   await db.transaction(
     "rw",
-    [...Object.values(CLIENT_SYNC_DOMAINS).map((d) => db.table(d.storeName)), db.syncLog, db.pendingArbitrations],
+    [...Object.values(CLIENT_SYNC_DOMAINS).map((d) => db.table(d.storeName)), db.syncLog, db.arbitrations],
     async () => {
       for (const domain of Object.values(CLIENT_SYNC_DOMAINS)) {
         await db.table(domain.storeName).clear();
       }
       await db.syncLog.clear();
-      await db.pendingArbitrations.clear();
+      await db.arbitrations.clear();
 
       for (const change of response.changes) {
         if (change.action === "delete" || !change.data) continue;
@@ -1483,7 +1483,7 @@ export async function requeueQuarantinedSyncLogs(ids?: string[]): Promise<number
   // 待裁决的死信不走这个出口：拒收当轮的回声 pull 已推进游标，重推时服务端判据不再命中，
   // 净效果是一次静默删除。它只能由用户裁决解开（阶段 2），不能由重新入队解开。
   const arbitrated = new Set(
-    (await db.pendingArbitrations.toArray())
+    (await db.arbitrations.toArray())
       .filter((row) => row.disposition === "pending")
       .flatMap((row) => row.syncLogIds),
   );

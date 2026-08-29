@@ -64,7 +64,7 @@ export function SyncProvider({ children }: { children: ReactNode }) {
   const [connection, setConnection] = useState<SyncStreamState>("disconnected");
   const liveUnsyncedCount = useLiveQuery(() => db.syncLog.where("synced").equals(0).count(), [], 0);
   const livePendingArbitrations = useLiveQuery(
-    async () => (await db.pendingArbitrations.toArray()).filter((row) => row.disposition === "pending"),
+    async () => (await db.arbitrations.toArray()).filter((row) => row.disposition === "pending"),
     [],
     [] as PendingArbitration[],
   );

@@ -21,7 +21,7 @@ const change = {
 
 describe("pending arbitration", () => {
   beforeEach(async () => {
-    await db.pendingArbitrations.clear();
+    await db.arbitrations.clear();
   });
 
   it("stores the full payload so it survives without the sync log", async () => {
@@ -47,10 +47,25 @@ describe("pending arbitration", () => {
     expect(rows[0].syncLogIds).toEqual(["log-2"]);
   });
 
-  it("clears by record id", async () => {
+  it("clears by table name + record id", async () => {
     await recordPendingArbitration(change, ["log-1"]);
-    await clearPendingArbitration("entry-offline");
+    await clearPendingArbitration("time_entries", "entry-offline");
     expect(await listPendingArbitrations()).toHaveLength(0);
+  });
+
+  it("同 id 不同表的两条存档互不覆盖，清一条不动另一条", async () => {
+    await recordPendingArbitration(change, ["log-1"]);
+    await recordPendingArbitration(
+      { ...change, tableName: "categories", data: { id: "entry-offline", name: "同 id 的分类" } } as typeof change,
+      ["log-2"],
+    );
+    expect(await listPendingArbitrations()).toHaveLength(2);
+
+    await clearPendingArbitration("time_entries", "entry-offline");
+
+    const rows = await listPendingArbitrations();
+    expect(rows).toHaveLength(1);
+    expect(rows[0].tableName).toBe("categories");
   });
 
   // 搁置超过 7 天后 pruneSyncedLogs 会清掉隔离日志（那条行为已由 engine.test.ts

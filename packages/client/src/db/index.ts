@@ -32,7 +32,7 @@ export const db = new Dexie("timedata") as Dexie & {
   sessions: EntityTable<Session, "id">;
   taskRelations: Table<TaskRelation, [string, string, string, string]>;
   migrationSnapshots: EntityTable<MigrationSnapshot, "key">;
-  pendingArbitrations: EntityTable<PendingArbitration, "recordId">;
+  arbitrations: Table<PendingArbitration, [PendingArbitration["tableName"], string]>;
 };
 
 /** 纯本地快照行：value 存 JSON 字符串，不进任何同步域（见 v19 注释）。 */
@@ -365,6 +365,23 @@ db.version(21).stores({
   trackMilestones: "id, trackId, taskId, updatedAt",
 });
 
+// v20 的 pendingArbitrations 主键只有 recordId，而同步身份是「表名 + 记录 id」：跨表同 id 时
+// 后写覆盖前写，静默丢一条待用户裁决的存档，clearPendingArbitration 也会误删另一张表的同 id 行。
+// Dexie 不允许改既有表的主键，故换表名重建 + 搬数据（v22 建新表搬过去、v23 删旧表）。
+// 存档是「syncLog 的 7 天回收窗口过后唯一还留着原始 payload 的地方」，必须搬而不是重建空表。
+db.version(22)
+  .stores({
+    arbitrations: "[tableName+recordId], tableName, rejectedAt",
+  })
+  .upgrade(async (tx) => {
+    const legacy = await tx.table("pendingArbitrations").toArray();
+    if (legacy.length > 0) await tx.table("arbitrations").bulkPut(legacy);
+  });
+
+db.version(23).stores({
+  pendingArbitrations: null,
+});
+
 export async function seedDefaultCategories(): Promise<void> {
   const count = await db.categories.count();
   if (count > 0) return;
@@ -572,7 +589,7 @@ export async function migrateLocalSettingsToDexie(): Promise<void> {
 export async function resetLocalDataToDefaults(): Promise<void> {
   // 有意不清 migrationSnapshots（迁移快照是纯本地底牌，见 v19 注释）：重置本地数据之后
   // goals 会从服务端重新拉到「已清空」的版本，那正是最需要底牌的时刻。
-  await db.transaction("rw", [db.categories, db.timeEntries, db.tasks, db.tracks, db.trackSteps, db.goals, db.goalLayoutPins, db.taskRelations, db.syncLog, db.settings, db.pendingArbitrations], async () => {
+  await db.transaction("rw", [db.categories, db.timeEntries, db.tasks, db.tracks, db.trackSteps, db.goals, db.goalLayoutPins, db.taskRelations, db.syncLog, db.settings, db.arbitrations], async () => {
     const nonQuickNoteLogs = await db.syncLog.filter((log) => log.tableName !== "quick_notes").toArray();
     await db.timeEntries.clear();
     await db.goals.clear();
@@ -582,7 +599,7 @@ export async function resetLocalDataToDefaults(): Promise<void> {
     await db.tracks.clear();
     await db.taskRelations.clear();
     await db.syncLog.bulkDelete(nonQuickNoteLogs.map((log) => log.id));
-    await db.pendingArbitrations.clear();
+    await db.arbitrations.clear();
     await db.settings.clear();
     await db.categories.clear();
     await db.categories.bulkAdd(createDefaultCategories());

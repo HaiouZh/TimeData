@@ -2,6 +2,7 @@ import "fake-indexeddb/auto";
 import Dexie from "dexie";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { STORAGE_KEYS } from "../lib/storageKeys.js";
+import { clearPendingArbitration } from "../sync/arbitration.js";
 import {
   GOAL_PREREQUISITES_SNAPSHOT_KEY,
   LAST_SYNCED_SEQ_KEY,
@@ -145,6 +146,82 @@ describe("Dexie database", () => {
     await expect(db.categories.get("cat-keep")).resolves.toMatchObject({ name: "保留我" });
   });
 
+  it("从 v21 升级：待裁决存档搬进复合主键表，旧表退场", async () => {
+    db.close();
+    await db.delete();
+
+    const legacy = new Dexie("timedata");
+    legacy.version(21).stores({
+      categories: "id, parentId, sortOrder",
+      pendingArbitrations: "recordId, tableName, rejectedAt",
+    });
+    await legacy.open();
+    await legacy.table("pendingArbitrations").put({
+      recordId: "entry-1",
+      tableName: "time_entries",
+      action: "update",
+      payloadJson: JSON.stringify({ id: "entry-1" }),
+      syncLogIds: ["log-1"],
+      rejectedAt: "2026-08-20T10:00:00.000Z",
+      disposition: "pending",
+    });
+    await legacy.table("categories").put({ id: "cat-keep", name: "保留我", parentId: null, color: "#111111", sortOrder: 0 });
+    legacy.close();
+
+    await db.open();
+
+    // 存档是「日志被 7 天回收之后唯一还留着原始 payload 的地方」，迁移必须搬过来而不是重建空表。
+    const rows = await db.arbitrations.toArray();
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ recordId: "entry-1", tableName: "time_entries", disposition: "pending" });
+    expect(db.tables.map((table) => table.name)).not.toContain("pendingArbitrations");
+    await expect(db.categories.get("cat-keep")).resolves.toMatchObject({ name: "保留我" });
+  });
+
+  it("复合主键让跨表同 id 的两条存档共存，不再互相覆盖", async () => {
+    await db.delete();
+    await db.open();
+
+    // 同步身份是「表名 + 记录 id」。旧的单键主键下，后写的那条会把前一条静默顶掉——
+    // 丢的是一条待用户裁决的冲突存档，且没有任何提示。
+    const base = {
+      recordId: "same-id",
+      action: "update" as const,
+      payloadJson: "{}",
+      syncLogIds: [],
+      rejectedAt: "2026-08-20T10:00:00.000Z",
+      disposition: "pending" as const,
+    };
+    await db.arbitrations.put({ ...base, tableName: "time_entries" });
+    await db.arbitrations.put({ ...base, tableName: "categories" });
+
+    const rows = await db.arbitrations.toArray();
+    expect(rows).toHaveLength(2);
+    expect(rows.map((r) => r.tableName).sort()).toEqual(["categories", "time_entries"]);
+  });
+
+  it("clearPendingArbitration 只清指定表的那条，不误伤同 id 的另一张表", async () => {
+    await db.delete();
+    await db.open();
+
+    const base = {
+      recordId: "same-id",
+      action: "update" as const,
+      payloadJson: "{}",
+      syncLogIds: [],
+      rejectedAt: "2026-08-20T10:00:00.000Z",
+      disposition: "pending" as const,
+    };
+    await db.arbitrations.put({ ...base, tableName: "time_entries" });
+    await db.arbitrations.put({ ...base, tableName: "categories" });
+
+    await clearPendingArbitration("time_entries", "same-id");
+
+    const rows = await db.arbitrations.toArray();
+    expect(rows).toHaveLength(1);
+    expect(rows[0].tableName).toBe("categories");
+  });
+
   it("creates the current schema and seeds default categories on a fresh open", async () => {
     await db.delete();
 
@@ -152,7 +229,9 @@ describe("Dexie database", () => {
     await seedDefaultCategories();
 
     expect(await db.categories.count()).toBeGreaterThan(0);
-    expect(db.verno).toBe(21);
+    expect(db.verno).toBe(23);
+    // 同步身份是「表名 + 记录 id」，主键必须是这两位的复合键——退回单键即跨表同 id 互相覆盖。
+    expect(db.arbitrations.schema.primKey.keyPath).toEqual(["tableName", "recordId"]);
     expect(db.tables.some((table) => table.name === "autoBackups")).toBe(false);
     expect(db.settings.schema.primKey.keyPath).toBe("key");
     expect(db.quickNotes.schema.primKey.keyPath).toBe("id");
@@ -195,7 +274,6 @@ describe("Dexie database", () => {
     expect(db.goalLayoutPins.schema.idxByName.nodeId).toBeDefined();
     expect(db.goalLayoutPins.schema.idxByName.updatedAt).toBeDefined();
     expect(db.migrationSnapshots.schema.primKey.keyPath).toBe("key");
-    expect(db.pendingArbitrations.schema.primKey.keyPath).toBe("recordId");
   });
 
   it("exposes a tasks table keyed by id", async () => {

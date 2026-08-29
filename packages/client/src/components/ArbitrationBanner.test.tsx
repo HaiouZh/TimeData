@@ -78,7 +78,7 @@ describe("ArbitrationBanner", () => {
     expect(html).toBe("");
   });
 
-  it("点「知道了」→ clearPendingArbitration 被调用且传的是那一条的 recordId", async () => {
+  it("点「知道了」→ clearPendingArbitration 拿到的是「表名 + 记录 id」两位，不会误清同 id 的别表", async () => {
     useSyncContextMock.mockReturnValue({
       pendingArbitrations: [pendingRow({ recordId: "entry-abc" })],
     });
@@ -90,7 +90,7 @@ describe("ArbitrationBanner", () => {
       // allow microtask
       await new Promise((r) => setTimeout(r, 0));
       expect(clearPendingArbitrationMock).toHaveBeenCalledTimes(1);
-      expect(clearPendingArbitrationMock).toHaveBeenCalledWith("entry-abc");
+      expect(clearPendingArbitrationMock).toHaveBeenCalledWith("time_entries", "entry-abc");
     } finally {
       await unmount(root);
     }

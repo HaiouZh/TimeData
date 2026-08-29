@@ -7,7 +7,7 @@ export function isImplicitDeleteChange(change: SyncChange): boolean {
   return false;
 }
 
-/** 记一条待裁决冲突。同一 recordId 覆盖写：一条记录同时最多一个待裁决。 */
+/** 记一条待裁决冲突。同一「表名 + 记录 id」覆盖写：一条记录同时最多一个待裁决。 */
 export async function recordPendingArbitration(
   change: SyncChange,
   syncLogIds: string[],
@@ -24,7 +24,7 @@ export async function recordPendingArbitration(
       reason: error instanceof Error ? error.message : String(error),
     });
   }
-  await db.pendingArbitrations.put({
+  await db.arbitrations.put({
     recordId: change.recordId,
     tableName: change.tableName,
     action: change.action,
@@ -36,9 +36,13 @@ export async function recordPendingArbitration(
 }
 
 export async function listPendingArbitrations(): Promise<PendingArbitration[]> {
-  return db.pendingArbitrations.toArray();
+  return db.arbitrations.toArray();
 }
 
-export async function clearPendingArbitration(recordId: string): Promise<void> {
-  await db.pendingArbitrations.delete(recordId);
+/** 主键是「表名 + 记录 id」复合键——只传 recordId 会误删另一张表的同 id 行。 */
+export async function clearPendingArbitration(
+  tableName: SyncChange["tableName"],
+  recordId: string,
+): Promise<void> {
+  await db.arbitrations.delete([tableName, recordId]);
 }
