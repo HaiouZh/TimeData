@@ -11,7 +11,7 @@
     "build": "tsc",
     "start": "node dist/index.js",
     "test": "vitest run",
-    "typecheck": "pnpm --filter @timedata/shared build && tsc --noEmit"
+    "typecheck": "pnpm --filter @timedata/shared build && tsc -p tsconfig.typecheck.json"
   },
   "dependencies": {
     "@hono/node-server": "^2.0.6",

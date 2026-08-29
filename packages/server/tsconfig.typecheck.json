@@ -1,0 +1,14 @@
+{
+  "//": "体检口径：比构建口径多收测试文件。两份配置不能合成一份——tsconfig.json 的 exclude 同时管着编译输出，把它清空会让测试文件一起被编译进 dist，而 vitest 连 dist 里的 .js 一起跑（实测：dist/middleware/cors.test.js 与源码那份同时执行，一份失败）。故构建口径继续排除测试，体检口径 noEmit 收全部。测试里手写影子签名把真类型盖掉那一类事故，靠的就是这份配置。",
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "rootDir": "../..",
+    "composite": false,
+    "incremental": false,
+    "declaration": false,
+    "declarationMap": false
+  },
+  "include": ["src"],
+  "exclude": []
+}

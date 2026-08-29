@@ -52,10 +52,23 @@ fn now_ms() -> u64 {
         .unwrap_or(0)
 }
 
+/// 窗口操作失败时留一行 stderr，不打扰用户——`show()` 失败几乎无从恢复，弹提示只是把无力感
+/// 传过去；但「按了热键窗口没出来」时手上得有线索。**界限**：打包后的 GUI 进程没有控制台，
+/// 这行只在从终端启动时看得见；要生产可查得引入日志插件（未做）。
+///
+/// **只记 `show` / `unminimize`，不记 `set_focus`**：前台锁会把 `set_focus` 降级后照样返回
+/// `Ok`，它的返回值查不出焦点归属（见 evergreen desktop §「Rust 侧查不出抢没抢到」），
+/// 记了只会制造「日志干净所以没问题」的错觉。焦点落在谁身上只有拿到焦点的那一端知道。
+fn log_window_op(label: &str, op: &str, result: tauri::Result<()>) {
+    if let Err(err) = result {
+        eprintln!("[timedata:window] {label}.{op} failed: {err}");
+    }
+}
+
 pub fn show_main_window(app: &AppHandle) {
     if let Some(window) = app.get_webview_window(shell::MAIN_WINDOW) {
-        let _ = window.show();
-        let _ = window.unminimize();
+        log_window_op(shell::MAIN_WINDOW, "show", window.show());
+        log_window_op(shell::MAIN_WINDOW, "unminimize", window.unminimize());
         let _ = window.set_focus();
     }
 }
@@ -132,8 +145,8 @@ fn deliver_to_webview(app: &AppHandle, label: &str, payload: HotkeyEventPayload)
 
 fn show_capture_window(app: &AppHandle) {
     let Some(window) = app.get_webview_window(shell::CAPTURE_WINDOW) else { return };
-    let _ = window.show();
-    let _ = window.unminimize();
+    log_window_op(shell::CAPTURE_WINDOW, "show", window.show());
+    log_window_op(shell::CAPTURE_WINDOW, "unminimize", window.unminimize());
     let _ = window.set_focus();
 }
 

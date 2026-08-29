@@ -6,6 +6,5 @@
   },
   "references": [{ "path": "../shared" }],
   "include": ["src"],
-  "_comment_exclude": "测试文件刻意不排除：排除掉的那些年里，resolver.test.ts / tasks-domain.test.ts 各手写了一份 applyChange 的影子签名把真类型盖掉，改签名它们永远不会红；测试里的 @ts-expect-error 也是装饰。client 侧仍排除（存量 400 处待清）。",
-  "exclude": []
+  "exclude": ["src/**/*.test.ts", "src/**/__tests__/**"]
 }
