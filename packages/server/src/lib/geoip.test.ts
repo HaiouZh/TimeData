@@ -36,7 +36,7 @@ describe("geoip 缺库降级", () => {
   // mock connection 后动态 import 的写法照抄 knownIps.test.ts。
   it("加载结果被缓存：两次查询只读盘 2 次（City+ASN），reset 后才重新读", async () => {
     process.env.GEOIP_DIR = "/nonexistent/geoip-dir-for-tests";
-    const readFileSyncSpy = vi.fn(() => {
+    const readFileSyncSpy = vi.fn((_filePath?: unknown) => {
       throw new Error("ENOENT: mmdb 不存在（测试桩）");
     });
     vi.resetModules();

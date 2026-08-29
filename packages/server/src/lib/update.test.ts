@@ -77,7 +77,7 @@ describe("update status files", () => {
     });
     expect(fs.existsSync(updateStatusPath(tempDir))).toBe(true);
     expect(fs.existsSync(updateLogPath(tempDir))).toBe(true);
-    expect(getUpdateStatus(tempDir)).toEqual({
+    expect(getUpdateStatus(tempDir as string)).toEqual({
       ...status,
       logTail: "[2026-05-07T12:00:00.000Z] update update-1 started\n",
     });
@@ -147,7 +147,7 @@ describe("reconcileInterruptedUpdate", () => {
     reconcileInterruptedUpdate(tempDir);
 
     expect(fs.existsSync(updateLockPath(tempDir))).toBe(false);
-    const status = getUpdateStatus(tempDir);
+    const status = getUpdateStatus(tempDir as string);
     expect(status.status).toBe("unknown");
     expect(status.finishedAt).not.toBeNull();
   });
@@ -164,7 +164,7 @@ describe("reconcileInterruptedUpdate", () => {
     reconcileInterruptedUpdate(tempDir, "newsha2");
 
     expect(fs.existsSync(updateLockPath(tempDir))).toBe(false);
-    const status = getUpdateStatus(tempDir);
+    const status = getUpdateStatus(tempDir as string);
     expect(status.status).toBe("succeeded");
     expect(status.exitCode).toBe(0);
   });
@@ -180,7 +180,7 @@ describe("reconcileInterruptedUpdate", () => {
 
     reconcileInterruptedUpdate(tempDir, "samesha");
 
-    expect(getUpdateStatus(tempDir).status).toBe("failed");
+    expect(getUpdateStatus(tempDir as string).status).toBe("failed");
   });
 
   it("falls back to unknown when the running image sha is unavailable", () => {
@@ -194,7 +194,7 @@ describe("reconcileInterruptedUpdate", () => {
 
     reconcileInterruptedUpdate(tempDir, "dev");
 
-    expect(getUpdateStatus(tempDir).status).toBe("unknown");
+    expect(getUpdateStatus(tempDir as string).status).toBe("unknown");
   });
 
   it("is a no-op when no lock exists", () => {
@@ -213,7 +213,7 @@ describe("reconcileInterruptedUpdate", () => {
 
     reconcileInterruptedUpdate(tempDir);
 
-    expect(getUpdateStatus(tempDir).status).toBe("succeeded");
+    expect(getUpdateStatus(tempDir as string).status).toBe("succeeded");
   });
 
   it("removes update.lock when status creation fails after acquiring the lock", () => {
@@ -242,7 +242,7 @@ describe("reconcileInterruptedUpdate", () => {
       watchtowerToken: "secret-token",
       fetch: fetchMock,
     });
-    await vi.waitFor(() => expect(getUpdateStatus(tempDir).status).toBe("succeeded"));
+    await vi.waitFor(() => expect(getUpdateStatus(tempDir as string).status).toBe("succeeded"));
 
     expect(fs.existsSync(updateLockPath(tempDir))).toBe(false);
   });
@@ -257,9 +257,9 @@ describe("reconcileInterruptedUpdate", () => {
       watchtowerToken: "bad-token",
       fetch: fetchMock,
     });
-    await vi.waitFor(() => expect(getUpdateStatus(tempDir).status).toBe("failed"));
+    await vi.waitFor(() => expect(getUpdateStatus(tempDir as string).status).toBe("failed"));
 
-    expect(getUpdateStatus(tempDir).logTail).toMatch(/watchtower update failed: 401/);
+    expect(getUpdateStatus(tempDir as string).logTail).toMatch(/watchtower update failed: 401/);
     expect(fs.existsSync(updateLockPath(tempDir))).toBe(false);
   });
 

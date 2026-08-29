@@ -8,7 +8,7 @@ describe("validateQuery", () => {
     const app = new Hono();
     const schema = z.object({ date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/) });
     app.use("/test", validateQuery(schema));
-    app.get("/test", (c) => c.json({ date: c.var.query.date }));
+    app.get("/test", (c) => c.json({ date: (c.var as { query: { date: string } }).query.date }));
 
     const res = await app.request("/test?date=2026-05-19");
 
@@ -36,7 +36,7 @@ describe("validateBody", () => {
     const app = new Hono();
     const schema = z.object({ name: z.string().min(1) });
     app.use("/test", validateBody(schema));
-    app.post("/test", (c) => c.json({ name: c.var.body.name }));
+    app.post("/test", (c) => c.json({ name: (c.var as { body: { name: string } }).body.name }));
 
     const res = await app.request("/test", {
       method: "POST",

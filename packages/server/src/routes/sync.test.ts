@@ -207,7 +207,7 @@ function taskData(overrides: Partial<Task> = {}): Task {
     createdAt: "2026-07-04T00:00:00.000Z",
     updatedAt: "2026-07-04T00:00:00.000Z",
     ...overrides,
-  };
+  } as Task;
 }
 
 function taskChange(action: "create" | "update", data: Task, op?: TaskCompletionOp): SyncChange {
@@ -241,7 +241,7 @@ function pushChanges(
   changes: SyncChange[],
   baseSeq: number | null = latestSeq(),
   requestId?: string,
-): Promise<Response> {
+) {
   return app.request("/api/sync/push", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -2974,7 +2974,7 @@ describe("sync route", () => {
       "entry-seq",
       "create",
     );
-    const latestSeq = Number(db.prepare("SELECT MAX(id) as seq FROM sync_seq").get().seq);
+    const latestSeq = Number((db.prepare("SELECT MAX(id) as seq FROM sync_seq").get() as { seq: number | null }).seq);
 
     const res = await app.request("/api/sync/pull", {
       method: "POST",
@@ -3024,7 +3024,7 @@ describe("sync route", () => {
       "cat-work",
       "create",
     );
-    const beforeSeq = Number(db.prepare("SELECT MAX(id) as seq FROM sync_seq").get().seq);
+    const beforeSeq = Number((db.prepare("SELECT MAX(id) as seq FROM sync_seq").get() as { seq: number | null }).seq);
     const created = createEntryFromCliInput(
       db,
       {
@@ -3570,7 +3570,7 @@ function currentTotpCode(): string {
   return totpCode(TOTP_SECRET, Date.now());
 }
 
-function pullRequest(body: unknown, code?: string): Promise<Response> {
+function pullRequest(body: unknown, code?: string) {
   return app.request("/api/sync/pull", {
     method: "POST",
     headers: { "Content-Type": "application/json", ...(code ? { "X-TOTP-Code": code } : {}) },
@@ -3584,7 +3584,7 @@ function bulkDeleteChanges(count: number): SyncChange[] {
   );
 }
 
-function pushRaw(body: unknown, code?: string): Promise<Response> {
+function pushRaw(body: unknown, code?: string) {
   return app.request("/api/sync/push", {
     method: "POST",
     headers: { "Content-Type": "application/json", ...(code ? { "X-TOTP-Code": code } : {}) },

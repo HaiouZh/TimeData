@@ -1,9 +1,10 @@
 import type Database from "better-sqlite3";
 import type { Hono } from "hono";
+import type { ServerEnv } from "../env.js";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanupRouteTestDb, setupRouteTestApp } from "../__tests__/helpers.js";
 
-let app: Hono;
+let app: Hono<ServerEnv>;
 let db: Database.Database;
 
 beforeEach(async () => {
@@ -13,7 +14,7 @@ beforeEach(async () => {
 
   const { Hono } = await import("hono");
   const { requestAudit } = await import("./requestAudit.js");
-  app = new Hono();
+  app = new Hono<ServerEnv>();
   app.use("/api/*", requestAudit());
 });
 
@@ -133,7 +134,7 @@ describe("requestAudit", () => {
     }));
     const { Hono } = await import("hono");
     const { requestAudit } = await import("./requestAudit.js");
-    const failingApp = new Hono();
+    const failingApp = new Hono<ServerEnv>();
     failingApp.use("/api/*", requestAudit());
     failingApp.get("/api/ok", (c) => c.json({ ok: true }));
 

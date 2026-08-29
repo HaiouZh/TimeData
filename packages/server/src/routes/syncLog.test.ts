@@ -6,7 +6,7 @@ import { cleanupRouteTestDb, setupRouteTestApp } from "../__tests__/helpers.js";
 let app: Hono;
 let db: Database.Database;
 
-function syncLogRequest(path = "", init?: RequestInit): Promise<Response> {
+function syncLogRequest(path = "", init?: RequestInit) {
   return app.request(`/api/admin/sync-logs${path}`, init);
 }
 

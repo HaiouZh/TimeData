@@ -6,6 +6,7 @@ covers:
   - packages/client/src/lib/safeStorage.ts
   - packages/client/src/lib/storageKeys.ts
   - packages/client/vite.config.ts
+  - packages/server/src/env.ts
   - packages/server/src/middleware/auth.ts
   - packages/server/src/middleware/requestAudit.ts
   - packages/server/src/middleware/rateLimit.ts

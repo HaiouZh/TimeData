@@ -1,4 +1,5 @@
 import { Hono } from "hono";
+import type { ServerEnv } from "../env.js";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   authMiddleware,
@@ -15,7 +16,7 @@ const originalAllowUnauthenticatedDev = process.env.ALLOW_UNAUTHENTICATED_DEV;
 
 function createApp() {
   const handler = vi.fn((c) => c.json({ ok: true }));
-  const app = new Hono();
+  const app = new Hono<ServerEnv>();
   app.use("/api/*", authMiddleware);
   app.get("/api/protected", handler);
   return { app, handler };
@@ -23,21 +24,21 @@ function createApp() {
 
 function createScopedApp() {
   const handler = vi.fn((c) => c.json({ ok: true }));
-  const app = new Hono();
+  const app = new Hono<ServerEnv>();
   app.use("/api/*", scopedAuthMiddleware);
   app.get("/api/protected", handler);
   return { app, handler };
 }
 
 function createTierEchoApp() {
-  const app = new Hono();
+  const app = new Hono<ServerEnv>();
   app.use("/api/*", authMiddleware);
   app.get("/api/protected", (c) => c.json({ tokenTier: c.get(TOKEN_TIER_CONTEXT_KEY) }));
   return app;
 }
 
 function createScopedTierEchoApp() {
-  const app = new Hono();
+  const app = new Hono<ServerEnv>();
   app.use("/api/*", scopedAuthMiddleware);
   app.get("/api/protected", (c) => c.json({ tokenTier: c.get(TOKEN_TIER_CONTEXT_KEY) }));
   return app;
@@ -111,7 +112,7 @@ describe("authMiddleware", () => {
 
   it("records unauthorized requests through the audit hook", async () => {
     const audit = vi.fn();
-    const app = new Hono();
+    const app = new Hono<ServerEnv>();
     app.use("/api/*", createAuthMiddleware({ recordAuthFailure: audit }));
     app.get("/api/protected", (c) => c.json({ ok: true }));
     process.env.AUTH_TOKEN = "correct-token";
@@ -164,7 +165,7 @@ describe("authMiddleware", () => {
   it("returns 401 when authorization is missing", async () => {
     process.env.AUTH_TOKEN = "correct-token";
     let tier = "unset";
-    const app = new Hono();
+    const app = new Hono<ServerEnv>();
     app.use("/api/*", async (c, next) => {
       await next();
       tier = c.get(TOKEN_TIER_CONTEXT_KEY) ?? "unset";
@@ -182,7 +183,7 @@ describe("authMiddleware", () => {
   it("returns 401 for a wrong bearer token", async () => {
     process.env.AUTH_TOKEN = "correct-token";
     let tier = "unset";
-    const app = new Hono();
+    const app = new Hono<ServerEnv>();
     app.use("/api/*", async (c, next) => {
       await next();
       tier = c.get(TOKEN_TIER_CONTEXT_KEY) ?? "unset";
@@ -284,7 +285,7 @@ describe("scopedAuthMiddleware", () => {
   it("records unauthorized scoped requests through the audit hook", async () => {
     const audit = vi.fn();
     const handler = vi.fn((c) => c.json({ ok: true }));
-    const app = new Hono();
+    const app = new Hono<ServerEnv>();
     app.use("/api/*", createScopedAuthMiddleware({ recordAuthFailure: audit }));
     app.get("/api/protected", handler);
     process.env.AUTH_TOKEN = "master-token";

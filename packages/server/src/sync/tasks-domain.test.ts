@@ -3,7 +3,8 @@ import Database from "better-sqlite3";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 let db: Database.Database;
-let applyChange: (change: SyncChange) => { status: string };
+// 类型取自被测模块，不手写影子签名（手写那份只声明了一个参数，签名怎么改都不会红）。
+let applyChange: typeof import("./resolver.js").applyChange;
 let domains: typeof import("./domains.js");
 
 function change(action: "create" | "update" | "delete", id: string, title?: string): SyncChange {

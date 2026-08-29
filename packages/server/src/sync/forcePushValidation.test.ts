@@ -3,15 +3,26 @@ import { validateForcePushBusinessRules } from "./forcePushValidation.js";
 import type { Category, QuickNote, Task, TimeEntry } from "@timedata/shared";
 
 const baseCategory = (overrides: Partial<Category>): Category => ({
-  id: "c1", name: "X", parentId: null, color: "#ffffff", icon: null,
-  sortOrder: 0, isArchived: false,
-  createdAt: "2026-05-19T03:00:00.000Z", updatedAt: "2026-05-19T03:00:00.000Z",
+  id: "c1",
+  name: "X",
+  parentId: null,
+  color: "#ffffff",
+  icon: null,
+  sortOrder: 0,
+  isArchived: false,
+  createdAt: "2026-05-19T03:00:00.000Z",
+  updatedAt: "2026-05-19T03:00:00.000Z",
   ...overrides,
 });
 
 const baseEntry = (overrides: Partial<TimeEntry>): TimeEntry => ({
-  id: "e1", categoryId: "c1", startTime: "2026-05-19T09:00:00.000Z", endTime: "2026-05-19T10:00:00.000Z",
-  note: null, createdAt: "2026-05-19T03:00:00.000Z", updatedAt: "2026-05-19T03:00:00.000Z",
+  id: "e1",
+  categoryId: "c1",
+  startTime: "2026-05-19T09:00:00.000Z",
+  endTime: "2026-05-19T10:00:00.000Z",
+  note: null,
+  createdAt: "2026-05-19T03:00:00.000Z",
+  updatedAt: "2026-05-19T03:00:00.000Z",
   ...overrides,
 });
 
@@ -24,23 +35,25 @@ const baseQuickNote = (overrides: Partial<QuickNote>): QuickNote => ({
   ...overrides,
 });
 
-const baseTask = (overrides: Partial<Task>): Task => ({
-  id: "task-1",
-  parentId: null,
-  title: "跑步",
-  done: false,
-  recurrence: null,
-  lastDoneAt: null,
-  startAt: null,
-  scheduledAt: null,
-  completedCount: 0,
-  completedAt: null,
-  tags: [],
-  sortOrder: 0,
-  createdAt: "2026-06-14T00:00:00.000Z",
-  updatedAt: "2026-06-14T00:00:00.000Z",
-  ...overrides,
-});
+// Partial<T> 展开后可选字段带上 undefined，TS 证不出合并结果仍是完整 T——测试不会显式传 undefined，故断言。
+const baseTask = (overrides: Partial<Task>): Task =>
+  ({
+    id: "task-1",
+    parentId: null,
+    title: "跑步",
+    done: false,
+    recurrence: null,
+    lastDoneAt: null,
+    startAt: null,
+    scheduledAt: null,
+    completedCount: 0,
+    completedAt: null,
+    tags: [],
+    sortOrder: 0,
+    createdAt: "2026-06-14T00:00:00.000Z",
+    updatedAt: "2026-06-14T00:00:00.000Z",
+    ...overrides,
+  }) as Task;
 
 describe("validateForcePushBusinessRules", () => {
   it("rejects duplicate category id", () => {
@@ -55,11 +68,7 @@ describe("validateForcePushBusinessRules", () => {
 
   it("rejects third-level parent-child", () => {
     const result = validateForcePushBusinessRules(
-      [
-        baseCategory({ id: "p" }),
-        baseCategory({ id: "c", parentId: "p" }),
-        baseCategory({ id: "g", parentId: "c" }),
-      ],
+      [baseCategory({ id: "p" }), baseCategory({ id: "c", parentId: "p" }), baseCategory({ id: "g", parentId: "c" })],
       [],
     );
     expect(result).toMatch(/third level/);
@@ -86,7 +95,10 @@ describe("validateForcePushBusinessRules", () => {
   });
 
   it("rejects entry referencing non-existent category", () => {
-    const result = validateForcePushBusinessRules([baseCategory({ id: "c1" })], [baseEntry({ categoryId: "nonexistent" })]);
+    const result = validateForcePushBusinessRules(
+      [baseCategory({ id: "c1" })],
+      [baseEntry({ categoryId: "nonexistent" })],
+    );
     expect(result).toMatch(/missing category/);
   });
 
@@ -137,11 +149,16 @@ describe("validateForcePushBusinessRules", () => {
   });
 
   it("rejects third-level task parent structure", () => {
-    const result = validateForcePushBusinessRules([], [], [], [
-      baseTask({ id: "root", parentId: null }),
-      baseTask({ id: "child", parentId: "root" }),
-      baseTask({ id: "grandchild", parentId: "child" }),
-    ]);
+    const result = validateForcePushBusinessRules(
+      [],
+      [],
+      [],
+      [
+        baseTask({ id: "root", parentId: null }),
+        baseTask({ id: "child", parentId: "root" }),
+        baseTask({ id: "grandchild", parentId: "child" }),
+      ],
+    );
     expect(result).toMatch(/third level/);
   });
 

@@ -164,7 +164,7 @@ function taskData(overrides: Partial<Task> = {}): Task {
     createdAt: "2026-07-04T00:00:00.000Z",
     updatedAt: "2026-07-04T00:00:00.000Z",
     ...overrides,
-  };
+  } as Task;
 }
 
 function taskChange(action: "create" | "update", data: Task, op?: TaskCompletionOp): SyncChange {
@@ -187,7 +187,7 @@ function trackData(overrides: Partial<Track> = {}): Track {
     createdAt: "2026-07-04T00:00:00.000Z",
     updatedAt: "2026-07-04T00:00:00.000Z",
     ...overrides,
-  };
+  } as Track;
 }
 
 function trackStepData(overrides: Partial<TrackStep> = {}): TrackStep {
@@ -204,7 +204,7 @@ function trackStepData(overrides: Partial<TrackStep> = {}): TrackStep {
     createdAt: "2026-07-04T00:00:00.000Z",
     updatedAt: "2026-07-04T00:00:00.000Z",
     ...overrides,
-  };
+  } as TrackStep;
 }
 
 function trackChange(action: "create" | "update", data: Track, op?: TrackStatusOp): SyncChange {
@@ -490,6 +490,7 @@ describe("applyChange", () => {
       tableName: "categories",
       recordId: "parent-cat",
       action: "delete",
+      data: null,
       timestamp: "2026-05-08T12:00:00",
     });
 
@@ -538,6 +539,7 @@ describe("applyChange", () => {
       tableName: "categories",
       recordId: "parent-cat",
       action: "delete",
+      data: null,
       timestamp: "2026-05-08T12:00:00",
     });
 

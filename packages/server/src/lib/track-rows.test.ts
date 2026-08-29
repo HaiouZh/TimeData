@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { rowToTrack, rowToTrackStep, trackStepToRow, trackToRow } from "./track-rows.js";
+import { type TrackRow, type TrackStepRow, rowToTrack, rowToTrackStep, trackStepToRow, trackToRow } from "./track-rows.js";
 
 const now = "2026-06-21T00:00:00.000Z";
 
@@ -31,10 +31,7 @@ describe("track rows", () => {
       created_at: now,
     });
     expect(
-      rowToTrack({
-        ...row,
-        updated_at: now,
-      }),
+      rowToTrack({ ...row, updated_at: now } as TrackRow),
     ).toEqual({
       id: "track-1",
       title: "T1 数据地基",
@@ -116,7 +113,7 @@ describe("track rows", () => {
       created_at: now,
       edited_at: "2026-06-21T00:10:00.000Z",
     });
-    expect(rowToTrackStep({ ...row, updated_at: now })).toEqual({
+    expect(rowToTrackStep({ ...row, updated_at: now } as TrackStepRow)).toEqual({
       id: "step-1",
       trackId: "track-1",
       source: "agent",

@@ -67,7 +67,7 @@ function entryChange(overrides: Partial<SyncChange> = {}): SyncChange {
     },
     timestamp: "2026-05-08T09:00:00.000Z",
     ...overrides,
-  };
+  } as SyncChange;
 }
 
 function categoryChange(overrides: Partial<SyncChange> = {}): SyncChange {
@@ -88,7 +88,7 @@ function categoryChange(overrides: Partial<SyncChange> = {}): SyncChange {
     },
     timestamp: "2026-05-08T08:30:00.000Z",
     ...overrides,
-  };
+  } as SyncChange;
 }
 
 function settingChange(overrides: Partial<SyncChange> = {}): SyncChange {
@@ -103,7 +103,7 @@ function settingChange(overrides: Partial<SyncChange> = {}): SyncChange {
     },
     timestamp: "2026-05-30T00:00:00.000Z",
     ...overrides,
-  };
+  } as SyncChange;
 }
 
 function quickNoteChange(overrides: Partial<SyncChange> = {}): SyncChange {
@@ -120,7 +120,7 @@ function quickNoteChange(overrides: Partial<SyncChange> = {}): SyncChange {
     },
     timestamp: "2026-06-01T04:02:00.000Z",
     ...overrides,
-  };
+  } as SyncChange;
 }
 
 describe("validateSyncChanges", () => {
