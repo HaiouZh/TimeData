@@ -48,7 +48,7 @@ last-reviewed: 2026-08-21
 
 ## 2. 当前运行时域
 
-当前十个运行时域：
+当前十二个运行时域：
 
 | 域 | 策略 | 备注 |
 |---|---|---|
@@ -63,6 +63,7 @@ last-reviewed: 2026-08-21
 | `goals` | lww | `countsInStatus=false`，目标层 |
 | `goal_layout_pins` | lww | `countsInStatus=false`，目标图用户钉点，复合键域 |
 | `sessions` | lww | 零钩子，`countsInStatus=false`；"手头"软会话元数据，`Task.sessionId` 反挂引用它、`Session.trackIds` 正挂抓进场的轨道（JSON 列 `track_ids`，实体字段演进非新域），不在 force-push 五域兜底范围内，见 [todo/at-hand](../todo/at-hand.md) |
+| `task_relations` | lww | `countsInStatus=false`；任务/轨道之间的「A 要等 B」阻塞关系，复合键域（`[blockerKind+blockerId+blockedKind+blockedId]`）。一条边全局一行——同一对端点同时落在两个目标的成员里时共用这一行，不各持副本。同 `sessions`、轨道域、目标域一样**不在 force-push 五域兜底范围内**（force-push 只覆盖 `categories` / `time_entries` / `settings` / `quick_notes` / `tasks`，见 [push-pull](push-pull.md)）：force-push 之后关系表按各自的增量同步收敛，不被整表覆盖。 |
 
 登记簿里没有健康域：本仓不承载体征与跑步数据（决策见 [ADR 0024](../../adr/0024-retire-health-subsystem.md) 与 [ADR 0031](../../adr/0031-delete-health-data-layer.md)）。`syncDomains.test.ts` 有一条封闭性断言守着这一点——任何以 `health_` 开头的域或 `runs` 被加回登记簿，都会先红一次。
 

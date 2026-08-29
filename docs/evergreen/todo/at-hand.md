@@ -52,6 +52,7 @@ last-reviewed: 2026-08-21
 放轨道 releaseTrackFromHand(trackId)
   → 活跃场 trackIds 摘除（sessions update + syncLog）
   → 无活跃场或不含该 id → no-op 返回 null/原场
+  → 不校验 track 是否存在（与抓轨道刻意不对称，见下）
 
 散场 endActiveSession()
   → 只把当前活跃场 Session.endedAt 置当前时间（update + syncLog）
@@ -60,6 +61,8 @@ last-reviewed: 2026-08-21
 续场 resumeSession(sessionId)
   → 见 §5
 ```
+
+**抓与放的失败语义刻意不对称，不是漏了统一。** 判据是「这个动作要不要求目标存在」：抓的语义是把它弄到手头，目标不存在 / 非 active 就办不到，属输入非法 → `throw`；放的语义是让它不在手头，没有活跃场、或场里本来就没有它，那**结果已经达成** → 静默 no-op。同样传一个不存在的 trackId：**抓必须炸，放必须不炸**。照着「两个动作要长得一样」去改，两边都会错一个方向。调用方按此预期即可——抓要 try/catch，放不用。
 
 抓取的两道校验（`recurrence !== null` 拒重复模板本体 / `skipped` 拒已跳过的发）都在 `grabTaskToHand` 内部执行，与三处 UI 入口的按钮可见性判定（§7.2）各自独立、互为纵深防御——UI 判定放宽或漏判，`grabTaskToHand` 仍会 throw，不会写出非法状态。子任务可直接抓（保持子身份，五把解锁之一，见 [todo](../todo.md#todo-s2-2)）；拖拽路径另有 `promoteTaskToHand`（升根再抓，语义是「把它提成独立的活」），两条路径并存、动词不同。
 

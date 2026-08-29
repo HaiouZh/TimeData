@@ -50,6 +50,8 @@ last-reviewed: 2026-08-20
 2. `validateSyncChanges`（登记簿驱动，规则见 [sync/domain-registry](domain-registry.md)）。
 3. **任意一条 invalid 就整体拒绝**：返回 409 + 全部 outcomes，不写业务表、`sync_seq`、tombstone 或 SSE；accepted outcome 的 reasonCode 为 `validated`（不是 `applied`），表述 passed validation。
 4. 根据 `baseSeq` 与 change 的**完整影响集合**分析：分类删除展开后代分类/关联 entries，时间记录 upsert 展开预计被覆盖的 overlap IDs。普通快进 / 非重叠合并不创建服务端备份；`unknown_base` / `local_wins_non_fast_forward` / 隐式删除会在 apply 前创建受保护备份。备份完成后再次比对 `latestSeq`；期间账本前进则 409 让客户端重试，不用过时分析继续 apply。
+
+   **这一步同时是「判据快照在事务外算」的兜底，不是可有可无的优化**：影响集合分析（`impactRecordsByChange` / `analyzePushBaseSeq` / `staleGuardKeys`）跑在 `db.transaction` 之前，中间还隔着一次 `await createServerBackup`——单看这段，并发 push 确实可能拿着过期快照走到 apply。拦住它的正是这条 seq 比对：任何并发写入都必然推进 `sync_seq`，于是那一路被改判 409 重试、带着新鲜快照重来。所以判据分析**不需要**搬进事务；反过来说，**谁要动这条 seq 比对，得先把判据分析一起搬进事务**，否则守卫就空了。
 5. 在一个 SQLite 事务里逐条 `applyChange`（登记簿驱动，规则见 [sync/domain-registry](domain-registry.md)）。冲突记录按时间戳线性化：`analyzePushBaseSeq` 命中的 `overlappingRecords` 启用 staleGuard，`unknown_base` 全量保守启用；比较基线冻结在本批 apply 开始前，来包 `change.timestamp <=` 当时的服务器现存行 `updated_at` 或 tombstone `deleted_at` 时返回 `stale_change_rejected`，不写库、不占 seq。同批前序变更新产生的 tombstone 不得误伤后序 change。快进和非重叠记录不比时间戳，避免同设备快速连续编辑被服务器分配的 `updated_at` 误拒。每条成功写入都追加 `sync_seq` 并把 commit hash 标 dirty。
 6. 写一条 server-side `sync_logs` 摘要，事务后 `notifySyncChange(getLatestSeq(), buildBumpPayload(...))`——bump 在条数与字节上限内直接带上本批增量 changes，超限则只推游标。
 7. 响应带 `latestSeq`（apply 后账本最新号）与 `appliedCount`（本批记账数 = apply 事务前后 `getLatestSeq()` 之差）；客户端据 `latestSeq − baseSeq === appliedCount` 判定无插队、跳过回声 pull（见 [ADR 0016](../../adr/0016-push-latestseq-and-pull-pagination.md)）。rejected 的 409 响应同样带这两字段（`appliedCount: 0`）。

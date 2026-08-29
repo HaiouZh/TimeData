@@ -73,7 +73,15 @@ export async function releaseTaskFromHand(taskId: string, options: { now?: Date 
   return db.transaction("rw", db.tasks, db.syncLog, async () => putTaskSessionId(taskId, null, ts));
 }
 
-/** 抓轨道到手头：track 须存在且 active；无活跃场零仪式开场；幂等（已在场内不重写）。返回活跃场。 */
+/**
+ * 抓轨道到手头：track 须存在且 active；无活跃场零仪式开场；幂等（已在场内不重写）。返回活跃场。
+ *
+ * **抓与放的失败语义刻意不对称，不是没统一**——判据是「这个动作要不要求目标存在」：
+ * 抓的语义是「把它弄到手头」，目标不存在 / 非 active 就办不到，属输入非法 → `throw`；
+ * 放的语义是「让它不在手头」，没有活跃场、或场里本来就没有它，那**结果已经达成** → 静默 no-op。
+ * 换句话说，同样传一个不存在的 trackId：抓必须炸，放必须不炸。照着「两个动作要长得一样」去改，
+ * 两边都会错一个方向。调用方按此预期即可：抓要 try/catch，放不用。
+ */
 export async function grabTrackToHand(trackId: string, options: { now?: Date } = {}): Promise<Session> {
   const ts = nowIso(options.now);
   return db.transaction("rw", db.sessions, db.tracks, db.syncLog, async () => {
@@ -97,7 +105,10 @@ export async function grabTrackToHand(trackId: string, options: { now?: Date } =
   });
 }
 
-/** 移出手头：从活跃场 trackIds 摘除。无活跃场或不含该 id 时 no-op 返回当前活跃场（可能 null）。 */
+/**
+ * 移出手头：从活跃场 trackIds 摘除。无活跃场或不含该 id 时 no-op 返回当前活跃场（可能 null）。
+ * 不校验 track 是否存在——理由见 grabTrackToHand 上方那段「抓与放为何不对称」。
+ */
 export async function releaseTrackFromHand(trackId: string, options: { now?: Date } = {}): Promise<Session | null> {
   const ts = nowIso(options.now);
   return db.transaction("rw", db.sessions, db.tracks, db.syncLog, async () => {
