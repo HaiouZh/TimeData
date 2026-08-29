@@ -118,6 +118,8 @@ last-reviewed: 2026-08-06
 ## 3. 关键不变量 / 坑 / 红线
 
 1. **完成与创建的排除域刻意不对称**：`completionEvents` 排除重复模板行但计入 occurrence 行；`creationEvents` 排除 occurrence 物化行与子任务克隆行（id 含 `:child:`）。两者不是互为补集。
+
+   **发次镜像子步骤计入完成事件是产品口径，不是漏排除**（2026-08-29 拍板）。后果是同一件事按勾法差 5 倍：逐条勾完 4 个子步骤再勾整条 = 5 个完成事件，直接勾整条 = 1 个；灌进 `doneTotal` / 热力图 / 节奏 / 周期四处，`cycleMetrics` 也把这些「几小时完成」的样本算进周转中位数。**这是有意的**——完成事件记的是「你完成了几个你视为独立的动作」，把一个习惯拆成 4 步并逐条勾掉，那就是 5 次完成。排除判据现成（`isOccurrenceChildId`，`creationEvents` 已在用），**加上去会让历史 doneTotal 当场下降且不可逆**，这是它没被加上的原因，不是没人想到。再有 review 报「completionEvents 漏排除子步骤」，答案在这里。
 2. **桶边界方向随函数而变**：age/survival 桶左闭右开（恰 7 天归「7-30天」）；cycle 周转桶右闭（恰 7 天归「4-7天」）。写断言先查所属函数。
 3. **时区一律 `APP_TIME_ZONE`（`@timedata/shared` 常量，当前 "Asia/Shanghai"）**：日切分走 `getDateString`/`startOfWeek`/`toLocalDateTimeString`，rhythm.ts 显式禁止 UTC 裸切割；跨 UTC 日界的 23:00Z 归本地次日。
 4. **overview 的 overdue 是双路并集**：带标志的桶内行 + 回流 inbox 的一次性过期任务（不带标志），漏补第二路就少计。

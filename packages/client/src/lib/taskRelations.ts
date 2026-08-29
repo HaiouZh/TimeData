@@ -184,10 +184,19 @@ export async function removeTaskRelationsForInCurrentTransaction(
 export async function removeTaskRelationsWithinScopeInCurrentTransaction(
   memberKeys: Set<string>, // 目标全部成员的 `${kind}:${id}`
   ref: TaskRelationEnd,
+  /** 发起清边的目标 id——它自己不算「别的目标」，否则一条边永远删不掉。 */
+  excludeGoalId: string,
   now?: Date,
 ): Promise<void> {
   const timestamp = nowIso(now);
   const refKey = endKey(ref);
+  // 一条边全局一行：同一对端点同时是两个目标的成员时，两边共用这一行（迁移专门做过这个去重，
+  // 是支持的存量形态）。旧模型下 A、B 各持一份副本，删 A 的不影响 B；换成全局一行后，只按
+  // 「两端都在本目标内」判就会连坐——从 A 移出成员，B 的星图箭头无声消失、零提示。
+  // 故删之前先看这条边是否还落在别的目标的成员范围内，落着就留下。
+  const otherScopes = (await db.goals.toArray())
+    .filter((goal) => goal.id !== excludeGoalId)
+    .map((goal) => new Set((goal.members ?? []).map((member) => `${member.kind}:${member.id}`)));
   const rows = await db.taskRelations.toArray();
   for (const row of rows) {
     const blockerKey = endKey({ kind: row.blockerKind, id: row.blockerId });
@@ -196,6 +205,9 @@ export async function removeTaskRelationsWithinScopeInCurrentTransaction(
     if (!bothInScope) continue;
     const touchesRef = blockerKey === refKey || blockedKey === refKey;
     if (!touchesRef) continue;
+    // 别的目标只包含一端时不算——那个目标的图上本来就没有这条边，删掉不影响它。
+    const stillScopedElsewhere = otherScopes.some((scope) => scope.has(blockerKey) && scope.has(blockedKey));
+    if (stillScopedElsewhere) continue;
     await db.taskRelations.delete([row.blockerKind, row.blockerId, row.blockedKind, row.blockedId]);
     await recordSyncLog("task_relations", taskRelationKey(row), "delete", timestamp);
   }

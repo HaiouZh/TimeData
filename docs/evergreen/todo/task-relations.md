@@ -64,7 +64,7 @@ last-reviewed: 2026-08-21
 
 - **任务被删**：`deleteTaskCascade` 对 root 与每一条 child 各调一次 `removeTaskRelationsForInCurrentTransaction`。**子任务的边也要清**——它们能有自己的前置。
 - **轨道被删**：同一个函数，`{ kind: "track", id }`。
-- **成员被移出目标**：`removeTaskRelationsWithinScopeInCurrentTransaction`，只清「两端都在该目标成员内、且一端是被移出者」的边。**两端都在成员内**这个收窄是必须的：跨目标的边不该因为一次移出被连带删掉。
+- **成员被移出目标**：`removeTaskRelationsWithinScopeInCurrentTransaction`，清「两端都在该目标成员内、且一端是被移出者、**且这条边不再落在别的目标的成员范围内**」的边。两道收窄各挡一种连坐：前者挡「一端在目标外」的跨目标边；后者挡「两端同时也是另一个目标的成员」——**关系表一条边全局一行**（迁移专门把两个目标里的同一条边去重成一行，是支持的存量形态），旧模型下 A、B 各持一份副本、删 A 的不影响 B，换成全局一行后少了这道判断就会让 B 的箭头无声消失。判断只看别的目标是否**同时**包含两端：只含一端的目标，它的图上本来就没有这条边。发起清边的目标自己不算「别的目标」（`excludeGoalId`），否则边永远删不掉。
 
 两个 `InCurrentTransaction` 后缀的函数**要求调用方的事务已经包含 `db.taskRelations` 与 `db.syncLog`**。Dexie 的事务作用域是声明式的，漏声明会在运行时抛 `NotFoundError` 而不是静默——但那要走到那一行才炸，所以新增删除路径时先看事务声明。
 

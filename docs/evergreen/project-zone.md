@@ -82,6 +82,8 @@ last-reviewed: 2026-08-22
 
 `members` 没有跨目标唯一约束，一条任务可同时挂多个 active project。`assignTaskToProject(goalId, taskId)` 在**一个** Dexie 事务里「先摘后加」——遍历裸行找出持有它的其它 active project 逐个 `removeGoalMember`，再 `addGoalMember` 进目标组——使单一归属成为**写入侧不变量**。
 
+「先摘后加」与前置关系的清边守卫有一处**正确的交互**，别当成 bug 改掉：`removeGoalMember` 清边时会跳过「两端仍同时落在别的目标成员范围内」的边（见 [task-relations](todo/task-relations.md) §5）。一条任务同时挂在 P、Q 两个 project 且两端都在时，摘 P 那一步不删边（Q 还持有它），摘 Q 那一步才删——即**最后一个持有它的目标被摘掉时边才消失**，与逐个摘的顺序无关。
+
 - **摘/加复用既有两个函数而不是自己读改写**：它们已负担幂等、`prerequisites` 边清理、`goalLayoutPins` 回收、成员 touch + syncLog 四件事。Dexie 的嵌套事务在表是父集子集时并入父事务，故任一步抛错整包回滚。**没有外层事务会怎样是实测过的**：摘除已提交而加入失败 → 任务从两个组里同时消失，是静默的归属丢失。
 - **目标组必须仍是 active project**（`status`/`kind` 双判，与读侧 `projectMemberIndex` 逐字同一个表达式）。缺这道闸时，目标组在另一端被归档/改 theme 后拖入会照常摘除、照常写入，而读侧只认 active project → 这条任务不再属于任何组。判据与读侧同源是构造性保证：**凡能被渲染成落点的组必然通过这道闸**。
 - **只摘 active project**：theme 归属走绿竖条那条独立通道（§2），归档目标读侧本来就不认，摘它只是白写一行 syncLog。

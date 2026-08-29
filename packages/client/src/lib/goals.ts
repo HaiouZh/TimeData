@@ -220,7 +220,7 @@ export async function removeGoalMemberInCurrentTransaction(
   await deleteGoalMemberPinInCurrentTransaction({ goalId: goal.id, nodeKind: ref.kind, nodeId: ref.id }, now);
   // 移出成员：同事务删掉「两端都在本目标内、且一端是被移出者」的关系行。旧模型下边存在目标里，
   // 成员一走边就没了；保持该行为，与确认弹窗「移动会一并删除」的提示一致。
-  await removeTaskRelationsWithinScopeInCurrentTransaction(memberKeys, { kind: ref.kind, id: ref.id }, now);
+  await removeTaskRelationsWithinScopeInCurrentTransaction(memberKeys, { kind: ref.kind, id: ref.id }, goal.id, now);
   await touchTasksInCurrentTransaction(releasedProjectTaskIds(goal, next), timestamp);
   return next;
 }

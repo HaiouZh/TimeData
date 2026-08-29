@@ -63,6 +63,8 @@ last-reviewed: 2026-08-06
 
 仍然保留，因为剩一个真窗口：远端 goal 行**已落进 Dexie**、而 liveQuery 通知与剪枝 effect 还没跑完，用户恰在这几毫秒里松手。此时选中集还是旧的，而预测函数读的是最新库——该弹，不问就是静默丢边。**承重在数据层**（`goals.test.ts` 的 `prerequisiteLossOnAssignMany` 一节）；页面这一段测不了，jsdom 里 `act()` 会把渲染和 effect 一口气跑完。**它不是死代码。**
 
+**预测会高估，方向是有意选的安全一侧。** `removeGoalMember` 实际清边时会跳过「两端仍同时落在别的目标成员范围内」的边（见 [task-relations](../todo/task-relations.md) §5），而 `prerequisiteLossOnAssignMany` 不做这一层判断——要判准就得模拟「这批全摘完之后边还落不落在某个目标里」，复杂度翻倍，换来的只是一个**恒不弹**的确认框少报几条。偏差方向是「说要删、其实没删」，即多问一次而非静默删，故接受。反过来的偏差（少报）才是必须修的。
+
 调用点必须**在两条提交路径的 `try` 之内**：它第一句就是 `db.goals.toArray()`，DatabaseClosed / 版本升级期会 reject，而提交是 `void submitXxx(...)` 发出的——留在 try 外既不进兜底 toast 也没人接这个 rejection，用户只看到「点了没反应」。用户点「取消」返回的是 `false` 不是异常，在 try 里照旧原地返回，不会被兜底 toast 当成错误。
 
 ## 5. 模块速查
