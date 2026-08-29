@@ -6,18 +6,39 @@ import { recordSeqWithDb } from "./seq.js";
 
 export type { ApplyChangeResult } from "./domains.js";
 
-export interface ApplyChangeOptions {
-  /** 仅对冲突记录启用：来包时间戳 <= 服务器现存行或 tombstone 时间戳时拒收。 */
-  staleGuard?: boolean;
+type ImpactRecord = { tableName: SyncChange["tableName"]; recordId: string };
+
+interface ApplyChangeCommonOptions {
   /** 隐式受影响记录（分类级联、时间重叠删除）也参与 staleGuard。 */
-  staleAgainst?: Array<{ tableName: SyncChange["tableName"]; recordId: string }>;
-  /** 本次 change 会隐式删除、但本设备从未见过其最新状态的记录。非空即拒收，不比时间戳。 */
-  unseenImpactRecords?: Array<{ tableName: SyncChange["tableName"]; recordId: string }>;
+  staleAgainst?: ImpactRecord[];
   /** 本批 apply 开始前冻结的服务器时间戳，避免同批前序变更产生的 tombstone 误伤后序变更。 */
   staleServerTimestamps?: ReadonlyMap<string, string | null>;
   /** 复用调用方事务中的连接，避免写业务表和记账分叉。 */
   db?: Database;
 }
+
+/**
+ * 「启用冲突守卫」与「给出 unseenImpactRecords」在类型上绑成一体，不是两个各自可选的开关。
+ *
+ * 理由：漏传 unseenImpactRecords 是**静默失效**——隐式删除守卫整个不生效，调用方什么都看不到，
+ * 而它拦的是「时间戳看着没问题、但要删的是本设备从未见过的记录」这类不可逆的删除。
+ * 拆成两个可选字段时，新增一个启用守卫的调用点只要忘了第二个字段就直接漏防。
+ *
+ * `staleGuard` 在启用支里是 `boolean` 而非 `true`：push 路径传的是动态值
+ *（`staleGuardAll || touchesOverlappingRecord`），要求它一并给出 unseenImpactRecords 正是本意。
+ * 想完全不启用就整个省略 `staleGuard`（或显式 `false`），那一支不接受 unseenImpactRecords。
+ */
+export type ApplyChangeOptions =
+  | (ApplyChangeCommonOptions & {
+      staleGuard?: false;
+      unseenImpactRecords?: undefined;
+    })
+  | (ApplyChangeCommonOptions & {
+      /** 仅对冲突记录启用：来包时间戳 <= 服务器现存行或 tombstone 时间戳时拒收。 */
+      staleGuard: boolean;
+      /** 本次 change 会隐式删除、但本设备从未见过其最新状态的记录。非空即拒收，不比时间戳。 */
+      unseenImpactRecords: ImpactRecord[];
+    });
 
 function recordKey(record: { tableName: SyncChange["tableName"]; recordId: string }): string {
   return `${record.tableName}:${record.recordId}`;
@@ -73,6 +94,7 @@ function rejectIfStale(
 
 export function applyChange(change: SyncChange, options: ApplyChangeOptions = {}): ApplyChangeResult {
   const db = options.db ?? getDb();
+  // 类型上已绑定，这里兜的是绕过类型的入口（as 断言、未纳入 typecheck 的测试文件、将来的 JS 调用方）。
   if (options.unseenImpactRecords === undefined && options.staleGuard) {
     throw new Error("unseenImpactRecords must be explicitly provided when staleGuard is enabled");
   }

@@ -1,23 +1,12 @@
 import type { SyncChange, Task, TaskCompletionOp, Track, TrackStatusOp, TrackStep } from "@timedata/shared";
 import Database from "better-sqlite3";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { ApplyChangeOptions } from "./resolver.js";
 
 let db: Database.Database;
-let applyChange: (
-  change: SyncChange,
-  options?: {
-    staleGuard?: boolean;
-    staleAgainst?: Array<{ tableName: SyncChange["tableName"]; recordId: string }>;
-    staleServerTimestamps?: ReadonlyMap<string, string | null>;
-    db?: Database.Database;
-  },
-) => {
-  status: string;
-  reason: string;
-  skipReason?: string;
-  serverUpdatedAt?: string;
-  overriddenRecordIds?: string[];
-};
+// 类型直接取自被测模块，**不再手写一份影子签名**——手写那份漏掉了 unseenImpactRecords，
+// 于是 applyChange 的签名怎么改，这个文件的 typecheck 都不会红（守卫参数漏传正是它没能拦住的）。
+let applyChange: typeof import("./resolver.js").applyChange;
 let getChangesSinceSeq: (sinceSeq: number | null) => Array<{ tableName: string; recordId: string; action: string }>;
 
 beforeEach(async () => {
@@ -883,6 +872,19 @@ describe("applyChange", () => {
         timestamp,
       } as SyncChange;
     }
+
+    // 守卫参数漏传是静默失效——unseenImpactRecords 缺席时隐式删除守卫整个不生效，而调用方
+    // 什么都看不到。两道闸：类型上「启用守卫」与「给出 unseenImpactRecords」绑成一体
+    //（生产代码里这么写会 error TS2345），运行时再兜一道。本用例守的是后者。
+    // 之所以要 as 断言：**测试文件不在 typecheck 范围内**（两端 tsconfig 都 exclude 了 *.test.ts），
+    // 在这里写 @ts-expect-error 既不会生效也不会被发现——类型闸的反证只能在生产文件里做。
+    it("启用 staleGuard 却不给 unseenImpactRecords：类型绕过后运行时兜底抛错", () => {
+      expect(() =>
+        applyChange(settingChange("light", "2026-07-04T11:00:00.000Z"), {
+          staleGuard: true,
+        } as ApplyChangeOptions),
+      ).toThrow("unseenImpactRecords must be explicitly provided when staleGuard is enabled");
+    });
 
     it("rejects an update older than the current server row", () => {
       db.prepare("INSERT INTO settings (key, value, updated_at) VALUES (?, ?, ?)").run(
