@@ -4661,7 +4661,11 @@ describe("409 needs_arbitration 正常处置", () => {
 });
 
 describe("changeByKey 落空分支", () => {
-  it("服务端回执的 action 与本地不一致时，日志被隔离但无存档（协议错配现状）", async () => {
+  // 服务端回执的 key 是「表名:记录 id:action」三元组。action 那一位由服务端按落库结果改写是允许的
+  // （客户端推 create、服务端按已有行判成 update），此时精确 key 匹配必然落空。落空的代价不对称：
+  // 200 路径会让日志永远留在 synced=0 无限重推同一载荷，409 路径直接抛错阻断整条同步链。
+  // 故 key 匹配分两级：精确三元组优先，落空后按「表名:记录 id」回退——且只在唯一命中时才认。
+  it("200 路径：服务端改写了 action，按记录 id 回退匹配后隔离并存档", async () => {
     await db.pendingArbitrations.clear();
     await db.categories.add({
       id: "cat-mismatch",
@@ -4692,7 +4696,7 @@ describe("changeByKey 落空分支", () => {
       synced: 0,
     });
 
-    // 本地是 create，服务端回执故意用 update（或 delete），导致 changeByKey.get 落空
+    // 本地是 create，服务端回执故意用 update，精确 changeKey 必然落空
     apiFetchMock.mockResolvedValue({
       outcomes: [
         {
@@ -4716,18 +4720,18 @@ describe("changeByKey 落空分支", () => {
 
     const result = await syncPush();
 
-    // 实测现状：changeByKey 落空导致 sourceLogIdsByChangeKey 也落空，日志未被隔离、仍留在队列（synced=0），且无存档
-    // 行为是 "未隔离也未存档"（留在队列重推），而非 "隔离了没存档"；虽不会丢数据但会无限重推该载荷。
-    // TODO: 待处置的协议错配缺口 — 当服务端回执的 action/recordId 与本地 changeKey 不一致时，当前未落库也未隔离；
-    // 1) 若未来改为隔离则需同步补存档（仅改隔离不补存档会变成 "隔离了没存档" 的丢数据形态）；2) 更稳妥是按 recordId 回退查找并存档。
-    await expect(db.syncLog.get("log-mismatch")).resolves.toMatchObject({ synced: 0 });
+    // 回退命中 → 走 needs_arbitration：移出上传队列（不再无限重推），内容进待裁决存档。
+    await expect(db.syncLog.get("log-mismatch")).resolves.toMatchObject({ synced: SYNC_LOG_QUARANTINED });
     const rows = await listPendingArbitrations();
-    expect(rows.filter((r) => r.recordId === "entry-mismatch")).toHaveLength(0);
+    const archived = rows.find((r) => r.recordId === "entry-mismatch");
+    expect(archived).toBeDefined();
+    expect(archived?.disposition).toBe("pending");
+    expect(JSON.parse(archived!.payloadJson)).toMatchObject({ id: "entry-mismatch" });
     expect(result.issues).toHaveLength(1);
     expect(result.issues[0]).toMatchObject({ reasonCode: "unseen_record_deletion_rejected" });
   });
 
-  it("409 路径下 action 错配同样隔离但无存档", async () => {
+  it("409 路径：服务端改写了 action，按记录 id 回退匹配后隔离并存档，不再抛错", async () => {
     await db.pendingArbitrations.clear();
     await db.categories.add({
       id: "cat-mismatch-409",
@@ -4780,14 +4784,126 @@ describe("changeByKey 落空分支", () => {
     };
 
     apiFetchMock.mockRejectedValueOnce(new ApiErrorMock(409, "Conflict", "", push409Body));
+    // 这批还捎带着 time_entries 的 beforePush 补出的分类 change。错配那条被摘出隔离后，
+    // 剩下的照常拆批重试——原先抛错时根本走不到这一步。
+    apiFetchMock.mockResolvedValueOnce({
+      outcomes: [],
+      accepted: 1,
+      rejected: 0,
+      conflicts: 0,
+      backupId: null,
+      serverTime: "2026-08-19T12:01:00.000Z",
+      latestSeq: 15842,
+      appliedCount: 1,
+    });
 
-    // 实测现状：409 原子拒收路径在 key 错配时，retryKeys 未被删掉一部分，导致校验抛 "atomic rejection contains no rejected change"
-    // TODO: 同为协议错配缺口 — 409 分支对 action/recordId 强依赖 key 精确匹配，一旦错配直接抛错阻断重试；
-    // 需要与 200 分支一致地做 recordId 回退或至少不抛错而是按隔离存档处理。
-    await expect(syncPush()).rejects.toThrow("Invalid /api/sync/push 409 response: atomic rejection contains no rejected change");
-    await expect(db.syncLog.get("log-mismatch-409")).resolves.toMatchObject({ synced: 0 });
+    const result = await syncPush();
+
+    // 回退命中 → retryKeys 正确摘除 → 不再触发「atomic rejection contains no rejected change」
+    await expect(db.syncLog.get("log-mismatch-409")).resolves.toMatchObject({ synced: SYNC_LOG_QUARANTINED });
     const rows = await listPendingArbitrations();
-    expect(rows.filter((r) => r.recordId === "entry-mismatch-409")).toHaveLength(0);
+    const archived = rows.find((r) => r.recordId === "entry-mismatch-409");
+    expect(archived).toBeDefined();
+    expect(archived?.disposition).toBe("pending");
+    expect(result.issues).toHaveLength(1);
+  });
+
+  it("409 路径：回执的记录 id 也对不上时，整批隔离并存档而不是抛错阻断同步", async () => {
+    await db.pendingArbitrations.clear();
+    await db.categories.add({
+      id: "cat-mismatch-orphan",
+      name: "Work",
+      parentId: null,
+      color: "#3366ff",
+      icon: null,
+      sortOrder: 1,
+      isArchived: false,
+      createdAt: "2026-08-19T12:00:00.000Z",
+      updatedAt: "2026-08-19T12:00:00.000Z",
+    });
+    await db.timeEntries.add({
+      id: "entry-mismatch-orphan",
+      categoryId: "cat-mismatch-orphan",
+      startTime: "2026-08-19T11:58:00.000Z",
+      endTime: "2026-08-19T12:42:00.000Z",
+      note: null,
+      createdAt: "2026-08-19T12:00:00.000Z",
+      updatedAt: "2026-08-19T12:00:00.000Z",
+    });
+    await db.syncLog.add({
+      id: "log-mismatch-orphan",
+      tableName: "time_entries",
+      recordId: "entry-mismatch-orphan",
+      action: "create",
+      timestamp: "2026-08-19T12:00:00.000Z",
+      synced: 0,
+    });
+
+    const push409Body = {
+      outcomes: [
+        {
+          tableName: "time_entries",
+          recordId: "entry-totally-unknown",
+          action: "update",
+          status: "rejected",
+          reasonCode: "unseen_record_deletion_rejected",
+          message: "unseen record deletion rejected",
+          incomingTimestamp: "2026-08-19T12:00:00.000Z",
+        } as const,
+      ],
+      accepted: 0,
+      rejected: 0,
+      conflicts: 1,
+      backupId: null,
+      serverTime: "2026-08-19T12:01:00.000Z",
+      latestSeq: 15842,
+      appliedCount: 0,
+    };
+
+    apiFetchMock.mockRejectedValueOnce(new ApiErrorMock(409, "Conflict", "", push409Body));
+
+    // 回退也不中：一条 outcome 都对不上本地任何 change。抛错会让整条同步链停摆且本地日志
+    // 下轮原样重推、再次 409——死循环。改为把这批就地隔离 + 存档：同步继续走，内容不丢。
+    const result = await syncPush();
+
+    await expect(db.syncLog.get("log-mismatch-orphan")).resolves.toMatchObject({ synced: SYNC_LOG_QUARANTINED });
+    const rows = await listPendingArbitrations();
+    const archived = rows.find((r) => r.recordId === "entry-mismatch-orphan");
+    expect(archived).toBeDefined();
+    expect(archived?.disposition).toBe("discarded");
+    expect(JSON.parse(archived!.payloadJson)).toMatchObject({ id: "entry-mismatch-orphan" });
+    // 可辨识信号不是新造一个 reasonCode（那是服务端的词汇表），而是「存档标 discarded + 日志隔离」
+    // 这一组合——匹配成功的路径存的是 pending。服务端原样的 outcome 仍在 issues 里，可观测。
+    expect(result.issues).toHaveLength(1);
+  });
+
+  // 回退匹配「只认唯一命中」的守卫在生产路径上打不着——一批 changes 里同一条记录至多一条：
+  // compactSyncLogs 按「表名:记录 id」分组、每组产至多一条，beforePush 补分类时用
+  // includedCategoryIds 去重。守卫留着是廉价保险，但真正该守的是它依赖的这个前提：
+  // 前提一旦被打破（例如 compact 改成按三元组分组），回退匹配就会在 create/delete 之间张冠李戴，
+  // 而认错是不可逆的——本地主张作废、内容移出上传队列。
+  it("同一记录的多条待推日志被压成一条——回退匹配不出现歧义的前提", () => {
+    const compacted = compactSyncLogs([
+      {
+        id: "log-a",
+        tableName: "time_entries",
+        recordId: "entry-same",
+        action: "create",
+        timestamp: "2026-08-19T12:00:00.000Z",
+        synced: 0,
+      },
+      {
+        id: "log-b",
+        tableName: "time_entries",
+        recordId: "entry-same",
+        action: "update",
+        timestamp: "2026-08-19T12:00:30.000Z",
+        synced: 0,
+      },
+    ]);
+
+    const recordKeys = compacted.map((log) => `${log.tableName}:${log.recordId}`);
+    expect(new Set(recordKeys).size).toBe(recordKeys.length);
   });
 });
 

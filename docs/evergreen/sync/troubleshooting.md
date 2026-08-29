@@ -41,6 +41,8 @@ last-reviewed: 2026-08-20
 
 **「待同步 0 条」不等于本地写入都已到达服务端**：`synced=1`（已放弃本地主张）与 `synced=2`（死信隔离）都已移出上传队列，两者都不计入 `unsyncedCount`。被[隐式删除守卫](../sync.md#sync-unseen-delete-guard)拦下的写入属这一类——它的内容快照落在 Dexie `pendingArbitrations`（`listPendingArbitrations()` 读取），`disposition` 区分两种归宿：`pending` 对应 `synced=2`、等用户裁决，`discarded` 对应 `synced=1`、主张已放弃而仅留内容备查。字段契约见 [data-model](../data-model.md) §Dexie schema。**`syncLog` 的 `synced=1/2` 行走 7 天回收窗口，而 `pendingArbitrations` 不参与该回收**：日志被回收之后，快照是唯一还留着原始 payload 的地方。
 
+**服务端回执的 key 按两级匹配落到本地 change 上**：精确三元组（表名:记录 id:action）优先，落空后按「表名:记录 id」回退——`action` 那一位由服务端按落库结果改写是允许的（客户端推 `create`、服务端按已有行判成 `update`），精确匹配随之落空。回退只在唯一命中时才认；「一批 changes 里同一条记录至多一条」由 `compactSyncLogs` 的分组与 `beforePush` 的 `includedCategoryIds` 去重共同保证。**回执一条都对不上本地 change 时**（连回退也不中），409 原子拒收路径把这批就地隔离（`synced=2`）并存一份 `disposition="discarded"` 的快照，而不是让整条同步链停摆——排障时的表征是「待裁决区多出一批 discarded 存档、同步本身照常继续」。
+
 **`requeueQuarantinedSyncLogs()` 只重新入队没有待裁决存档的死信**：`disposition="pending"` 的存档所指向的日志被跳过，也不计入返回值。理由是那类死信重推即等于放行——拒收当轮必然触发一次回声 pull（`canSkipEchoPull()` 遇到任何 issue 即返回 false），游标随之推进；此后重推同一载荷时[隐式删除守卫](../sync.md#sync-unseen-delete-guard)的判据不再命中，服务端放行，净效果是一次静默删除。**该判据只能由用户裁决解开，不能由重新入队解开**，这条排除是它的实现方式。
 
 ## 2. 被拦下的写入在界面上的出口

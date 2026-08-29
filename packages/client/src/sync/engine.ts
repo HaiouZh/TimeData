@@ -384,6 +384,43 @@ async function fetchPullBatches(
 
 // parseRemote* and quickNoteNeedsApply moved to clientDomains.ts
 
+/**
+ * 回执 key 的两级匹配：精确三元组（表名:记录 id:action）优先，落空后按「表名:记录 id」回退。
+ *
+ * 为什么需要回退：action 那一位由服务端按落库结果改写是允许的（客户端推 create、服务端按已有行
+ * 判成 update），此时精确匹配必然落空，而落空的代价严重且不对称——200 路径会让日志永远留在
+ * synced=0 无限重推同一份对不上的载荷；409 路径连一个 retryKey 都摘不掉，直接抛错阻断整条同步链。
+ *
+ * 为什么只认唯一命中：同一条记录同时有多条待推 change（create + delete）时，回退无从判断该认哪条。
+ * 认错的代价不可逆——本地主张作废、内容移出上传队列；不认的代价只是这一轮不处理、日志留在队列里。
+ */
+function resolveOutcomeChangeKey(
+  outcome: SyncPushOutcome,
+  changeByKey: Map<string, SyncChange>,
+  keysByRecord: Map<string, string[]>,
+  changeKey: (tableName: SyncChange["tableName"], recordId: string, action: SyncChange["action"]) => string,
+): string | null {
+  const exact = changeKey(outcome.tableName, outcome.recordId, outcome.action);
+  if (changeByKey.has(exact)) return exact;
+  const candidates = keysByRecord.get(`${outcome.tableName}:${outcome.recordId}`) ?? [];
+  return candidates.length === 1 ? candidates[0] : null;
+}
+
+/** `表名:记录 id` → 该记录在本批里的全部精确 key（用于上面的回退匹配与歧义判定）。 */
+function indexChangeKeysByRecord(
+  changes: SyncChange[],
+  changeKey: (tableName: SyncChange["tableName"], recordId: string, action: SyncChange["action"]) => string,
+): Map<string, string[]> {
+  const index = new Map<string, string[]>();
+  for (const change of changes) {
+    const recordKey = `${change.tableName}:${change.recordId}`;
+    const keys = index.get(recordKey) ?? [];
+    keys.push(changeKey(change.tableName, change.recordId, change.action));
+    index.set(recordKey, keys);
+  }
+  return index;
+}
+
 async function applyPushResponse(
   response: SyncPushResponse,
   changes: SyncChange[],
@@ -402,10 +439,12 @@ async function applyPushResponse(
   const changeByKey = new Map(
     changes.map((change) => [changeKey(change.tableName, change.recordId, change.action), change]),
   );
+  const keysByRecord = indexChangeKeysByRecord(changes, changeKey);
 
   for (const outcome of response.outcomes) {
     const category = classifyReasonCode(outcome.reasonCode);
-    const logIds = sourceLogIdsByChangeKey.get(changeKey(outcome.tableName, outcome.recordId, outcome.action)) || [];
+    const matchedKey = resolveOutcomeChangeKey(outcome, changeByKey, keysByRecord, changeKey);
+    const logIds = (matchedKey && sourceLogIdsByChangeKey.get(matchedKey)) || [];
 
     switch (category) {
       case "applied":
@@ -423,7 +462,7 @@ async function applyPushResponse(
         acceptedLogIds.push(...logIds);
         // 本地主张即将被丢弃。会隐式删除别人记录的那类 change，内容一旦丢就没有找回入口——
         // 先留一份快照（不隔离、不重推，只是留底）。
-        const rejected = changeByKey.get(changeKey(outcome.tableName, outcome.recordId, outcome.action));
+        const rejected = matchedKey ? changeByKey.get(matchedKey) : undefined;
         if (rejected && isImplicitDeleteChange(rejected)) discardedChanges.push(rejected);
         issues.push(outcome);
         break;
@@ -432,7 +471,7 @@ async function applyPushResponse(
         // 绝不能像 user_actionable 那样把 pending 留在队列里：echo pull 会推进 baseSeq，
         // 下一轮 push 判据就不再命中，等于延迟一轮的静默删除。
         arbitrationLogIds.push(...logIds);
-        const rejected = changeByKey.get(changeKey(outcome.tableName, outcome.recordId, outcome.action));
+        const rejected = matchedKey ? changeByKey.get(matchedKey) : undefined;
         if (rejected) arbitrationChanges.push(rejected);
         issues.push(outcome);
         break;
@@ -510,16 +549,17 @@ async function applyAtomicRejectedPushResponse(
   const changeByKey = new Map(
     changes.map((change) => [changeKey(change.tableName, change.recordId, change.action), change]),
   );
+  const keysByRecord = indexChangeKeysByRecord(changes, changeKey);
 
   for (const outcome of response.outcomes) {
-    const key = changeKey(outcome.tableName, outcome.recordId, outcome.action);
     if (outcome.status === "accepted") {
       continue;
     }
-    retryKeys.delete(key);
+    const key = resolveOutcomeChangeKey(outcome, changeByKey, keysByRecord, changeKey);
+    if (key !== null) retryKeys.delete(key);
 
     const category = classifyReasonCode(outcome.reasonCode);
-    const logIds = sourceLogIdsByChangeKey.get(key) ?? [];
+    const logIds = (key && sourceLogIdsByChangeKey.get(key)) ?? [];
     if (category === "client_bug") {
       clientBugLogIds.push(...logIds);
       clientBugIssues.push(outcome);
@@ -528,13 +568,13 @@ async function applyAtomicRejectedPushResponse(
       // 本地主张即将被丢弃。会隐式删除别人记录的那类 change，内容一旦丢就没有找回入口——
       // 先留一份快照（不隔离、不重推，只是留底）。
       staleRejectedLogIds.push(...logIds);
-      const rejected = changeByKey.get(key);
+      const rejected = key ? changeByKey.get(key) : undefined;
       if (rejected && isImplicitDeleteChange(rejected)) discardedChanges.push(rejected);
       issues.push(outcome);
     } else if (category === "needs_arbitration") {
       // 与 200 路径同语义：隔离本地主张 + 留住内容
       quarantineLogIds.push(...logIds);
-      const rejected = changeByKey.get(key);
+      const rejected = key ? changeByKey.get(key) : undefined;
       if (rejected) arbitrationChanges.push(rejected);
       issues.push(outcome);
     } else {
@@ -584,7 +624,43 @@ async function applyAtomicRejectedPushResponse(
 
   const retryChanges = changes.filter((change) => retryKeys.has(changeKey(change.tableName, change.recordId, change.action)));
   if (retryChanges.length === changes.length) {
-    throw new Error("Invalid /api/sync/push 409 response: atomic rejection contains no rejected change");
+    // 一条 outcome 都没能匹配到本地 change——连按记录 id 的回退也不中。原先这里抛错，代价是整条
+    // 同步链停摆，而这批日志下轮原样重推、再次 409，死循环；用户看到的是同步永久卡住。
+    // 改为就地隔离 + 存档：同步继续走（下一批照常推），内容留底可从待裁决区捞回。
+    // 存档标 discarded 而非 pending——没有任何服务端判定能对上这批，它不是「待裁决」而是「已作废」。
+    const orphanLogIds = [
+      ...new Set(
+        changes.flatMap(
+          (change) => sourceLogIdsByChangeKey.get(changeKey(change.tableName, change.recordId, change.action)) ?? [],
+        ),
+      ),
+    ];
+    await db.transaction("rw", [db.syncLog, db.pendingArbitrations], async () => {
+      // 存档先于标记，同 200 路径：失败时留下的是「有存档没标记」（安全的一侧）。
+      for (const change of changes) {
+        await recordPendingArbitration(
+          change,
+          sourceLogIdsByChangeKey.get(changeKey(change.tableName, change.recordId, change.action)) ?? [],
+          "discarded",
+        );
+      }
+      if (orphanLogIds.length > 0) {
+        await db.syncLog.bulkUpdate(
+          orphanLogIds.map((id) => ({ key: id, changes: { synced: SYNC_LOG_QUARANTINED } })),
+        );
+      }
+    });
+    return {
+      accepted: 0,
+      rejected: response.rejected,
+      conflicts: response.conflicts,
+      issues,
+      clientBugIssues,
+      userActionableIssues,
+      baseSeq,
+      serverLatestSeq: response.latestSeq ?? null,
+      appliedCount: response.appliedCount ?? 0,
+    };
   }
 
   let retryResult: SyncPushResult | null = null;
