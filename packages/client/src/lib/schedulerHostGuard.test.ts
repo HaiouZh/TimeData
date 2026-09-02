@@ -2,6 +2,7 @@ import { createRequire } from "node:module";
 import { readFileSync } from "node:fs";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
+  hasSchedulerPort,
   installSchedulerPortTap,
   kickScheduler,
   resetSchedulerPortTap,
@@ -107,14 +108,32 @@ describe("kickScheduler", () => {
   });
 });
 
+describe("hasSchedulerPort", () => {
+  it("记到端口前为 false，记到后为 true，且查询本身不投递", () => {
+    const { scope, makePort } = createPortStub();
+    installSchedulerPortTap(scope);
+    expect(hasSchedulerPort()).toBe(false);
+
+    const schedulerPort = makePort();
+    schedulerPort.postMessage(null);
+    expect(hasSchedulerPort()).toBe(true);
+    // 只查不发：收件箱仍只有调度器自己那一条
+    expect(schedulerPort.inbox).toEqual([null]);
+  });
+});
+
 describe("调度器的调用形态", () => {
   /**
    * 真闸：整套补拍机制押在「调度器用 `postMessage(null)` 排队」这一形态上。React 若改了它，
    * 端口就再也记不到，补拍静默失效而没有任何报错——这里直接读 `scheduler` 产物钉死这个前提。
+   * dev 与 production 由不同构建路径产出，线上跑的是 production 那份，两份都要验。
    */
-  it("scheduler 仍以 postMessage(null) 排队", () => {
+  it.each([
+    "scheduler/cjs/scheduler.development.js",
+    "scheduler/cjs/scheduler.production.js",
+  ])("%s 仍以 postMessage(null) 排队", (file) => {
     const require = createRequire(import.meta.url);
-    const source = readFileSync(require.resolve("scheduler/cjs/scheduler.development.js"), "utf8");
+    const source = readFileSync(require.resolve(file), "utf8");
 
     expect(source).toMatch(/port\w*\.postMessage\(null\)/);
   });

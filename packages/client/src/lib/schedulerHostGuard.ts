@@ -63,6 +63,14 @@ export function installSchedulerPortTap(scope: MessagePortScope = globalThis): b
 }
 
 /**
+ * 判定时是否记到了调度器端口——只查不发。
+ * `kickScheduler()` 的单一 boolean 分不清「没端口」与「投递抛错」，观测口径要把两者拆开（design §2.1 hadPort）。
+ */
+export function hasSchedulerPort(): boolean {
+  return schedulerPort !== null;
+}
+
+/**
  * 给调度器补发一拍。返回是否真的补出去了（没记到端口、或投递抛错都算没补成）。
  *
  * 只在**确认停摆后**调用（见 `components/SchedulerWatchdog.tsx`）：调度器没死时这一拍是纯空转，
