@@ -36,7 +36,7 @@ contracts:
   - packages/server/src/middleware/auth.ts
   - packages/server/src/middleware/totp.ts
   - packages/client/src/lib/storageKeys.ts
-last-reviewed: 2026-08-14
+last-reviewed: 2026-09-02
 ---
 
 # 安全与凭据处理
