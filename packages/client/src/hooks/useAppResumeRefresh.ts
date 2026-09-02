@@ -2,27 +2,28 @@ import { App as CapacitorApp } from "@capacitor/app";
 import { Capacitor } from "@capacitor/core";
 import { useEffect, useRef } from "react";
 
+/** 恢复事件从哪来。看门狗把它记进现场：iOS 壳里同一次回前台会连发几条，谁最后到、来了几条都有诊断价值。 */
+export type ResumeSource = "visibilitychange" | "focus" | "pageshow" | "appStateChange";
+
 interface ResumeRefreshTarget {
   document: Pick<Document, "addEventListener" | "removeEventListener" | "visibilityState">;
   window: Pick<Window, "addEventListener" | "removeEventListener">;
 }
 
 export function subscribeWebAppResumeRefresh(
-  onResume: () => void,
+  onResume: (source: ResumeSource) => void,
   target: ResumeRefreshTarget = { document, window },
 ): () => void {
-  const trigger = () => onResume();
-
   const handleVisibilityChange = () => {
-    if (target.document.visibilityState === "visible") trigger();
+    if (target.document.visibilityState === "visible") onResume("visibilitychange");
   };
 
   const handleFocus = () => {
-    trigger();
+    onResume("focus");
   };
 
   const handlePageShow = (event: PageTransitionEvent) => {
-    if (event.persisted) trigger();
+    if (event.persisted) onResume("pageshow");
   };
 
   target.document.addEventListener("visibilitychange", handleVisibilityChange);
@@ -36,19 +37,19 @@ export function subscribeWebAppResumeRefresh(
   };
 }
 
-export function useAppResumeRefresh(onResume: () => void) {
+export function useAppResumeRefresh(onResume: (source: ResumeSource) => void) {
   const onResumeRef = useRef(onResume);
   onResumeRef.current = onResume;
 
   useEffect(() => {
-    const trigger = () => onResumeRef.current();
+    const trigger = (source: ResumeSource) => onResumeRef.current(source);
     let disposed = false;
     let removeCapacitorListener: (() => void) | undefined;
     const removeWebListeners = subscribeWebAppResumeRefresh(trigger);
 
     if (Capacitor.isNativePlatform()) {
       void CapacitorApp.addListener("appStateChange", ({ isActive }) => {
-        if (isActive) trigger();
+        if (isActive) trigger("appStateChange");
       }).then((listener) => {
         if (disposed) {
           listener.remove();

@@ -45,6 +45,8 @@ describe("subscribeWebAppResumeRefresh", () => {
     fakeWindow.dispatch("pageshow", Object.assign(new Event("pageshow"), { persisted: true }));
 
     expect(onResume).toHaveBeenCalledTimes(3);
+    // 来源要透传给回调：看门狗把它记进现场。
+    expect(onResume.mock.calls.map((call) => call[0])).toEqual(["visibilitychange", "focus", "pageshow"]);
   });
 
   it("removes listeners when disposed", () => {
