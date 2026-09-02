@@ -4,9 +4,12 @@ title: iOS 壳 · 调度器韧性
 covers:
   - packages/client/src/components/SchedulerWatchdog.tsx
   - packages/client/src/lib/schedulerHostGuard.ts
+  - packages/client/src/lib/recovery/schedulerProbeReport.ts
+  - packages/client/src/lib/recovery/mainThreadHeartbeat.ts
+  - packages/client/src/lib/recovery/storageProbe.ts
 contracts:
   - packages/client/src/lib/schedulerHostGuard.ts
-last-reviewed: 2026-08-14
+last-reviewed: 2026-09-02
 ---
 
 # iOS 壳 · 调度器韧性
@@ -57,7 +60,9 @@ React 按 lane 决定更新走哪条通道，两条通道在死锁后的存活�
 
 - **探针必须走 transition**：同步 `setState` 那条通道没坏，用它探不出任何问题。
 - **「已落地」必须在渲染期同步记录**，不能写进 `useEffect`：effect 与提交同生共死，提交本身被卡住时 effect 根本不跑，那样探到的只是「effect 还跑不跑」，永远报死。
-- **补拍优先于重载**：补拍成功用户毫无感知，重载则丢掉滚动位置与未提交输入。补不出去（没记到端口 / 投递抛错）时没有中间档，直接走重载。
+- **补拍优先于重载，判定三分**：补拍成功用户毫无感知，重载则丢掉滚动位置与未提交输入。超时那一刻先读现场（端口在不在、页面可不可见、真实等了多久、心跳迟到多少、IndexedDB 回没回来），再补一拍——**不可见也照补、补不出去也不早退**（没发出去不代表调度器一定死了）；宽限后按「落地了 → `recovered` 不重载 / 没落地且可见 → `reload` 留墓碑重载 / 没落地且不可见 → `held` 不重载、不封锁下次自救」三分。
+- **每次超时都记现场**：`scheduler_probe`（`lib/recovery/schedulerProbeReport.ts`）搭同步上报的车，字段与分辨表见 `docs_local` 里的观测口径 design §2.1 / §0.4。正常落地零上报；只有一个例外——探针落地了但定时器迟到 ≥ 2 个窗口记 `late`，那是「线程 / App 被冻、用户照样在等、看门狗却没动」唯一能被看见的地方。
+- **两枚旁证探针只在看门狗挂着的几秒内跑**：主线程心跳（`mainThreadHeartbeat.ts`，250ms 一拍，量最大迟到）与 IndexedDB 最小往返（`storageProbe.ts`）。心跳迟到 ≈ 等待时长 → 线程被冻，不是调度器的事；IndexedDB 判定时没回来 → 存储层被冻。
 - **不按平台 gate**：正常平台永远不触发，成本只是每次恢复一枚定时器；而 iOS Safari 的 PWA 里 `Capacitor.getPlatform()` 返回 `web`，按平台 gate 反而漏掉真会中招的一档。
 - 探针窗口取秒级而非更短：React 自己给 transition 的饥饿保护也在同一量级，正常情况早已自行收敛，还没落地的只可能是真停摆。重载保留当前 URL，路由自然回到原处；此刻页面本就冻着，没有能被打断的交互。
 
@@ -87,6 +92,8 @@ React 按 lane 决定更新走哪条通道，两条通道在死锁后的存活�
 4. **别再试图在构造器层预防**（§3）：那条路在生产构建下必然赶不上 `scheduler` 的求值，而且静默失效——源码里 import 顺序看着对，产物里 React chunk 先求值。验证要看 `dist` 产物的实际调用序，不是源码顺序。
 5. **诊断同类现场先分通道**（§2）：先确认「点得开弹层但切不了页」这个组合成立，再往调度器上想；全都点不动是另一族原因。
 6. **主动重载必须留墓碑**（§4.5）——不留就会被归因成「渲染进程被回收」，两族问题重新混作一团。
+7. **`held` / `recovered` / `late` 不留墓碑、不置 `firedRef`**（§4）——留了就把下一次真实冷启动误归因成看门狗；置位了就把「下次 resume 还能自救」封死。
+8. **探针累计计数必须落 localStorage**（`schedulerProbeReport.ts`）——待发送队列上限 5 条会挤掉早的记录，只有跨重载的累计值不会因丢记录而失真。
 
 ## 6. 模块速查
 
@@ -95,5 +102,9 @@ React 按 lane 决定更新走哪条通道，两条通道在死锁后的存活�
 | `lib/schedulerHostGuard.ts` | `MessagePort.prototype.postMessage` 挂钩记端口（`installSchedulerPortTap`）、补发一拍（`kickScheduler`） |
 | `components/SchedulerWatchdog.tsx` | 回前台发 transition 探针，超时先补拍、再不行才重载 |
 | `lib/recovery/reloadAttribution.ts` | 重载归因：主动重载留墓碑，冷启动时区分死锁自救 / 版本更新 / 渲染进程被回收 |
+| `lib/recovery/schedulerProbeReport.ts` | `scheduler_probe` 记录构造、探针累计计数（跨重载） |
+| `lib/recovery/mainThreadHeartbeat.ts` | 探针挂着期间的主线程心跳，量定时器最大迟到 |
+| `lib/recovery/storageProbe.ts` | 与探针同时打的一次 IndexedDB 最小往返 |
+| `hooks/useAppResumeRefresh.ts` | 恢复事件订阅（visibilitychange / focus / pageshow / appStateChange），把来源透传给回调 |
 
 **测试**：`lib/schedulerHostGuard.test.ts`（含「scheduler 仍以 `postMessage(null)` 排队」的前提闸）、`components/SchedulerWatchdog.test.tsx`。
