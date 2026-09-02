@@ -113,37 +113,39 @@ export function SchedulerWatchdog({
   useAppResumeRefresh((source) => {
     if (firedRef.current) return;
     const expected = landedRef.current + 1;
-    startTransition(() => setProbe(expected));
 
-    // 同一拍里的多条恢复事件（visibilitychange / focus / appStateChange）共用一枚探针：
-    // 中间没有重渲染，算出的 expected 相同。只记条数与最后来源，首发时刻不动。
+    // 探针挂着期间再来的恢复事件（同一拍的 visibilitychange / focus / appStateChange，或几秒后
+    // 补来的一条）只记条数与最后来源，**不重发探针、不重置定时器**：重置会把超时与宽限一并往后推，
+    // 真死锁时自救被无限推迟，而 waitedMs 也量不出用户真实等了多久（终审 d2b-② / L2-F4）。
     const existing = armedRef.current;
-    let armed: ArmedProbe;
     if (existing && existing.expected === expected) {
       existing.resumes += 1;
       existing.trigger = source ?? null;
-      armed = existing;
-    } else {
-      existing?.heartbeat.stop();
-      armed = {
-        expected,
-        armedAt: Date.now(),
-        resumes: 1,
-        trigger: source ?? null,
-        probes: safeBumpProbeCount(),
-        heartbeat: startHeartbeat(SCHEDULER_HEARTBEAT_MS),
-        storageMs: null,
-      };
-      armedRef.current = armed;
-      // 与 transition 探针同时打一次 IndexedDB 往返：判定时还没回来 = 存储层被冻。
-      const current = armed;
-      void probeStorage().then(
-        () => {
-          if (armedRef.current === current) current.storageMs = Date.now() - current.armedAt;
-        },
-        () => undefined,
-      );
+      return;
     }
+    existing?.heartbeat.stop();
+
+    startTransition(() => setProbe(expected));
+    const armed: ArmedProbe = {
+      expected,
+      armedAt: Date.now(),
+      resumes: 1,
+      trigger: source ?? null,
+      probes: safeBumpProbeCount(),
+      heartbeat: startHeartbeat(SCHEDULER_HEARTBEAT_MS),
+      storageMs: null,
+    };
+    armedRef.current = armed;
+    // 与 transition 探针同时打一次 IndexedDB 往返：判定时还没回来 = 存储层被冻（null）；
+    // 抛错（库没开 / 被 iOS 关掉）记 -1——两者在数据里必须分得开，否则存储报错会被读成存储被冻。
+    void probeStorage().then(
+      () => {
+        if (armedRef.current === armed) armed.storageMs = Date.now() - armed.armedAt;
+      },
+      () => {
+        if (armedRef.current === armed) armed.storageMs = -1;
+      },
+    );
 
     const landed = () => landedRef.current >= expected;
     const disarm = () => {
@@ -175,12 +177,12 @@ export function SchedulerWatchdog({
       }
     };
 
-    // 一次恢复会同时触发好几条事件，只留最后一枚定时器：它们的 expected 相同，留哪枚都等价。
     if (timerRef.current !== null) clearTimeout(timerRef.current);
     timerRef.current = setTimeout(() => {
       timerRef.current = null;
       if (firedRef.current) return;
-      const waitedMs = Date.now() - armed.armedAt;
+      // 夹到 0：系统时钟回拨时差值为负，负数进了埋点会污染分位数。
+      const waitedMs = Math.max(0, Date.now() - armed.armedAt);
 
       if (landed()) {
         // 落地了。定时器若迟到 ≥ 2 个窗口，说明中间线程被冻过——这是重载之外、用户照样在等的那种卡，
@@ -199,16 +201,17 @@ export function SchedulerWatchdog({
         return;
       }
 
-      // 先读现场，再补一拍——visible 与 waitedMs 都取自判定这一刻。
-      // 不可见也照补（拍板②）：补拍无害；补不出去也不早退——没发出去不代表调度器一定死了。
+      // 先读端口，再补一拍。不可见也照补（拍板②）：补拍无害；补不出去也不早退——没发出去不代表调度器一定死了。
       const hadPort = hasSchedulerPort();
-      const visible = document.visibilityState;
       const kicked = kickScheduler();
 
       timerRef.current = setTimeout(() => {
         timerRef.current = null;
         if (firedRef.current) return;
         const recovered = landed();
+        // visible 取宽限结束、真要决定重不重载的这一刻——在超时那刻采样再拿到这里用，
+        // 中间那一秒用户切走了就会在后台重载（终审复核 CONFIRMED）。waitedMs 仍取超时那刻。
+        const visible = document.visibilityState;
         const outcome: SchedulerProbeOutcome = recovered ? "recovered" : visible === "visible" ? "reload" : "held";
         report({ outcome, hadPort, kicked, recovered, visible, waitedMs });
         disarm();

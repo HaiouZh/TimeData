@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { STORAGE_KEYS } from "../storageKeys.js";
 import type { RecoveryKV } from "./kv.js";
 import { bumpProbeCount, buildSchedulerProbeReport } from "./schedulerProbeReport.js";
 
@@ -55,12 +56,16 @@ describe("bumpProbeCount", () => {
     // 重载 = 模块从头求值：模块变量归零、只有 KV 里的值还在。同进程里不重置模块，模块变量也会延续，闸就是假的。
     vi.resetModules();
     const fresh = await import("./schedulerProbeReport.js");
-    const afterReload = memoryKV({ timedata_scheduler_probes: kv.get("timedata_scheduler_probes") ?? "" });
+    const afterReload = memoryKV({ [STORAGE_KEYS.schedulerProbes]: kv.get(STORAGE_KEYS.schedulerProbes) ?? "" });
     expect(fresh.bumpProbeCount(afterReload)).toBe(3);
   });
 
   it("KV 里是坏值时从 1 重新数，不抛错", () => {
-    expect(bumpProbeCount(memoryKV({ timedata_scheduler_probes: "abc" }))).toBe(1);
-    expect(bumpProbeCount(memoryKV({ timedata_scheduler_probes: "-4" }))).toBe(1);
+    expect(bumpProbeCount(memoryKV({ [STORAGE_KEYS.schedulerProbes]: "abc" }))).toBe(1);
+    expect(bumpProbeCount(memoryKV({ [STORAGE_KEYS.schedulerProbes]: "-4" }))).toBe(1);
+  });
+
+  it("KV 里是小数时先取整再加——probes 永远是整数", () => {
+    expect(bumpProbeCount(memoryKV({ [STORAGE_KEYS.schedulerProbes]: "41.5" }))).toBe(42);
   });
 });

@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { act, createElement } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { STORAGE_KEYS } from "../lib/storageKeys.ts";
 import { renderDom, unmount } from "../test/domHarness.tsx";
 
 /**
@@ -278,7 +279,7 @@ describe("SchedulerWatchdog", () => {
   });
 
   it("现场带上分母与线程 / 存储探针：probes 累计、maxGapMs、storageMs、sinceBootMs、resumes、trigger", async () => {
-    localStorage.setItem("timedata_scheduler_probes", "41");
+    localStorage.setItem(STORAGE_KEYS.schedulerProbes, "41");
     const onDeadlock = vi.fn();
     const { root } = await renderDom(
       createElement(SchedulerWatchdog, { onDeadlock, timeoutMs: TIMEOUT_MS, kickGraceMs: GRACE_MS }),
@@ -332,6 +333,109 @@ describe("SchedulerWatchdog", () => {
     expect(markReload).not.toHaveBeenCalled();
     expect(lastProbeDetail()).toMatchObject({ outcome: "late", recovered: true, kicked: false });
     expect(lastProbeDetail().waitedMs).toBeGreaterThanOrEqual(TIMEOUT_MS * 4);
+    await unmount(root);
+  });
+
+  // 终审复核 CONFIRMED：visible 在超时那刻采样、宽限结束才拿来用，中间切到后台就会在后台重载。
+  it("宽限期内切到后台 → 按宽限结束那一刻判定，记 held 不重载", async () => {
+    const onDeadlock = vi.fn();
+    const { root } = await renderDom(
+      createElement(SchedulerWatchdog, { onDeadlock, timeoutMs: TIMEOUT_MS, kickGraceMs: GRACE_MS }),
+    );
+
+    resume?.();
+    vi.advanceTimersByTime(TIMEOUT_MS);
+    expect(kickScheduler).toHaveBeenCalledTimes(1);
+    setVisibility("hidden"); // 补完拍、宽限还没走完，用户切走了
+    vi.advanceTimersByTime(GRACE_MS);
+
+    expect(onDeadlock).not.toHaveBeenCalled();
+    expect(markReload).not.toHaveBeenCalled();
+    expect(lastProbeDetail()).toMatchObject({ outcome: "held", visible: "hidden" });
+    await unmount(root);
+  });
+
+  // 真闸三合一：重置定时器 → 补拍推迟到 T7；清掉宽限 → T6 不重载；刷新 armedAt → waitedMs 变 3000。
+  it("探针挂着期间再来恢复事件不重置定时器——补拍与宽限按首发计时，waitedMs 从首发算", async () => {
+    const onDeadlock = vi.fn();
+    const { root } = await renderDom(
+      createElement(SchedulerWatchdog, { onDeadlock, timeoutMs: TIMEOUT_MS, kickGraceMs: GRACE_MS }),
+    );
+
+    resume?.();
+    vi.advanceTimersByTime(2000);
+    resume?.(); // 挂着期间第二条恢复事件
+    vi.advanceTimersByTime(TIMEOUT_MS - 2000);
+    expect(kickScheduler).toHaveBeenCalledTimes(1);
+    resume?.(); // 宽限期内第三条
+    vi.advanceTimersByTime(GRACE_MS);
+
+    expect(onDeadlock).toHaveBeenCalledTimes(1);
+    const detail = lastProbeDetail();
+    expect(detail.waitedMs).toBe(TIMEOUT_MS);
+    expect(detail.resumes).toBe(3);
+    await unmount(root);
+  });
+
+  // 终审复核 CONFIRMED：抛错与「还没回来」都留 null，阶段 2 分不出存储报错与存储被冻。
+  it("IndexedDB 探针抛错 → storageMs 记 -1，与「还没回来」的 null 区分开", async () => {
+    probeStorage.mockImplementation(() => Promise.reject(new Error("DatabaseClosedError")));
+    const onDeadlock = vi.fn();
+    const { root } = await renderDom(
+      createElement(SchedulerWatchdog, { onDeadlock, timeoutMs: TIMEOUT_MS, kickGraceMs: GRACE_MS }),
+    );
+
+    resume?.();
+    await Promise.resolve();
+    await Promise.resolve();
+    vi.advanceTimersByTime(TIMEOUT_MS + GRACE_MS);
+
+    expect(lastProbeDetail().storageMs).toBe(-1);
+    await unmount(root);
+  });
+
+  it("系统时钟回拨 → waitedMs 夹到 0，不把负数写进埋点", async () => {
+    const onDeadlock = vi.fn();
+    const { root } = await renderDom(
+      createElement(SchedulerWatchdog, { onDeadlock, timeoutMs: TIMEOUT_MS, kickGraceMs: GRACE_MS }),
+    );
+
+    resume?.();
+    vi.setSystemTime(Date.now() - 8000);
+    vi.advanceTimersByTime(TIMEOUT_MS + GRACE_MS);
+
+    expect(lastProbeDetail().waitedMs).toBe(0);
+    await unmount(root);
+  });
+
+  it("visibilityState 是 prerender 这类非 visible 值 → 按不可见处理，记 held", async () => {
+    setVisibility("prerender" as DocumentVisibilityState);
+    const onDeadlock = vi.fn();
+    const { root } = await renderDom(
+      createElement(SchedulerWatchdog, { onDeadlock, timeoutMs: TIMEOUT_MS, kickGraceMs: GRACE_MS }),
+    );
+
+    resume?.();
+    vi.advanceTimersByTime(TIMEOUT_MS + GRACE_MS);
+
+    expect(onDeadlock).not.toHaveBeenCalled();
+    expect(lastProbeDetail()).toMatchObject({ outcome: "held", visible: "prerender" });
+    await unmount(root);
+  });
+
+  it("定时器恰好迟到 2 个窗口 → 也记 late（边界含等号）", async () => {
+    const { root } = await renderDom(
+      createElement(SchedulerWatchdog, { onDeadlock: vi.fn(), timeoutMs: TIMEOUT_MS, kickGraceMs: GRACE_MS }),
+    );
+
+    await act(async () => {
+      resume?.();
+    });
+    vi.setSystemTime(Date.now() + TIMEOUT_MS); // 加上定时器自己的 5 秒，正好 2 个窗口
+    vi.advanceTimersByTime(TIMEOUT_MS);
+
+    expect(lastProbeDetail()).toMatchObject({ outcome: "late" });
+    expect(lastProbeDetail().waitedMs).toBe(TIMEOUT_MS * 2);
     await unmount(root);
   });
 

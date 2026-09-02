@@ -16,9 +16,11 @@ export interface SchedulerProbeInput {
   outcome: SchedulerProbeOutcome;
   hadPort: boolean;
   kicked: boolean;
+  /** 判定那一刻探针是否已落地。late 时恒 true（落地了，只是定时器迟到）——它不是「补拍救回来了」的同义词，那要看 kicked && recovered。 */
   recovered: boolean;
+  /** 决定重不重载那一刻的 document.visibilityState 原值（宽限结束时取；late 是超时定时器跑到时取）。 */
   visible: string;
-  /** 探针首次发出到判定那一刻的真实经过毫秒（Date.now 差，含 App 挂起时间）。 */
+  /** 探针首次发出到超时定时器跑到那一刻的真实经过毫秒（Date.now 差，含 App 挂起时间；不含宽限；时钟回拨夹到 0）。 */
   waitedMs: number;
   /** 探针累计发出次数（跨重载）。两条记录之差 = 期间探了多少次。 */
   probes: number;
@@ -26,7 +28,7 @@ export interface SchedulerProbeInput {
   maxGapMs: number;
   /** 判定时刻距页面启动的毫秒（performance.now）。很小 = 探针是在启动链里发的。 */
   sinceBootMs: number;
-  /** 探针发出时同时打的一次 IndexedDB 最小往返耗时；判定时还没回来为 null。 */
+  /** 探针发出时同时打的一次 IndexedDB 最小往返耗时；判定时还没回来为 null（存储被冻），抛错为 -1（库没开 / 被关）。 */
   storageMs: number | null;
   /** 本枚探针挂着期间收到的恢复事件条数（≥1）。 */
   resumes: number;

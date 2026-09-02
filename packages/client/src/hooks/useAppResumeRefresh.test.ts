@@ -49,6 +49,18 @@ describe("subscribeWebAppResumeRefresh", () => {
     expect(onResume.mock.calls.map((call) => call[0])).toEqual(["visibilitychange", "focus", "pageshow"]);
   });
 
+  // 真闸：普通加载与导航也会派 pageshow（persisted=false），只有 bfcache 恢复才算回前台。
+  it("pageshow 不带 persisted 时不算恢复", () => {
+    const fakeDocument = new FakeDocument();
+    const fakeWindow = new FakeTarget();
+    const onResume = vi.fn();
+
+    subscribeWebAppResumeRefresh(onResume, { document: fakeDocument, window: fakeWindow });
+    fakeWindow.dispatch("pageshow", Object.assign(new Event("pageshow"), { persisted: false }));
+
+    expect(onResume).not.toHaveBeenCalled();
+  });
+
   it("removes listeners when disposed", () => {
     const fakeDocument = new FakeDocument();
     const fakeWindow = new FakeTarget();

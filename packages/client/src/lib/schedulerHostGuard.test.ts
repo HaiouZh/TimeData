@@ -109,6 +109,18 @@ describe("kickScheduler", () => {
 });
 
 describe("hasSchedulerPort", () => {
+  // 真闸：过滤条件若从 === null 松成 == null，无参 / undefined 的投递会被记成调度器端口，补拍就补到无关端口上。
+  it("只认 null 这一形态：无参与 undefined 的投递不记端口", () => {
+    const { scope, makePort } = createPortStub();
+    installSchedulerPortTap(scope);
+    const other = makePort();
+    other.postMessage(undefined);
+    (other.postMessage as unknown as () => void)();
+    expect(hasSchedulerPort()).toBe(false);
+    expect(kickScheduler()).toBe(false);
+    expect(other.inbox).toEqual([undefined, undefined]);
+  });
+
   it("记到端口前为 false，记到后为 true，且查询本身不投递", () => {
     const { scope, makePort } = createPortStub();
     installSchedulerPortTap(scope);
