@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { RecoveryKV } from "./kv.js";
 import { bumpProbeCount, buildSchedulerProbeReport } from "./schedulerProbeReport.js";
 
@@ -48,12 +48,15 @@ describe("buildSchedulerProbeReport", () => {
 
 describe("bumpProbeCount", () => {
   // 真闸：累计值必须落在 KV 里跨重载存活——改成模块变量，第二个 KV 读不到 3 就红。
-  it("累计值存在 KV 里，跨「重载」（新实例、同 KV）继续累加", () => {
+  it("累计值存在 KV 里，跨「重载」（模块重新求值、同 KV）继续累加", async () => {
     const kv = memoryKV();
     expect(bumpProbeCount(kv)).toBe(1);
     expect(bumpProbeCount(kv)).toBe(2);
+    // 重载 = 模块从头求值：模块变量归零、只有 KV 里的值还在。同进程里不重置模块，模块变量也会延续，闸就是假的。
+    vi.resetModules();
+    const fresh = await import("./schedulerProbeReport.js");
     const afterReload = memoryKV({ timedata_scheduler_probes: kv.get("timedata_scheduler_probes") ?? "" });
-    expect(bumpProbeCount(afterReload)).toBe(3);
+    expect(fresh.bumpProbeCount(afterReload)).toBe(3);
   });
 
   it("KV 里是坏值时从 1 重新数，不抛错", () => {
