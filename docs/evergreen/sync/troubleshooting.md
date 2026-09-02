@@ -61,6 +61,8 @@ last-reviewed: 2026-08-20
 
 设置页同步卡片展示最近一次各阶段耗时、p50/p95，以及最新一条的 `waitMs` / `reason` / `connection` / `transport`。带 push 或补差的那一轮，客户端审计日志会多写 `action: "phase_timings"`；服务端侧 push/pull 在 `sync_logs.detail.timings` 记录 parse / validate / apply / read / total 等阶段耗时。这套观测纯附加，不改变任何同步判定或行为。
 
+同一条上报通道还搭载两类与同步无关的客户端观测：冷启动分段 `action: "cold_start"` 与调度器看门狗现场 `action: "scheduler_probe"`。它们不单独发请求，先攒在 localStorage `timedata_pending_reports`（上限 5 条），随下一次带上报的同步轮一起 POST；因此服务端 `timestamp` 是上报时刻而非发生时刻，同一秒出现多条即是一次补投。看门狗的探针累计计数存 `timedata_scheduler_probes`，跨重载存活，两条 `scheduler_probe` 记录的 `probes` 之差等于期间探针总次数——这是队列上限会挤掉早期记录时仍然可信的唯一分母。字段含义与判定机制见 [ios/scheduler-resilience](../ios/scheduler-resilience.md)。
+
 ## 4. 同步慢排查入口
 
 同步指示灯开始闪只说明客户端进入了同步轮次，不能据此判断慢在调度器、网络还是服务端。排查先固定一条完整时间线（触发动作、指示灯开始、最新数据可见），再按以下顺序对同一轮数据取证：
