@@ -1,7 +1,15 @@
 import { startTransition, useEffect, useRef, useState } from "react";
-import { useAppResumeRefresh } from "../hooks/useAppResumeRefresh.ts";
+import { type ResumeSource, useAppResumeRefresh } from "../hooks/useAppResumeRefresh.ts";
+import { type Heartbeat, startHeartbeat } from "../lib/recovery/mainThreadHeartbeat.ts";
+import { stashPendingReport } from "../lib/recovery/pendingReports.ts";
 import { markReload } from "../lib/recovery/reloadAttribution.ts";
-import { kickScheduler } from "../lib/schedulerHostGuard.ts";
+import {
+  type SchedulerProbeOutcome,
+  buildSchedulerProbeReport,
+  bumpProbeCount,
+} from "../lib/recovery/schedulerProbeReport.ts";
+import { probeStorage } from "../lib/recovery/storageProbe.ts";
+import { hasSchedulerPort, kickScheduler } from "../lib/schedulerHostGuard.ts";
 
 /**
  * 探针从发出到判定死锁的等待窗口。
@@ -18,11 +26,14 @@ export const SCHEDULER_PROBE_TIMEOUT_MS = 5000;
  */
 export const SCHEDULER_KICK_GRACE_MS = 1000;
 
+/** 探针落地了、但定时器迟到 ≥ 这么多个窗口，就记一条 late：线程或 App 被冻过，用户照样在等。 */
+export const SCHEDULER_LATE_FACTOR = 2;
+
+/** 主线程心跳间隔。只在探针挂着的几秒内跑。 */
+export const SCHEDULER_HEARTBEAT_MS = 250;
+
 /** 页面本就冻着，没有能被打断的交互；reload 保留当前 URL，路由自然回到原处。 */
 function reloadPage(): void {
-  // 先留墓碑再重载：新页面靠「是 reload 却没有墓碑」识别 iOS 回收渲染进程那条路径，
-  // 这里不留，本次自救就会被误统计成一次系统回收。
-  markReload("watchdog", Date.now());
   window.location.reload();
 }
 
@@ -33,6 +44,18 @@ interface SchedulerWatchdogProps {
   timeoutMs?: number;
   /** 补拍后的宽限窗口，默认 {@link SCHEDULER_KICK_GRACE_MS}。 */
   kickGraceMs?: number;
+}
+
+/** 一枚挂着的探针及其现场。同一拍里的多条恢复事件共用一枚（expected 相同）。 */
+interface ArmedProbe {
+  expected: number;
+  /** 首次发出的 Date.now()。再来的恢复事件不刷新它——waitedMs 要量的是用户真实等了多久。 */
+  armedAt: number;
+  resumes: number;
+  trigger: ResumeSource | null;
+  probes: number;
+  heartbeat: Heartbeat;
+  storageMs: number | null;
 }
 
 /**
@@ -47,7 +70,11 @@ interface SchedulerWatchdogProps {
  * **探针必须走 transition**：同步 setState 走微任务通道，那条根本没坏，探不出问题。
  *
  * **补拍优先于重载**：补一拍就是把丢掉的那条消息重发一遍，成功的话用户毫无感知；
- * 重载则丢掉滚动位置与未提交输入，只在补拍没能救回来时才用。
+ * 重载则丢掉滚动位置与未提交输入，只在补拍没能救回来、且页面此刻可见时才用。
+ *
+ * **每次超时都记现场**（`scheduler_probe`，搭同步上报的车）：端口在不在、补没补出去、补完落没落地、
+ * 页面可不可见、真实等了多久、主线程心跳迟到多少、IndexedDB 回没回来——这几个字段合起来才分得清
+ * 「调度器死了」「补拍失灵」「看门狗误判」「线程 / 存储被冻」四族根因，见 design §2.1 / §0.4。
  *
  * 不按平台 gate：同一套 WebKit 在 iOS Safari 的 PWA 里同样会中招（那里
  * `Capacitor.getPlatform()` 返回 web），而正常平台永远不会触发，成本是每次恢复一枚定时器。
@@ -66,9 +93,10 @@ export function SchedulerWatchdog({
   const landedRef = useRef(0);
   landedRef.current = probe;
 
-  /** 自救只做一次：reload 已在路上时再触发一次没有意义。 */
+  /** 重载只做一次：reload 已在路上时再触发一次没有意义。held / recovered / late 都不置位。 */
   const firedRef = useRef(false);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const armedRef = useRef<ArmedProbe | null>(null);
   const onDeadlockRef = useRef(onDeadlock);
   onDeadlockRef.current = onDeadlock;
 
@@ -76,42 +104,132 @@ export function SchedulerWatchdog({
     () => () => {
       if (timerRef.current !== null) clearTimeout(timerRef.current);
       timerRef.current = null;
+      armedRef.current?.heartbeat.stop();
+      armedRef.current = null;
     },
     [],
   );
 
-  useAppResumeRefresh(() => {
+  useAppResumeRefresh((source) => {
     if (firedRef.current) return;
     const expected = landedRef.current + 1;
     startTransition(() => setProbe(expected));
 
+    // 同一拍里的多条恢复事件（visibilitychange / focus / appStateChange）共用一枚探针：
+    // 中间没有重渲染，算出的 expected 相同。只记条数与最后来源，首发时刻不动。
+    const existing = armedRef.current;
+    let armed: ArmedProbe;
+    if (existing && existing.expected === expected) {
+      existing.resumes += 1;
+      existing.trigger = source ?? null;
+      armed = existing;
+    } else {
+      existing?.heartbeat.stop();
+      armed = {
+        expected,
+        armedAt: Date.now(),
+        resumes: 1,
+        trigger: source ?? null,
+        probes: safeBumpProbeCount(),
+        heartbeat: startHeartbeat(SCHEDULER_HEARTBEAT_MS),
+        storageMs: null,
+      };
+      armedRef.current = armed;
+      // 与 transition 探针同时打一次 IndexedDB 往返：判定时还没回来 = 存储层被冻。
+      const current = armed;
+      void probeStorage().then(
+        () => {
+          if (armedRef.current === current) current.storageMs = Date.now() - current.armedAt;
+        },
+        () => undefined,
+      );
+    }
+
     const landed = () => landedRef.current >= expected;
-    const giveUp = () => {
-      firedRef.current = true;
-      (onDeadlockRef.current ?? reloadPage)();
+    const disarm = () => {
+      armed.heartbeat.stop();
+      if (armedRef.current === armed) armedRef.current = null;
+    };
+    const report = (fields: {
+      outcome: SchedulerProbeOutcome;
+      hadPort: boolean;
+      kicked: boolean;
+      recovered: boolean;
+      visible: string;
+      waitedMs: number;
+    }) => {
+      try {
+        stashPendingReport(
+          buildSchedulerProbeReport({
+            ...fields,
+            probes: armed.probes,
+            maxGapMs: armed.heartbeat.maxGapMs(),
+            sinceBootMs: Math.round(performance.now()),
+            storageMs: armed.storageMs,
+            resumes: armed.resumes,
+            trigger: armed.trigger,
+          }),
+        );
+      } catch {
+        // 观测失败绝不能影响自救路径
+      }
     };
 
-    // 一次恢复会同时触发 visibilitychange / focus / appStateChange 好几条，只留最后一枚定时器：
-    // 它们在同一拍里算出的 expected 相同（中间没有重渲染），留哪枚都等价。
+    // 一次恢复会同时触发好几条事件，只留最后一枚定时器：它们的 expected 相同，留哪枚都等价。
     if (timerRef.current !== null) clearTimeout(timerRef.current);
     timerRef.current = setTimeout(() => {
       timerRef.current = null;
-      if (firedRef.current || landed()) return;
+      if (firedRef.current) return;
+      const waitedMs = Date.now() - armed.armedAt;
 
-      // 先补一拍：把 WebView 丢掉的那条调度消息重发一遍。救回来用户无感，比重载便宜得多。
-      // 补不出去（没记到调度器端口 / 投递抛错）就没有中间档可走，直接进最后手段。
-      if (!kickScheduler()) {
-        giveUp();
+      if (landed()) {
+        // 落地了。定时器若迟到 ≥ 2 个窗口，说明中间线程被冻过——这是重载之外、用户照样在等的那种卡，
+        // 不记就永远看不见。准点落地什么都不记（拍板④）。
+        if (waitedMs >= timeoutMs * SCHEDULER_LATE_FACTOR) {
+          report({
+            outcome: "late",
+            hadPort: hasSchedulerPort(),
+            kicked: false,
+            recovered: true,
+            visible: document.visibilityState,
+            waitedMs,
+          });
+        }
+        disarm();
         return;
       }
 
+      // 先读现场，再补一拍——visible 与 waitedMs 都取自判定这一刻。
+      // 不可见也照补（拍板②）：补拍无害；补不出去也不早退——没发出去不代表调度器一定死了。
+      const hadPort = hasSchedulerPort();
+      const visible = document.visibilityState;
+      const kicked = kickScheduler();
+
       timerRef.current = setTimeout(() => {
         timerRef.current = null;
-        if (firedRef.current || landed()) return;
-        giveUp();
+        if (firedRef.current) return;
+        const recovered = landed();
+        const outcome: SchedulerProbeOutcome = recovered ? "recovered" : visible === "visible" ? "reload" : "held";
+        report({ outcome, hadPort, kicked, recovered, visible, waitedMs });
+        disarm();
+        if (outcome !== "reload") return;
+
+        // 先留墓碑再重载：新页面靠「是 reload 却没有墓碑」识别 iOS 回收渲染进程那条路径，
+        // 这里不留，本次自救就会被误统计成一次系统回收。held / recovered 不重载，也就不留。
+        firedRef.current = true;
+        markReload("watchdog", Date.now());
+        (onDeadlockRef.current ?? reloadPage)();
       }, kickGraceMs);
     }, timeoutMs);
   });
 
   return null;
+}
+
+function safeBumpProbeCount(): number {
+  try {
+    return bumpProbeCount();
+  } catch {
+    return -1;
+  }
 }
