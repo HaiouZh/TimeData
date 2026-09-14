@@ -2021,6 +2021,50 @@ describe("主线日期条", () => {
     await unmount(root);
   });
 
+  // Telegram 双端同款：滑动时浮在顶上的那颗日期条点了不开日历（Android 浮动条 jumpToDate、iOS
+  // stickDistanceFactor ≥ 0.5 时 navigateToFirstDateMessage），只有列表里原位那颗才开 Calendar。
+  // 本仓浮动条与原位条是同一个 sticky 元素，只能在点击那一刻按几何分辨——判定区间与停手扫描同一个。
+  it("粘顶（浮动）中的日期药丸点了不开月历，列表原位那颗照常开", async () => {
+    await db.quickNotes.bulkAdd([
+      {
+        id: "f1",
+        text: "浮动第一天",
+        occurredAt: "2026-06-01T04:00:00.000Z",
+        createdAt: "2026-06-01T04:00:00.000Z",
+        updatedAt: "2026-06-01T04:00:00.000Z",
+      },
+      {
+        id: "f2",
+        text: "原位第二天",
+        occurredAt: "2026-06-02T04:00:00.000Z",
+        createdAt: "2026-06-02T04:00:00.000Z",
+        updatedAt: "2026-06-02T04:00:00.000Z",
+      },
+    ]);
+    const { host, root } = await renderPage();
+    const list = host.querySelector<HTMLElement>('[aria-label="速记列表"]');
+    if (!list) throw new Error("missing quick notes list");
+    const dividers = Array.from(host.querySelectorAll<HTMLElement>("[data-date-label]"));
+    // jsdom 量不出布局，按「第一条已粘住、第二条还在下方原位」伪造几何（与停手隐身用例同一套）。
+    list.getBoundingClientRect = () => ({ top: 0, height: 400 }) as DOMRect;
+    dividers[0].getBoundingClientRect = () => ({ top: -10, height: 21 }) as DOMRect;
+    dividers[1].getBoundingClientRect = () => ({ top: 300, height: 21 }) as DOMRect;
+
+    const stuckTrigger = dividers[0].querySelector<HTMLButtonElement>('button[aria-label*="点击跳转到其他日期"]');
+    await act(async () => {
+      stuckTrigger?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    expect(document.body.querySelector('button[aria-label="2026-06-01"]')).toBeNull();
+
+    const restingTrigger = dividers[1].querySelector<HTMLButtonElement>('button[aria-label*="点击跳转到其他日期"]');
+    await act(async () => {
+      restingTrigger?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    expect(document.body.querySelector('button[aria-label="2026-06-02"]')).toBeInstanceOf(HTMLButtonElement);
+
+    await unmount(root);
+  });
+
   it("主线药丸走 DateField 的 bare 形态：只剩 .quick-note-date-pill，字段外观三件套一个不在", async () => {
     // 守的是一次真实回归：DateField 的字段外观（min-h-11 圆角方块 + 自带底色）曾经赢过
     // 调用处的药丸类，药丸被撑成 44px 高的方角块。工具类之间比的是生成 CSS 的先后、
@@ -2260,8 +2304,9 @@ describe("停手隐身", () => {
     // 滚动中：谁都不隐身，粘住效果全靠 CSS sticky。
     expect(dividers[0].classList.contains("stuck")).toBe(false);
 
-    // 停手多久才隐身对齐 Telegram Android 的 hideDateDelay = 500：网页版那套 1.2s 手感明显拖。
-    expect(STUCK_HIDE_DELAY_MS).toBe(500);
+    // 停手多久才隐身：产品定 0.3s（TG Android 代码是 0.5s + 150ms 淡出、iOS 是停手即 0.4s 淡出，
+    // 两端都不是 0.3；这是用户按手感拍的板，不是抄的）。网页版那套 1.2s 手感明显拖。
+    expect(STUCK_HIDE_DELAY_MS).toBe(300);
     await act(async () => {
       vi.advanceTimersByTime(STUCK_HIDE_DELAY_MS - 1);
     });
@@ -2477,19 +2522,24 @@ describe("停手隐身", () => {
     list.getBoundingClientRect = () => ({ top: 0, height: 400 }) as DOMRect;
     divider.getBoundingClientRect = () => ({ top: -10, height: 28 }) as DOMRect;
 
+    // 慢步骤（开菜单要 flush 十轮宏任务）放在种定时器之前：延迟只有 0.3s，机器一忙它就先 fire 了。
+    await openMenu(host, "闭包守卫样本");
+
     vi.useFakeTimers({ shouldAdvanceTime: true });
-    // 先滚动种下定时器，此刻 selectionMode 还是 false —— 回调闭包冻结的就是这个值。
+    // 滚动种下定时器，此刻 selectionMode 还是 false —— 回调闭包冻结的就是这个值。
     await act(async () => {
       list.dispatchEvent(new Event("scroll", { bubbles: true }));
     });
-    // 倒计时途中进多选（不再滚动，所以定时器不会被重设）。
-    await openMenu(host, "闭包守卫样本");
-    await click(menuItem(host, "选择"));
-    // 这条用例的闸建立在「定时器还没 fire」之上：若前面两步真实耗时超过 1.2s，
+    // 倒计时途中进多选（不再滚动，所以定时器不会被重设）。只做一次同步点击、不 flush，
+    // 种定时器到下面那条断言之间不留真实等待。
+    await act(async () => {
+      menuItem(host, "选择")?.click();
+    });
+    // 这条用例的闸建立在「定时器还没 fire」之上：若上一步真实耗时超过 STUCK_HIDE_DELAY_MS，
     // shouldAdvanceTime 会让它提前 fire，坏实现打的类又被 3f 的清理摘掉，闸会静默变绿。
     expect(vi.getTimerCount()).toBeGreaterThan(0);
     await act(async () => {
-      vi.advanceTimersByTime(1_500);
+      vi.advanceTimersByTime(STUCK_HIDE_DELAY_MS * 5);
     });
     // 直接读 state 而非 ref 的实现会在这里打上 stuck，把「选中这天」藏掉。
     expect(host.querySelector<HTMLElement>("[data-date-label]")?.classList.contains("stuck")).toBe(false);
@@ -2512,10 +2562,12 @@ describe("停手隐身", () => {
     const divider = host.querySelector<HTMLElement>("[data-date-label]");
     if (!divider) throw new Error("missing date divider");
     list.getBoundingClientRect = () => ({ top: 0, height: 400 }) as DOMRect;
-    divider.getBoundingClientRect = () => ({ top: -10, height: 28 }) as DOMRect;
-
-    // 点日期药丸开出月历，datePickerOpen 置真。
+    // 月历只能从**原位**那颗药丸开出来（浮动中那颗点了不开，见「粘顶（浮动）中的日期药丸」用例），
+    // 所以先按原位几何点开它、datePickerOpen 置真，再把几何切成粘顶态去滚。
+    divider.getBoundingClientRect = () => ({ top: 300, height: 21 }) as DOMRect;
     await click(divider.querySelector<HTMLButtonElement>('button[aria-label*="点击跳转到其他日期"]'));
+    expect(document.body.querySelector('button[aria-label="2026-06-01"]')).toBeInstanceOf(HTMLButtonElement);
+    divider.getBoundingClientRect = () => ({ top: -10, height: 21 }) as DOMRect;
 
     vi.useFakeTimers({ shouldAdvanceTime: true });
     await act(async () => {

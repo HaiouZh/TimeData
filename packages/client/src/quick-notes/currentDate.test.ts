@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { findStuckDivider } from "./currentDate.js";
+import { findStuckDivider, isStuckCandidate } from "./currentDate.js";
 
 const H = 28; // 日期药丸行高，取值不影响判定逻辑，只要各用例内自洽
 
@@ -41,5 +41,21 @@ describe("findStuckDivider", () => {
 
   it("空列表返回 null", () => {
     expect(findStuckDivider([], 8)).toBeNull();
+  });
+});
+
+// 单条判定给页面层在「点击那一刻」复用：浮动（粘顶）中的药丸点了不开日历，原位那颗才开——
+// Telegram 双端同款（浮动条 jumpToDate / 原位条开 Calendar）。区间与 findStuckDivider 同一个。
+describe("isStuckCandidate", () => {
+  it("落在 [-自身高度, stickyTop] 区间内即粘顶", () => {
+    expect(isStuckCandidate({ top: 8, height: H }, 8)).toBe(true);
+    expect(isStuckCandidate({ top: -H, height: H }, 8)).toBe(true);
+    expect(isStuckCandidate({ top: 0, height: H }, 8)).toBe(true);
+  });
+
+  it("还在列表原位（top 大于 stickyTop）或已被顶出（top 小于 -高度）都不算粘顶", () => {
+    expect(isStuckCandidate({ top: 9, height: H }, 8)).toBe(false);
+    expect(isStuckCandidate({ top: 200, height: H }, 8)).toBe(false);
+    expect(isStuckCandidate({ top: -H - 1, height: H }, 8)).toBe(false);
   });
 });

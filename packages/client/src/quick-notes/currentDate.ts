@@ -21,7 +21,17 @@ export interface StuckCandidate {
  */
 export function findStuckDivider<T extends StuckCandidate>(dividers: T[], stickyTop: number): T | null {
   for (const divider of dividers) {
-    if (divider.top >= -divider.height && divider.top <= stickyTop) return divider;
+    if (isStuckCandidate(divider, stickyTop)) return divider;
   }
   return null;
+}
+
+/**
+ * 单条日期条此刻是否粘在顶部（区间同上）。页面层在**点击那一刻**也用它：浮动（粘顶）中的药丸
+ * 点了不开日历、列表原位那颗才开——Telegram 双端同款（Android 浮动条 jumpToDate、iOS
+ * stickDistanceFactor ≥ 0.5 时不走 Calendar）。本仓浮动条与原位条是同一个 sticky 元素，
+ * 只能按几何分辨，判定与停手扫描共用一个区间，两边不会各漂各的。
+ */
+export function isStuckCandidate(divider: StuckCandidate, stickyTop: number): boolean {
+  return divider.top >= -divider.height && divider.top <= stickyTop;
 }

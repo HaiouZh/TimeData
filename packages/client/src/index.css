@@ -483,16 +483,16 @@ details[open] > summary .ts-collapse-caret {
       transition-delay: 0s;
     }
   }
-  /* 日期药丸本体，几何照 Telegram Android 的 ChatActionCell：14sp 中粗白字、行高 + 3dp×2 ≈ 22dp
-     高、字到左右边 8dp、无边框、半透明深色服务底（叠在气泡上、叠在页面底上都看得清——这正是
-     TG 不用实心面而用半透明的原因）。它是排版角色语义类：自带字号 / 行高 / 字重，**替代**
+  /* 日期药丸本体，几何照 Telegram Android 的 ChatActionCell：字号 = 正文 − 2（TG 16→14sp，本仓
+     td-text-body 15px → 13px）中粗白字、行高 + 3px×2 ≈ 21px 高、字到左右边 8px、无边框、半透明
+     深色服务底（叠在气泡上、叠在页面底上都看得清——这正是 TG 不用实心面而用半透明的原因）。它是排版角色语义类：自带字号 / 行高 / 字重，**替代**
      td-text-*、不与之叠用（叠用会被顶层 .td-text-* 压回去）；字号写在这里而不是 JSX 的
      text-[14px]，那条是 bare-text-size 硬闸。主线（DateField bare）与搜索态（纯 div）两处
      药丸都只挂这一个类，观感同款由此保证。 */
   .quick-note-date-pill {
     font-family: var(--font-body);
-    font-size: 0.875rem;
-    line-height: 1rem;
+    font-size: 0.8125rem;
+    line-height: 0.9375rem;
     font-weight: 500;
     padding: 0.1875rem 0.5rem;
     border-radius: var(--radius-pill);

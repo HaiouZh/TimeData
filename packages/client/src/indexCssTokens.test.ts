@@ -204,19 +204,19 @@ describe("速记日期条隐身态（.quick-note-date-divider.stuck）", () => {
   });
 });
 
-// 速记日期药丸的几何与观感对齐 Telegram Android 的 ChatActionCell：14sp 中粗白字、行高 + 3dp×2 ≈ 22dp 高、
-// 字到左右边 8dp、无边框、半透明深色服务底。字号偏离 td-text-* 档位，按设计语言走「排版角色语义类」
+// 速记日期药丸的几何与观感对齐 Telegram Android 的 ChatActionCell：字号 = 正文 − 2（TG 16→14sp，
+// 本仓 td-text-body 15px → 13px）中粗白字、行高 + 3px×2 ≈ 21px 高、字到左右边 8px、无边框、半透明深色服务底。字号偏离 td-text-* 档位，按设计语言走「排版角色语义类」
 // 而不是 JSX 里的 text-[14px]（bare-text-size 硬闸）；颜色只准经 token / color-mix 派生。
 describe("速记日期药丸（.quick-note-date-pill）对齐 Telegram Android", () => {
   const pill = css.slice(css.indexOf(".quick-note-date-pill {"), css.indexOf(".quick-note-time-spacer"));
 
-  it("存在且自带字号 / 行高 / 字重：14px、16px 行高、500", () => {
-    expect(pill).toMatch(/font-size:\s*0\.875rem;/);
-    expect(pill).toMatch(/line-height:\s*1rem;/);
+  it("存在且自带字号 / 行高 / 字重：13px（正文 15px − 2）、15px 行高、500", () => {
+    expect(pill).toMatch(/font-size:\s*0\.8125rem;/);
+    expect(pill).toMatch(/line-height:\s*0\.9375rem;/);
     expect(pill).toMatch(/font-weight:\s*500;/);
   });
 
-  it("内距 3px×8px 把药丸撑到 22px 高、字到左右边 8px；全圆角走 token", () => {
+  it("内距 3px×8px 把药丸撑到 21px 高、字到左右边 8px；全圆角走 token", () => {
     expect(pill).toMatch(/padding:\s*0\.1875rem 0\.5rem;/);
     expect(pill).toMatch(/border-radius:\s*var\(--radius-pill\);/);
   });

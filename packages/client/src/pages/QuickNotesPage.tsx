@@ -62,7 +62,7 @@ import {
   readComposerDraft,
   writeComposerDraft,
 } from "../quick-notes/composerDraft.ts";
-import { findStuckDivider } from "../quick-notes/currentDate.ts";
+import { findStuckDivider, isStuckCandidate } from "../quick-notes/currentDate.ts";
 import { groupDisplayItemsByDay } from "../quick-notes/dayGroups.ts";
 import { deleteQuickNotesByIds } from "../quick-notes/deleteQuickNotesByIds.ts";
 import {
@@ -85,11 +85,11 @@ const DEFAULT_COMPOSER_INSET_PX = 128;
 const COMPOSER_BOTTOM_GAP_PX = 16;
 const STATUS_AUTO_DISMISS_MS = 2400;
 /**
- * 停止滚动多久后给粘顶那条日期条打隐身类。对齐 Telegram Android 的 `hideDateDelay = 500`
- * （网页版那套 1.2s 手感明显拖）；淡出本身的 150ms 在 index.css 的 .quick-note-date-divider。
- * 导出给用例卡边界与推算防抖比例，别在测试里再抄一份字面量。
+ * 停止滚动多久后给粘顶那条日期条打隐身类。产品定 0.3s——TG Android 代码是 0.5s、iOS 是停手即淡，
+ * 两端都不是这个数，这是按手感拍的板（网页版那套 1.2s 手感明显拖）；淡出本身的 150ms 在
+ * index.css 的 .quick-note-date-divider。导出给用例卡边界与推算防抖比例，别在测试里再抄一份字面量。
  */
-export const STUCK_HIDE_DELAY_MS = 500;
+export const STUCK_HIDE_DELAY_MS = 300;
 /**
  * 与 JSX 上的 `sticky top-2`（0.5rem = 8px）是同一个值：日期条粘住时距滚动容器可视区顶部的
  * 像素，也是 `findStuckDivider` 判定区间的上界。三处独立字面量（这个常量 + 主线/搜索两处
@@ -559,6 +559,28 @@ export default function QuickNotesPage() {
     if (!stuckElRef.current) return;
     stuckElRef.current.classList.remove("stuck");
     stuckElRef.current = null;
+  }
+
+  /**
+   * 浮动（粘顶）中的日期药丸点了不开日历——Telegram 双端同款，只有列表里原位那颗才是入口。
+   * 本仓两者是同一个 sticky 元素，只能在点击那一刻按几何分辨；判定区间与停手扫描共用。
+   * 挂在日期条容器的捕获阶段：只拦药丸触发钮自己（月历 Sheet 走 portal，React 合成事件仍会
+   * 冒泡经过这里，不看 target 会把月历里的点击一起吞掉），多选态旁边的「选中这天」不受影响。
+   */
+  function blockPickerWhileFloating(event: MouseEvent<HTMLElement>) {
+    const target = event.target instanceof Element ? event.target : null;
+    if (!target?.closest("button.quick-note-date-pill")) return;
+    const el = scrollRef.current;
+    if (!el) return;
+    const rect = event.currentTarget.getBoundingClientRect();
+    // 量不出布局盒（高度 0：未渲染 / jsdom）就不拦——真浏览器里被点到的元素一定有盒子，
+    // 零几何下 [-0, 8] 会把每一条都判成粘顶，入口全部失效。
+    if (rect.height <= 0) return;
+    const top = rect.top - el.getBoundingClientRect().top;
+    if (isStuckCandidate({ top, height: rect.height }, STICKY_TOP_PX)) {
+      event.preventDefault();
+      event.stopPropagation();
+    }
   }
 
   /**
@@ -1356,6 +1378,7 @@ export default function QuickNotesPage() {
                         // w-fit mx-auto 是承重的：DateField 基础类带 w-full，容器不收窄
                         // 药丸就会被撑成通栏（w-full 解析成父级宽），别当排版类顺手删掉。
                         className="quick-note-date-divider sticky top-2 z-10 mx-auto flex w-fit items-center gap-2"
+                        onClickCapture={blockPickerWhileFloating}
                       >
                         <DateField
                           value={groupDate.localDate}
