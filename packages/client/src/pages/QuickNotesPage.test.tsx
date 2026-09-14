@@ -2047,8 +2047,8 @@ describe("主线日期条", () => {
     const dividers = Array.from(host.querySelectorAll<HTMLElement>("[data-date-label]"));
     // jsdom 量不出布局，按「第一条已粘住、第二条还在下方原位」伪造几何（与停手隐身用例同一套）。
     list.getBoundingClientRect = () => ({ top: 0, height: 400 }) as DOMRect;
-    dividers[0].getBoundingClientRect = () => ({ top: -10, height: 21 }) as DOMRect;
-    dividers[1].getBoundingClientRect = () => ({ top: 300, height: 21 }) as DOMRect;
+    dividers[0].getBoundingClientRect = () => ({ top: -10, height: 20 }) as DOMRect;
+    dividers[1].getBoundingClientRect = () => ({ top: 300, height: 20 }) as DOMRect;
 
     const stuckTrigger = dividers[0].querySelector<HTMLButtonElement>('button[aria-label*="点击跳转到其他日期"]');
     await act(async () => {
@@ -2564,10 +2564,10 @@ describe("停手隐身", () => {
     list.getBoundingClientRect = () => ({ top: 0, height: 400 }) as DOMRect;
     // 月历只能从**原位**那颗药丸开出来（浮动中那颗点了不开，见「粘顶（浮动）中的日期药丸」用例），
     // 所以先按原位几何点开它、datePickerOpen 置真，再把几何切成粘顶态去滚。
-    divider.getBoundingClientRect = () => ({ top: 300, height: 21 }) as DOMRect;
+    divider.getBoundingClientRect = () => ({ top: 300, height: 20 }) as DOMRect;
     await click(divider.querySelector<HTMLButtonElement>('button[aria-label*="点击跳转到其他日期"]'));
     expect(document.body.querySelector('button[aria-label="2026-06-01"]')).toBeInstanceOf(HTMLButtonElement);
-    divider.getBoundingClientRect = () => ({ top: -10, height: 21 }) as DOMRect;
+    divider.getBoundingClientRect = () => ({ top: -10, height: 20 }) as DOMRect;
 
     vi.useFakeTimers({ shouldAdvanceTime: true });
     await act(async () => {
