@@ -22,7 +22,19 @@ const components = {
   h2: ({ children }) => <p className="mb-1 mt-2 td-text-body font-semibold">{children}</p>,
   h3: ({ children }) => <p className="mb-1 mt-2 td-text-body font-medium">{children}</p>,
   ul: ({ node: _node, ...props }) => <ul {...props} className="my-1 ml-4 list-disc space-y-0.5" />,
-  ol: ({ node: _node, ...props }) => <ol {...props} className="my-1 ml-4 list-decimal space-y-0.5" />,
+  // 外侧序号落在 ol 的左缩进里，而 NoteBubble 外层 overflow-hidden 会裁掉缩进外的部分：
+  // 缩进按最大序号的位数给（ch = 数字宽，另 1.5ch 容纳「. 」），固定 ml-4 会把「10.」裁成「0.」。
+  ol: ({ node, ...props }) => {
+    const itemCount = node?.children.filter((child) => child.type === "element" && child.tagName === "li").length ?? 0;
+    const lastNumber = (props.start ?? 1) + Math.max(itemCount, 1) - 1;
+    return (
+      <ol
+        {...props}
+        className="my-1 list-decimal space-y-0.5"
+        style={{ marginInlineStart: `${String(Math.max(lastNumber, 0)).length + 1.5}ch` }}
+      />
+    );
+  },
   blockquote: ({ node: _node, ...props }) => (
     <blockquote {...props} className="my-1 border-l-2 border-border-strong pl-3 text-ink-2" />
   ),

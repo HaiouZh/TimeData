@@ -16,6 +16,16 @@ describe("QuickNoteContent", () => {
     expect(html).toContain("list-disc");
   });
 
+  // 气泡正文外层有 overflow-hidden（折叠用），外侧序号只能落在 ol 自己的左缩进里；
+  // 缩进不够宽，「10.」的首位就被裁成「0.」。
+  it("sizes ordered-list indent to the widest marker so it is not clipped", () => {
+    const tenItems = Array.from({ length: 10 }, (_, i) => `${i + 1}. 项`).join("\n");
+
+    expect(render("1. 甲\n2. 乙")).toContain('style="margin-inline-start:2.5ch"');
+    expect(render(tenItems)).toContain('style="margin-inline-start:3.5ch"');
+    expect(render("98. 甲\n99. 乙\n100. 丙")).toContain('style="margin-inline-start:4.5ch"');
+  });
+
   it("adds safe target and rel attributes to links", () => {
     const html = render("见 [文档](https://example.com)");
 
