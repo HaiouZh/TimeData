@@ -87,9 +87,6 @@ importers:
       '@fontsource/tinos':
         specifier: ^5.2.7
         version: 5.3.0
-      '@meauxt/react-swipeable-list':
-        specifier: ^1.0.0
-        version: 1.0.0
       '@phosphor-icons/react':
         specifier: ^2.1.10
         version: 2.1.10(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
@@ -1378,9 +1375,6 @@ packages:
 
   '@jridgewell/trace-mapping@0.3.31':
     resolution: {integrity: sha512-zzNR+SdQSDJzc8joaeP8QQoCQr8NuYx2dIIytl1QeBEZHJ9uW6hebsrYgbz8hJwUQao3TWCMtmfV8Nu1twOLAw==}
-
-  '@meauxt/react-swipeable-list@1.0.0':
-    resolution: {integrity: sha512-LhcGbX9otSfm788p0I43Q4keKNsvl/hbFhVszEpI8f4+EyyU9+Gc6Sn6HajVUCX4Enh4Wk1G1DDrmA2+HnpB/A==}
 
   '@napi-rs/wasm-runtime@1.1.6':
     resolution: {integrity: sha512-ZLv/JdUfkvOy9eCnnBaGfiO+XimbjebAeO+MRQqD/B+FR1tnRN0tpKSJHRbE8sFfS6aqsXZ67TQjfwfsxULVbg==}
@@ -5271,8 +5265,6 @@ snapshots:
     dependencies:
       '@jridgewell/resolve-uri': 3.1.2
       '@jridgewell/sourcemap-codec': 1.5.5
-
-  '@meauxt/react-swipeable-list@1.0.0': {}
 
   '@napi-rs/wasm-runtime@1.1.6(@emnapi/core@1.11.1)(@emnapi/runtime@1.11.1)':
     dependencies:

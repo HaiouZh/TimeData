@@ -3,7 +3,7 @@ import { DndContext } from "@dnd-kit/core";
 import type { Task } from "@timedata/shared";
 import { act } from "react";
 import { describe, expect, it, vi } from "vitest";
-import { renderDom, unmount } from "../../test/domHarness.js";
+import { click, renderDom, unmount } from "../../test/domHarness.js";
 import { TaskList } from "./TaskList.js";
 
 vi.mock("../../lib/useIsCoarsePointer.js", () => ({
@@ -11,33 +11,6 @@ vi.mock("../../lib/useIsCoarsePointer.js", () => ({
 }));
 
 const { useIsCoarsePointer } = await import("../../lib/useIsCoarsePointer.js");
-
-vi.mock("@meauxt/react-swipeable-list", () => ({
-  Type: { IOS: "IOS" },
-  LeadingActions: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-  TrailingActions: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-  SwipeAction: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-  SwipeableList: ({ children, ...rest }: { children: React.ReactNode; [key: string]: unknown }) => (
-    <div
-      data-testid="swipeable-list"
-      data-threshold={String(rest.threshold)}
-      data-fullswipe={String(rest.fullSwipe)}
-      data-classname={String(rest.className ?? "")}
-    >
-      {children}
-    </div>
-  ),
-  SwipeableListItem: ({ children, ...rest }: { children: React.ReactNode; [key: string]: unknown }) => (
-    <div
-      data-testid="swipeable-item"
-      data-blockswipe={String(rest.blockSwipe)}
-      data-maxswipe={String(rest.maxSwipe)}
-      data-classname={String(rest.className ?? "")}
-    >
-      {children}
-    </div>
-  ),
-}));
 
 function task(overrides: Partial<Task> = {}): Task {
   return {
@@ -60,60 +33,131 @@ function task(overrides: Partial<Task> = {}): Task {
 
 const noop = () => {};
 
-describe("TaskList prop 透传", () => {
-  it("桌面（细指针）下：blockSwipe=true、maxSwipe=0.5、threshold=0.3", async () => {
+/** 第 index 行滑动动作条里的按钮名，左侧在前、右侧在后。按钮只有图标，名字在 aria-label 上。 */
+function swipeActionLabels(host: HTMLElement, index = 0): string[] {
+  const row = host.querySelectorAll("[data-swipe-row]")[index];
+  return [...(row?.querySelectorAll("[data-swipe-actions] button") ?? [])].map(
+    (b) => b.getAttribute("aria-label") ?? "",
+  );
+}
+
+describe("TaskList 滑动动作", () => {
+  it("桌面（细指针）下不渲染滑动动作条——动作走行尾悬停按钮", async () => {
     vi.mocked(useIsCoarsePointer).mockReturnValue(false);
     const { host, root } = await renderDom(
       <TaskList
         pool="today"
-        tasks={[task()]}
+        tasks={[task({ ruleId: null })]}
         onToggle={noop}
         onEdit={noop}
         onDelete={noop}
         onToToday={noop}
         onToInbox={noop}
-        onSubtasksChange={noop}
       />,
     );
 
-    const list = host.querySelector('[data-testid="swipeable-list"]');
-    const item = host.querySelector('[data-testid="swipeable-item"]');
-    expect(list?.getAttribute("data-threshold")).toBe("0.3");
-    expect(list?.getAttribute("data-fullswipe")).toBe("false");
-    expect(item?.getAttribute("data-blockswipe")).toBe("true");
-    expect(item?.getAttribute("data-maxswipe")).toBe("0.5");
+    expect(host.querySelector("[data-swipe-row]")).not.toBeNull();
+    expect(host.querySelector("[data-swipe-actions]")).toBeNull();
 
     await unmount(root);
   });
 
-  it("移动端（粗指针）下：blockSwipe=false、maxSwipe=0.5、threshold=0.3", async () => {
+  it("触屏 today 池：右侧依次回收件箱 / 抓到手头 / 删除，左侧没有动作", async () => {
     vi.mocked(useIsCoarsePointer).mockReturnValue(true);
     const { host, root } = await renderDom(
       <TaskList
         pool="today"
-        tasks={[task()]}
+        tasks={[task({ ruleId: null })]}
         onToggle={noop}
         onEdit={noop}
         onDelete={noop}
         onToToday={noop}
         onToInbox={noop}
-        onSubtasksChange={noop}
+        onToHand={noop}
       />,
     );
 
-    const item = host.querySelector('[data-testid="swipeable-item"]');
-    expect(item?.getAttribute("data-blockswipe")).toBe("false");
-    expect(item?.getAttribute("data-maxswipe")).toBe("0.5");
+    expect(host.querySelector('[data-swipe-actions="leading"]')).toBeNull();
+    expect(swipeActionLabels(host)).toEqual(["回收件箱 示例", "抓到手头 示例", "删除 示例"]);
 
     await unmount(root);
   });
 
-  it("约束 swipe 容器横向溢出，resize 后条目按当前页面宽度收缩", async () => {
+  it("混池按行覆盖：排了今天且已在手头的行只给回收件箱 + 删除，收件箱行给排进今天 + 抓到手头 + 删除", async () => {
+    vi.mocked(useIsCoarsePointer).mockReturnValue(true);
+    const { host, root } = await renderDom(
+      <TaskList
+        pool="inbox"
+        rowPool={(t) => (t.id === "a" ? "today" : "inbox")}
+        atHandIds={new Set(["a"])}
+        tasks={[task({ id: "a", title: "甲", ruleId: null }), task({ id: "b", title: "乙", ruleId: null })]}
+        onToggle={noop}
+        onEdit={noop}
+        onDelete={noop}
+        onToToday={noop}
+        onToInbox={noop}
+        onToHand={noop}
+      />,
+    );
+
+    expect(swipeActionLabels(host, 0)).toEqual(["回收件箱 甲", "删除 甲"]);
+    expect(swipeActionLabels(host, 1)).toEqual(["排进今天 乙", "抓到手头 乙", "删除 乙"]);
+
+    await unmount(root);
+  });
+
+  it("已完成列表只给删除", async () => {
+    vi.mocked(useIsCoarsePointer).mockReturnValue(true);
+    const { host, root } = await renderDom(
+      <TaskList
+        pool="completed"
+        tasks={[task({ done: true })]}
+        onToggle={noop}
+        onEdit={noop}
+        onDelete={noop}
+        onToToday={noop}
+        onToInbox={noop}
+        onToHand={noop}
+      />,
+    );
+
+    expect(swipeActionLabels(host)).toEqual(["删除 示例"]);
+
+    await unmount(root);
+  });
+
+  it("点动作按钮把本行任务交给对应回调", async () => {
+    vi.mocked(useIsCoarsePointer).mockReturnValue(true);
+    const onToInbox = vi.fn();
+    const onDelete = vi.fn();
+    const item = task({ ruleId: null });
+    const { host, root } = await renderDom(
+      <TaskList
+        pool="today"
+        tasks={[item]}
+        onToggle={noop}
+        onEdit={noop}
+        onDelete={onDelete}
+        onToToday={noop}
+        onToInbox={onToInbox}
+      />,
+    );
+
+    await click(host.querySelector('[aria-label="回收件箱 示例"]'));
+    await click(host.querySelector('[aria-label="删除 示例"]'));
+
+    expect(onToInbox).toHaveBeenCalledWith(item);
+    expect(onDelete).toHaveBeenCalledWith(item);
+
+    await unmount(root);
+  });
+
+  it("约束列表容器横向溢出，行容器可按页面宽度收缩", async () => {
     vi.mocked(useIsCoarsePointer).mockReturnValue(true);
     const { host, root } = await renderDom(
       <TaskList
         pool="today"
-        tasks={[task()]}
+        tasks={[task({ ruleId: null })]}
         onToggle={noop}
         onEdit={noop}
         onDelete={noop}
@@ -122,15 +166,16 @@ describe("TaskList prop 透传", () => {
       />,
     );
 
-    expect(host.querySelector('[data-testid="swipeable-list"]')?.getAttribute("data-classname")).toContain("min-w-0");
-    expect(host.querySelector('[data-testid="swipeable-list"]')?.getAttribute("data-classname")).toContain(
-      "overflow-x-clip",
-    );
-    expect(host.querySelector('[data-testid="swipeable-item"]')?.getAttribute("data-classname")).toContain("min-w-0");
+    const list = host.querySelector('[data-testid="task-list"]');
+    expect(list?.className).toContain("min-w-0");
+    expect(list?.className).toContain("overflow-x-clip");
+    expect(host.querySelector("[data-swipe-row]")?.className).toContain("min-w-0");
 
     await unmount(root);
   });
+});
 
+describe("TaskList 透传", () => {
   it("onCopyTitle 透传到行：Shift+单击标题触发复制回调", async () => {
     vi.mocked(useIsCoarsePointer).mockReturnValue(false);
     const writeText = vi.fn().mockResolvedValue(undefined);
@@ -232,7 +277,7 @@ describe("TaskList 多选态", () => {
     await unmount(root);
   });
 
-  it("多选态下禁掉左右滑（粗指针也 blockSwipe）", async () => {
+  it("多选态下禁掉左右滑（粗指针也不渲染动作条）", async () => {
     vi.mocked(useIsCoarsePointer).mockReturnValue(true);
     const { host, root } = await renderWithDnd(
       <TaskList
@@ -249,7 +294,8 @@ describe("TaskList 多选态", () => {
       />,
     );
     // 多选态下整行点击 = 勾选，滑动手势与它抢同一片区域，必须一起关掉。
-    expect(host.querySelector('[data-testid="swipeable-item"]')?.getAttribute("data-blockswipe")).toBe("true");
+    expect(host.querySelector("[data-swipe-row]")).not.toBeNull();
+    expect(host.querySelector("[data-swipe-actions]")).toBeNull();
     await unmount(root);
   });
 });

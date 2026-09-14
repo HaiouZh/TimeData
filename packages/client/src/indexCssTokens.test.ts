@@ -137,9 +137,10 @@ describe("index.css design tokens", () => {
     expect(css).toContain("font-variant-numeric: tabular-nums");
   });
 
-  it("clips todo drag rows horizontally while allowing vertical dnd movement", () => {
+  it("clips todo swipe rows, and only horizontally while dragging so vertical dnd movement stays visible", () => {
+    expect(css).toMatch(/\.todo-swipe-row\s*\{\s*overflow:\s*hidden;\s*\}/);
     expect(css).toMatch(
-      /\.todo-dnd-dragging \.swipeable-list-item\s*\{\s*overflow-x:\s*clip;\s*overflow-y:\s*visible;\s*\}/,
+      /\.todo-dnd-dragging \.todo-swipe-row\s*\{\s*overflow-x:\s*clip;\s*overflow-y:\s*visible;\s*\}/,
     );
   });
 

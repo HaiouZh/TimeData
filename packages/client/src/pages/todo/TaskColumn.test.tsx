@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import type { Task } from "@timedata/shared";
 import { act, createElement } from "react";
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { addTask, createChildTask } from "../../lib/tasks.js";
 import { db, resetDb } from "../../test/dbReset.js";
 import { renderDom, unmount } from "../../test/domHarness.js";
@@ -36,34 +36,51 @@ function task(overrides: Partial<Task> = {}): Task {
 const noop = () => {};
 const handlers = { onToggle: noop, onEdit: noop, onDelete: noop, onToToday: noop, onToInbox: noop };
 
+/** 滑动动作只在触屏（粗指针）渲染；jsdom 的 matchMedia 缺省，得显式切过去。 */
+function stubCoarsePointer(): void {
+  vi.stubGlobal("matchMedia", (query: string) => ({
+    matches: query === "(pointer: coarse)",
+    media: query,
+    onchange: null,
+    addEventListener: () => {},
+    removeEventListener: () => {},
+    addListener: () => {},
+    removeListener: () => {},
+    dispatchEvent: () => false,
+  }));
+}
+
+/** 滑动动作条里的按钮名，左侧在前、右侧在后。按钮只有图标，名字在 aria-label 上。 */
+function swipeActionLabels(host: HTMLElement): string[] {
+  return [...host.querySelectorAll("[data-swipe-actions] button")].map((b) => b.getAttribute("aria-label") ?? "");
+}
+
 describe("TaskColumn swipe 接线", () => {
   it("today 列：有回收件箱 + 删除，无排进今天", async () => {
+    stubCoarsePointer();
     const { host, root } = await renderDom(
       createElement(TaskColumn, { title: "今天", pool: "today", tasks: [task()], emptyText: "空", ...handlers }),
     );
-    expect(host.textContent).toContain("回收件箱");
-    expect(host.textContent).toContain("删除");
-    expect(host.textContent).not.toContain("排进今天");
+    expect(swipeActionLabels(host)).toEqual(["回收件箱 示例", "删除 示例"]);
     await unmount(root);
   });
 
   it("inbox 列：有排进今天 + 删除，无回收件箱", async () => {
+    stubCoarsePointer();
     const { host, root } = await renderDom(
       createElement(TaskColumn, { title: "收件箱", pool: "inbox", tasks: [task()], emptyText: "空", ...handlers }),
     );
-    expect(host.textContent).toContain("排进今天");
-    expect(host.textContent).toContain("删除");
-    expect(host.textContent).not.toContain("回收件箱");
+    expect(swipeActionLabels(host)).toEqual(["排进今天 示例", "删除 示例"]);
     await unmount(root);
   });
 
   it("重复任务在 today 列无移动动作", async () => {
+    stubCoarsePointer();
     const recurring = task({ recurrence: { freq: "daily", interval: 1, basis: "due" } });
     const { host, root } = await renderDom(
       createElement(TaskColumn, { title: "今天", pool: "today", tasks: [recurring], emptyText: "空", ...handlers }),
     );
-    expect(host.textContent).not.toContain("回收件箱");
-    expect(host.textContent).not.toContain("排进今天");
+    expect(swipeActionLabels(host)).toEqual(["删除 示例"]);
     await unmount(root);
   });
 
@@ -142,13 +159,12 @@ describe("TaskColumn swipe 接线", () => {
   });
 
   it("occurrence 在 today 列无移动动作，只保留删除", async () => {
+    stubCoarsePointer();
     const occurrence = task({ id: "occ:r1:2026-06-14", ruleId: "r1", scheduledAt: "2026-06-14T00:00:00.000Z" });
     const { host, root } = await renderDom(
       createElement(TaskColumn, { title: "今天", pool: "today", tasks: [occurrence], emptyText: "空", ...handlers }),
     );
-    expect(host.textContent).not.toContain("回收件箱");
-    expect(host.textContent).not.toContain("排进今天");
-    expect(host.textContent).toContain("删除");
+    expect(swipeActionLabels(host)).toEqual(["删除 示例"]);
     await unmount(root);
   });
 });

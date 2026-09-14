@@ -217,7 +217,7 @@ export function TodoPage() {
   // 是集合不是单槽：两条分属不同组的成员先后回落时，两次置位若被 React 自动批处理合并，
   // 单槽只会保住最后一个、另一组静默丢掉。消费由 TodoProjectSection 回报（见 onRevealConsumed）。
   const [revealGoals, setRevealGoals] = useState<readonly string[]>([]);
-  // 拖拽期间挂 todo-dnd-dragging：临时解除 .swipeable-list-item 的 overflow:hidden，
+  // 拖拽期间挂 todo-dnd-dragging：临时解除 .todo-swipe-row 的纵向裁剪，
   // 否则 dnd-kit 的 translateY 会被裁掉、被拖/让位的行隐身（index.css 有对应规则）。
   const [dragging, setDragging] = useState(false);
   const laneRef = useRef<TodoDragLane>("root");

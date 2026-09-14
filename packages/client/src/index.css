@@ -293,11 +293,19 @@ html {
 }
 
 /*
- * 待办「今天」列表拖拽排序时临时解除 swipe 行容器的 overflow:hidden。
- * 否则 dnd-kit 给被拖/相邻条目加的 translateY 会被 .swipeable-list-item 裁掉，表现为条目隐身。
+ * 待办列表的滑动行容器（SwipeActionRow）：裁掉滑出去的内容与两侧动作条。
+ * 行内装饰因此必须画在内侧——向外画的 ring / box-shadow 会被这里整圈裁掉（见 design-language 不变量）。
+ */
+.todo-swipe-row {
+  overflow: hidden;
+}
+
+/*
+ * 待办列表拖拽排序时临时解除滑动行容器的纵向裁剪。
+ * 否则 dnd-kit 给被拖/相邻条目加的 translateY 会被 .todo-swipe-row 裁掉，表现为条目隐身。
  * 横向仍裁掉，避免向右拖拽时把 <main> 撑出可滚宽度，触发 dnd-kit 横向自动滚动。
  */
-.todo-dnd-dragging .swipeable-list-item {
+.todo-dnd-dragging .todo-swipe-row {
   overflow-x: clip;
   overflow-y: visible;
 }

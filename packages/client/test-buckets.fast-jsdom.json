@@ -55,6 +55,7 @@
   "src/pages/todo/RecurrencePresetSheet.test.tsx",
   "src/pages/todo/ResizableSplit.test.tsx",
   "src/pages/todo/SunkenInboxTail.test.tsx",
+  "src/pages/todo/SwipeActionRow.test.tsx",
   "src/pages/todo/TagFilterPanel.test.tsx",
   "src/pages/todo/TaskColumn.test.tsx",
   "src/pages/todo/TaskDetailSheet.test.tsx",

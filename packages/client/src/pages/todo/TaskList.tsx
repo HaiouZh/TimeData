@@ -1,17 +1,10 @@
 import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable";
-import {
-  LeadingActions,
-  Type as ListType,
-  SwipeAction,
-  SwipeableList,
-  SwipeableListItem,
-  TrailingActions,
-} from "@meauxt/react-swipeable-list";
-import "@meauxt/react-swipeable-list/dist/styles.css";
+import { HandGrabbing, Sun, Trash, Tray } from "@phosphor-icons/react";
 import type { Task } from "@timedata/shared";
 import type { ReactNode } from "react";
 import { useIsCoarsePointer } from "../../lib/useIsCoarsePointer.js";
 import { SortableTaskRow } from "./SortableTaskRow.js";
+import { SwipeActionRow, type SwipeRowAction } from "./SwipeActionRow.js";
 import { type RowDragHandle, type TaskPool, TaskRow } from "./TaskRow.js";
 import type { InlineChildrenMode } from "./InlineChildren.js";
 
@@ -105,47 +98,53 @@ export function TaskList(props: TaskListProps) {
     const canSwap = !readOnly && task.recurrence === null && task.ruleId === null;
     // 与悬停按钮同一个 poolOf：滑动与悬停是同一批动作的两种指针形态，口径分叉就是「桌面对了、手机还错」。
     const rowPool = poolOf(task);
-    const leading =
-      canSwap && (rowPool === "inbox" || rowPool === "upcoming") ? (
-        <LeadingActions>
-          <SwipeAction onClick={() => props.onToToday(task)}>
-            {/* 行卡片化后动作色块跟随行圆角，避免直角块贴圆角卡透出底色缺口 */}
-            <div className="flex h-full items-center rounded-row bg-accent-strong px-4 td-text-label font-medium text-page">
-              排进今天
-            </div>
-          </SwipeAction>
-        </LeadingActions>
-      ) : undefined;
-    const trailing = (
-      <TrailingActions>
-        {canSwap && rowPool === "today" && (
-          <SwipeAction onClick={() => props.onToInbox(task)}>
-            <div className="flex h-full items-center rounded-row bg-surface-elevated px-4 td-text-label font-medium text-ink">
-              回收件箱
-            </div>
-          </SwipeAction>
-        )}
-        {props.onToHand && task.recurrence === null && pool !== "completed" && !props.atHandIds?.has(task.id) && (
-          <SwipeAction onClick={() => props.onToHand?.(task)}>
-            <div className="flex h-full items-center rounded-row bg-surface-elevated px-4 td-text-label font-medium text-ink">
-              抓到手头
-            </div>
-          </SwipeAction>
-        )}
-        <SwipeAction destructive onClick={() => props.onDelete(task)}>
-          <div className="flex h-full items-center rounded-row bg-danger px-4 td-text-label font-medium text-page">删除</div>
-        </SwipeAction>
-      </TrailingActions>
-    );
+    // 图标与手机拖拽坞同一套（今天=太阳、收件箱=收件盒、手头=抓手）：窄屏上两处说的是同一组去处。
+    const leading: SwipeRowAction[] =
+      canSwap && (rowPool === "inbox" || rowPool === "upcoming")
+        ? [
+            {
+              key: "today",
+              label: `排进今天 ${task.title}`,
+              icon: Sun,
+              tone: "accent",
+              onTrigger: () => props.onToToday(task),
+            },
+          ]
+        : [];
+    const trailing: SwipeRowAction[] = [];
+    if (canSwap && rowPool === "today") {
+      trailing.push({
+        key: "inbox",
+        label: `回收件箱 ${task.title}`,
+        icon: Tray,
+        tone: "neutral",
+        onTrigger: () => props.onToInbox(task),
+      });
+    }
+    const onToHand = props.onToHand;
+    if (onToHand && task.recurrence === null && pool !== "completed" && !props.atHandIds?.has(task.id)) {
+      trailing.push({
+        key: "hand",
+        label: `抓到手头 ${task.title}`,
+        icon: HandGrabbing,
+        tone: "neutral",
+        onTrigger: () => onToHand(task),
+      });
+    }
+    trailing.push({
+      key: "delete",
+      label: `删除 ${task.title}`,
+      icon: Trash,
+      tone: "danger",
+      onTrigger: () => props.onDelete(task),
+    });
 
     return (
-      <SwipeableListItem
+      <SwipeActionRow
         key={task.id}
-        className="min-w-0 max-w-full"
-        leadingActions={leading}
-        trailingActions={trailing}
-        blockSwipe={!isCoarsePointer || Boolean(props.selectionMode)}
-        maxSwipe={0.5}
+        enabled={isCoarsePointer && !props.selectionMode}
+        leading={leading}
+        trailing={trailing}
       >
         {canSort && containerId ? (
           // 缩进态（indentTargetId 非空）下冻结全行避让，只留高亮环——理由见 SortableTaskRow 的
@@ -161,16 +160,15 @@ export function TaskList(props: TaskListProps) {
         ) : (
           renderTaskRow(task)
         )}
-      </SwipeableListItem>
+      </SwipeActionRow>
     );
   }
 
   const list = (
-    // 行缝声明在容器（space-y）而非逐项 margin：不依赖库把 className 挂到直接子元素
-    // 尾部无兄弟节点的 DOM 假设，也省掉 last: 补丁。
-    <SwipeableList className="min-w-0 space-y-1 overflow-x-clip" type={ListType.IOS} fullSwipe={false} threshold={0.3}>
+    // 行缝声明在容器（space-y）而非逐项 margin：不依赖行容器尾部无兄弟节点的 DOM 假设，也省掉 last: 补丁。
+    <div data-testid="task-list" className="w-full min-w-0 space-y-1 overflow-x-clip">
       {tasks.map((task) => renderItem(task))}
-    </SwipeableList>
+    </div>
   );
 
   if (!canSort || !containerId) return list;

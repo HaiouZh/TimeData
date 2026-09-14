@@ -84,7 +84,7 @@ export interface TaskRowProps {
    *
    * **分界刻意不是一个插在行之间的 DOM 节点**：组内行注册了 sortable，
    * `verticalListSortingStrategy` 按 DOM 顺序算位置，夹节点会扰乱拖拽计算；
-   * 而行被第三方 `SwipeableListItem` 包着、DOM 兄弟结构由库决定，CSS 兄弟选择器同样不能用。
+   * 而行被 `SwipeActionRow` 包着、行与行之间不是直接兄弟，CSS 兄弟选择器同样不能用。
    */
   blockedBoundary?: boolean;
 }
