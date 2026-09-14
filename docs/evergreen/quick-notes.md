@@ -121,7 +121,7 @@ TrackStep 也有 `source: "user" | "agent"` 与 `sourceLabel?`，但那只是复
 3. **排序约定**：时间线/导出按 `occurredAt` 升序（`id` 次级稳定）；搜索结果与置顶列表按 `occurredAt` 倒序；CLI date/range ASC、recent DESC。
 4. **`pinned` 参与 content hash**：它改变用户可见分区（置顶区 vs 主列表），故参与本地 content hash 与同步摘要；切换走 `setQuickNotePinned` + `recordSyncLog("update")`。
 5. **`source`/`sourceLabel` 是展示元数据，不参与 content hash**；`source="agent"` 由服务端强制（`createSchema` 不含 `source`），**agent 不能伪造 `source="user"`**。
-6. **正文存储始终是原始 `text`**：展示层保守 Markdown（`QuickNoteContent`：`looksLikeMarkdown` 命中才用 `react-markdown`+`remark-gfm`+`rehype-sanitize`，否则纯文本；`NoteBubble` 正文外层为折叠而 `overflow-hidden`，外侧列表序号只能落在 `ol` 自身缩进里，故 `ol` 缩进按最大序号位数以 `ch` 计，不能回退成固定 `ml-4`——否则「10.」被裁成「0.」）；搜索结果纯文本 `<mark>` 高亮；导出/复制/编辑/同步都用原文。
+6. **正文存储始终是原始 `text`**：展示层保守 Markdown（`QuickNoteContent`：`looksLikeMarkdown` 命中才用 `react-markdown`+`remark-gfm`+`rehype-sanitize`，否则纯文本；`NoteBubble` 正文外层为折叠而 `overflow-hidden`，外侧列表序号只能落在 `ol` 自身缩进里，故 `ol` 缩进按最大序号位数以 `ch` 计，不能回退成固定 `ml-4`——否则「10.」被裁成「0.」；字号只由根节点 `textClassName` 给、标题与表格继承，日记参考栏据此复用同一渲染器缩一档）；搜索结果纯文本 `<mark>` 高亮；导出/复制/编辑/同步都用原文。
 7. **单条上传状态从 syncLog 推导，不是 QuickNote 字段**：`useUnsyncedQuickNoteIds` 读 `syncLog(tableName="quick_notes", synced=0)`，待上传显示时钟、已同步显示单勾。agent 速记本地无 pending，恒显单勾。
 8. **本地 mutation 必须与 syncLog 同事务**；窗口查询/搜索/置顶列表查询只读、不写 syncLog。
 9. **`updateQuickNote` 保留 source/sourceLabel/pinned**：编辑只改 text/occurredAt/updatedAt。

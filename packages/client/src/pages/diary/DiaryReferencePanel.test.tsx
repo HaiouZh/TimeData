@@ -294,6 +294,24 @@ describe("参考栏 · 速记块", () => {
     expect(list.textContent).toContain("10:30");
   });
 
+  it("Markdown 速记按速记页同款渲染：列表成项、加粗成 strong，不挤成一行原文", async () => {
+    await addNote("n1", "今天要做：\n\n- 买菜\n- 回邮件\n\n**重点**周五交稿", "2026-07-25T02:30:00.000Z");
+    const { host } = await renderPanel("2026-07-25");
+    await waitFor(() => host.querySelector('[data-testid="diary-ref-quick-note-list"]') !== null, "速记列表");
+    const list = host.querySelector('[data-testid="diary-ref-quick-note-list"]') as HTMLElement;
+    expect([...list.querySelectorAll("li ul li")].map((li) => li.textContent)).toEqual(["买菜", "回邮件"]);
+    expect(list.querySelector("strong")?.textContent).toBe("重点");
+    expect(list.textContent).not.toContain("**");
+  });
+
+  it("纯文本速记保留原文换行", async () => {
+    await addNote("n1", "第一行\n第二行", "2026-07-25T02:30:00.000Z");
+    const { host } = await renderPanel("2026-07-25");
+    await waitFor(() => host.textContent?.includes("第一行") === true, "速记");
+    const list = host.querySelector('[data-testid="diary-ref-quick-note-list"]') as HTMLElement;
+    expect(list.querySelector(".whitespace-pre-wrap")?.textContent).toBe("第一行\n第二行");
+  });
+
   it("别的日期的速记不出现在这天", async () => {
     await addNote("n1", "上周记的", "2026-07-20T02:30:00.000Z");
     const { host } = await renderPanel("2026-07-25");

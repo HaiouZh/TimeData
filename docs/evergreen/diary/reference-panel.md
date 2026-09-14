@@ -8,7 +8,7 @@ covers:
   - packages/client/src/lib/diary/diaryRefEntriesQuery.ts
   - packages/client/src/lib/diary/diaryRefTasks.ts
   - packages/client/src/lib/diary/diaryRefPrefs.ts
-last-reviewed: 2026-08-21
+last-reviewed: 2026-09-14
 ---
 
 # 日记 · 参考栏（只读）
@@ -39,7 +39,7 @@ last-reviewed: 2026-08-21
 |---|---|---|
 | 打点 | `listEntriesOverlappingDay(date)` + `useCategories()` | 区间重叠查出，跨零点条目**必须按日界裁剪**（`lib/diary/diaryRefEntries.ts`），否则「23:00–次日01:00」两天各显示成两小时。**不借 `useEntries`**，理由见 §4。每行按分类上色，见下 |
 | 完成的待办 | `listTasks().completed` 再过滤 | 硬性三条：`done === true`（排除账本判定耗尽、混在同一桶里的重复模板）、`completedAt !== null`（**绝不回退 `updatedAt`**）、`getDateString(completedAt) === date` |
-| 速记 | `listQuickNotesByDate(date)` | 现成，走 `occurredAt` 索引半开区间、日界已是 Asia/Shanghai，**不再包一层过滤** |
+| 速记 | `listQuickNotesByDate(date)` | 现成，走 `occurredAt` 索引半开区间、日界已是 Asia/Shanghai，**不再包一层过滤**。正文与速记页共用 `quick-notes/QuickNoteContent`（Markdown 成排版、纯文本保留换行），只传 `textClassName="td-text-label"` 缩一档字号；**不许退回裸 `{text}`**——多行速记会被 HTML 空白折叠挤成一行 |
 | 回看 | `fetchDiary(addDays(date,-1))` / `addDays(date,-7)` | 相对 `date` 而非相对真实今天。两块**一律默认收起、展开才请求**，已加载过不重复拉 |
 | 引导 | `DiaryPage` 的 config `guideItems` 经 `parseGuideItems` 拆行传入 | 零请求零查询的只读条目列表；**空 items 整段不渲染**（section 级守卫在 Panel）；折叠偏好走 `diaryRefPrefs`（`guide` 键，默认展开，与窄屏容器共享） |
 

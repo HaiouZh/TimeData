@@ -26,6 +26,23 @@ describe("QuickNoteContent", () => {
     expect(render("98. 甲\n99. 乙\n100. 丙")).toContain('style="margin-inline-start:4.5ch"');
   });
 
+  // 日记参考栏复用本组件、字号比速记页小一档：字号只由根节点给，标题/表格一律继承，
+  // 否则参考栏里 Markdown 速记的标题会比同屏正文大一号。
+  it("takes its text size from the root so compact hosts can shrink everything", () => {
+    const html = renderToStaticMarkup(
+      createElement(QuickNoteContent, { text: "# 标题\n\n| A |\n| - |\n| B |", textClassName: "td-text-label" }),
+    );
+
+    expect(html).toMatch(/^<div class="[^"]*td-text-label[^"]*">/);
+    expect(html).not.toContain("td-text-body");
+  });
+
+  it("wraps long unbroken words in Markdown instead of overflowing the column", () => {
+    expect(render("- https://example.com/a-very-long-path-without-any-spaces")).toMatch(
+      /^<div class="[^"]*break-words[^"]*">/,
+    );
+  });
+
   it("adds safe target and rel attributes to links", () => {
     const html = render("见 [文档](https://example.com)");
 

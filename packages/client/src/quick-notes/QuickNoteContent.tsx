@@ -18,9 +18,9 @@ class MarkdownBoundary extends Component<{ fallback: ReactNode; children: ReactN
 
 const components = {
   p: ({ node: _node, ...props }) => <p {...props} className="my-1 first:mt-0 last:mb-0" />,
-  h1: ({ children }) => <p className="mb-1 mt-2 td-text-body font-bold">{children}</p>,
-  h2: ({ children }) => <p className="mb-1 mt-2 td-text-body font-semibold">{children}</p>,
-  h3: ({ children }) => <p className="mb-1 mt-2 td-text-body font-medium">{children}</p>,
+  h1: ({ children }) => <p className="mb-1 mt-2 font-bold">{children}</p>,
+  h2: ({ children }) => <p className="mb-1 mt-2 font-semibold">{children}</p>,
+  h3: ({ children }) => <p className="mb-1 mt-2 font-medium">{children}</p>,
   ul: ({ node: _node, ...props }) => <ul {...props} className="my-1 ml-4 list-disc space-y-0.5" />,
   // 外侧序号落在 ol 的左缩进里，而 NoteBubble 外层 overflow-hidden 会裁掉缩进外的部分：
   // 缩进按最大序号的位数给（ch = 数字宽，另 1.5ch 容纳「. 」），固定 ml-4 会把「10.」裁成「0.」。
@@ -70,14 +70,23 @@ const components = {
   },
   table: ({ node: _node, ...props }) => (
     <div data-edge-swipe-block="" className="my-1 overflow-x-auto">
-      <table {...props} className="border-collapse td-text-body" />
+      <table {...props} className="border-collapse" />
     </div>
   ),
   th: ({ node: _node, ...props }) => <th {...props} className="border border-border px-2 py-1 text-left" />,
   td: ({ node: _node, ...props }) => <td {...props} className="border border-border px-2 py-1" />,
 } satisfies Components;
 
-export default function QuickNoteContent({ text, trailing }: { text: string; trailing?: ReactNode }) {
+// 字号只由 Markdown 根节点给、标题与表格一律继承：日记参考栏复用本组件时整体小一档（td-text-label）。
+export default function QuickNoteContent({
+  text,
+  trailing,
+  textClassName = "td-text-body",
+}: {
+  text: string;
+  trailing?: ReactNode;
+  textClassName?: string;
+}) {
   const plain = (
     <span className="whitespace-pre-wrap break-words">
       {text}
@@ -88,7 +97,7 @@ export default function QuickNoteContent({ text, trailing }: { text: string; tra
 
   return (
     <MarkdownBoundary fallback={plain}>
-      <div className="td-text-body">
+      <div className={`${textClassName} break-words`}>
         <Markdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeSanitize]} components={components}>
           {text}
         </Markdown>
