@@ -12,7 +12,7 @@ import { getDateString } from "../lib/time.js";
 import { STORAGE_KEYS } from "../lib/storageKeys.js";
 import { db } from "../test/dbReset.js";
 import { type Root, renderDom, unmount } from "../test/domHarness.js";
-import QuickNotesPage, { STICKY_TOP_PX } from "./QuickNotesPage.js";
+import QuickNotesPage, { STICKY_TOP_PX, STUCK_HIDE_DELAY_MS } from "./QuickNotesPage.js";
 
 vi.mock("../quick-notes/fileDownload.ts", () => ({
   downloadQuickNotesJson: vi.fn(async () => {}),
@@ -2021,11 +2021,11 @@ describe("主线日期条", () => {
     await unmount(root);
   });
 
-  it("主线药丸走 DateField 的 bare 形态，观感与搜索态那颗逐字同款", async () => {
+  it("主线药丸走 DateField 的 bare 形态：只剩 .quick-note-date-pill，字段外观三件套一个不在", async () => {
     // 守的是一次真实回归：DateField 的字段外观（min-h-11 圆角方块 + 自带底色）曾经赢过
-    // 调用处的 rounded-pill，药丸被撑成 44px 高的方角块。工具类之间比的是生成 CSS 的先后、
+    // 调用处的药丸类，药丸被撑成 44px 高的方角块。工具类之间比的是生成 CSS 的先后、
     // 不是 class 串里的先后，所以「在 className 里覆盖」是赌运气——必须靠 bare 换掉基础类。
-    // 漏传 bare 时下面两条断言会同时红。
+    // 漏传 bare 时下面两条断言会同时红。与搜索态同款由「sticky 偏移常量与 JSX 同步」里的用例守。
     await db.quickNotes.add({
       id: "p1",
       text: "药丸形态样本",
@@ -2037,7 +2037,7 @@ describe("主线日期条", () => {
 
     const trigger = host.querySelector<HTMLButtonElement>('button[aria-label*="点击跳转到其他日期"]');
     if (!trigger) throw new Error("missing date trigger");
-    expect(trigger.className).toContain("rounded-pill");
+    expect(trigger.className.split(/\s+/)).toContain("quick-note-date-pill");
     // 字段外观的三件套一个都不该在：撑高的 min-h-11、方角的 rounded-row、自带的 bg-surface-elevated。
     for (const fieldLook of ["min-h-11", "rounded-row", "bg-surface-elevated"]) {
       expect(trigger.className).not.toContain(fieldLook);
@@ -2173,6 +2173,56 @@ describe("sticky 偏移常量与 JSX 同步", () => {
 
     await unmount(root);
   });
+
+  // 主线药丸是 DateField(bare) 的触发钮、搜索态药丸是纯 div，两处观感必须同款；几何与颜色全在
+  // index.css 的 .quick-note-date-pill 一个类里（对齐 Telegram Android），JSX 不再各写一串工具类——
+  // 否则改一处漏一处，两态药丸静默分家。
+  it("主线与搜索态的日期药丸只挂同一个 .quick-note-date-pill 类、class 串逐字一致", async () => {
+    await db.quickNotes.add({
+      id: "p1",
+      text: "药丸同款样本",
+      occurredAt: "2026-06-01T04:00:00.000Z",
+      createdAt: "2026-06-01T04:00:00.000Z",
+      updatedAt: "2026-06-01T04:00:00.000Z",
+    });
+    const { host, root } = await renderPage();
+
+    const mainPill = host.querySelector<HTMLElement>("[data-date-label] .quick-note-date-pill");
+    expect(mainPill?.tagName).toBe("BUTTON");
+    expect(mainPill?.textContent).toContain("6月1日");
+
+    await click(host.querySelector<HTMLButtonElement>('button[aria-label="搜索速记"]'));
+    const searchBox = host.querySelector<HTMLInputElement>('input[placeholder="搜索速记…"]');
+    if (!searchBox) throw new Error("missing search input");
+
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    await act(async () => {
+      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
+      setter?.call(searchBox, "药丸");
+      searchBox.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    await act(async () => {
+      vi.advanceTimersByTime(300); // 搜索 debounce 200ms
+    });
+    await flush();
+    vi.useRealTimers();
+
+    const searchPill = host.querySelector<HTMLElement>("[data-search-date] .quick-note-date-pill");
+    expect(searchPill?.tagName).toBe("DIV");
+    expect(searchPill?.textContent).toContain("6月1日");
+
+    // 观感类只允许这一个：边框 / 底色 / 字号 / 内距一律不在 JSX 里，否则两态药丸会分家。
+    const visualClasses = (el: HTMLElement | null) =>
+      (el?.className ?? "")
+        .split(/\s+/)
+        .filter((c) => /^(rounded-|border|bg-|px-|py-|text-|td-text-|font-)/.test(c))
+        .sort();
+    expect(visualClasses(mainPill)).toEqual([]);
+    expect(visualClasses(searchPill)).toEqual([]);
+    expect(searchPill?.className.split(/\s+/)).toEqual(["quick-note-date-pill"]);
+
+    await unmount(root);
+  });
 }, PAGE_TEST_TIMEOUT_MS);
 
 describe("停手隐身", () => {
@@ -2210,10 +2260,17 @@ describe("停手隐身", () => {
     // 滚动中：谁都不隐身，粘住效果全靠 CSS sticky。
     expect(dividers[0].classList.contains("stuck")).toBe(false);
 
+    // 停手多久才隐身对齐 Telegram Android 的 hideDateDelay = 500：网页版那套 1.2s 手感明显拖。
+    expect(STUCK_HIDE_DELAY_MS).toBe(500);
     await act(async () => {
-      vi.advanceTimersByTime(1_500);
+      vi.advanceTimersByTime(STUCK_HIDE_DELAY_MS - 1);
     });
-    // 停手 1.2s 后：粘住那条隐身，没粘住的照常可见。
+    // 差 1ms 没到点：谁都不隐身。
+    expect(dividers[0].classList.contains("stuck")).toBe(false);
+    await act(async () => {
+      vi.advanceTimersByTime(1);
+    });
+    // 到点：粘住那条隐身，没粘住的照常可见。
     expect(dividers[0].classList.contains("stuck")).toBe(true);
     expect(dividers[1].classList.contains("stuck")).toBe(false);
 
@@ -2253,28 +2310,30 @@ describe("停手隐身", () => {
     dividers[0].getBoundingClientRect = () => ({ top: -10, height: 28 }) as DOMRect;
     dividers[1].getBoundingClientRect = () => ({ top: 300, height: 28 }) as DOMRect;
 
+    // 两段各走 0.7 个延迟：单段不到点、累计已越过一个延迟——忘了 clearTimeout 的实现会在累计处 fire。
+    const partial = Math.round(STUCK_HIDE_DELAY_MS * 0.7);
     vi.useFakeTimers({ shouldAdvanceTime: true });
     await act(async () => {
       list.dispatchEvent(new Event("scroll", { bubbles: true }));
     });
     await act(async () => {
-      vi.advanceTimersByTime(800);
+      vi.advanceTimersByTime(partial);
     });
     // 手指还在动：第二次 scroll 必须把上一次排下的定时器清掉再重排。
     await act(async () => {
       list.dispatchEvent(new Event("scroll", { bubbles: true }));
     });
     await act(async () => {
-      vi.advanceTimersByTime(800);
+      vi.advanceTimersByTime(partial);
     });
-    // 忘了 clearTimeout 的实现：第一次 scroll 那个定时器已在累计 1200ms 处 fire 过，这里就已隐身。
+    // 忘了 clearTimeout 的实现：第一次 scroll 那个定时器已在累计 1.4 个延迟处 fire 过，这里就已隐身。
     // 退化后果是滑动途中日期条闪烁 + 全程反复 setState，正是这条防抖分支要消灭的东西。
     expect(dividers[0].classList.contains("stuck")).toBe(false);
 
     await act(async () => {
-      vi.advanceTimersByTime(900);
+      vi.advanceTimersByTime(STUCK_HIDE_DELAY_MS - partial);
     });
-    // 从最后一次 scroll 起算满 1.2 秒才隐身。
+    // 从最后一次 scroll 起算满一个延迟才隐身。
     expect(dividers[0].classList.contains("stuck")).toBe(true);
 
     vi.useRealTimers();

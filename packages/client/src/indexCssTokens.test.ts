@@ -183,9 +183,11 @@ describe("速记日期条隐身态（.quick-note-date-divider.stuck）", () => {
     expect(block.replace(/\/\*[\s\S]*?\*\//g, "")).not.toContain("pointer-events");
   });
 
-  it("visibility 延迟 300ms 才隐身、摘类时无延迟立刻回来", () => {
-    expect(block).toMatch(/\.quick-note-date-divider\.stuck\s*\{[^}]*visibility 0s linear 300ms/s);
-    expect(block).toMatch(/\.quick-note-date-divider\s*\{[^}]*visibility 0s linear 0s/s);
+  it("淡入淡出 150ms（对齐 Telegram Android 的 floatingDateAnimation），visibility 延迟同为 150ms、摘类时无延迟立刻回来", () => {
+    // 三处时长必须同数：淡出 opacity、淡出后 visibility 延迟、淡入 opacity。延迟短于 opacity 时长会出现
+    // 「还看得见却点不到」的空窗，长于它则「已看不见还挡着气泡」。
+    expect(block).toMatch(/\.quick-note-date-divider\.stuck\s*\{[^}]*opacity 150ms ease,\s*visibility 0s linear 150ms/s);
+    expect(block).toMatch(/\.quick-note-date-divider\s*\{[^}]*opacity 150ms ease,\s*visibility 0s linear 0s/s);
   });
 
   it("键盘焦点落在里面时不隐身（逃生阀）", () => {
@@ -198,6 +200,32 @@ describe("速记日期条隐身态（.quick-note-date-divider.stuck）", () => {
     expect(block).toMatch(
       /@media \(prefers-reduced-motion: reduce\)\s*\{[^@]*\.quick-note-date-divider[^@]*transition-duration:\s*0s;[^@]*transition-delay:\s*0s;/s,
     );
+  });
+});
+
+// 速记日期药丸的几何与观感对齐 Telegram Android 的 ChatActionCell：14sp 中粗白字、行高 + 3dp×2 ≈ 22dp 高、
+// 字到左右边 8dp、无边框、半透明深色服务底。字号偏离 td-text-* 档位，按设计语言走「排版角色语义类」
+// 而不是 JSX 里的 text-[14px]（bare-text-size 硬闸）；颜色只准经 token / color-mix 派生。
+describe("速记日期药丸（.quick-note-date-pill）对齐 Telegram Android", () => {
+  const pill = css.slice(css.indexOf(".quick-note-date-pill {"), css.indexOf(".quick-note-time-spacer"));
+
+  it("存在且自带字号 / 行高 / 字重：14px、16px 行高、500", () => {
+    expect(pill).toMatch(/font-size:\s*0\.875rem;/);
+    expect(pill).toMatch(/line-height:\s*1rem;/);
+    expect(pill).toMatch(/font-weight:\s*500;/);
+  });
+
+  it("内距 3px×8px 把药丸撑到 22px 高、字到左右边 8px；全圆角走 token", () => {
+    expect(pill).toMatch(/padding:\s*0\.1875rem 0\.5rem;/);
+    expect(pill).toMatch(/border-radius:\s*var\(--radius-pill\);/);
+  });
+
+  it("无边框；底色由 backdrop token 混透明派生、文字用 ink token，不写裸色", () => {
+    const pillWithoutComments = pill.replace(/\/\*[\s\S]*?\*\//g, "");
+    expect(pillWithoutComments).not.toMatch(/border:|border-width|border-color/);
+    expect(pillWithoutComments).toMatch(/background(?:-color)?:\s*color-mix\(in srgb, var\(--color-backdrop\) \d+%, transparent\);/);
+    expect(pillWithoutComments).toMatch(/color:\s*var\(--color-ink\);/);
+    expect(pillWithoutComments).not.toMatch(/#[0-9a-f]{3,8}|rgba?\(/i);
   });
 });
 

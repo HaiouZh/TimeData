@@ -84,7 +84,12 @@ const INPUT_MAX_HEIGHT_PX = 160;
 const DEFAULT_COMPOSER_INSET_PX = 128;
 const COMPOSER_BOTTOM_GAP_PX = 16;
 const STATUS_AUTO_DISMISS_MS = 2400;
-const STUCK_HIDE_DELAY_MS = 1200;
+/**
+ * 停止滚动多久后给粘顶那条日期条打隐身类。对齐 Telegram Android 的 `hideDateDelay = 500`
+ * （网页版那套 1.2s 手感明显拖）；淡出本身的 150ms 在 index.css 的 .quick-note-date-divider。
+ * 导出给用例卡边界与推算防抖比例，别在测试里再抄一份字面量。
+ */
+export const STUCK_HIDE_DELAY_MS = 500;
 /**
  * 与 JSX 上的 `sticky top-2`（0.5rem = 8px）是同一个值：日期条粘住时距滚动容器可视区顶部的
  * 像素，也是 `findStuckDivider` 判定区间的上界。三处独立字面量（这个常量 + 主线/搜索两处
@@ -1257,9 +1262,7 @@ export default function QuickNotesPage() {
                         data-search-date={group.date.localDate}
                         className="quick-note-date-divider sticky top-2 z-10 flex items-center justify-center"
                       >
-                        <div className="rounded-pill border border-border bg-surface px-2.5 td-text-body font-medium text-ink-3">
-                          {group.date.label}
-                        </div>
+                        <div className="quick-note-date-pill">{group.date.label}</div>
                       </div>
                     )}
                     {group.notes.map((entry) => {
@@ -1365,10 +1368,11 @@ export default function QuickNotesPage() {
                           hideIcon
                           // bare 是承重的：不加它，DateField 的字段外观（min-h-11 / rounded-row /
                           // 底色 / td-time）会赢过这里的 className——工具类之间比的是生成 CSS 的
-                          // 先后，不是 class 串里的先后。className 与搜索态那颗药丸逐字一致，
-                          // 两处观感必须同款（搜索态在 data-search-date 那段）。
+                          // 先后，不是 class 串里的先后。药丸的几何与颜色全在 index.css 的
+                          // .quick-note-date-pill（对齐 Telegram Android），这里不再追加任何观感
+                          // 工具类；搜索态那颗药丸挂的是同一个类，两处观感同款由用例锁死。
                           bare
-                          className="rounded-pill border border-border bg-surface px-2.5 td-text-body font-medium text-ink-3"
+                          className="quick-note-date-pill"
                           formatValue={() => <span>{groupDate.label}</span>}
                         />
                         {selectionMode && (

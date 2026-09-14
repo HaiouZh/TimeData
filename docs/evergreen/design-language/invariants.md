@@ -9,7 +9,7 @@ contracts:
   - packages/client/src/lib/haptics.ts
   - packages/client/src/pages/stats/chartColors.ts
   - packages/client/src/lib/navigation/navRegistry.ts
-last-reviewed: 2026-08-22
+last-reviewed: 2026-09-14
 ---
 
 # 设计语言 · 关键不变量与红线
