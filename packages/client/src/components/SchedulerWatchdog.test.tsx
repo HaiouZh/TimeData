@@ -16,22 +16,46 @@ vi.mock("../hooks/useAppResumeRefresh.ts", () => ({
 }));
 
 // 补拍能否发出由调度器端口是否被记到决定，这里直接控制它，好把「补拍救回来」与
-// 「补拍也没救回来」两条分支分开钉。
+// 「补拍也没救回来」两条分支分开钉。送达判定的两个纯函数用真实实现。
 const kickScheduler = vi.hoisted(() => vi.fn(() => true));
 const hasSchedulerPort = vi.hoisted(() => vi.fn(() => true));
-vi.mock("../lib/schedulerHostGuard.ts", () => ({ kickScheduler, hasSchedulerPort }));
+const schedulerDeliveryState = vi.hoisted(() =>
+  vi.fn(() => ({ paired: true, lastPostedAt: 0 as number | null, lastDeliveredAt: null as number | null })),
+);
+const driveSchedulerDirectly = vi.hoisted(() => vi.fn(() => true));
+vi.mock("../lib/schedulerHostGuard.ts", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../lib/schedulerHostGuard.ts")>();
+  return { ...actual, kickScheduler, hasSchedulerPort, schedulerDeliveryState, driveSchedulerDirectly };
+});
 
 const stashPendingReport = vi.hoisted(() => vi.fn());
-vi.mock("../lib/recovery/pendingReports.ts", () => ({ stashPendingReport }));
+vi.mock("../lib/recovery/pendingReports.ts", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../lib/recovery/pendingReports.ts")>();
+  return { ...actual, stashPendingReport };
+});
 
 const markReload = vi.hoisted(() => vi.fn());
 vi.mock("../lib/recovery/reloadAttribution.ts", () => ({ markReload }));
 
-// IDB 探针默认「立刻回来」；要测「没回来」的用例自己换成永不 resolve 的 Promise。
-const probeStorage = vi.hoisted(() => vi.fn<() => Promise<unknown>>(() => Promise.resolve([])));
-vi.mock("../lib/recovery/storageProbe.ts", () => ({ probeStorage }));
+// 存储探针默认「立刻回来、耗时 12ms」；要测「没回来」的用例自己换成永不 resolve 的 Promise。
+const timeStorageProbe = vi.hoisted(() =>
+  vi.fn<() => Promise<{ ms: number; errorName: string | null }>>(() => Promise.resolve({ ms: 12, errorName: null })),
+);
+vi.mock("../lib/recovery/storageTiming.ts", () => ({ timeStorageProbe }));
+const isStorageOpen = vi.hoisted(() => vi.fn<() => boolean | null>(() => true));
+vi.mock("../lib/recovery/storageProbe.ts", () => ({ probeStorage: vi.fn(), isStorageOpen }));
 
-const { SchedulerWatchdog } = await import("./SchedulerWatchdog.tsx");
+const snapshotReactRoot = vi.hoisted(() => vi.fn<() => unknown>(() => null));
+vi.mock("../lib/recovery/reactRootProbe.ts", () => ({ snapshotReactRoot }));
+const snapshotInFlightLazy = vi.hoisted(() => vi.fn<() => [string, number][]>(() => []));
+vi.mock("../lib/recovery/lazyRegistry.ts", () => ({ snapshotInFlightLazy }));
+
+vi.mock("../lib/frontendUpdate.ts", () => ({ CURRENT_BUILD_ID: "test-build" }));
+vi.mock("../lib/recovery/reportId.ts", () => ({ newReportId: () => "rid0000001" }));
+
+const { SchedulerWatchdog, SCHEDULER_DIRECT_DRIVE_AFTER_MS, SCHEDULER_KICK_GRACE_MS } = await import(
+  "./SchedulerWatchdog.tsx"
+);
 
 const TIMEOUT_MS = 5000;
 const GRACE_MS = 1000;
@@ -56,8 +80,18 @@ beforeEach(() => {
   hasSchedulerPort.mockReturnValue(true);
   stashPendingReport.mockReset();
   markReload.mockReset();
-  probeStorage.mockReset();
-  probeStorage.mockImplementation(() => Promise.resolve([]));
+  timeStorageProbe.mockReset();
+  timeStorageProbe.mockImplementation(() => Promise.resolve({ ms: 12, errorName: null }));
+  schedulerDeliveryState.mockReset();
+  schedulerDeliveryState.mockImplementation(() => ({ paired: true, lastPostedAt: 0, lastDeliveredAt: null }));
+  driveSchedulerDirectly.mockReset();
+  driveSchedulerDirectly.mockReturnValue(true);
+  snapshotReactRoot.mockReset();
+  snapshotReactRoot.mockReturnValue(null);
+  snapshotInFlightLazy.mockReset();
+  snapshotInFlightLazy.mockReturnValue([]);
+  isStorageOpen.mockReset();
+  isStorageOpen.mockReturnValue(true);
   localStorage.clear();
   vi.useFakeTimers();
 });
@@ -295,14 +329,14 @@ describe("SchedulerWatchdog", () => {
     expect(detail.resumes).toBe(2);
     expect(detail.trigger).toBe("appStateChange");
     expect(detail.maxGapMs).toBe(0);
-    expect(typeof detail.storageMs).toBe("number");
+    expect(detail.storageMs).toBe(12);
     expect(typeof detail.sinceBootMs).toBe("number");
     expect(detail.waitedMs).toBeGreaterThanOrEqual(TIMEOUT_MS);
     await unmount(root);
   });
 
   it("IndexedDB 探针到判定时还没回来 → storageMs 为 null", async () => {
-    probeStorage.mockImplementation(() => new Promise(() => {}));
+    timeStorageProbe.mockImplementation(() => new Promise(() => {}));
     const onDeadlock = vi.fn();
     const { root } = await renderDom(
       createElement(SchedulerWatchdog, { onDeadlock, timeoutMs: TIMEOUT_MS, kickGraceMs: GRACE_MS }),
@@ -379,7 +413,7 @@ describe("SchedulerWatchdog", () => {
 
   // 终审复核 CONFIRMED：抛错与「还没回来」都留 null，阶段 2 分不出存储报错与存储被冻。
   it("IndexedDB 探针抛错 → storageMs 记 -1，与「还没回来」的 null 区分开", async () => {
-    probeStorage.mockImplementation(() => Promise.reject(new Error("DatabaseClosedError")));
+    timeStorageProbe.mockImplementation(() => Promise.resolve({ ms: 40, errorName: "DatabaseClosedError" }));
     const onDeadlock = vi.fn();
     const { root } = await renderDom(
       createElement(SchedulerWatchdog, { onDeadlock, timeoutMs: TIMEOUT_MS, kickGraceMs: GRACE_MS }),
@@ -391,6 +425,7 @@ describe("SchedulerWatchdog", () => {
     vi.advanceTimersByTime(TIMEOUT_MS + GRACE_MS);
 
     expect(lastProbeDetail().storageMs).toBe(-1);
+    expect(lastProbeDetail().storageErr).toBe("DatabaseClosedError");
     await unmount(root);
   });
 
@@ -448,6 +483,163 @@ describe("SchedulerWatchdog", () => {
     });
     vi.advanceTimersByTime(TIMEOUT_MS * 2);
     expect(stashPendingReport).not.toHaveBeenCalled();
+    await unmount(root);
+  });
+
+  it("直驱时机常量小于宽限——宽限结束前一定来得及直驱", () => {
+    expect(SCHEDULER_DIRECT_DRIVE_AFTER_MS).toBeLessThan(SCHEDULER_KICK_GRACE_MS);
+  });
+
+  // 逃逸变异：去掉「已送达就不直驱」→ 送达了也直驱，报告里分不清是信道还是直驱救的。
+  it("补拍后未送达且已配对 → 250ms 直驱，现场记 delivered:false / direct:ran", async () => {
+    const { root } = await renderDom(
+      createElement(SchedulerWatchdog, { onDeadlock: vi.fn(), timeoutMs: TIMEOUT_MS, kickGraceMs: GRACE_MS }),
+    );
+    resume?.();
+    vi.advanceTimersByTime(TIMEOUT_MS);
+    expect(driveSchedulerDirectly).not.toHaveBeenCalled();
+    vi.advanceTimersByTime(SCHEDULER_DIRECT_DRIVE_AFTER_MS);
+    expect(driveSchedulerDirectly).toHaveBeenCalledTimes(1);
+    vi.advanceTimersByTime(GRACE_MS - SCHEDULER_DIRECT_DRIVE_AFTER_MS);
+    expect(lastProbeDetail()).toMatchObject({ paired: true, delivered: false, direct: "ran" });
+    await unmount(root);
+  });
+
+  it("补拍已送达 → 不直驱，记 delivered:true / direct:none", async () => {
+    schedulerDeliveryState.mockImplementation(() => ({
+      paired: true,
+      lastPostedAt: 0,
+      lastDeliveredAt: Number.MAX_SAFE_INTEGER,
+    }));
+    const { root } = await renderDom(
+      createElement(SchedulerWatchdog, { onDeadlock: vi.fn(), timeoutMs: TIMEOUT_MS, kickGraceMs: GRACE_MS }),
+    );
+    resume?.();
+    vi.advanceTimersByTime(TIMEOUT_MS + GRACE_MS);
+    expect(driveSchedulerDirectly).not.toHaveBeenCalled();
+    expect(lastProbeDetail()).toMatchObject({ delivered: true, direct: "none" });
+    await unmount(root);
+  });
+
+  it("未配对 → 不直驱，记 paired:false / delivered:null / direct:unavailable", async () => {
+    schedulerDeliveryState.mockImplementation(() => ({ paired: false, lastPostedAt: null, lastDeliveredAt: null }));
+    const { root } = await renderDom(
+      createElement(SchedulerWatchdog, { onDeadlock: vi.fn(), timeoutMs: TIMEOUT_MS, kickGraceMs: GRACE_MS }),
+    );
+    resume?.();
+    vi.advanceTimersByTime(TIMEOUT_MS + GRACE_MS);
+    expect(driveSchedulerDirectly).not.toHaveBeenCalled();
+    expect(lastProbeDetail()).toMatchObject({ paired: false, delivered: null, pendingMsgMs: null, direct: "unavailable" });
+    await unmount(root);
+  });
+
+  // 逃逸变异：rootPre 与 rootPost 用同一次快照 → 看不出补拍前后根状态有没有变。
+  it("根快照补拍前、宽限结束各采一次，全字段形状钉死", async () => {
+    const pre = { p: 512, s: 512, pg: 0, cb: false, cpc: false };
+    const post = { p: 1024, s: 0, pg: 0, cb: true, cpc: false };
+    snapshotReactRoot.mockReturnValueOnce(pre).mockReturnValueOnce(post);
+    snapshotInFlightLazy.mockReturnValue([["TodoPage", 5300]]);
+    isStorageOpen.mockReturnValue(false);
+    localStorage.setItem(STORAGE_KEYS.schedulerProbes, "9");
+    const { root } = await renderDom(
+      createElement(SchedulerWatchdog, { onDeadlock: vi.fn(), timeoutMs: TIMEOUT_MS, kickGraceMs: GRACE_MS }),
+    );
+    resume?.("appStateChange");
+    await Promise.resolve();
+    vi.advanceTimersByTime(TIMEOUT_MS + GRACE_MS);
+
+    const detail = lastProbeDetail();
+    expect(detail).toEqual({
+      outcome: "reload",
+      hadPort: true,
+      kicked: true,
+      recovered: false,
+      visible: "visible",
+      waitedMs: TIMEOUT_MS,
+      probes: 10,
+      maxGapMs: 0,
+      sinceBootMs: expect.any(Number),
+      storageMs: 12,
+      resumes: 1,
+      trigger: "appStateChange",
+      id: "rid0000001",
+      sessionId: null,
+      build: "test-build",
+      paired: true,
+      delivered: false,
+      pendingMsgMs: expect.any(Number),
+      direct: "ran",
+      rootPre: pre,
+      rootPost: post,
+      lazy: [["TodoPage", 5300]],
+      storageErr: null,
+      dbOpen: false,
+    });
+    await unmount(root);
+  });
+
+  it("直驱救活（宽限内落地）→ 记 recovered，不重载、不留墓碑", async () => {
+    const onDeadlock = vi.fn();
+    const { root } = await renderDom(
+      createElement(SchedulerWatchdog, { onDeadlock, timeoutMs: TIMEOUT_MS, kickGraceMs: GRACE_MS }),
+    );
+    resume?.();
+    vi.advanceTimersByTime(TIMEOUT_MS + SCHEDULER_DIRECT_DRIVE_AFTER_MS);
+    await act(async () => {}); // 直驱之后探针落地
+    vi.advanceTimersByTime(GRACE_MS);
+    expect(onDeadlock).not.toHaveBeenCalled();
+    expect(markReload).not.toHaveBeenCalled();
+    expect(lastProbeDetail()).toMatchObject({ outcome: "recovered", direct: "ran" });
+    await unmount(root);
+  });
+
+  // 逃逸变异：dispose 只清宽限定时器、不清直驱定时器 → 卸载后仍会直驱。
+  it("补拍之后卸载 → 直驱与宽限两枚定时器都跟着走", async () => {
+    const onDeadlock = vi.fn();
+    const { root } = await renderDom(
+      createElement(SchedulerWatchdog, { onDeadlock, timeoutMs: TIMEOUT_MS, kickGraceMs: GRACE_MS }),
+    );
+    resume?.();
+    vi.advanceTimersByTime(TIMEOUT_MS);
+    await unmount(root);
+    vi.advanceTimersByTime(GRACE_MS * 2);
+    expect(driveSchedulerDirectly).not.toHaveBeenCalled();
+    expect(onDeadlock).not.toHaveBeenCalled();
+    expect(stashPendingReport).not.toHaveBeenCalled();
+  });
+
+  // 上面那条是假闸：schedule 的回调里还有一道 disposed 二次守卫，两枚定时器就算一枚都没清，
+  // 到点也什么都不做——把 dispose 里的 clearTimeout 整个删掉它照样绿（执行器实测并如实报了）。
+  // 漏清真正改变的是「定时器还挂不挂着」：一枚挂着的定时器把已卸载的整棵树连同闭包钉在内存里，
+  // 还会在 iOS 该让线程睡下去的时候把它叫醒——而这正是本主题要治的那个病。这一条钉那个。
+  it("卸载后一枚定时器都不许剩下——直驱、宽限、心跳三个 handle 都要被清掉", async () => {
+    const { root } = await renderDom(
+      createElement(SchedulerWatchdog, { onDeadlock: vi.fn(), timeoutMs: TIMEOUT_MS, kickGraceMs: GRACE_MS }),
+    );
+    resume?.();
+    vi.advanceTimersByTime(TIMEOUT_MS); // 补拍已发：直驱与宽限两枚定时器 + 心跳这一枚 interval 同时挂着
+    expect(vi.getTimerCount()).toBe(3);
+    await unmount(root);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it("late 记录也带诊断字段：未补拍、direct:none、delivered:null、rootPre:null", async () => {
+    snapshotReactRoot.mockReturnValue({ p: 0, s: 0, pg: 0, cb: false, cpc: false });
+    const { root } = await renderDom(
+      createElement(SchedulerWatchdog, { onDeadlock: vi.fn(), timeoutMs: TIMEOUT_MS, kickGraceMs: GRACE_MS }),
+    );
+    await act(async () => {
+      resume?.();
+    });
+    vi.setSystemTime(Date.now() + TIMEOUT_MS * 4);
+    vi.advanceTimersByTime(TIMEOUT_MS);
+    expect(lastProbeDetail()).toMatchObject({
+      outcome: "late",
+      delivered: null,
+      direct: "none",
+      rootPre: null,
+      rootPost: { p: 0, s: 0, pg: 0, cb: false, cpc: false },
+    });
     await unmount(root);
   });
 });

@@ -1,15 +1,28 @@
 import { startTransition, useEffect, useRef, useState } from "react";
 import { type ResumeSource, useAppResumeRefresh } from "../hooks/useAppResumeRefresh.ts";
+import { CURRENT_BUILD_ID } from "../lib/frontendUpdate.ts";
+import { snapshotInFlightLazy } from "../lib/recovery/lazyRegistry.ts";
 import { type Heartbeat, startHeartbeat } from "../lib/recovery/mainThreadHeartbeat.ts";
 import { stashPendingReport } from "../lib/recovery/pendingReports.ts";
+import { type ReactRootSnapshot, snapshotReactRoot } from "../lib/recovery/reactRootProbe.ts";
 import { markReload } from "../lib/recovery/reloadAttribution.ts";
+import { newReportId } from "../lib/recovery/reportId.ts";
 import {
+  type DirectDrive,
   type SchedulerProbeOutcome,
   buildSchedulerProbeReport,
   bumpProbeCount,
 } from "../lib/recovery/schedulerProbeReport.ts";
-import { probeStorage } from "../lib/recovery/storageProbe.ts";
-import { hasSchedulerPort, kickScheduler } from "../lib/schedulerHostGuard.ts";
+import { isStorageOpen, probeStorage } from "../lib/recovery/storageProbe.ts";
+import { timeStorageProbe } from "../lib/recovery/storageTiming.ts";
+import {
+  deliveredSince,
+  driveSchedulerDirectly,
+  hasSchedulerPort,
+  kickScheduler,
+  pendingMessageMs,
+  schedulerDeliveryState,
+} from "../lib/schedulerHostGuard.ts";
 
 /**
  * 探针从发出到判定死锁的等待窗口。
@@ -25,6 +38,12 @@ export const SCHEDULER_PROBE_TIMEOUT_MS = 5000;
  * 所以这个窗口只需覆盖「一次提交」的量级，不必再等一个探针窗口。
  */
 export const SCHEDULER_KICK_GRACE_MS = 1000;
+
+/**
+ * 补拍后等多久看信送没送到；没送到就绕过信道直驱（ios-instant-open 阶段1 design §2.6）。
+ * 必须小于宽限：直驱与判定都在原 1 秒宽限之内完成，不延长用户可见的等待。
+ */
+export const SCHEDULER_DIRECT_DRIVE_AFTER_MS = 250;
 
 /** 探针落地了、但定时器迟到 ≥ 这么多个窗口，就记一条 late：线程或 App 被冻过，用户照样在等。 */
 export const SCHEDULER_LATE_FACTOR = 2;
@@ -46,7 +65,10 @@ interface SchedulerWatchdogProps {
   kickGraceMs?: number;
 }
 
-/** 一枚挂着的探针及其现场。同一拍里的多条恢复事件共用一枚（expected 相同）。 */
+/**
+ * 一枚挂着的探针及其现场。同一拍里的多条恢复事件共用一枚（expected 相同）。
+ * 心跳与全部定时器由 `dispose()` 一处回收（前身残留账 Q1：加第二枚旁证后三处手调 stop 必漏）。
+ */
 interface ArmedProbe {
   expected: number;
   /** 首次发出的 Date.now()。再来的恢复事件不刷新它——waitedMs 要量的是用户真实等了多久。 */
@@ -56,25 +78,72 @@ interface ArmedProbe {
   probes: number;
   heartbeat: Heartbeat;
   storageMs: number | null;
+  storageErr: string | null;
+  disposed: boolean;
+  schedule(task: () => void, ms: number): void;
+  dispose(): void;
+}
+
+/** 一条 scheduler_probe 里由判定分支决定的字段。全部必填：漏传时 TS 当场报错（前身残留账 Q1）。 */
+interface ProbeVerdict {
+  outcome: SchedulerProbeOutcome;
+  hadPort: boolean;
+  kicked: boolean;
+  recovered: boolean;
+  visible: string;
+  waitedMs: number;
+  paired: boolean;
+  delivered: boolean | null;
+  pendingMsgMs: number | null;
+  direct: DirectDrive;
+  rootPre: ReactRootSnapshot | null;
+  rootPost: ReactRootSnapshot | null;
+}
+
+function armProbe(expected: number, trigger: ResumeSource | null): ArmedProbe {
+  const timers = new Set<ReturnType<typeof setTimeout>>();
+  const probe: ArmedProbe = {
+    expected,
+    armedAt: Date.now(),
+    resumes: 1,
+    trigger,
+    probes: safeBumpProbeCount(),
+    heartbeat: startHeartbeat(SCHEDULER_HEARTBEAT_MS),
+    storageMs: null,
+    storageErr: null,
+    disposed: false,
+    schedule(task, ms) {
+      if (probe.disposed) return;
+      const timer = setTimeout(() => {
+        timers.delete(timer);
+        if (!probe.disposed) task();
+      }, ms);
+      timers.add(timer);
+    },
+    dispose() {
+      if (probe.disposed) return;
+      probe.disposed = true;
+      for (const timer of timers) clearTimeout(timer);
+      timers.clear();
+      probe.heartbeat.stop();
+    },
+  };
+  return probe;
 }
 
 /**
- * React 调度器死锁看门狗：每次回到前台发一枚 transition 探针，超时没落地就先补一拍、再不行才重载。
+ * React 调度器死锁看门狗：每次回到前台发一枚 transition 探针，超时没落地就先补一拍、补拍没送到再直驱、
+ * 仍不行才重载。
  *
- * iOS 的 WKWebView 在 App 挂起时会丢掉调度器那条 MessageChannel 的在途消息，
- * 导致 `scheduler` 内部的「消息循环已在跑」开关永久卡住，**所有走调度器的更新一起停摆**
- * （路由导航、liveQuery 回流），而点击里直接改 state 照常生效——现场就是
- * 「弹层点得开、底栏 tab 点不动、数据写进去了但画面不刷」，且没有自愈路径。
- * 成因与补拍的原理见 `lib/schedulerHostGuard.ts`。
+ * iOS 的 WKWebView 回前台后，走调度器的更新可能全部停摆（路由导航、liveQuery 回流），而点击里直接改 state
+ * 照常生效——现场就是「弹层点得开、底栏 tab 点不动、数据写进去了但画面不刷」。2026-09 生产数据证实补拍
+ * 发出去了却从未救活（ios-instant-open metaspec §0.2），病根在「信没送到」与「挂起的 transition 毒化整批」
+ * 之间，本组件在超时时把两者分辨开要的现场全部记下（design §2）。
  *
  * **探针必须走 transition**：同步 setState 走微任务通道，那条根本没坏，探不出问题。
  *
- * **补拍优先于重载**：补一拍就是把丢掉的那条消息重发一遍，成功的话用户毫无感知；
- * 重载则丢掉滚动位置与未提交输入，只在补拍没能救回来、且页面此刻可见时才用。
- *
- * **每次超时都记现场**（`scheduler_probe`，搭同步上报的车）：端口在不在、补没补出去、补完落没落地、
- * 页面可不可见、真实等了多久、主线程心跳迟到多少、IndexedDB 回没回来——这几个字段合起来才分得清
- * 「调度器死了」「补拍失灵」「看门狗误判」「线程 / 存储被冻」四族根因，见 design §2.1 / §0.4。
+ * **补拍 / 直驱优先于重载**：成功的话用户毫无感知；重载则丢掉滚动位置与未提交输入，
+ * 只在都没救回来、且页面此刻可见时才用。
  *
  * 不按平台 gate：同一套 WebKit 在 iOS Safari 的 PWA 里同样会中招（那里
  * `Capacitor.getPlatform()` 返回 web），而正常平台永远不会触发，成本是每次恢复一枚定时器。
@@ -95,16 +164,13 @@ export function SchedulerWatchdog({
 
   /** 重载只做一次：reload 已在路上时再触发一次没有意义。held / recovered / late 都不置位。 */
   const firedRef = useRef(false);
-  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const armedRef = useRef<ArmedProbe | null>(null);
   const onDeadlockRef = useRef(onDeadlock);
   onDeadlockRef.current = onDeadlock;
 
   useEffect(
     () => () => {
-      if (timerRef.current !== null) clearTimeout(timerRef.current);
-      timerRef.current = null;
-      armedRef.current?.heartbeat.stop();
+      armedRef.current?.dispose();
       armedRef.current = null;
     },
     [],
@@ -116,60 +182,49 @@ export function SchedulerWatchdog({
 
     // 探针挂着期间再来的恢复事件（同一拍的 visibilitychange / focus / appStateChange，或几秒后
     // 补来的一条）只记条数与最后来源，**不重发探针、不重置定时器**：重置会把超时与宽限一并往后推，
-    // 真死锁时自救被无限推迟，而 waitedMs 也量不出用户真实等了多久（终审 d2b-② / L2-F4）。
+    // 真死锁时自救被无限推迟，而 waitedMs 也量不出用户真实等了多久（前身终审 d2b-② / L2-F4）。
     const existing = armedRef.current;
     if (existing && existing.expected === expected) {
       existing.resumes += 1;
       existing.trigger = source ?? null;
       return;
     }
-    existing?.heartbeat.stop();
+    existing?.dispose();
 
     startTransition(() => setProbe(expected));
-    const armed: ArmedProbe = {
-      expected,
-      armedAt: Date.now(),
-      resumes: 1,
-      trigger: source ?? null,
-      probes: safeBumpProbeCount(),
-      heartbeat: startHeartbeat(SCHEDULER_HEARTBEAT_MS),
-      storageMs: null,
-    };
+    const armed = armProbe(expected, source ?? null);
     armedRef.current = armed;
-    // 与 transition 探针同时打一次 IndexedDB 往返：判定时还没回来 = 存储层被冻（null）；
-    // 抛错（库没开 / 被 iOS 关掉）记 -1——两者在数据里必须分得开，否则存储报错会被读成存储被冻。
-    void probeStorage().then(
-      () => {
-        if (armedRef.current === armed) armed.storageMs = Date.now() - armed.armedAt;
-      },
-      () => {
-        if (armedRef.current === armed) armed.storageMs = -1;
-      },
-    );
+
+    // 与 transition 探针同时打一次 IndexedDB 往返：判定时还没回来 = 存储层被冻（storageMs null）；
+    // 抛错记 -1 并留错误类型名——两者在数据里必须分得开，否则存储报错会被读成存储被冻。
+    void timeStorageProbe(probeStorage).then((result) => {
+      if (armed.disposed) return;
+      armed.storageMs = result.errorName === null ? result.ms : -1;
+      armed.storageErr = result.errorName;
+    });
 
     const landed = () => landedRef.current >= expected;
     const disarm = () => {
-      armed.heartbeat.stop();
+      armed.dispose();
       if (armedRef.current === armed) armedRef.current = null;
     };
-    const report = (fields: {
-      outcome: SchedulerProbeOutcome;
-      hadPort: boolean;
-      kicked: boolean;
-      recovered: boolean;
-      visible: string;
-      waitedMs: number;
-    }) => {
+    const report = (verdict: ProbeVerdict) => {
       try {
         stashPendingReport(
           buildSchedulerProbeReport({
-            ...fields,
+            ...verdict,
             probes: armed.probes,
             maxGapMs: armed.heartbeat.maxGapMs(),
             sinceBootMs: Math.round(performance.now()),
             storageMs: armed.storageMs,
             resumes: armed.resumes,
             trigger: armed.trigger,
+            id: newReportId(),
+            sessionId: null,
+            build: CURRENT_BUILD_ID,
+            lazy: snapshotInFlightLazy(),
+            storageErr: armed.storageErr,
+            dbOpen: isStorageOpen(),
           }),
         );
       } catch {
@@ -177,17 +232,16 @@ export function SchedulerWatchdog({
       }
     };
 
-    if (timerRef.current !== null) clearTimeout(timerRef.current);
-    timerRef.current = setTimeout(() => {
-      timerRef.current = null;
+    armed.schedule(() => {
       if (firedRef.current) return;
       // 夹到 0：系统时钟回拨时差值为负，负数进了埋点会污染分位数。
       const waitedMs = Math.max(0, Date.now() - armed.armedAt);
 
       if (landed()) {
         // 落地了。定时器若迟到 ≥ 2 个窗口，说明中间线程被冻过——这是重载之外、用户照样在等的那种卡，
-        // 不记就永远看不见。准点落地什么都不记（拍板④）。
+        // 不记就永远看不见。准点落地什么都不记（前身拍板④）。
         if (waitedMs >= timeoutMs * SCHEDULER_LATE_FACTOR) {
+          const state = schedulerDeliveryState();
           report({
             outcome: "late",
             hadPort: hasSchedulerPort(),
@@ -195,25 +249,60 @@ export function SchedulerWatchdog({
             recovered: true,
             visible: document.visibilityState,
             waitedMs,
+            paired: state.paired,
+            delivered: null,
+            pendingMsgMs: pendingMessageMs(state, performance.now()),
+            direct: "none",
+            rootPre: null,
+            rootPost: snapshotReactRoot(),
           });
         }
         disarm();
         return;
       }
 
-      // 先读端口，再补一拍。不可见也照补（拍板②）：补拍无害；补不出去也不早退——没发出去不代表调度器一定死了。
+      // 先读端口、送达状态与根快照，再补一拍。不可见也照补（前身拍板②）：补拍无害；补不出去也不早退。
       const hadPort = hasSchedulerPort();
+      const before = schedulerDeliveryState();
+      const pendingMsgMs = pendingMessageMs(before, performance.now());
+      const rootPre = snapshotReactRoot();
+      const kickAt = performance.now();
       const kicked = kickScheduler();
+      let direct: DirectDrive = "none";
 
-      timerRef.current = setTimeout(() => {
-        timerRef.current = null;
+      armed.schedule(() => {
+        if (firedRef.current) return;
+        const state = schedulerDeliveryState();
+        if (!state.paired) {
+          direct = "unavailable";
+          return;
+        }
+        if (deliveredSince(state, kickAt)) return; // 信送到了，不直驱：救没救活要能归到信道头上
+        direct = driveSchedulerDirectly() ? "ran" : "unavailable";
+      }, SCHEDULER_DIRECT_DRIVE_AFTER_MS);
+
+      armed.schedule(() => {
         if (firedRef.current) return;
         const recovered = landed();
         // visible 取宽限结束、真要决定重不重载的这一刻——在超时那刻采样再拿到这里用，
-        // 中间那一秒用户切走了就会在后台重载（终审复核 CONFIRMED）。waitedMs 仍取超时那刻。
+        // 中间那一秒用户切走了就会在后台重载（前身终审复核 CONFIRMED）。waitedMs 仍取超时那刻。
         const visible = document.visibilityState;
+        const after = schedulerDeliveryState();
         const outcome: SchedulerProbeOutcome = recovered ? "recovered" : visible === "visible" ? "reload" : "held";
-        report({ outcome, hadPort, kicked, recovered, visible, waitedMs });
+        report({
+          outcome,
+          hadPort,
+          kicked,
+          recovered,
+          visible,
+          waitedMs,
+          paired: after.paired,
+          delivered: after.paired ? deliveredSince(after, kickAt) : null,
+          pendingMsgMs,
+          direct,
+          rootPre,
+          rootPost: snapshotReactRoot(),
+        });
         disarm();
         if (outcome !== "reload") return;
 
