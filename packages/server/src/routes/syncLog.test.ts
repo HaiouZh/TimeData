@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import type Database from "better-sqlite3";
 import type { Hono } from "hono";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -150,5 +151,42 @@ describe("DELETE /api/admin/sync-logs", () => {
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ cleared: true });
     expect(db.prepare("SELECT COUNT(*) AS count FROM sync_logs").get()).toEqual({ count: 0 });
+  });
+});
+
+
+describe("上报上限：客户端常量与本路由的 schema 必须同源", () => {
+  // 客户端把 detail 超长的现场直接拒收、把单批切到 100 条，两个数字都是照着本文件的 schema 写死的，
+  // 而此前只有注释相认——漂了就是整批 400，open_session / scheduler_probe 会静默全丢，而报告全空
+  // 会被读成「没有卡死」。这一条读客户端源码取数、再拿真实请求打本路由，两边任一改动都会红（终审 A4）。
+  const clientSource = readFileSync(
+    new URL("../../../client/src/lib/recovery/pendingReports.ts", import.meta.url),
+    "utf8",
+  );
+  const constOf = (name: string): number => {
+    const found = new RegExp(`export const ${name} = (\\d+);`).exec(clientSource);
+    if (!found) throw new Error(`客户端 pendingReports.ts 里找不到 ${name}`);
+    return Number(found[1]);
+  };
+  const detailMax = constOf("SYNC_LOG_DETAIL_MAX");
+  const batchMax = constOf("SYNC_LOG_BATCH_MAX");
+
+  const post = (body: unknown) =>
+    syncLogRequest("", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+  const entry = (detail: string) => ({ action: "scheduler_probe", detail });
+
+  it(`detail 恰好 SYNC_LOG_DETAIL_MAX 收得下，多一个字符就 400`, async () => {
+    expect((await post(entry("x".repeat(detailMax)))).status).toBe(201);
+    expect((await post(entry("x".repeat(detailMax + 1)))).status).toBe(400);
+  });
+
+  it(`单批恰好 SYNC_LOG_BATCH_MAX 条收得下，多一条就 400`, async () => {
+    const batch = (n: number) => Array.from({ length: n }, () => entry("x"));
+    expect((await post(batch(batchMax))).status).toBe(201);
+    expect((await post(batch(batchMax + 1))).status).toBe(400);
   });
 });

@@ -102,6 +102,9 @@ test("classifyStall：design §2.8 的判定顺序", () => {
   // 逃逸变异：乙不查 transition 掩码 → 同步 lane 挂着也被判成乙
   assert.equal(classifyStall({ delivered: true, rootPost: { p: 2, s: 2, pg: 0, cb: false, cpc: false }, lazy: [] }), "未定");
   assert.equal(classifyStall({ delivered: true, rootPost: { p: 512, s: 0, pg: 0, cb: true, cpc: false }, lazy: [] }), "未定");
+  // cb 的镜像：有提交在等资源（cpc 为真）也不算乙——那是资源等待，不是 transition 挂起。
+  // 少了这一条，`&& !root.cpc` 删掉全部用例仍绿（终审 L2-F2 实测逃逸）。
+  assert.equal(classifyStall({ delivered: true, rootPost: { p: 512, s: 0, pg: 0, cb: false, cpc: true }, lazy: [] }), "未定");
   assert.equal(classifyStall({ delivered: null }), "未定");
 });
 

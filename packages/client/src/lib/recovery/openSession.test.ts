@@ -68,6 +68,33 @@ function syncEntry(at: string, overrides: Partial<SyncTimingEntry> = {}): SyncTi
 }
 
 describe("打开会话收集器", () => {
+  // 冷启动的起点是页面导航那一刻（startedAt: 0），而收集器要到 React 挂载才被调用——两者之间
+  // 差着整个启动耗时。墙钟起点必须把这段扣掉，否则导航之后、挂载之前落账的那一轮同步会被当成
+  // 「转后台前发起的陈旧轮」丢弃，冷启动会话的 sync 永远为 null、三件事齐不了，只能拖到 20 s 上限
+  // ——报告 M3 的冷启动行会显示「> 20 s」，读的人会以为冷启动根本等不到新数据（终审 L2-F1）。
+  it("冷启动的墙钟起点要扣掉已过去的时间：导航之后、挂载之前落账的同步轮算数", () => {
+    const h = harness();
+    // now() 此刻是 10_000，startedAt 取 0 → 已过去 10 秒；墙钟起点应回推到 10 秒前
+    h.tracker.begin({ kind: "cold", startedAt: 0, cause: "cold", hiddenMs: null, trigger: null });
+    // 这一轮同步在「5 秒前」落账——晚于导航、早于挂载，属于这次打开
+    h.tracker.syncRecorded(syncEntry(h.wallIso(-5_000)));
+    h.tracker.probeLanded(10_500);
+    h.tracker.storageSettled(12, null);
+    expect(h.records()).toHaveLength(1);
+    expect(h.records()[0]).toMatchObject({ kind: "cold", endedBy: "complete" });
+    expect(h.records()[0].syncMs).toBe(10_000);
+  });
+
+  it("真正陈旧的那一轮仍然要丢：落账时刻早于墙钟起点就不算", () => {
+    const h = harness();
+    h.tracker.begin({ kind: "cold", startedAt: 0, cause: "cold", hiddenMs: null, trigger: null });
+    // 「15 秒前」落账——早于导航时刻（10 秒前），是上一次打开留下的
+    h.tracker.syncRecorded(syncEntry(h.wallIso(-15_000)));
+    h.tracker.probeLanded(10_500);
+    h.tracker.storageSettled(12, null);
+    expect(h.records()).toHaveLength(0); // 三件事没齐，还挂着
+  });
+
   it("探针落地 + 存储回来 + 同步落账三者齐 → complete，恰好一条", () => {
     const h = harness({ takeDropped: () => 2, netTiming: () => ({ connectMs: 240, ttfbMs: 350, xferMs: 20, reused: false }) });
     const id = h.tracker.begin({ kind: "resume", startedAt: 10_000, cause: null, hiddenMs: 3_600_000, trigger: "visibilitychange" });

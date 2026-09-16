@@ -5,6 +5,8 @@ covers:
   - packages/client/src/components/SyncTimingsPanel.tsx
   - packages/client/src/components/ArbitrationBanner.tsx
   - packages/client/src/sync/resourceTimingCache.ts
+  - packages/client/src/lib/recovery/pendingReports.ts
+  - scripts/ios-report.mjs
 contracts:
   - packages/client/src/components/SyncTimingsPanel.tsx
   - packages/client/src/components/ArbitrationBanner.tsx
@@ -71,6 +73,8 @@ last-reviewed: 2026-09-16
 - **被挤出和被拒收的都计在 `timedata_dropped_reports`**，随下一条 `open_session` 的 `dropped` 字段上报。没有这个数，「没有坏数据」和「坏数据被丢了」在报告里长得一模一样。
 
 `open_session` 一条记一次打开：`kind`（cold / resume）、`ttiMs`（打开到能点）、`syncMs`（新数据到达）、`endedBy`（complete / cap / hidden / reload）、`net`（建连 / 首字节 / 传输，来自 `sync/resourceTimingCache.ts`）、`storageMs` / `storageErr`、`dropped`。资源计时走 PerformanceObserver 缓存而不是 `getEntriesByType`——后者的缓冲有 250 条上限，满了新条目不入。
+
+**两处接线断了，指标会静默变空而不是报错**，排查时先确认它们还在：`main.tsx` 里的 `installResourceTimingCache()` 一旦没装，`net` 全为 null，报告 M3 的建连 / 首字节列整列是「—」，看起来像服务端没发 `Timing-Allow-Origin`；`SchedulerWatchdog` 里订阅 `phaseTimings` 的 `onSyncTimingRecorded` 一旦被当成死代码删掉，`syncMs` 恒为 null、三件事永远齐不了，M3 会整列变成「> 20 s」，看起来像网络全挂。两者都不会抛错、不会有测试变红。
 
 固定口径的报告由 `node scripts/ios-report.mjs` 出（用法见 [development/commands-and-testing](../development/commands-and-testing.md)），它按构建号 × 设备分组、剔重、剔后台噪声，再把端上分段与服务端 `api_request_logs` 摆在一起对表。看门狗的探针累计计数存 `timedata_scheduler_probes`，跨重载存活，两条 `scheduler_probe` 记录的 `probes` 之差等于期间探针总次数——这是队列上限会挤掉早期记录时仍然可信的唯一分母。字段含义与判定机制见 [ios/scheduler-resilience](../ios/scheduler-resilience.md)。
 

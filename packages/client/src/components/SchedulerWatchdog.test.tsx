@@ -22,7 +22,9 @@ const hasSchedulerPort = vi.hoisted(() => vi.fn(() => true));
 const schedulerDeliveryState = vi.hoisted(() =>
   vi.fn(() => ({ paired: true, lastPostedAt: 0 as number | null, lastDeliveredAt: null as number | null })),
 );
-const driveSchedulerDirectly = vi.hoisted(() => vi.fn(() => true));
+const driveSchedulerDirectly = vi.hoisted(() =>
+  vi.fn((_schedule?: (task: () => void) => void): boolean => true),
+);
 vi.mock("../lib/schedulerHostGuard.ts", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../lib/schedulerHostGuard.ts")>();
   return { ...actual, kickScheduler, hasSchedulerPort, schedulerDeliveryState, driveSchedulerDirectly };
@@ -92,9 +94,8 @@ vi.mock("../sync/phaseTimings.ts", () => ({
 
 vi.mock("../lib/recovery/probe.ts", () => ({ readColdStartCause: () => "cold" }));
 
-const { SchedulerWatchdog, SCHEDULER_DIRECT_DRIVE_AFTER_MS, SCHEDULER_KICK_GRACE_MS } = await import(
-  "./SchedulerWatchdog.tsx"
-);
+const { SchedulerWatchdog, SCHEDULER_DIRECT_DRIVE_AFTER_MS, SCHEDULER_KICK_GRACE_MS, SCHEDULER_RELOAD_ABORT_MS } =
+  await import("./SchedulerWatchdog.tsx");
 
 const TIMEOUT_MS = 5000;
 const GRACE_MS = 1000;
@@ -669,6 +670,67 @@ describe("SchedulerWatchdog", () => {
     expect(vi.getTimerCount()).toBe(3);
     await unmount(root);
     expect(vi.getTimerCount()).toBe(0);
+  });
+
+  // ↓↓↓ 终审修复波：三条 verifier CONFIRMED 的缺陷，各自一条闸 ↓↓↓
+
+  it("A1 直驱同步调——不再多排一跳宏任务，定时器被冻住时判定抢不到它前面", async () => {
+    const { root } = await renderDom(
+      createElement(SchedulerWatchdog, { onDeadlock: vi.fn(), timeoutMs: TIMEOUT_MS, kickGraceMs: GRACE_MS }),
+    );
+    resume?.();
+    vi.advanceTimersByTime(TIMEOUT_MS + SCHEDULER_DIRECT_DRIVE_AFTER_MS);
+    expect(driveSchedulerDirectly).toHaveBeenCalledTimes(1);
+    const schedule = driveSchedulerDirectly.mock.calls[0][0];
+    expect(typeof schedule).toBe("function");
+    // 传进去的 schedule 必须当场把任务跑完。默认的 setTimeout(task, 0) 会让它落到下一跳宏任务，
+    // 而两枚定时器都已到期时浏览器按到期时间出队，宽限判定就跑在那一跳之前。
+    const pendingBefore = vi.getTimerCount();
+    const task = vi.fn();
+    schedule?.(task);
+    expect(task).toHaveBeenCalledTimes(1);
+    expect(vi.getTimerCount()).toBe(pendingBefore); // 没有多排一枚定时器
+    await unmount(root);
+  });
+
+  it("A2 探针挂着期间切走再回来：合并早返要把会话 id 刷成新会话，结论不能丢给已收尾的旧会话", async () => {
+    openSessions.activeId.mockReturnValue("S1");
+    const { root } = await renderDom(
+      createElement(SchedulerWatchdog, { onDeadlock: vi.fn(), timeoutMs: TIMEOUT_MS, kickGraceMs: GRACE_MS }),
+    );
+    resume?.(); // 探针发出，armed.sessionId 快照成 S1
+    vi.advanceTimersByTime(1000);
+    hidden?.(); // 用户切走，S1 以 hidden 收尾
+    openSessions.activeId.mockReturnValue("S2"); // 再回来时已经是新会话
+    resume?.(); // 探针没落地、expected 没变 → 走合并早返，不重建 armed
+    vi.advanceTimersByTime(TIMEOUT_MS - 1000 + GRACE_MS);
+    // 卡死结论要归给当前会话 S2；不刷 sessionId 的话 sessionStillActive("S1") 为假，这一条整个被跳过
+    expect(openSessions.stallDecided).toHaveBeenCalledWith("reload");
+    await unmount(root);
+  });
+
+  it("A3 重载没真的发生（beforeunload 被取消）→ 到点把自救能力还回来，不永久哑火", async () => {
+    const onDeadlock = vi.fn(); // 注入点什么都不做 = 导航被用户取消、页面还活着
+    const { root } = await renderDom(
+      createElement(SchedulerWatchdog, { onDeadlock, timeoutMs: TIMEOUT_MS, kickGraceMs: GRACE_MS }),
+    );
+    resume?.();
+    vi.advanceTimersByTime(TIMEOUT_MS + GRACE_MS);
+    expect(onDeadlock).toHaveBeenCalledTimes(1);
+
+    // 复位时刻之前：仍然只重载一次，再来的恢复事件被吞掉
+    vi.advanceTimersByTime(SCHEDULER_RELOAD_ABORT_MS - 1);
+    kickScheduler.mockClear();
+    resume?.();
+    vi.advanceTimersByTime(TIMEOUT_MS + GRACE_MS);
+    expect(kickScheduler).not.toHaveBeenCalled();
+
+    // 过了复位时刻：看门狗回来了，下一次卡死照样补拍
+    vi.advanceTimersByTime(1);
+    resume?.();
+    vi.advanceTimersByTime(TIMEOUT_MS);
+    expect(kickScheduler).toHaveBeenCalledTimes(1);
+    await unmount(root);
   });
 
   it("late 记录也带诊断字段：未补拍、direct:none、delivered:null、rootPre:null", async () => {

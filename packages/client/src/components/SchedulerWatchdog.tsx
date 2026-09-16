@@ -50,6 +50,16 @@ export const SCHEDULER_KICK_GRACE_MS = 1000;
  */
 export const SCHEDULER_DIRECT_DRIVE_AFTER_MS = 250;
 
+/**
+ * 重载发出去之后等这么久，页面还活着就把自救能力还回来。
+ *
+ * `location.reload()` 可能根本不发生——有未保存修改的页面挂着 `beforeunload`，用户在原生对话框上
+ * 点「取消」导航就中止了。而 `firedRef` 已经置位且没有任何复位路径，看门狗从此永久哑火：不再发探针、
+ * 不补拍、不直驱，连打开会话的记账都停，用户只能自己刷新（终审 A3，verifier CONFIRMED）。
+ * 真重载发生时这枚定时器随页面一起消失，所以它只在「重载没成」那条路上起作用。
+ */
+export const SCHEDULER_RELOAD_ABORT_MS = 10000;
+
 /** 探针落地了、但定时器迟到 ≥ 这么多个窗口，就记一条 late：线程或 App 被冻过，用户照样在等。 */
 export const SCHEDULER_LATE_FACTOR = 2;
 
@@ -173,6 +183,8 @@ export function SchedulerWatchdog({
   /** 重载只做一次：reload 已在路上时再触发一次没有意义。held / recovered / late 都不置位。 */
   const firedRef = useRef(false);
   const armedRef = useRef<ArmedProbe | null>(null);
+  /** 重载没真的发生时复位 firedRef 的那枚定时器。卸载要跟着清。 */
+  const reloadAbortRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const onDeadlockRef = useRef(onDeadlock);
   onDeadlockRef.current = onDeadlock;
   /** 冷启动探针：只量不救（design 拍板④）——不经 armProbe、没有任何定时器，慢启动不会被判卡死。 */
@@ -229,6 +241,8 @@ export function SchedulerWatchdog({
     () => () => {
       armedRef.current?.dispose();
       armedRef.current = null;
+      if (reloadAbortRef.current !== null) clearTimeout(reloadAbortRef.current);
+      reloadAbortRef.current = null;
     },
     [],
   );
@@ -245,6 +259,13 @@ export function SchedulerWatchdog({
     if (existing && existing.expected === expected) {
       existing.resumes += 1;
       existing.trigger = source ?? null;
+      // 会话 id 要跟着刷：探针挂着期间用户切走再回来时，旧会话已按 hidden 收尾、新会话已经开了
+      // （上面 noteResumeInSession 刚开的）。不刷的话探针落地、存储结果、卡死结论三样都会因为
+      // sessionStillActive(旧 id) 为假而全部丢掉，新会话三线落空只能拖到 20 s 上限（终审 A2）。
+      existing.sessionId = openSessions.activeId();
+      // 会话 id 要跟着刷：探针挂着期间用户切走再回来时，旧会话已按 hidden 收尾、新会话已经开了
+      // （上面 noteResumeInSession 刚开的）。不刷的话探针落地、存储结果、卡死结论三样都会因为
+      // sessionStillActive(旧 id) 为假而全部丢掉，新会话三线落空只能拖到 20 s 上限（终审 A2）。
       return;
     }
     existing?.dispose();
@@ -340,7 +361,14 @@ export function SchedulerWatchdog({
           return;
         }
         if (deliveredSince(state, kickAt)) return; // 信送到了，不直驱：救没救活要能归到信道头上
-        direct = driveSchedulerDirectly() ? "ran" : "unavailable";
+        // 同步驱，不用 driveSchedulerDirectly 默认的 setTimeout(task, 0)：那会让直驱比宽限判定多排一跳
+        // 宏任务，而定时器被整体冻住时（挂起恢复、主线程被长任务占住）两枚定时器都已到期、按到期时间
+        // 出队，判定就会跑在那一跳之前——本能无感救活的那次被判成 reload（终审 A1，verifier CONFIRMED）。
+        direct = driveSchedulerDirectly((task) => {
+          task();
+        })
+          ? "ran"
+          : "unavailable";
       }, SCHEDULER_DIRECT_DRIVE_AFTER_MS);
 
       armed.schedule(() => {
@@ -377,6 +405,10 @@ export function SchedulerWatchdog({
         firedRef.current = true;
         markReload("watchdog", Date.now());
         (onDeadlockRef.current ?? reloadPage)();
+        reloadAbortRef.current = setTimeout(() => {
+          reloadAbortRef.current = null;
+          firedRef.current = false;
+        }, SCHEDULER_RELOAD_ABORT_MS);
       }, kickGraceMs);
     }, timeoutMs);
   });

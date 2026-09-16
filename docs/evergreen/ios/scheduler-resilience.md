@@ -64,7 +64,7 @@ React 按 lane 决定更新走哪条通道，两条通道在死锁后的存活�
 - **只认 `postMessage(null)` 这一形态**。不过滤就会把页面里别的 MessageChannel 使用方（workbox 等）记进来，补拍补到无关端口上——调度器依旧卡死，而我们以为已经救过了。这个前提由测试直接读 `scheduler` 产物钉住，React 升级改了调用形态会红。
 - 挂钩不改变任何投递行为，开销是每次 `postMessage` 多一次比较和一次赋值。
 
-> **补拍只治「消息没送回来」这一支。** 若现场判定是「送到了、React 自己挂着等一个永不 settle 的 transition」，补多少拍都没用——`markRootUpdated` 会在下一次非 Idle 更新时清掉 `suspendedLanes`，一个挂死的 transition 于是把后续同批 lane 一起拖住。那一支的修法不在本节，见 `docs_local` 的 ios-instant-open 主题阶段2；届时本节一并重写。
+> **补拍只治「消息没送回来」这一支。** 若现场判定是「送到了、React 自己挂着等一个永不 settle 的 transition」，补多少拍都没用——`markRootUpdated` 会在下一次非 Idle 更新时清掉 `suspendedLanes`，一个挂死的 transition 于是把后续同批 lane 一起拖住。分辨两支靠的是补拍后的送达账与根快照，见 §2.6；本节只写「怎么分辨」，不写「怎么治乙」。
 
 ## 4. 什么时候救：回前台探针
 
@@ -121,18 +121,31 @@ React 按 lane 决定更新走哪条通道，两条通道在死锁后的存活�
 - **同步耗时只认会话开始之后的那条**：`sync/resourceTimingCache.ts` 缓存的是 PerformanceObserver 收到的条目，会话开始前的陈旧记录按开始墙钟时刻过滤掉，只取第一条。直接读 `getEntriesByType` 不行——那个缓冲有 250 条上限，满了之后新条目根本不入。
 - 网络细分（建连 / 首字节 / 传输）要服务端放行 `Timing-Allow-Origin` 才非零，见 [deployment/configuration](../deployment/configuration.md)。
 
+## 5.6 现场太长时丢什么：定序降级
+
+服务端对单条 `detail` 的上限是 1000 字符，超了整批 400；客户端的上报队列也会把超长条目直接拒收。
+所以两类现场都带一套**固定顺序**的降级，丢完一档仍超就丢下一档，丢过就打 `trunc: true`：
+
+- `scheduler_probe`：先丢在途懒加载列表（`lazy`）、再丢补拍前的根快照（`rootPre`）、最后截短存储错误名（`storageErr`）。
+  这个顺序按「对甲乙判定的贡献度」从低到高排——前两样丢了仍判得出甲乙，最后一样只影响丙那个交叉维度。
+- `open_session`：先丢网络细分（`net`）、再清同步分段（`sync.phases`）。两步之后仍超就交给上报队列拒收。
+
+**读数据时必须先看 `trunc`**：`trunc: true` 且 `lazy: []` 的意思是「这一条被降级过、懒加载列表已被丢掉」，
+**不是**「当时没有懒加载在途」；同理 `net: null` 可能是被降级掉的，不一定是服务端没发 `Timing-Allow-Origin`。
+把两者读混就会把「乙·懒加载」误判成「乙·未知挂起源」，或者跑去查线上反代。
+
 ## 6. 模块速查
 
 | 入口 | 职责 |
 |---|---|
-| `lib/schedulerHostGuard.ts` | `MessagePort.prototype.postMessage` 挂钩记端口（`installSchedulerPortTap`）、补发一拍（`kickScheduler`） |
+| `lib/schedulerHostGuard.ts` | `MessagePort.prototype.postMessage` 挂钩记端口（`installSchedulerPortTap`）、补发一拍（`kickScheduler`）；配对 port2→port1 后记送达时刻（`schedulerDeliveryState` / `deliveredSince` / `pendingMessageMs`），以及绕过信道直接调处理函数（`driveSchedulerDirectly`） |
 | `components/SchedulerWatchdog.tsx` | 回前台发 transition 探针，超时先补拍、再不行才重载 |
 | `lib/recovery/reloadAttribution.ts` | 重载归因：主动重载留墓碑，冷启动时区分死锁自救 / 版本更新 / 渲染进程被回收 |
-| `lib/recovery/schedulerProbeReport.ts` | `scheduler_probe` 记录构造、探针累计计数（跨重载） |
+| `lib/recovery/schedulerProbeReport.ts` | `scheduler_probe` 记录构造、超长时的定序降级、探针累计计数（跨重载） |
 | `lib/recovery/mainThreadHeartbeat.ts` | 探针挂着期间的主线程心跳，量定时器最大迟到 |
 | `lib/recovery/storageProbe.ts` | 与探针同时打的一次 IndexedDB 最小往返 |
 | `hooks/useAppResumeRefresh.ts` | 恢复事件订阅（visibilitychange / focus / pageshow / appStateChange），把来源透传给回调 |
-| `lib/recovery/reactRootProbe.ts` | 读 FiberRoot 的 lane 位与在排回调，`TRANSITION_LANES_MASK` 的唯一定义处 |
+| `lib/recovery/reactRootProbe.ts` | 读 FiberRoot 的 lane 位与在排回调；`TRANSITION_LANES_MASK` 在这里与 `scripts/ios-report.mjs` 各有一份，报告脚本的测试读本文件源码比对防漂 |
 | `lib/recovery/lazyRegistry.ts` | 在途懒加载 chunk 登记，给「挂起的 transition」找源头 |
 | `lib/recovery/storageTiming.ts` | 本地库探针计时与错误名提取（纯函数，不 import db） |
 | `lib/recovery/openSession.ts` / `openSessionRuntime.ts` | 一次打开收成一条 `open_session`；单例在 runtime |
