@@ -1,3 +1,4 @@
+import type { MiddlewareHandler } from "hono";
 import type { cors } from "hono/cors";
 
 // 跨域预检放行的请求头白名单。客户端 apiFetch 设置的任何自定义头都必须列在这里，
@@ -47,24 +48,40 @@ export function allowedOriginsFromEnv(env: Record<string, string | undefined>): 
     .filter((origin) => origin.length > 0);
 }
 
+/**
+ * 一个 origin 放不放行：放行返回它本身，否则 null。`corsOptions` 的 origin 回调与 `timingAllowOrigin` 共用这一处，
+ * 不各抄一份——两者分头演化会让「CORS 放行了、计时却没放行」或反过来。
+ */
+export function resolveAllowedOrigin(origin: string | null | undefined, allowedOrigins: string[]): string | null {
+  if (!origin) return null;
+  if (allowedOrigins.includes("*")) return origin;
+  if (SHELL_ORIGINS.includes(origin)) return origin;
+  return allowedOrigins.includes(origin) ? origin : null;
+}
+
 /** /api/* 的 CORS 配置。提炼成函数是为了让预检行为可被测试直接驱动。 */
 export function corsOptions(allowedOrigins: string[]): Parameters<typeof cors>[0] {
   return {
-    origin: (origin) => {
-      if (!origin) {
-        return null;
-      }
-      if (allowedOrigins.includes("*")) {
-        return origin;
-      }
-      if (SHELL_ORIGINS.includes(origin)) {
-        return origin;
-      }
-      return allowedOrigins.includes(origin) ? origin : null;
-    },
+    origin: (origin) => resolveAllowedOrigin(origin, allowedOrigins),
     allowHeaders: [...ALLOWED_REQUEST_HEADERS],
     allowMethods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     credentials: true,
     maxAge: CORS_PREFLIGHT_MAX_AGE_SECONDS,
+  };
+}
+
+/**
+ * 给放行 origin 的实际响应加 `Timing-Allow-Origin`（ios-instant-open 阶段1 design §5）。
+ *
+ * 跨域请求的 Resource Timing 细分（连接 / 首字节 / 传输）默认被浏览器置 0：服务端不明确放行，
+ * 手机端就量不出一次同步慢在哪一段——2026-09 生产数据里 status 服务端处理 9 ms、端上 1.8 s，差额全在网络，
+ * 但分不清是建连还是往返。只暴露计时、不暴露内容；放行范围与 CORS 同一判定，回显具体 origin 不用 `*`。
+ * 预检由 cors 中间件直接应答、不走到这里。
+ */
+export function timingAllowOrigin(allowedOrigins: string[]): MiddlewareHandler {
+  return async (c, next) => {
+    await next();
+    const origin = resolveAllowedOrigin(c.req.header("Origin"), allowedOrigins);
+    if (origin) c.res.headers.set("Timing-Allow-Origin", origin);
   };
 }

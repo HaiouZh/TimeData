@@ -8,7 +8,7 @@ import { initializeDatabase } from "./db/schema.js";
 import { runUtcResetIfNeeded } from "./db/utcReset.js";
 import { authMiddleware, scopedAuthMiddleware } from "./middleware/auth.js";
 import { bodyLimit } from "./middleware/bodyLimit.js";
-import { allowedOriginsFromEnv, corsOptions } from "./middleware/cors.js";
+import { allowedOriginsFromEnv, corsOptions, timingAllowOrigin } from "./middleware/cors.js";
 import { rateLimit } from "./middleware/rateLimit.js";
 import { requestAudit } from "./middleware/requestAudit.js";
 import { requireTotp } from "./middleware/totp.js";
@@ -67,6 +67,7 @@ app.use(
 );
 
 app.use("/api/*", cors(corsOptions(allowedOrigins)));
+app.use("/api/*", timingAllowOrigin(allowedOrigins));
 
 app.use("/api/*", bodyLimit(MAX_BODY_BYTES));
 app.use("/api/*", requestAudit());

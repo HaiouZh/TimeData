@@ -11,6 +11,8 @@ import {
   SHELL_ORIGINS_BY_SHELL,
   allowedOriginsFromEnv,
   corsOptions,
+  resolveAllowedOrigin,
+  timingAllowOrigin,
 } from "./cors.js";
 
 describe("allowedOriginsFromEnv", () => {
@@ -236,5 +238,60 @@ describe("壳包登记闸", () => {
         expect(SHELL_ORIGINS, `${kind}: ${origin}`).toContain(origin);
       }
     }
+  });
+});
+
+describe("Timing-Allow-Origin（ios-instant-open 阶段1 §5）", () => {
+  function appWith(allowed: string[]) {
+    const app = new Hono();
+    app.use("/api/*", cors(corsOptions(allowed)));
+    app.use("/api/*", timingAllowOrigin(allowed));
+    app.get("/api/sync/status", (c) => c.json({ ok: true }));
+    app.post("/api/sync/status", (c) => c.json({ ok: true }));
+    return app;
+  }
+
+  it("放行的壳 origin：实际响应带 TAO，值就是该 origin", async () => {
+    const res = await appWith([]).request("/api/sync/status", { headers: { Origin: "capacitor://localhost" } });
+    expect(res.headers.get("Timing-Allow-Origin")).toBe("capacitor://localhost");
+  });
+
+  // 逃逸变异：无条件加头 → 任意第三方网页都能量到本服务的请求计时。
+  it("不放行的 origin 不带", async () => {
+    const res = await appWith([]).request("/api/sync/status", { headers: { Origin: "https://evil.example.com" } });
+    expect(res.headers.get("Timing-Allow-Origin")).toBeNull();
+  });
+
+  it("没有 Origin 头（同源）不带", async () => {
+    const res = await appWith([]).request("/api/sync/status");
+    expect(res.headers.get("Timing-Allow-Origin")).toBeNull();
+  });
+
+  // 逃逸变异：通配时回 * → 与 credentials 语义不一致，也等于对任意来源开放计时。
+  it("ALLOWED_ORIGINS=* 时回显具体 origin，不回 *", async () => {
+    const res = await appWith(["*"]).request("/api/sync/status", { headers: { Origin: "https://app.example.com" } });
+    expect(res.headers.get("Timing-Allow-Origin")).toBe("https://app.example.com");
+  });
+
+  it("预检响应不受影响（cors 中间件直接应答，TAO 中间件不参与）", async () => {
+    const res = await appWith([]).request("/api/sync/status", {
+      method: "OPTIONS",
+      headers: { Origin: "capacitor://localhost", "Access-Control-Request-Method": "POST" },
+    });
+    expect(res.headers.get("Access-Control-Allow-Origin")).toBe("capacitor://localhost");
+    expect(res.headers.get("Timing-Allow-Origin")).toBeNull();
+  });
+
+  it("resolveAllowedOrigin 与 corsOptions 同一判定", () => {
+    expect(resolveAllowedOrigin(undefined, [])).toBeNull();
+    expect(resolveAllowedOrigin("capacitor://localhost", [])).toBe("capacitor://localhost");
+    expect(resolveAllowedOrigin("https://a.example", ["https://a.example"])).toBe("https://a.example");
+    expect(resolveAllowedOrigin("https://b.example", ["https://a.example"])).toBeNull();
+  });
+
+  // 提炼出中间件却忘了在 index.ts 接线，上面的闸照样全绿而生产没加头。
+  it("index.ts 接了 timingAllowOrigin", () => {
+    const indexSource = readFileSync(join(dirname(fileURLToPath(import.meta.url)), "..", "index.ts"), "utf8");
+    expect(indexSource).toContain("timingAllowOrigin(allowedOrigins)");
   });
 });
