@@ -1,6 +1,8 @@
 import { STORAGE_KEYS } from "../storageKeys.js";
 import { type RecoveryKV, defaultRecoveryKV } from "./kv.js";
 import type { PendingReport } from "./pendingReports.js";
+import { SYNC_LOG_DETAIL_MAX } from "./pendingReports.js";
+import type { ReactRootSnapshot } from "./reactRootProbe.js";
 
 /**
  * 探针超时后的判定结果：
@@ -10,6 +12,9 @@ import type { PendingReport } from "./pendingReports.js";
  * - late：探针其实落地了，但定时器迟到 ≥ 2 个窗口——线程或 App 被冻过，用户照样在等
  */
 export type SchedulerProbeOutcome = "recovered" | "reload" | "held" | "late";
+
+/** 直驱救援：none = 补拍已送达无需直驱；ran = 补拍未送达、已直驱；unavailable = 未配对到调度器处理函数。 */
+export type DirectDrive = "none" | "ran" | "unavailable";
 
 /** 一次判定的完整现场。字段含义与分辨哪条假说见 design §2.1 / §0.4。只有数字与标签，不含内容数据。 */
 export interface SchedulerProbeInput {
@@ -34,10 +39,50 @@ export interface SchedulerProbeInput {
   resumes: number;
   /** 最后一次恢复事件的来源（visibilitychange / focus / pageshow / appStateChange）。 */
   trigger: string | null;
+  /** 记录唯一编号（10 位 base36），报告按它去重。 */
+  id: string;
+  /** 所属 open_session 的 id；不在任何会话里为 null。 */
+  sessionId: string | null;
+  /** CURRENT_BUILD_ID，版本前后对比用。 */
+  build: string;
+  /** index.html 内联钩子是否配对到调度器 port1（ios-instant-open 阶段1 §2.1）。 */
+  paired: boolean;
+  /** 补拍后到宽限结束，调度器处理函数是否经信道被调用过；未配对为 null。false = 甲。 */
+  delivered: boolean | null;
+  /** 超时那刻「最后一次排队之后再没投递」已持续的毫秒；投递晚于排队为 0；未配对为 null。 */
+  pendingMsgMs: number | null;
+  direct: DirectDrive;
+  /** 补拍前的 React 根快照。 */
+  rootPre: ReactRootSnapshot | null;
+  /** 宽限结束时的 React 根快照（late 为超时那刻）。transition lane 仍挂起 = 乙。 */
+  rootPost: ReactRootSnapshot | null;
+  /** 在途懒加载 `[页面名, 已等毫秒]`，≤ 3 条。 */
+  lazy: [string, number][];
+  /** 存储探针错误类型名。 */
+  storageErr: string | null;
+  /** db.isOpen()；取不到为 null。 */
+  dbOpen: boolean | null;
 }
 
+type ProbeRecord = SchedulerProbeInput & { trunc?: true };
+
+/** 超过服务端 detail 上限时的降级顺序（design §2.7）：先丢在途懒加载，再丢补拍前快照，最后截短存储错误名。 */
+const DEGRADE_STEPS: Array<(record: ProbeRecord) => ProbeRecord> = [
+  (record) => ({ ...record, lazy: [], trunc: true }),
+  (record) => ({ ...record, rootPre: null, trunc: true }),
+  (record) => ({ ...record, storageErr: record.storageErr === null ? null : record.storageErr.slice(0, 20), trunc: true }),
+];
+
 export function buildSchedulerProbeReport(input: SchedulerProbeInput): PendingReport {
-  return { action: "scheduler_probe", detail: JSON.stringify(input), record_count: 0 };
+  let record: ProbeRecord = input;
+  let detail = JSON.stringify(record);
+  for (const step of DEGRADE_STEPS) {
+    if (detail.length <= SYNC_LOG_DETAIL_MAX) break;
+    record = step(record);
+    detail = JSON.stringify(record);
+  }
+  // 三步后仍超限只可能是调用方塞了异常长的字段；交给 stashPendingReport 拒收并计入 dropped，不在这里硬截 JSON。
+  return { action: "scheduler_probe", detail, record_count: 0 };
 }
 
 /**
