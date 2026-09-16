@@ -342,7 +342,13 @@ describe("TrackBucketRow 展开态", () => {
     const steps = await db.trackSteps.where("trackId").equals("tr1").toArray();
     expect(steps.length).toBe(1);
     expect(steps[0].content).toBe("新建的一步");
-    expect((host.querySelector('input[aria-label="新步骤内容"]') as HTMLInputElement).value).toBe("");
+    // 落库与清空输入是两件事：写完之后还要等 React 把清空那次 state 更新渲染出来。上面的轮询一见到
+    // 行数就 break，满载并行时渲染可能还差一拍——直接断言会偶发红（全量 gate 撞到过一次）。
+    const stepInput = () => host.querySelector('input[aria-label="新步骤内容"]') as HTMLInputElement;
+    for (let i = 0; i < 20 && stepInput().value !== ""; i += 1) {
+      await flush();
+    }
+    expect(stepInput().value).toBe("");
     await unmount(root);
     mounted = null;
   });
