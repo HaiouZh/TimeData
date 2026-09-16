@@ -10,3 +10,15 @@ import { db } from "../../db/index.js";
 export function probeStorage(): Promise<unknown> {
   return db.categories.limit(1).toArray();
 }
+
+/**
+ * 本地库当前是否开着：开着但探针抛错与库被关了是两回事，分不清就误判存储被冻。
+ * 读 db.isOpen() 的瞬时值；读不到记 null（未知），调用方与 errorName 合起来判定。
+ */
+export function isStorageOpen(): boolean | null {
+  try {
+    return db.isOpen();
+  } catch {
+    return null;
+  }
+}
