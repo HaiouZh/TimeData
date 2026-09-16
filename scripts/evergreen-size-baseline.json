@@ -90,7 +90,7 @@
     "covers": 6
   },
   "docs/evergreen/ios/scheduler-resilience.md": {
-    "covers": 5
+    "covers": 13
   },
   "docs/evergreen/project-zone.md": {
     "covers": 4
@@ -126,7 +126,7 @@
     "covers": 9
   },
   "docs/evergreen/sync/troubleshooting.md": {
-    "covers": 2
+    "covers": 3
   },
   "docs/evergreen/timeline.md": {
     "covers": 26

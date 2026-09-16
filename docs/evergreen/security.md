@@ -36,7 +36,7 @@ contracts:
   - packages/server/src/middleware/auth.ts
   - packages/server/src/middleware/totp.ts
   - packages/client/src/lib/storageKeys.ts
-last-reviewed: 2026-09-02
+last-reviewed: 2026-09-16
 ---
 
 # 安全与凭据处理
@@ -54,7 +54,7 @@ last-reviewed: 2026-09-02
 | 凭据与连接 | `apiToken`（见上两段）、`apiUrl` | **敏感**：明文存本机 |
 | **用户内容** | **`quickNoteComposerDraft`**（速记页）、**`captureComposerDraft`**（桌面速记浮窗）—— 用户尚未发出的速记正文 | **含用户内容**：纯本地，不进同步域、不进备份 |
 | 业务 id 引用 | `sleepCategoryId`（睡眠分类 id） | 引用 id，不含内容 |
-| 同步游标 / 诊断 / UI 偏好 | `lastSyncedSeq`、`clockSkewMs`、`syncFailureCount`、`syncPhaseTimings`、`schemaNormalizationVersion`、`reloadTombstone` / `pendingReports` / `lastColdStart` / `schedulerProbes`（冷启动与调度器看门狗的观测记录与计数，只有耗时数字与归因标签）、各页分栏比例与折叠态、`goalsViewMode`、`galaxyEngine`（`/goals` 星图用确定性还是本地 settle 引擎）等 | 不含用户内容、不含凭据 |
+| 同步游标 / 诊断 / UI 偏好 | `lastSyncedSeq`、`clockSkewMs`、`syncFailureCount`、`syncPhaseTimings`、`schemaNormalizationVersion`、`reloadTombstone` / `pendingReports` / `droppedReports` / `lastColdStart` / `lastHiddenAt` / `schedulerProbes`（冷启动、打开会话与调度器看门狗的观测记录与计数，只有耗时数字与归因标签）、各页分栏比例与折叠态、`goalsViewMode`、`galaxyEngine`（`/goals` 星图用确定性还是本地 settle 引擎）等 | 不含用户内容、不含凭据 |
 
 两个 `…ComposerDraft` 是仅有的把用户正文落到 localStorage 的 key——清本机数据、共享设备场景要按"含用户内容"对待，不能套用"UI 偏好无所谓"的判断。两者是**各自独立的 key**（共用会让浮窗里打了一半的话凭空出现在速记页）。
 
@@ -64,7 +64,7 @@ last-reviewed: 2026-09-02
 
 `schemaNormalizationVersion`（`timedata_schema_normalization_version`）是纯本地、不同步、非敏感的版本闸，只记录客户端 schema 归一 pass 已跑到的版本号。
 
-Android 原生环境保持 HTTPS-only：`packages/mobile/capacitor.config.ts` 的 `server.cleartext: false` / `android.allowMixedContent: false` 与 Manifest 的 `android:usesCleartextTraffic="false"` 共同禁止明文 API 请求。服务器设置页在原生环境会拒绝保存 `http://` API 地址，并提示用户改用 HTTPS 反向代理地址；Web/PWA 环境不做这层 Android 专属拦截。壳（Android `https://localhost`、iOS `capacitor://localhost`、桌面版 Tauri）的 origin 由服务端代码内置放行而非部署者手填，理由与安全论证见 [ADR 0030](../adr/0030-shell-origins-allowed-by-server-code.md)：这些 origin 只有本机安装的壳能占据，而真正的恶意本地应用根本不受 CORS 约束，守 API 的是 Bearer token。设置页仍提示自托管用户，服务端版本早于该改动时要把 origin 填进 `ALLOWED_ORIGINS`；配置位置与验证方法见 [deployment/configuration](deployment/configuration.md) §1。
+Android 原生环境保持 HTTPS-only：`packages/mobile/capacitor.config.ts` 的 `server.cleartext: false` / `android.allowMixedContent: false` 与 Manifest 的 `android:usesCleartextTraffic="false"` 共同禁止明文 API 请求。服务器设置页在原生环境会拒绝保存 `http://` API 地址，并提示用户改用 HTTPS 反向代理地址；Web/PWA 环境不做这层 Android 专属拦截。壳（Android `https://localhost`、iOS `capacitor://localhost`、桌面版 Tauri）的 origin 由服务端代码内置放行而非部署者手填，理由与安全论证见 [ADR 0030](../adr/0030-shell-origins-allowed-by-server-code.md)：这些 origin 只有本机安装的壳能占据，而真正的恶意本地应用根本不受 CORS 约束，守 API 的是 Bearer token。设置页仍提示自托管用户，服务端版本早于该改动时要把 origin 填进 `ALLOWED_ORIGINS`；配置位置与验证方法见 [deployment/configuration](deployment/configuration.md) §1。同一份放行判定还被 `Timing-Allow-Origin` 复用：放行的 origin 才拿得到跨域请求的计时细分，**只暴露耗时、不暴露内容**，且回显具体 origin 不用 `*`。判定写在 `cors.ts` 的 `resolveAllowedOrigin` 一处，CORS 与计时共用——各抄一份会漂成「CORS 放行了、计时没放行」或反过来。
 
 ## 服务端认证与审计
 

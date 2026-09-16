@@ -4,6 +4,7 @@ title: 同步 · 观测与排障
 covers:
   - packages/client/src/components/SyncTimingsPanel.tsx
   - packages/client/src/components/ArbitrationBanner.tsx
+  - packages/client/src/sync/resourceTimingCache.ts
 contracts:
   - packages/client/src/components/SyncTimingsPanel.tsx
   - packages/client/src/components/ArbitrationBanner.tsx
@@ -17,7 +18,7 @@ contracts:
   - packages/server/src/routes/admin/sync.ts
   - packages/server/src/routes/sync.ts
   - packages/server/src/routes/syncLog.ts
-last-reviewed: 2026-09-02
+last-reviewed: 2026-09-16
 ---
 
 # 同步 · 观测与排障
@@ -61,7 +62,17 @@ last-reviewed: 2026-09-02
 
 设置页同步卡片展示最近一次各阶段耗时、p50/p95，以及最新一条的 `waitMs` / `reason` / `connection` / `transport`。带 push 或补差的那一轮，客户端审计日志会多写 `action: "phase_timings"`；服务端侧 push/pull 在 `sync_logs.detail.timings` 记录 parse / validate / apply / read / total 等阶段耗时。这套观测纯附加，不改变任何同步判定或行为。
 
-同一条上报通道还搭载两类与同步无关的客户端观测：冷启动分段 `action: "cold_start"` 与调度器看门狗现场 `action: "scheduler_probe"`。它们不单独发请求，先攒在 localStorage `timedata_pending_reports`（上限 5 条），随下一次带上报的同步轮一起 POST；因此服务端 `timestamp` 是上报时刻而非发生时刻，同一秒出现多条即是一次补投。看门狗的探针累计计数存 `timedata_scheduler_probes`，跨重载存活，两条 `scheduler_probe` 记录的 `probes` 之差等于期间探针总次数——这是队列上限会挤掉早期记录时仍然可信的唯一分母。字段含义与判定机制见 [ios/scheduler-resilience](../ios/scheduler-resilience.md)。
+同一条上报通道还搭载几类与同步无关的客户端观测：冷启动分段 `action: "cold_start"`、调度器看门狗现场 `action: "scheduler_probe"`、一次打开的全程 `action: "open_session"`。它们不单独发请求，先攒在 localStorage `timedata_pending_reports`（上限 30 条），随下一次带上报的同步轮一起 POST；因此服务端 `timestamp` 是上报时刻而非发生时刻，同一秒出现多条即是一次补投。
+
+读这条通道的数据前先认三件事：
+
+- **每条记录带 `id`，服务端会收到重复**。`bump` / `push` / `pull` 三处各自 fire-and-forget 地投递，同一条报告可能落库两三次；按 `id` 去重是唯一可靠的办法，早期没有 `id` 的记录只能按 device+action+detail 全等判重。
+- **发送成功只删「这一批发出去的那几条」**，不整清队列——发送在途时新攒的记录会被一起抹掉，那是静默丢数据。在途期间新来的发送只带自己的 logs，不重复搭队列。
+- **被挤出和被拒收的都计在 `timedata_dropped_reports`**，随下一条 `open_session` 的 `dropped` 字段上报。没有这个数，「没有坏数据」和「坏数据被丢了」在报告里长得一模一样。
+
+`open_session` 一条记一次打开：`kind`（cold / resume）、`ttiMs`（打开到能点）、`syncMs`（新数据到达）、`endedBy`（complete / cap / hidden / reload）、`net`（建连 / 首字节 / 传输，来自 `sync/resourceTimingCache.ts`）、`storageMs` / `storageErr`、`dropped`。资源计时走 PerformanceObserver 缓存而不是 `getEntriesByType`——后者的缓冲有 250 条上限，满了新条目不入。
+
+固定口径的报告由 `node scripts/ios-report.mjs` 出（用法见 [development/commands-and-testing](../development/commands-and-testing.md)），它按构建号 × 设备分组、剔重、剔后台噪声，再把端上分段与服务端 `api_request_logs` 摆在一起对表。看门狗的探针累计计数存 `timedata_scheduler_probes`，跨重载存活，两条 `scheduler_probe` 记录的 `probes` 之差等于期间探针总次数——这是队列上限会挤掉早期记录时仍然可信的唯一分母。字段含义与判定机制见 [ios/scheduler-resilience](../ios/scheduler-resilience.md)。
 
 ## 4. 同步慢排查入口
 

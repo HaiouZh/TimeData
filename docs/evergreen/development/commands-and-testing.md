@@ -6,7 +6,8 @@ contracts:
   - package.json
   - packages/client/test-buckets.mjs
   - scripts/check-test-hygiene.mjs
-last-reviewed: 2026-08-10
+  - scripts/ios-report.mjs
+last-reviewed: 2026-09-16
 ---
 
 # 本地开发 · 命令与测试
@@ -61,6 +62,9 @@ pnpm check:diary       # 日记日期闸：本地日界与 UTC 存储的换算
 pnpm check:roadmap     # ROADMAP 程序门（docs_local 不入 Git，本地是唯一执行点）
 pnpm gate              # 全量门禁唯一入口，本机全局互斥
 pnpm icons:generate    # 从根目录 icon.png 生成 PWA / Android / favicon / iOS 全套图标
+node scripts/ios-report.mjs      # iOS 打开体验固定口径报告（只读生产库，不写任何东西）
+                                 # 需 TIMEDATA_PROD_SSH=<ssh 目标> TIMEDATA_PROD_DB=<生产库路径>
+                                 # 可选 --days 1..90（默认 7）、--json
 ```
 
 **两档分工**：日常提交走**聚焦验证**——按路径窄测 + 命中的那几道 check，快且够用。**收工 / 合并前走 `pnpm gate`**：它串行跑 CI 同集棘轮（lint、四道静态闸、typecheck、test、e2e、四道 docs、roadmap、build），是全量门禁的唯一入口，不必再手工挨个敲。gate 本机全局互斥，同一时刻只允许一份在跑，多 worktree 撞上会自动排队（`--no-wait` 则立即退出）；锁在主仓 `.git/timedata-gate.lock/`，进程被强杀留下的残锁 60 秒后自动接管，不用手删。

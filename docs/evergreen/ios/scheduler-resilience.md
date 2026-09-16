@@ -7,9 +7,19 @@ covers:
   - packages/client/src/lib/recovery/schedulerProbeReport.ts
   - packages/client/src/lib/recovery/mainThreadHeartbeat.ts
   - packages/client/src/lib/recovery/storageProbe.ts
+  - packages/client/src/lib/recovery/reactRootProbe.ts
+  - packages/client/src/lib/recovery/lazyRegistry.ts
+  - packages/client/src/lib/recovery/storageTiming.ts
+  - packages/client/src/lib/recovery/reportId.ts
+  - packages/client/src/lib/recovery/openSession.ts
+  - packages/client/src/lib/recovery/openSessionRuntime.ts
+  - packages/client/src/lib/recovery/lastHidden.ts
+  - packages/client/src/hooks/useAppHidden.ts
 contracts:
   - packages/client/src/lib/schedulerHostGuard.ts
-last-reviewed: 2026-09-02
+  - packages/client/src/lib/recovery/reactRootProbe.ts
+  - packages/client/src/lib/recovery/openSession.ts
+last-reviewed: 2026-09-16
 ---
 
 # iOS 壳 · 调度器韧性
@@ -54,6 +64,8 @@ React 按 lane 决定更新走哪条通道，两条通道在死锁后的存活�
 - **只认 `postMessage(null)` 这一形态**。不过滤就会把页面里别的 MessageChannel 使用方（workbox 等）记进来，补拍补到无关端口上——调度器依旧卡死，而我们以为已经救过了。这个前提由测试直接读 `scheduler` 产物钉住，React 升级改了调用形态会红。
 - 挂钩不改变任何投递行为，开销是每次 `postMessage` 多一次比较和一次赋值。
 
+> **补拍只治「消息没送回来」这一支。** 若现场判定是「送到了、React 自己挂着等一个永不 settle 的 transition」，补多少拍都没用——`markRootUpdated` 会在下一次非 Idle 更新时清掉 `suspendedLanes`，一个挂死的 transition 于是把后续同批 lane 一起拖住。那一支的修法不在本节，见 `docs_local` 的 ios-instant-open 主题阶段2；届时本节一并重写。
+
 ## 4. 什么时候救：回前台探针
 
 `components/SchedulerWatchdog.tsx` 每次回到前台发一枚探针：`startTransition` 里递增一个计数，超时窗口（`SCHEDULER_PROBE_TIMEOUT_MS`）内没落地就判定停摆，**先补一拍**；再过一个宽限窗口（`SCHEDULER_KICK_GRACE_MS`）仍没落地，才重载页面。
@@ -63,6 +75,8 @@ React 按 lane 决定更新走哪条通道，两条通道在死锁后的存活�
 - **补拍优先于重载，判定三分**：补拍成功用户毫无感知，重载则丢掉滚动位置与未提交输入。超时那一刻先读端口在不在、真实等了多久，再补一拍——**不可见也照补、补不出去也不早退**（没发出去不代表调度器一定死了）；宽限结束那一刻再读可见性（提前采样会让中间切走的用户在后台被重载），按「落地了 → `recovered` 不重载 / 没落地且可见 → `reload` 留墓碑重载 / 没落地且不可见 → `held` 不重载、不封锁下次自救」三分。探针挂着期间再来的恢复事件只累加计数，**不重发探针、不重置定时器**——重置会把超时与宽限一并后推，真死锁时自救被无限推迟。
 - **每次超时都记现场**：`scheduler_probe`（`lib/recovery/schedulerProbeReport.ts`）搭同步上报的车，字段与分辨表见 `docs_local` 里的观测口径 design §2.1 / §0.4。正常落地零上报；只有一个例外——探针落地了但定时器迟到 ≥ 2 个窗口记 `late`，那是「线程 / App 被冻、用户照样在等、看门狗却没动」唯一能被看见的地方。
 - **两枚旁证探针只在看门狗挂着的几秒内跑**：主线程心跳（`mainThreadHeartbeat.ts`，250ms 一拍，量最大迟到）与 IndexedDB 最小往返（`storageProbe.ts`）。心跳迟到 ≈ 等待时长 → 线程被冻，不是调度器的事；IndexedDB 判定时没回来（`storageMs` 为 null）→ 存储层被冻，抛错记 -1——两者在数据里分开，存储报错不能被读成存储被冻。
+- **「没落地」还要再分一次叉**：只知道没落地，分不出是消息没送回来还是 React 自己在等。三路证据合起来判：`schedulerHostGuard` 记 port2→port1 的配对与最近收发时刻（`delivered` / `pendingMsgMs`），`reactRootProbe` 读 FiberRoot 的 lane 位（`rootPre` / `rootPost`），`lazyRegistry` 报在途的懒加载 chunk（`lazy`）。判定口径、证伪条件与报告脚本见 `docs_local` 的 ios-instant-open 阶段1 design §2.8。
+- **补拍后再等 250ms 不动就直驱**：拿配对端口直接调那个处理函数（`driveSchedulerDirectly`），结果记 `direct`。补拍无效而直驱能救活，是「坏的是消息投递本身」的判决性证据；直驱只在补拍已经失效时才跑，不作为常规路径。
 - **不按平台 gate**：正常平台永远不触发，成本只是每次恢复一枚定时器；而 iOS Safari 的 PWA 里 `Capacitor.getPlatform()` 返回 `web`，按平台 gate 反而漏掉真会中招的一档。
 - 探针窗口取秒级而非更短：React 自己给 transition 的饥饿保护也在同一量级，正常情况早已自行收敛，还没落地的只可能是真停摆。重载保留当前 URL，路由自然回到原处；此刻页面本就冻着，没有能被打断的交互。
 
@@ -93,7 +107,19 @@ React 按 lane 决定更新走哪条通道，两条通道在死锁后的存活�
 5. **诊断同类现场先分通道**（§2）：先确认「点得开弹层但切不了页」这个组合成立，再往调度器上想；全都点不动是另一族原因。
 6. **主动重载必须留墓碑**（§4.5）——不留就会被归因成「渲染进程被回收」，两族问题重新混作一团。
 7. **`held` / `recovered` / `late` 不留墓碑、不置 `firedRef`**（§4）——留了就把下一次真实冷启动误归因成看门狗；置位了就把「下次 resume 还能自救」封死。
-8. **探针累计计数必须落 localStorage**（`schedulerProbeReport.ts`）——待发送队列上限 5 条会挤掉早的记录，只有跨重载的累计值不会因丢记录而失真。
+8. **探针累计计数必须落 localStorage**（`schedulerProbeReport.ts`）——待发送队列有上限（30 条）会挤掉早的记录，只有跨重载的累计值不会因丢记录而失真。挤出与拒收都要计数（`droppedReports`），否则「没有坏数据」与「坏数据被静默丢了」在报告里同形。
+9. **早期钩子必须是 classic 内联脚本**（`index.html`）——写成 `type="module"` 会被推迟到文档解析完才执行，那时 React chunk 早就把 MessageChannel 建好了；钩子静默失效、不报任何错。`indexHtmlRecovery.test.ts` 按标签属性守它。
+10. **根快照只读形态，读不到就整条回 null**（`reactRootProbe.ts`）——读的是 FiberRoot 的私有字段，React 升级会改。测试有一道形态闸直接读 `react-dom` 产物，改了会红；**绝不猜字段**，猜出来的 lane 位会让诊断整体失真而没人看得出。
+11. **冷启动探针只量不救**——冷启动路径上的探针超时不补拍、不重载，只记一条。冷启动本来就慢，让它有权重载等于给自己造一个重载循环。
+
+## 5.5 打开一次算一次：open_session
+
+看门狗只看「调度器动没动」，但用户说的卡是「打开到能操作之间那几秒」。`lib/recovery/openSession.ts` 因此把**一次打开**收成一条记录：冷启动或从后台回前台开始，到「能点了 + 新数据到了 + 本地库探过了」三件事齐活结束，超过 `OPEN_SESSION_CAP_MS`（20 s）强制收尾。
+
+- **边界靠 hidden 标记，不靠 focus**：前台里零星的 focus / visibilitychange 不开新会话，只有真的 hidden 过再回来才算（`lib/recovery/lastHidden.ts` 记时刻，`hooks/useAppHidden.ts` 订阅 `visibilitychange` / `pagehide` / Capacitor `appStateChange`）。不门控的话一次打开会被切成好几条，每条都很快，报告于是全绿。
+- **四种收尾要分开记**：`complete`（三件事齐活）、`cap`（到顶还没齐）、`hidden`（用户等不及切走了）、`reload`（看门狗救不回来重载了）。**`cap` 不能丢**——丢掉等于把最糟的那几次从分位数里抹掉；报告脚本把它记成 `Infinity` 排到最慢端。
+- **同步耗时只认会话开始之后的那条**：`sync/resourceTimingCache.ts` 缓存的是 PerformanceObserver 收到的条目，会话开始前的陈旧记录按开始墙钟时刻过滤掉，只取第一条。直接读 `getEntriesByType` 不行——那个缓冲有 250 条上限，满了之后新条目根本不入。
+- 网络细分（建连 / 首字节 / 传输）要服务端放行 `Timing-Allow-Origin` 才非零，见 [deployment/configuration](../deployment/configuration.md)。
 
 ## 6. 模块速查
 
@@ -106,5 +132,11 @@ React 按 lane 决定更新走哪条通道，两条通道在死锁后的存活�
 | `lib/recovery/mainThreadHeartbeat.ts` | 探针挂着期间的主线程心跳，量定时器最大迟到 |
 | `lib/recovery/storageProbe.ts` | 与探针同时打的一次 IndexedDB 最小往返 |
 | `hooks/useAppResumeRefresh.ts` | 恢复事件订阅（visibilitychange / focus / pageshow / appStateChange），把来源透传给回调 |
+| `lib/recovery/reactRootProbe.ts` | 读 FiberRoot 的 lane 位与在排回调，`TRANSITION_LANES_MASK` 的唯一定义处 |
+| `lib/recovery/lazyRegistry.ts` | 在途懒加载 chunk 登记，给「挂起的 transition」找源头 |
+| `lib/recovery/storageTiming.ts` | 本地库探针计时与错误名提取（纯函数，不 import db） |
+| `lib/recovery/openSession.ts` / `openSessionRuntime.ts` | 一次打开收成一条 `open_session`；单例在 runtime |
+| `lib/recovery/lastHidden.ts` / `hooks/useAppHidden.ts` | hidden 标记与订阅，决定「算不算一次新的打开」 |
+| `lib/recovery/reportId.ts` | 上报 id，服务端据它去重三路并发重投 |
 
-**测试**：`lib/schedulerHostGuard.test.ts`（含「scheduler 仍以 `postMessage(null)` 排队」的前提闸）、`components/SchedulerWatchdog.test.tsx`。
+**测试**：`lib/schedulerHostGuard.test.ts`（含「scheduler 仍以 `postMessage(null)` 排队」的前提闸）、`components/SchedulerWatchdog.test.tsx`、`lib/recovery/reactRootProbe.test.ts`（含读 `react-dom` 产物的形态闸）、`lib/recovery/openSession.test.ts`、`components/app-shell/appRoutesLazyTracking.test.ts`（守每个 lazy 路由都过 `trackLazyLoad`）、`index.html` 钩子由 `lib/recovery/indexHtmlRecovery.test.ts` 守。

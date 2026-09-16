@@ -6,7 +6,7 @@ contracts:
   - .env.example
   - docker-compose.yml
   - packages/server/src/middleware/cors.ts
-last-reviewed: 2026-08-10
+last-reviewed: 2026-09-16
 ---
 
 # 部署 · 配置与环境变量
@@ -64,6 +64,8 @@ Android `resume` 同步的原生通道（`/api/sync/status` 与增量 `/api/sync
 服务端 CORS 允许的请求头由 `packages/server/src/middleware/cors.ts` 的 `ALLOWED_REQUEST_HEADERS` 单点定义，`index.ts` 的 CORS 中间件直接消费：`Content-Type`、`Authorization`、`X-Confirm`、`X-TimeData-Client`、`X-TimeData-Client-Build`、`X-TOTP-Code`。`X-Confirm` 供 `/api/admin/sync-logs` 清空确认使用，`X-TimeData-Client` 供请求审计记录 client hint，`X-TimeData-Client-Build` 是 `apiFetch` 给每个请求带的构建观测头（见 [`sync`](../sync.md#sync-row-granularity)），`X-TOTP-Code` 供危险操作补码重试。**客户端新增任何跨域自定义 header 必须同步这份白名单**——漏掉会让 Capacitor 壳的每个请求预检失败，而同源网页版毫无感知。`cors.test.ts` 有一条跨包闸机检 `client/src/lib/api.ts` 里 `headers.set` 的 `X-` 头是否都在白名单内。
 
 CORS 中间件的完整配置由 `cors.ts` 的 `corsOptions()` 单点构造，`index.ts` 只做 `cors(corsOptions(allowedOrigins))` 接线。其中 `maxAge` 取 `CORS_PREFLIGHT_MAX_AGE_SECONDS`（86400 秒 = 1 天）：仍走 WebView 的 Capacitor 请求带 `Authorization`，属于非简单请求、必须预检，而不发 `Access-Control-Max-Age` 时 Chromium/WebView 只缓存 5 秒，于是这些安卓 API 调用实际是两个整往返；Android resume 的原生 status/增量 pull 不经过该浏览器预检。移动网络上预检翻倍很贵——生产取证：一次冷启动里客户端测得 status 阶段 5311ms，同一请求服务端只花了 5ms。同源网页版不走预检，所以这个开销在电脑上复现不出来。
+
+`index.ts` 在 CORS 之后还挂一道 `timingAllowOrigin(allowedOrigins)`：放行 origin 的**实际响应**（非预检）带 `Timing-Allow-Origin: <该 origin>`。没有这个头时，浏览器把跨域请求 Resource Timing 的 `connectStart` / `requestStart` / `responseStart` 一律置 0，手机端只量得出总耗时、分不出慢在建连还是往返——生产取证：一次 `/api/sync/status` 服务端处理 9 ms、端上 1.8 s，差额全在网络而无从细分。它只暴露计时、不暴露任何内容；放行范围与 CORS 共用 `resolveAllowedOrigin`，回显具体 origin 而不用 `*`。自部署时这个头由服务端自己发，不需要在反代里另配；**反代若剥掉未知响应头，要把它加进白名单**，否则手机端的网络细分会静默全是 0。
 
 **部署陷阱**：`docker-compose.yml` 的 `environment:` 块**必须**显式列出 `- ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-}`，否则就算 `.env` 写了值，变量也进不到容器里。壳 origin 内置放行后这条漏配不再影响手机与桌面版，但把网页版部署在与 API 不同的域名上时，网页端的全部 `/api/*` 会被拒。
 
