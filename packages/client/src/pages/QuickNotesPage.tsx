@@ -370,6 +370,19 @@ export default function QuickNotesPage() {
     clearStuckDivider();
   }, [selectionMode, searchOpen]);
 
+  // 列表就位之后也排一次停手扫描。只从 handleScroll 排是不够的：**用户可能一次都不滚**——
+  // 打开速记页、退出搜索 / 多选、关掉日历，这几种情形下没有任何 scroll 事件，药丸于是常驻在顶上
+  // 不消失（用户 2026-09-16 报的就是这个）。上面那条 effect 摘类之后同样没人重排，是同一个洞。
+  //
+  // 程序化日期跳转那条路**刻意不排**：刚跳过去要看得见落点是哪一天，它由 skipNextScrollScanRef
+  // 与 pendingJumpRef 两道一起让开，等用户真正动手滚才恢复跟随。
+  // biome-ignore lint/correctness/useExhaustiveDependencies: dayGroups / searchDayGroups 是「列表换了内容」的触发器，不是读取值
+  useEffect(() => {
+    if (pendingJumpRef.current || skipNextScrollScanRef.current) return;
+    scheduleStuckScan();
+    return cancelPendingStuckScan;
+  }, [dayGroups, searchDayGroups, searchOpen, selectionMode, datePickerOpen]);
+
   // 多选态导出菜单开着时 Escape 可关（QN-16）。气泡操作菜单的 Escape 在
   // QuickNoteActionMenu 内部处理，这里只管这一个内联菜单。
   useEffect(() => {
@@ -521,6 +534,18 @@ export default function QuickNotesPage() {
       stuckTimerRef.current = null;
       return;
     }
+    scheduleStuckScan();
+  }
+
+  /**
+   * 排一次停手扫描。滚动与「列表就位」两条路共用。
+   *
+   * **隐身是停手时的常态，不是「滚过一次之后才有」的状态。** 扫描原先只从 handleScroll 排，于是
+   * 用户不滚就永远等不到它消失——打开速记页药丸就挂在顶上不走，退出多选 / 退出搜索 / 关掉日历
+   * 之后也一样（那几处只 clearStuckDivider 不重排）。
+   */
+  function scheduleStuckScan() {
+    if (stuckTimerRef.current) clearTimeout(stuckTimerRef.current);
     stuckTimerRef.current = setTimeout(() => {
       stuckTimerRef.current = null;
       scanStuckDivider();

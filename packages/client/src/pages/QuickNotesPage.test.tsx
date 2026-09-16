@@ -2270,6 +2270,45 @@ describe("sticky 偏移常量与 JSX 同步", () => {
 }, PAGE_TEST_TIMEOUT_MS);
 
 describe("停手隐身", () => {
+  it("打开页面一次都没滚也会到点隐身——隐身是停手时的常态，不是「滚过一次之后才有」", async () => {
+    // 用户 2026-09-16 报的就是这个：停手扫描原先只从 handleScroll 排，用户不滚就永远等不到它
+    // 消失，打开速记页药丸挂在顶上不走（退出多选 / 退出搜索 / 关掉日历之后同理，那几处只摘类、
+    // 没人重排）。**这一条全程不派发任何 scroll 事件**——断言的正是「没有滚动也会扫描」。
+    await db.quickNotes.bulkAdd([
+      {
+        id: "n1",
+        text: "第一天",
+        occurredAt: "2026-06-01T04:00:00.000Z",
+        createdAt: "2026-06-01T04:00:00.000Z",
+        updatedAt: "2026-06-01T04:00:00.000Z",
+      },
+      {
+        id: "n2",
+        text: "第二天",
+        occurredAt: "2026-06-02T04:00:00.000Z",
+        createdAt: "2026-06-02T04:00:00.000Z",
+        updatedAt: "2026-06-02T04:00:00.000Z",
+      },
+    ]);
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    const { host, root } = await renderPage();
+    const list = host.querySelector<HTMLElement>('[aria-label="速记列表"]');
+    if (!list) throw new Error("missing quick notes list");
+    const dividers = Array.from(host.querySelectorAll<HTMLElement>("[data-date-label]"));
+    list.getBoundingClientRect = () => ({ top: 0, height: 400 }) as DOMRect;
+    dividers[0].getBoundingClientRect = () => ({ top: -10, height: 28 }) as DOMRect;
+    dividers[1].getBoundingClientRect = () => ({ top: 300, height: 28 }) as DOMRect;
+
+    await act(async () => {
+      vi.advanceTimersByTime(STUCK_HIDE_DELAY_MS);
+    });
+    expect(dividers[0].classList.contains("stuck")).toBe(true);
+    expect(dividers[1].classList.contains("stuck")).toBe(false);
+
+    vi.useRealTimers();
+    await unmount(root);
+  });
+
   it("停手后粘住的日期条隐身，一开始滚动立刻现身", async () => {
     await db.quickNotes.bulkAdd([
       {
