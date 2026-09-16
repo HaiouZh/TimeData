@@ -2,9 +2,26 @@ import { STORAGE_KEYS } from "../storageKeys.js";
 import { buildColdStartReport } from "./coldStart.js";
 import { defaultRecoveryKV } from "./kv.js";
 import { stashPendingReport } from "./pendingReports.js";
-import { attributeReload, consumeTombstone, readTombstone } from "./reloadAttribution.js";
+import { type ReloadCause, attributeReload, consumeTombstone, readTombstone } from "./reloadAttribution.js";
 
 let firstPaintRecorded = false;
+
+let coldStartCause: ReloadCause | null | undefined;
+
+/**
+ * 本次页面加载的重载归因，**备忘**：`markFirstPaint` 会消费墓碑，消费之后再算只剩「是 reload 却没墓碑 → external」。
+ * 看门狗的冷启动会话（ios-instant-open 阶段1 design §3）与 cold_start 记录必须拿到同一个值。
+ */
+export function readColdStartCause(): ReloadCause | null {
+  if (coldStartCause !== undefined) return coldStartCause;
+  try {
+    const nav = navigationEntry();
+    coldStartCause = nav ? attributeReload(nav.type, readTombstone(), Date.now()) : null;
+  } catch {
+    coldStartCause = null;
+  }
+  return coldStartCause;
+}
 
 function navigationEntry(): PerformanceNavigationTiming | null {
   try {
@@ -30,7 +47,7 @@ export function markFirstPaint(): void {
     const nav = navigationEntry();
     if (!nav) return;
 
-    const cause = attributeReload(nav.type, readTombstone(), Date.now());
+    const cause = readColdStartCause() ?? attributeReload(nav.type, readTombstone(), Date.now());
     consumeTombstone();
 
     const report = buildColdStartReport({

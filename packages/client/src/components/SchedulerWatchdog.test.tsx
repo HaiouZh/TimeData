@@ -53,6 +53,45 @@ vi.mock("../lib/recovery/lazyRegistry.ts", () => ({ snapshotInFlightLazy }));
 vi.mock("../lib/frontendUpdate.ts", () => ({ CURRENT_BUILD_ID: "test-build" }));
 vi.mock("../lib/recovery/reportId.ts", () => ({ newReportId: () => "rid0000001" }));
 
+const openSessions = vi.hoisted(() => ({
+  begin: vi.fn((): string => "sess-1"),
+  activeId: vi.fn((): string | null => null),
+  noteResume: vi.fn(),
+  probeLanded: vi.fn(),
+  stallDecided: vi.fn(),
+  storageSettled: vi.fn(),
+  syncRecorded: vi.fn(),
+  end: vi.fn(),
+}));
+vi.mock("../lib/recovery/openSessionRuntime.ts", () => ({ openSessions }));
+
+const lastHidden = vi.hoisted(() => ({
+  consumeHiddenFlag: vi.fn(() => false),
+  hiddenMsSinceInMemory: vi.fn((): number | null => 42_000),
+  hiddenMsSincePersisted: vi.fn((): number | null => null),
+  markHidden: vi.fn(),
+}));
+vi.mock("../lib/recovery/lastHidden.ts", () => lastHidden);
+
+let hidden: (() => void) | null = null;
+vi.mock("../hooks/useAppHidden.ts", () => ({
+  useAppHidden: (onHidden: () => void) => {
+    hidden = onHidden;
+  },
+}));
+
+let syncListener: ((entry: unknown) => void) | null = null;
+vi.mock("../sync/phaseTimings.ts", () => ({
+  onSyncTimingRecorded: (listener: (entry: unknown) => void) => {
+    syncListener = listener;
+    return () => {
+      syncListener = null;
+    };
+  },
+}));
+
+vi.mock("../lib/recovery/probe.ts", () => ({ readColdStartCause: () => "cold" }));
+
 const { SchedulerWatchdog, SCHEDULER_DIRECT_DRIVE_AFTER_MS, SCHEDULER_KICK_GRACE_MS } = await import(
   "./SchedulerWatchdog.tsx"
 );
@@ -73,6 +112,15 @@ function setVisibility(state: DocumentVisibilityState): void {
 }
 
 beforeEach(() => {
+  hidden = null;
+  syncListener = null;
+  for (const fn of Object.values(openSessions)) fn.mockReset();
+  openSessions.begin.mockReturnValue("sess-1");
+  openSessions.activeId.mockReturnValue(null);
+  for (const fn of Object.values(lastHidden)) fn.mockReset();
+  lastHidden.consumeHiddenFlag.mockReturnValue(false);
+  lastHidden.hiddenMsSinceInMemory.mockReturnValue(42_000);
+  lastHidden.hiddenMsSincePersisted.mockReturnValue(null);
   resume = null;
   kickScheduler.mockReset();
   kickScheduler.mockReturnValue(true);
@@ -640,6 +688,136 @@ describe("SchedulerWatchdog", () => {
       rootPre: null,
       rootPost: { p: 0, s: 0, pg: 0, cb: false, cpc: false },
     });
+    await unmount(root);
+  });
+});
+
+describe("SchedulerWatchdog · 打开会话接线（ios-instant-open 阶段1 §3）", () => {
+  it("挂载即开冷启动会话，冷启动探针落地与存储探针结果交给会话", async () => {
+    lastHidden.hiddenMsSincePersisted.mockReturnValue(90_000);
+    openSessions.activeId.mockReturnValue("sess-1");
+    const { root } = await renderDom(createElement(SchedulerWatchdog, { onDeadlock: vi.fn(), timeoutMs: TIMEOUT_MS }));
+    await Promise.resolve();
+
+    expect(openSessions.begin).toHaveBeenCalledTimes(1);
+    expect(openSessions.begin).toHaveBeenCalledWith({
+      kind: "cold",
+      startedAt: 0,
+      cause: "cold",
+      hiddenMs: 90_000,
+      trigger: null,
+    });
+    expect(openSessions.probeLanded).toHaveBeenCalledWith(expect.any(Number));
+    expect(openSessions.storageSettled).toHaveBeenCalledWith(12, null);
+    await unmount(root);
+  });
+
+  // 逃逸变异：冷启动也走 armProbe → 计数被加、慢启动会被判卡死重载。
+  it("冷启动探针只量不救：不计探针数、不补拍、不重载、不写墓碑、不记现场", async () => {
+    const onDeadlock = vi.fn();
+    const { root } = await renderDom(
+      createElement(SchedulerWatchdog, { onDeadlock, timeoutMs: TIMEOUT_MS, kickGraceMs: GRACE_MS }),
+    );
+    vi.advanceTimersByTime(TIMEOUT_MS * 10);
+    expect(localStorage.getItem(STORAGE_KEYS.schedulerProbes)).toBeNull();
+    expect(kickScheduler).not.toHaveBeenCalled();
+    expect(onDeadlock).not.toHaveBeenCalled();
+    expect(markReload).not.toHaveBeenCalled();
+    expect(stashPendingReport).not.toHaveBeenCalled();
+    await unmount(root);
+  });
+
+  // 逃逸变异：不看「转过后台」标记 → 前台里零星的 focus 事件被当成一次新打开。
+  it("没转过后台的恢复事件不开新会话", async () => {
+    const { root } = await renderDom(createElement(SchedulerWatchdog, { onDeadlock: vi.fn(), timeoutMs: TIMEOUT_MS }));
+    resume?.("focus");
+    expect(openSessions.begin).toHaveBeenCalledTimes(1); // 只有挂载时的冷启动那次
+    await unmount(root);
+  });
+
+  it("会话还开着时的恢复事件只累加条数，也消费掉转后台标记", async () => {
+    openSessions.activeId.mockReturnValue("sess-1");
+    const { root } = await renderDom(createElement(SchedulerWatchdog, { onDeadlock: vi.fn(), timeoutMs: TIMEOUT_MS }));
+    lastHidden.consumeHiddenFlag.mockClear();
+    resume?.("appStateChange");
+    expect(openSessions.noteResume).toHaveBeenCalledWith("appStateChange");
+    expect(lastHidden.consumeHiddenFlag).toHaveBeenCalledTimes(1);
+    expect(openSessions.begin).toHaveBeenCalledTimes(1);
+    await unmount(root);
+  });
+
+  it("转过后台的回前台：开会话（内存口径 hiddenMs），探针落地交给会话，现场带 sessionId", async () => {
+    const { root } = await renderDom(createElement(SchedulerWatchdog, { onDeadlock: vi.fn(), timeoutMs: TIMEOUT_MS }));
+    lastHidden.consumeHiddenFlag.mockReturnValue(true);
+    openSessions.begin.mockImplementation(() => {
+      openSessions.activeId.mockReturnValue("resume-1");
+      return "resume-1";
+    });
+
+    await act(async () => {
+      resume?.("visibilitychange");
+    });
+
+    expect(openSessions.begin).toHaveBeenLastCalledWith({
+      kind: "resume",
+      startedAt: expect.any(Number),
+      cause: null,
+      hiddenMs: 42_000,
+      trigger: "visibilitychange",
+    });
+    expect(openSessions.probeLanded).toHaveBeenCalledWith(expect.any(Number));
+    await unmount(root);
+  });
+
+  // 逃逸变异：end("reload") 挪到 markReload 之后 / 分支外 → 重载先走、这次卡死的会话记录丢失。
+  it("卡死重载：stall 结论与会话收尾都在墓碑之前，scheduler_probe 带 sessionId", async () => {
+    const { root } = await renderDom(
+      createElement(SchedulerWatchdog, { onDeadlock: vi.fn(), timeoutMs: TIMEOUT_MS, kickGraceMs: GRACE_MS }),
+    );
+    lastHidden.consumeHiddenFlag.mockReturnValue(true);
+    openSessions.begin.mockImplementation(() => {
+      openSessions.activeId.mockReturnValue("resume-1");
+      return "resume-1";
+    });
+    const order: string[] = [];
+    openSessions.stallDecided.mockImplementation((outcome: unknown) => order.push(`stall:${String(outcome)}`));
+    openSessions.end.mockImplementation((by: unknown) => order.push(`end:${String(by)}`));
+    markReload.mockImplementation(() => order.push("tombstone"));
+
+    resume?.();
+    vi.advanceTimersByTime(TIMEOUT_MS + GRACE_MS);
+
+    expect(order).toEqual(["stall:reload", "end:reload", "tombstone"]);
+    expect(lastProbeDetail().sessionId).toBe("resume-1");
+    await unmount(root);
+  });
+
+  it("held 把 stall 结论交给会话，但不收尾会话", async () => {
+    setVisibility("hidden");
+    openSessions.activeId.mockReturnValue("sess-1");
+    const { root } = await renderDom(
+      createElement(SchedulerWatchdog, { onDeadlock: vi.fn(), timeoutMs: TIMEOUT_MS, kickGraceMs: GRACE_MS }),
+    );
+    resume?.();
+    vi.advanceTimersByTime(TIMEOUT_MS + GRACE_MS);
+    expect(openSessions.stallDecided).toHaveBeenCalledWith("held");
+    expect(openSessions.end).not.toHaveBeenCalled();
+    await unmount(root);
+  });
+
+  it("转后台：记时间戳并以 hidden 收尾会话", async () => {
+    const { root } = await renderDom(createElement(SchedulerWatchdog, { onDeadlock: vi.fn(), timeoutMs: TIMEOUT_MS }));
+    hidden?.();
+    expect(lastHidden.markHidden).toHaveBeenCalledTimes(1);
+    expect(openSessions.end).toHaveBeenCalledWith("hidden");
+    await unmount(root);
+  });
+
+  it("同步耗时落账交给会话", async () => {
+    const { root } = await renderDom(createElement(SchedulerWatchdog, { onDeadlock: vi.fn(), timeoutMs: TIMEOUT_MS }));
+    const entry = { at: "2026-09-15T00:00:00.000Z", outcome: "identical", totalMs: 1, phases: {} };
+    syncListener?.(entry);
+    expect(openSessions.syncRecorded).toHaveBeenCalledWith(entry);
     await unmount(root);
   });
 });

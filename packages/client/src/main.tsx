@@ -12,9 +12,12 @@ import { CaptureApp } from "./capture/CaptureApp.tsx";
 import { isCaptureWindow } from "./lib/desktop/shell.ts";
 import { runWhenIdle } from "./lib/recovery/idle.ts";
 import { installSchedulerPortTap } from "./lib/schedulerHostGuard.ts";
+import { installResourceTimingCache } from "./sync/resourceTimingCache.ts";
 
 // 挂在 React 首次调度之前即可（渲染在下面才发生），与 import 求值顺序无关——原因见该模块注释。
 installSchedulerPortTap();
+// 同步请求的资源计时走观察者缓存：长驻页面的资源计时缓冲（250 条）早已写满，按需扫描读不到新条目。
+installResourceTimingCache();
 
 const rootElement = document.getElementById("root");
 if (!rootElement) {

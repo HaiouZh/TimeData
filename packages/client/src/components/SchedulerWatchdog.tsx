@@ -1,9 +1,13 @@
 import { startTransition, useEffect, useRef, useState } from "react";
+import { useAppHidden } from "../hooks/useAppHidden.ts";
 import { type ResumeSource, useAppResumeRefresh } from "../hooks/useAppResumeRefresh.ts";
 import { CURRENT_BUILD_ID } from "../lib/frontendUpdate.ts";
+import { consumeHiddenFlag, hiddenMsSinceInMemory, hiddenMsSincePersisted, markHidden } from "../lib/recovery/lastHidden.ts";
 import { snapshotInFlightLazy } from "../lib/recovery/lazyRegistry.ts";
 import { type Heartbeat, startHeartbeat } from "../lib/recovery/mainThreadHeartbeat.ts";
+import { openSessions } from "../lib/recovery/openSessionRuntime.ts";
 import { stashPendingReport } from "../lib/recovery/pendingReports.ts";
+import { readColdStartCause } from "../lib/recovery/probe.ts";
 import { type ReactRootSnapshot, snapshotReactRoot } from "../lib/recovery/reactRootProbe.ts";
 import { markReload } from "../lib/recovery/reloadAttribution.ts";
 import { newReportId } from "../lib/recovery/reportId.ts";
@@ -15,6 +19,7 @@ import {
 } from "../lib/recovery/schedulerProbeReport.ts";
 import { isStorageOpen, probeStorage } from "../lib/recovery/storageProbe.ts";
 import { timeStorageProbe } from "../lib/recovery/storageTiming.ts";
+import { onSyncTimingRecorded } from "../sync/phaseTimings.ts";
 import {
   deliveredSince,
   driveSchedulerDirectly,
@@ -76,6 +81,8 @@ interface ArmedProbe {
   resumes: number;
   trigger: ResumeSource | null;
   probes: number;
+  /** 所属打开会话；探针发出时没有会话为 null。 */
+  sessionId: string | null;
   heartbeat: Heartbeat;
   storageMs: number | null;
   storageErr: string | null;
@@ -100,7 +107,7 @@ interface ProbeVerdict {
   rootPost: ReactRootSnapshot | null;
 }
 
-function armProbe(expected: number, trigger: ResumeSource | null): ArmedProbe {
+function armProbe(expected: number, trigger: ResumeSource | null, sessionId: string | null): ArmedProbe {
   const timers = new Set<ReturnType<typeof setTimeout>>();
   const probe: ArmedProbe = {
     expected,
@@ -108,6 +115,7 @@ function armProbe(expected: number, trigger: ResumeSource | null): ArmedProbe {
     resumes: 1,
     trigger,
     probes: safeBumpProbeCount(),
+    sessionId,
     heartbeat: startHeartbeat(SCHEDULER_HEARTBEAT_MS),
     storageMs: null,
     storageErr: null,
@@ -167,6 +175,55 @@ export function SchedulerWatchdog({
   const armedRef = useRef<ArmedProbe | null>(null);
   const onDeadlockRef = useRef(onDeadlock);
   onDeadlockRef.current = onDeadlock;
+  /** 冷启动探针：只量不救（design 拍板④）——不经 armProbe、没有任何定时器，慢启动不会被判卡死。 */
+  const [boot, setBoot] = useState(0);
+  const bootLandedAtRef = useRef<number | null>(null);
+  if (boot === 1 && bootLandedAtRef.current === null) bootLandedAtRef.current = performance.now();
+  /** 回前台探针最近一次渲染到的序号与时刻：渲染期记（提交卡住时 effect 不跑，时刻要取渲染那一刻），effect 里交给会话。 */
+  const probeRenderedRef = useRef({ probe: 0, at: 0 });
+  if (probeRenderedRef.current.probe !== probe) probeRenderedRef.current = { probe, at: performance.now() };
+  const coldSessionRef = useRef<string | null>(null);
+  /** StrictMode 开发期 effect 双跑时 ref 保留，靠它不开两个冷启动会话。 */
+  const coldBegunRef = useRef(false);
+
+  useEffect(() => {
+    if (coldBegunRef.current) return;
+    coldBegunRef.current = true;
+    consumeHiddenFlag();
+    const sessionId = openSessions.begin({
+      kind: "cold",
+      startedAt: 0,
+      cause: readColdStartCause(),
+      hiddenMs: hiddenMsSincePersisted(),
+      trigger: null,
+    });
+    coldSessionRef.current = sessionId;
+    startTransition(() => setBoot(1));
+    void timeStorageProbe(probeStorage).then((result) => {
+      if (sessionStillActive(sessionId)) {
+        openSessions.storageSettled(result.errorName === null ? result.ms : null, result.errorName);
+      }
+    });
+  }, []);
+
+  useEffect(() => {
+    const at = bootLandedAtRef.current;
+    if (boot !== 1 || at === null) return;
+    if (sessionStillActive(coldSessionRef.current)) openSessions.probeLanded(at);
+  }, [boot]);
+
+  useEffect(() => {
+    const armed = armedRef.current;
+    if (!armed || probe !== armed.expected) return;
+    if (sessionStillActive(armed.sessionId)) openSessions.probeLanded(probeRenderedRef.current.at);
+  }, [probe]);
+
+  useEffect(() => onSyncTimingRecorded((entry) => openSessions.syncRecorded(entry)), []);
+
+  useAppHidden(() => {
+    markHidden();
+    openSessions.end("hidden");
+  });
 
   useEffect(
     () => () => {
@@ -178,6 +235,7 @@ export function SchedulerWatchdog({
 
   useAppResumeRefresh((source) => {
     if (firedRef.current) return;
+    noteResumeInSession(source ?? null);
     const expected = landedRef.current + 1;
 
     // 探针挂着期间再来的恢复事件（同一拍的 visibilitychange / focus / appStateChange，或几秒后
@@ -192,12 +250,15 @@ export function SchedulerWatchdog({
     existing?.dispose();
 
     startTransition(() => setProbe(expected));
-    const armed = armProbe(expected, source ?? null);
+    const armed = armProbe(expected, source ?? null, openSessions.activeId());
     armedRef.current = armed;
 
     // 与 transition 探针同时打一次 IndexedDB 往返：判定时还没回来 = 存储层被冻（storageMs null）；
     // 抛错记 -1 并留错误类型名——两者在数据里必须分得开，否则存储报错会被读成存储被冻。
     void timeStorageProbe(probeStorage).then((result) => {
+      if (sessionStillActive(armed.sessionId)) {
+        openSessions.storageSettled(result.errorName === null ? result.ms : null, result.errorName);
+      }
       if (armed.disposed) return;
       armed.storageMs = result.errorName === null ? result.ms : -1;
       armed.storageErr = result.errorName;
@@ -220,7 +281,7 @@ export function SchedulerWatchdog({
             resumes: armed.resumes,
             trigger: armed.trigger,
             id: newReportId(),
-            sessionId: null,
+            sessionId: armed.sessionId,
             build: CURRENT_BUILD_ID,
             lazy: snapshotInFlightLazy(),
             storageErr: armed.storageErr,
@@ -256,6 +317,7 @@ export function SchedulerWatchdog({
             rootPre: null,
             rootPost: snapshotReactRoot(),
           });
+          if (sessionStillActive(armed.sessionId)) openSessions.stallDecided("late");
         }
         disarm();
         return;
@@ -303,9 +365,13 @@ export function SchedulerWatchdog({
           rootPre,
           rootPost: snapshotReactRoot(),
         });
+        const inSession = sessionStillActive(armed.sessionId);
+        if (inSession) openSessions.stallDecided(outcome);
         disarm();
         if (outcome !== "reload") return;
 
+        // 会话记录赶在墓碑与重载之前进队列：重载后这一轮会话的内存状态就没了。
+        if (inSession) openSessions.end("reload");
         // 先留墓碑再重载：新页面靠「是 reload 却没有墓碑」识别 iOS 回收渲染进程那条路径，
         // 这里不留，本次自救就会被误统计成一次系统回收。held / recovered 不重载，也就不留。
         firedRef.current = true;
@@ -316,6 +382,31 @@ export function SchedulerWatchdog({
   });
 
   return null;
+}
+
+/** 探针所属会话此刻是否还开着。会话已收尾（转后台 / 20 s 到点）后迟到的事件不再交给它。 */
+function sessionStillActive(sessionId: string | null): sessionId is string {
+  return sessionId !== null && openSessions.activeId() === sessionId;
+}
+
+/**
+ * 恢复事件 → 打开会话：会话还开着就只累加条数；没开着且自上次以来真的转过后台，才开一个新的回前台会话。
+ * 转后台标记两条路都消费——挡住 App 没离开前台时零星冒出的 focus 事件被当成一次新打开（design §3.1）。
+ */
+function noteResumeInSession(trigger: string | null): void {
+  const sawHidden = consumeHiddenFlag();
+  if (openSessions.activeId() !== null) {
+    openSessions.noteResume(trigger);
+    return;
+  }
+  if (!sawHidden) return;
+  openSessions.begin({
+    kind: "resume",
+    startedAt: performance.now(),
+    cause: null,
+    hiddenMs: hiddenMsSinceInMemory(),
+    trigger,
+  });
 }
 
 function safeBumpProbeCount(): number {
