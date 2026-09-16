@@ -205,6 +205,10 @@ jobs:
 
       - name: Set up Android SDK
         uses: android-actions/setup-android@v4
+        with:
+          # 默认值是装一个叫 tools 的包，而它早已从 Android SDK 仓库撤下，sdkmanager 直接退 1
+          #（2026-09-16 的 mobile-release 就红在这里）。需要的包由下一步自己装，这里留空。
+          packages: ""
 
       - name: Install Android SDK packages
         run: sdkmanager "platform-tools" "platforms;android-35" "build-tools;35.0.0"

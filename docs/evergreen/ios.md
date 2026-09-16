@@ -8,7 +8,7 @@ covers:
   - packages/mobile/ios-assets/**
 contracts:
   - .github/workflows/mobile-release.yml
-last-reviewed: 2026-08-22
+last-reviewed: 2026-09-16
 ---
 
 # iOS 壳

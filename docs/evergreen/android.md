@@ -23,7 +23,7 @@ covers:
 contracts:
   - .github/workflows/mobile-release.yml
   - packages/mobile/capacitor.config.ts
-last-reviewed: 2026-08-22
+last-reviewed: 2026-09-16
 ---
 
 # Android 壳
@@ -67,7 +67,7 @@ packages/mobile/android/app/build/outputs/apk/release/app-release.apk
 
 ## 2. Capacitor / Gradle 契约
 
-Capacitor 7 版本的 Android 构建要求：Node 22+、pnpm 11、Java 21、Android SDK Platform 35 / Build-tools 35.0.0、Gradle 8.11.1、Android Gradle Plugin 8.7.2。`packages/mobile/android/variables.gradle` 中 `minSdkVersion = 24`，因此 APK 支持 Android 7.0（API 24）及以上设备；CI 的 `mobile-release.yml` 也按这些版本安装 pnpm、Java 与 Android SDK。
+Capacitor 7 版本的 Android 构建要求：Node 22+、pnpm 11、Java 21、Android SDK Platform 35 / Build-tools 35.0.0、Gradle 8.11.1、Android Gradle Plugin 8.7.2。`packages/mobile/android/variables.gradle` 中 `minSdkVersion = 24`，因此 APK 支持 Android 7.0（API 24）及以上设备；CI 的 `mobile-release.yml` 也按这些版本安装 pnpm、Java 与 Android SDK。 SDK 那一步给 `android-actions/setup-android` 显式传 `packages: ""`：它的默认值是装一个叫 `tools` 的包，而那个包早已从 Android SDK 仓库撤下，sdkmanager 会直接退 1、整个 android job 红在「Set up Android SDK」。需要的三个包（`platform-tools` / `platforms;android-35` / `build-tools;35.0.0`）由紧跟的一步自己装，默认那次安装本就多余。
 
 Android 端依赖的 Capacitor 插件清单：`@capacitor/app`（返回键）、`@capacitor/app-launcher`（把外链交给系统处理）、`@capacitor/browser`（外链浏览器 fallback）、`@capacitor/filesystem` + `@capacitor/share`（备份导出落盘和分享）、`@capacitor/haptics`（触感反馈，见 [design-language/invariants](design-language/invariants.md) 第 13 条）、`@capacitor/keyboard`（软键盘事件桥接，见 [design-language/invariants](design-language/invariants.md) 第 12 条）。新增或升级这些插件后必须重跑 `pnpm --filter @timedata/mobile android:sync`，让 `packages/mobile/android/capacitor.settings.gradle` 与 `packages/mobile/android/app/capacitor.build.gradle` 同步注册原生插件，否则原生工程拿不到新插件。
 
