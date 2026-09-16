@@ -263,9 +263,6 @@ export function SchedulerWatchdog({
       // （上面 noteResumeInSession 刚开的）。不刷的话探针落地、存储结果、卡死结论三样都会因为
       // sessionStillActive(旧 id) 为假而全部丢掉，新会话三线落空只能拖到 20 s 上限（终审 A2）。
       existing.sessionId = openSessions.activeId();
-      // 会话 id 要跟着刷：探针挂着期间用户切走再回来时，旧会话已按 hidden 收尾、新会话已经开了
-      // （上面 noteResumeInSession 刚开的）。不刷的话探针落地、存储结果、卡死结论三样都会因为
-      // sessionStillActive(旧 id) 为假而全部丢掉，新会话三线落空只能拖到 20 s 上限（终审 A2）。
       return;
     }
     existing?.dispose();
