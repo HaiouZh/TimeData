@@ -1,11 +1,15 @@
 import { createRequire } from "node:module";
 import { readFileSync } from "node:fs";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  deliveredSince,
+  driveSchedulerDirectly,
   hasSchedulerPort,
   installSchedulerPortTap,
   kickScheduler,
+  pendingMessageMs,
   resetSchedulerPortTap,
+  schedulerDeliveryState,
 } from "./schedulerHostGuard.ts";
 
 interface StubPort extends MessagePort {
@@ -148,5 +152,137 @@ describe("调度器的调用形态", () => {
     const source = readFileSync(require.resolve(file), "utf8");
 
     expect(source).toMatch(/port\w*\.postMessage\(null\)/);
+  });
+});
+
+/** 带配对表的端口族：port1 有 onmessage，port2 负责排队。postMessage 不真投递，由用例手动调 onmessage 模拟送达。 */
+function createPairedChannel() {
+  class FakeMessagePort {
+    inbox: unknown[] = [];
+    onmessage: ((this: MessagePort, event: MessageEvent) => unknown) | null = null;
+    postMessage(message: unknown): void {
+      this.inbox.push(message);
+    }
+  }
+  const port1 = new FakeMessagePort() as unknown as MessagePort;
+  const port2 = new FakeMessagePort() as unknown as MessagePort;
+  const handler = vi.fn();
+  port1.onmessage = handler;
+  const scope = {
+    MessagePort: FakeMessagePort as unknown as typeof MessagePort,
+    __timedataBoot: { channelPairs: new WeakMap<object, MessagePort>([[port2, port1]]) },
+  };
+  return { scope, port1, port2, handler };
+}
+
+describe("送达记账（ios-instant-open 阶段1 §2.2）", () => {
+  it("未安装时：未配对、两个时间都为 null", () => {
+    expect(schedulerDeliveryState()).toEqual({ paired: false, lastPostedAt: null, lastDeliveredAt: null });
+  });
+
+  it("以 null 排队记 lastPostedAt，并按配对表包一层 port1.onmessage", () => {
+    const { scope, port1, port2, handler } = createPairedChannel();
+    let t = 100;
+    installSchedulerPortTap(scope, { now: () => t });
+    port2.postMessage(null);
+    expect(schedulerDeliveryState()).toEqual({ paired: true, lastPostedAt: 100, lastDeliveredAt: null });
+
+    t = 130;
+    const event = { data: null } as MessageEvent;
+    port1.onmessage?.call(port1, event);
+    expect(handler).toHaveBeenCalledTimes(1);
+    expect(handler).toHaveBeenCalledWith(event);
+    expect(schedulerDeliveryState().lastDeliveredAt).toBe(130);
+  });
+
+  it("没有配对表：照常记端口与排队时间，paired 为 false", () => {
+    const { scope, port2 } = createPairedChannel();
+    installSchedulerPortTap({ MessagePort: scope.MessagePort }, { now: () => 7 });
+    port2.postMessage(null);
+    expect(schedulerDeliveryState()).toEqual({ paired: false, lastPostedAt: 7, lastDeliveredAt: null });
+    expect(hasSchedulerPort()).toBe(true);
+  });
+
+  it("port1 没有处理函数：不配对、不抛", () => {
+    const { scope, port1, port2 } = createPairedChannel();
+    port1.onmessage = null;
+    installSchedulerPortTap(scope, { now: () => 1 });
+    expect(() => port2.postMessage(null)).not.toThrow();
+    expect(schedulerDeliveryState().paired).toBe(false);
+  });
+
+  // 逃逸变异：直驱调 port1.onmessage（包装函数）而不是原处理函数 → lastDeliveredAt 被刷新，甲的判据失效。
+  it("直驱调原处理函数一次，且不刷新 lastDeliveredAt", () => {
+    const { scope, port2, handler } = createPairedChannel();
+    installSchedulerPortTap(scope, { now: () => 50 });
+    port2.postMessage(null);
+    const tasks: Array<() => void> = [];
+    expect(driveSchedulerDirectly((task) => tasks.push(task))).toBe(true);
+    expect(handler).not.toHaveBeenCalled(); // 排进宏任务，不同步调
+    for (const task of tasks) task();
+    expect(handler).toHaveBeenCalledTimes(1);
+    expect(schedulerDeliveryState().lastDeliveredAt).toBeNull();
+  });
+
+  // 逃逸变异：去掉 originalHandlers 查询 → 再次配对把包装函数当原处理函数记下，直驱就会刷新送达时间。
+  it("配对状态被清后再次排队，不会把包装函数当成原处理函数", () => {
+    const { scope, port2, handler } = createPairedChannel();
+    installSchedulerPortTap(scope, { now: () => 5 });
+    port2.postMessage(null);
+    // 模拟「别的端口以 null 排队顶掉了记录，调度器端口又回来」
+    const other = new (scope.MessagePort as unknown as new () => MessagePort)();
+    other.postMessage(null);
+    port2.postMessage(null);
+    const tasks: Array<() => void> = [];
+    driveSchedulerDirectly((task) => tasks.push(task));
+    for (const task of tasks) task();
+    expect(handler).toHaveBeenCalledTimes(1);
+    expect(schedulerDeliveryState().lastDeliveredAt).toBeNull();
+  });
+
+  it("未配对时直驱返回 false、不排任务", () => {
+    const schedule = vi.fn();
+    expect(driveSchedulerDirectly(schedule)).toBe(false);
+    expect(schedule).not.toHaveBeenCalled();
+  });
+
+  it("直驱时处理函数抛错被吞，不外泄", () => {
+    const { scope, port1, port2 } = createPairedChannel();
+    port1.onmessage = () => {
+      throw new Error("boom");
+    };
+    installSchedulerPortTap(scope, { now: () => 1 });
+    port2.postMessage(null);
+    const tasks: Array<() => void> = [];
+    driveSchedulerDirectly((task) => tasks.push(task));
+    expect(() => {
+      for (const task of tasks) task();
+    }).not.toThrow();
+  });
+
+  it("reset 清掉送达状态", () => {
+    const { scope, port2 } = createPairedChannel();
+    installSchedulerPortTap(scope, { now: () => 9 });
+    port2.postMessage(null);
+    resetSchedulerPortTap();
+    expect(schedulerDeliveryState()).toEqual({ paired: false, lastPostedAt: null, lastDeliveredAt: null });
+  });
+});
+
+describe("送达判定助手", () => {
+  const base = { paired: true, lastPostedAt: 100, lastDeliveredAt: 90 };
+
+  it("deliveredSince：送达时间不早于基准才算", () => {
+    expect(deliveredSince({ ...base, lastDeliveredAt: 120 }, 110)).toBe(true);
+    expect(deliveredSince({ ...base, lastDeliveredAt: 110 }, 110)).toBe(true);
+    expect(deliveredSince({ ...base, lastDeliveredAt: 109 }, 110)).toBe(false);
+    expect(deliveredSince({ ...base, lastDeliveredAt: null }, 110)).toBe(false);
+  });
+
+  it("pendingMessageMs：排队后没投递 → 已挂多久；投递不早于排队 → 0；未配对或未排队 → null", () => {
+    expect(pendingMessageMs(base, 400)).toBe(300);
+    expect(pendingMessageMs({ ...base, lastDeliveredAt: 100 }, 400)).toBe(0);
+    expect(pendingMessageMs({ ...base, paired: false }, 400)).toBeNull();
+    expect(pendingMessageMs({ ...base, lastPostedAt: null }, 400)).toBeNull();
   });
 });

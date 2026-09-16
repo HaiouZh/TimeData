@@ -43,6 +43,29 @@
         /* 地址缺失或非法：跳过预热即可 */
       }
     </script>
+    <!-- 调度器信道配对（ios-instant-open 阶段1 design §2.1）：React 的 scheduler 在自己的模块求值时就
+         new MessageChannel() 并把处理函数挂到 port1.onmessage，应用模块里的任何钩子都赶不上。
+         classic 内联脚本在解析期同步执行，非 async 的 module 脚本一律在解析完成后才执行——与位置无关，
+         所以只能写在 HTML 里，且不得加 type/src/async/defer。只记 port2 → port1、原样返回原生实例，
+         不改任何投递行为；出错即放弃（schedulerHostGuard 把 paired 记为 false，只丢诊断数据）。 -->
+    <script id="td-boot-channel-tap">
+      try {
+        const NativeMessageChannel = window.MessageChannel;
+        if (typeof NativeMessageChannel === "function") {
+          const channelPairs = new WeakMap();
+          const TappedMessageChannel = function MessageChannel() {
+            const channel = new NativeMessageChannel();
+            channelPairs.set(channel.port2, channel.port1);
+            return channel;
+          };
+          TappedMessageChannel.prototype = NativeMessageChannel.prototype;
+          window.MessageChannel = TappedMessageChannel;
+          window.__timedataBoot = Object.assign(window.__timedataBoot || {}, { channelPairs });
+        }
+      } catch {
+        /* 配对失败只丢诊断数据 */
+      }
+    </script>
     <title>TimeData</title>
   </head>
   <body>
