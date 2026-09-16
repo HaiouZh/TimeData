@@ -1,5 +1,6 @@
 import { safeGetItem, safeSetItem } from "../lib/safeStorage.js";
 import { STORAGE_KEYS } from "../lib/storageKeys.js";
+import { latestSyncProtocol } from "./resourceTimingCache.js";
 import type { SyncTransport } from "./transport.js";
 
 export type SyncPhaseName = "status" | "push" | "pull" | "bumpApply";
@@ -59,10 +60,28 @@ const defaultKV: TimingsKV = { get: safeGetItem, set: safeSetItem };
 
 export const SYNC_TIMINGS_MAX = 20;
 
+type SyncTimingListener = (entry: SyncTimingEntry) => void;
+const syncTimingListeners = new Set<SyncTimingListener>();
+
+/** 进程内订阅每一轮同步耗时的落账（open_session 取「会话开始后的第一条」，ios-instant-open 阶段1 design §3.5）。 */
+export function onSyncTimingRecorded(listener: SyncTimingListener): () => void {
+  syncTimingListeners.add(listener);
+  return () => {
+    syncTimingListeners.delete(listener);
+  };
+}
+
 export function recordSyncTiming(entry: SyncTimingEntry, kv: TimingsKV = defaultKV): void {
   const existing = getSyncTimings(kv);
   const next = [entry, ...existing].slice(0, SYNC_TIMINGS_MAX); // 环形：最新在前，超出裁尾
   kv.set(STORAGE_KEYS.syncPhaseTimings, JSON.stringify(next));
+  for (const listener of syncTimingListeners) {
+    try {
+      listener(entry);
+    } catch {
+      // 观测监听器的错误不影响同步耗时落账
+    }
+  }
 }
 
 // 逐元素 shape 校验：坏元素被丢弃而非传染 UI。phases 允许带未知键（历史 localStorage
@@ -91,10 +110,12 @@ function isValidTimingEntry(value: unknown): value is SyncTimingEntry {
   return true;
 }
 
-// 从浏览器 Resource Timing API 里读取最近一条 /api/sync/ 请求的传输层协议
-// (nextHopProtocol，如 h2/h3/http/1.1)。仅用于观测，任何异常/API 缺失都兜底
-// 返回 undefined —— 绝不能因为埋点失败影响同步主流程。
+// 读取最近一条 /api/sync/ 请求的传输层协议（nextHopProtocol，如 h2/h3/http/1.1）。先读 PerformanceObserver 缓存
+// （resourceTimingCache.ts）——`getEntriesByType` 受 250 条缓冲上限约束，长驻页面写满后读不到新条目；缓存没装或还没
+// 观察到时再扫缓冲兜底。仅用于观测，任何异常 / API 缺失都返回 undefined，绝不能影响同步主流程。
 export function readSyncTransportProtocol(): string | undefined {
+  const cached = latestSyncProtocol();
+  if (cached) return cached;
   try {
     if (typeof performance === "undefined" || typeof performance.getEntriesByType !== "function") {
       return undefined;

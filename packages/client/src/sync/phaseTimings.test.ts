@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { STORAGE_KEYS } from "../lib/storageKeys.js";
 import {
   SYNC_TIMINGS_MAX,
@@ -7,11 +7,13 @@ import {
   createPhaseRecorder,
   getSyncTimings,
   mergeSyncTimingTransport,
+  onSyncTimingRecorded,
   readSyncTransportProtocol,
   recordSyncTiming,
   resolveSyncTimingTransport,
   timingTotalsPercentiles,
 } from "./phaseTimings.js";
+import { recordResourceEntry, resetResourceTimingCache } from "./resourceTimingCache.js";
 
 // in-memory KV：不碰真实 localStorage，遵循桶纪律。
 function createMemoryKV(): TimingsKV {
@@ -64,6 +66,7 @@ describe("createPhaseRecorder", () => {
 });
 
 describe("readSyncTransportProtocol", () => {
+  beforeEach(resetResourceTimingCache);
   afterEach(() => {
     vi.restoreAllMocks();
   });
@@ -81,6 +84,22 @@ describe("readSyncTransportProtocol", () => {
     vi.spyOn(performance, "getEntriesByType").mockReturnValue([]);
 
     expect(readSyncTransportProtocol()).toBeUndefined();
+  });
+
+  // 逃逸变异：仍只扫 getEntriesByType → 长驻页面缓冲写满后永远读不到新协议。
+  it("优先读资源计时缓存（缓冲写满后 getEntriesByType 读不到新条目）", () => {
+    vi.spyOn(performance, "getEntriesByType").mockReturnValue([]);
+    recordResourceEntry({
+      name: "https://x/api/sync/pull",
+      startTime: 1,
+      connectStart: 1,
+      connectEnd: 1,
+      requestStart: 1,
+      responseStart: 2,
+      responseEnd: 3,
+      nextHopProtocol: "h3",
+    });
+    expect(readSyncTransportProtocol()).toBe("h3");
   });
 });
 
@@ -198,5 +217,33 @@ describe("timingTotalsPercentiles", () => {
   it("少于 2 条返回 null", () => {
     expect(timingTotalsPercentiles([])).toBeNull();
     expect(timingTotalsPercentiles([makeEntry()])).toBeNull();
+  });
+});
+
+describe("onSyncTimingRecorded", () => {
+  it("落账后通知监听器，退订后不再通知", () => {
+    const kv = createMemoryKV();
+    const seen: SyncTimingEntry[] = [];
+    const unsubscribe = onSyncTimingRecorded((entry) => seen.push(entry));
+    const first = makeEntry({ totalMs: 1 });
+    recordSyncTiming(first, kv);
+    unsubscribe();
+    recordSyncTiming(makeEntry({ totalMs: 2 }), kv);
+    expect(seen).toEqual([first]);
+  });
+
+  // 逃逸变异：监听器抛错不吞 → 观测代码的 bug 让同步耗时落账抛到 useSync 的 finally 里。
+  it("监听器抛错被吞，不影响落账与其它监听器", () => {
+    const kv = createMemoryKV();
+    const other = vi.fn();
+    const offBad = onSyncTimingRecorded(() => {
+      throw new Error("boom");
+    });
+    const offOther = onSyncTimingRecorded(other);
+    expect(() => recordSyncTiming(makeEntry(), kv)).not.toThrow();
+    expect(getSyncTimings(kv)).toHaveLength(1);
+    expect(other).toHaveBeenCalledTimes(1);
+    offBad();
+    offOther();
   });
 });
