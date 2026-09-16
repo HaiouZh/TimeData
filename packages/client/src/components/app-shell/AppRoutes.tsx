@@ -1,42 +1,76 @@
 import { lazy } from "react";
 import { type Location, Route, Routes } from "react-router";
+import { trackLazyLoad } from "../../lib/recovery/lazyRegistry.ts";
 import TimelinePage from "../../pages/TimelinePage.tsx";
 
 // 除首屏时间轴外全部路由懒加载：recharts/@xyflow/markdown 等重依赖只在进入对应页面时才加载。
-const DiaryPage = lazy(() => import("../../pages/DiaryPage.tsx"));
-const DiaryReviewPage = lazy(() => import("../../pages/diary/review/DiaryReviewPage.tsx"));
-const StyleguidePage = lazy(() => import("../../pages/dev/StyleguidePage.tsx"));
-const EntryPage = lazy(() => import("../../pages/EntryPage.tsx"));
-const GoalDetailPage = lazy(() => import("../../pages/goals/GoalDetailPage.tsx"));
-const GoalsPage = lazy(() => import("../../pages/goals/GoalsPage.tsx"));
-const QuickNotesPage = lazy(() => import("../../pages/QuickNotesPage.tsx"));
-const SearchPage = lazy(() => import("../../pages/SearchPage.tsx"));
-const SettingsPage = lazy(() => import("../../pages/SettingsPage.tsx"));
-const StatsPage = lazy(() => import("../../pages/StatsPage.tsx"));
-const SettingsAdminInsightsPage = lazy(() => import("../../pages/settings/SettingsAdminInsightsPage.tsx"));
-const SettingsCategoriesPage = lazy(() => import("../../pages/settings/SettingsCategoriesPage.tsx"));
-const SettingsCategoryDetailPage = lazy(() => import("../../pages/settings/SettingsCategoryDetailPage.tsx"));
-const SettingsDataPage = lazy(() => import("../../pages/settings/SettingsDataPage.tsx"));
-const SettingsDesktopPage = lazy(() => import("../../pages/settings/SettingsDesktopPage.tsx"));
-const SettingsDiaryPage = lazy(() => import("../../pages/settings/SettingsDiaryPage.tsx"));
-const SettingsInsightsPage = lazy(() => import("../../pages/settings/SettingsInsightsPage.tsx"));
-const SettingsMorePage = lazy(() => import("../../pages/settings/SettingsMorePage.tsx"));
-const SettingsNavPage = lazy(() =>
-  import("../../pages/settings/SettingsNavPage.tsx").then((m) => ({ default: m.SettingsNavPage })),
+// 一律经 trackLazyLoad 登记在途：chunk 在 iOS 挂起期间被掐断而永不 settle 时，看门狗能点名是哪个页面（结构闸见 appRoutesLazyTracking.test.ts）。
+const DiaryPage = lazy(trackLazyLoad("DiaryPage", () => import("../../pages/DiaryPage.tsx")));
+const DiaryReviewPage = lazy(
+  trackLazyLoad("DiaryReviewPage", () => import("../../pages/diary/review/DiaryReviewPage.tsx")),
 );
-const SettingsServerPage = lazy(() => import("../../pages/settings/SettingsServerPage.tsx"));
-const SettingsStatsLayoutPage = lazy(() => import("../../pages/settings/SettingsStatsLayoutPage.tsx"));
-const SettingsTodoGravityPage = lazy(() => import("../../pages/settings/SettingsTodoGravityPage.tsx"));
-const SettingsTodoStatsLayoutPage = lazy(() => import("../../pages/settings/SettingsTodoStatsLayoutPage.tsx"));
-const SettingsTracksPage = lazy(() =>
-  import("../../pages/settings/SettingsTracksPage.tsx").then((m) => ({ default: m.SettingsTracksPage })),
+const StyleguidePage = lazy(trackLazyLoad("StyleguidePage", () => import("../../pages/dev/StyleguidePage.tsx")));
+const EntryPage = lazy(trackLazyLoad("EntryPage", () => import("../../pages/EntryPage.tsx")));
+const GoalDetailPage = lazy(trackLazyLoad("GoalDetailPage", () => import("../../pages/goals/GoalDetailPage.tsx")));
+const GoalsPage = lazy(trackLazyLoad("GoalsPage", () => import("../../pages/goals/GoalsPage.tsx")));
+const QuickNotesPage = lazy(trackLazyLoad("QuickNotesPage", () => import("../../pages/QuickNotesPage.tsx")));
+const SearchPage = lazy(trackLazyLoad("SearchPage", () => import("../../pages/SearchPage.tsx")));
+const SettingsPage = lazy(trackLazyLoad("SettingsPage", () => import("../../pages/SettingsPage.tsx")));
+const StatsPage = lazy(trackLazyLoad("StatsPage", () => import("../../pages/StatsPage.tsx")));
+const SettingsAdminInsightsPage = lazy(
+  trackLazyLoad("SettingsAdminInsightsPage", () => import("../../pages/settings/SettingsAdminInsightsPage.tsx")),
 );
-const TimeStatsPage = lazy(() => import("../../pages/TimeStatsPage.tsx"));
-const TodoPage = lazy(() => import("../../pages/TodoPage.tsx").then((m) => ({ default: m.TodoPage })));
-const TodoStatsPage = lazy(() => import("../../pages/TodoStatsPage.tsx"));
-const TrackDetailPage = lazy(() => import("../../pages/tracks/TrackDetailPage.tsx"));
-const TracksListPage = lazy(() => import("../../pages/tracks/TracksListPage.tsx"));
-const TracksShell = lazy(() => import("../../pages/tracks/TracksShell.tsx"));
+const SettingsCategoriesPage = lazy(
+  trackLazyLoad("SettingsCategoriesPage", () => import("../../pages/settings/SettingsCategoriesPage.tsx")),
+);
+const SettingsCategoryDetailPage = lazy(
+  trackLazyLoad("SettingsCategoryDetailPage", () => import("../../pages/settings/SettingsCategoryDetailPage.tsx")),
+);
+const SettingsDataPage = lazy(
+  trackLazyLoad("SettingsDataPage", () => import("../../pages/settings/SettingsDataPage.tsx")),
+);
+const SettingsDesktopPage = lazy(
+  trackLazyLoad("SettingsDesktopPage", () => import("../../pages/settings/SettingsDesktopPage.tsx")),
+);
+const SettingsDiaryPage = lazy(
+  trackLazyLoad("SettingsDiaryPage", () => import("../../pages/settings/SettingsDiaryPage.tsx")),
+);
+const SettingsInsightsPage = lazy(
+  trackLazyLoad("SettingsInsightsPage", () => import("../../pages/settings/SettingsInsightsPage.tsx")),
+);
+const SettingsMorePage = lazy(
+  trackLazyLoad("SettingsMorePage", () => import("../../pages/settings/SettingsMorePage.tsx")),
+);
+const SettingsNavPage = lazy(
+  trackLazyLoad("SettingsNavPage", () =>
+    import("../../pages/settings/SettingsNavPage.tsx").then((m) => ({ default: m.SettingsNavPage })),
+  ),
+);
+const SettingsServerPage = lazy(
+  trackLazyLoad("SettingsServerPage", () => import("../../pages/settings/SettingsServerPage.tsx")),
+);
+const SettingsStatsLayoutPage = lazy(
+  trackLazyLoad("SettingsStatsLayoutPage", () => import("../../pages/settings/SettingsStatsLayoutPage.tsx")),
+);
+const SettingsTodoGravityPage = lazy(
+  trackLazyLoad("SettingsTodoGravityPage", () => import("../../pages/settings/SettingsTodoGravityPage.tsx")),
+);
+const SettingsTodoStatsLayoutPage = lazy(
+  trackLazyLoad("SettingsTodoStatsLayoutPage", () => import("../../pages/settings/SettingsTodoStatsLayoutPage.tsx")),
+);
+const SettingsTracksPage = lazy(
+  trackLazyLoad("SettingsTracksPage", () =>
+    import("../../pages/settings/SettingsTracksPage.tsx").then((m) => ({ default: m.SettingsTracksPage })),
+  ),
+);
+const TimeStatsPage = lazy(trackLazyLoad("TimeStatsPage", () => import("../../pages/TimeStatsPage.tsx")));
+const TodoPage = lazy(
+  trackLazyLoad("TodoPage", () => import("../../pages/TodoPage.tsx").then((m) => ({ default: m.TodoPage }))),
+);
+const TodoStatsPage = lazy(trackLazyLoad("TodoStatsPage", () => import("../../pages/TodoStatsPage.tsx")));
+const TrackDetailPage = lazy(trackLazyLoad("TrackDetailPage", () => import("../../pages/tracks/TrackDetailPage.tsx")));
+const TracksListPage = lazy(trackLazyLoad("TracksListPage", () => import("../../pages/tracks/TracksListPage.tsx")));
+const TracksShell = lazy(trackLazyLoad("TracksShell", () => import("../../pages/tracks/TracksShell.tsx")));
 
 /**
  * 可选 `location`：不传时 `<Routes>` 读当前 location（改前行为，一字不差）；

@@ -72,6 +72,7 @@
   "dirty-in-clean-bucket:lib/galaxyEngineMode.test.ts",
   "dirty-in-clean-bucket:lib/haptics.test.ts",
   "dirty-in-clean-bucket:lib/keyboardMotion.test.tsx",
+  "dirty-in-clean-bucket:lib/recovery/reactRootProbe.test.ts",
   "dirty-in-clean-bucket:lib/safeStorage.test.ts",
   "dirty-in-clean-bucket:lib/settings/navVisibleTabsSetting.hook.test.tsx",
   "dirty-in-clean-bucket:lib/settings/trackActionTagsSetting.test.ts",
