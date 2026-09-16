@@ -41,7 +41,7 @@ export function buildSchedulerProbeReport(input: SchedulerProbeInput): PendingRe
 }
 
 /**
- * 探针累计计数 +1 并返回新值。**必须落 KV 而不是模块变量**：`stashPendingReport` 上限 5 条，
+ * 探针累计计数 +1 并返回新值。**必须落 KV 而不是模块变量**：`stashPendingReport` 上限 30 条，
  * 一次会话超时超过 5 次时早的记录会被挤掉，只有跨重载存活的累计值不会因丢记录而失真（design §2.2）。
  */
 export function bumpProbeCount(kv: RecoveryKV = defaultRecoveryKV): number {

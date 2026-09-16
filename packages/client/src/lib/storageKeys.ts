@@ -31,6 +31,7 @@ export const STORAGE_KEYS = {
   pendingReports: "timedata_pending_reports",
   lastColdStart: "timedata_last_cold_start",
   schedulerProbes: "timedata_scheduler_probes",
+  droppedReports: "timedata_dropped_reports",
   goalPrereqMigrationVersion: "timedata_goal_prereq_migration_version",
   diaryReviewYearRange: "timedata_diary_review_year_range",
   diaryReviewLayoutB: "timedata_diary_review_layout_b",
