@@ -42,7 +42,12 @@ import { composeBottomInset } from "../lib/bottomInset.ts";
 import { focusOnPointerDown } from "../lib/fastFocus.ts";
 import { hapticDestructive } from "../lib/haptics.ts";
 import { punchNow } from "../lib/punch.js";
-import { formatLocalClock, groupQuickNotesForDisplay, quickNoteAriaLabel } from "../lib/quickNoteDisplay.ts";
+import {
+  type QuickNoteDisplayItem,
+  formatLocalClock,
+  groupQuickNotesForDisplay,
+  quickNoteAriaLabel,
+} from "../lib/quickNoteDisplay.ts";
 import {
   addQuickNote,
   deleteQuickNote,
@@ -74,6 +79,7 @@ import HighlightedText from "../quick-notes/HighlightedText.tsx";
 import { shouldShowJumpToLatest } from "../quick-notes/jumpToLatest.ts";
 import NoteBubble from "../quick-notes/NoteBubble.tsx";
 import QuickNoteActionMenu from "../quick-notes/QuickNoteActionMenu.tsx";
+import { revealList, scrollToLatest } from "../quick-notes/scrollToLatest.ts";
 import { searchQuickNotes } from "../quick-notes/searchQuickNotes.ts";
 import { parseSearchTerms } from "../quick-notes/searchTerms.ts";
 import { useQuickNoteTimeline } from "../quick-notes/useQuickNoteTimeline.ts";
@@ -200,6 +206,11 @@ export default function QuickNotesPage() {
   // 事件由浏览器在滚动真正发生**之后**异步派发，handleScroll 那时才排下新定时器——要压的正是
   // 那一个，滚之前清的是别人的旧定时器，压不到它。见落点 effect 与 handleScroll 尾部。
   const skipNextScrollScanRef = useRef(false);
+  // 「回到最新」跨数据窗口时记下**点击那一刻的列表内容**：新的最新窗口落定（吸底 layout effect
+  // 看到内容引用变了）给列表整块淡入。换窗口是硬切、没有可滚的路径，淡入是唯一能给的过渡；同窗口内
+  // 的「回到最新」走平滑滚动，不记它。其它挪窗口的路（日期跳转 / 搜索定位）要把它清掉，否则之后某次
+  // 无关的落定会白白淡一次。
+  const revealOnLatestRef = useRef<QuickNoteDisplayItem[] | null>(null);
   // 停手定时器的回调捕获的是「创建定时器那一次渲染」的闭包：用户在那 1.2 秒内打开日历、
   // 进多选或开搜索，回调里读到的仍是旧值，照样会打上隐身类。同 draftTextRef / editingIdRef
   // 的老问题，经这个随渲染同步的 ref 读最新值。
@@ -440,7 +451,12 @@ export default function QuickNotesPage() {
   // 只在列表内容（新增 / 加载更多 / 删除）或搜索、最新窗口状态变化时校正滚动位置。
   // 不能每次 render 都跑：否则滚动驱动的 setState（日期气泡、导航显隐、atBottom）会反复
   // 把 scrollTop 弹回底部，在安卓 WebView 上表现为缓慢下滑时整体抖动、页面却不动。
-  const listItemCount = displayItems.length;
+  //
+  // 依赖认的是 displayItems **本身**（live 查询每次落数据都是新引用），不是它的条数：换数据窗口时
+  // atLatest 在新数据到达**之前**就翻成 true（setWindowState 同步、liveQuery 异步，期间还渲染着旧
+  // 数据），effect 那一跑贴的是旧内容的底；新内容落下后若条数恰好相等（历史 7 天 50 条 → 最新
+  // 7 天 50 条），按条数的依赖就不再跑，列表停在离底几千像素处、浮标不消失——真浏览器实测
+  // 3587px。有用例锁「两窗条数相等也贴到新内容的底」。
   useLayoutEffect(() => {
     const el = scrollRef.current;
     if (!el) return;
@@ -451,10 +467,15 @@ export default function QuickNotesPage() {
       return;
     }
 
-    if (listItemCount > 0 && !searchOpen && stickBottomRef.current && timeline.atLatest) {
+    if (displayItems.length > 0 && !searchOpen && stickBottomRef.current && timeline.atLatest) {
       el.scrollTop = el.scrollHeight;
+      // 淡入只认「点击之后内容真的换过」：atLatest 先翻、旧内容还在的那一跑不算，等新窗口落下。
+      if (revealOnLatestRef.current && revealOnLatestRef.current !== displayItems) {
+        revealOnLatestRef.current = null;
+        revealList(el.firstElementChild);
+      }
     }
-  }, [listItemCount, searchOpen, timeline.atLatest]);
+  }, [displayItems, searchOpen, timeline.atLatest]);
 
   useLayoutEffect(() => {
     const textarea = inputRef.current;
@@ -660,18 +681,24 @@ export default function QuickNotesPage() {
   }
 
   // 「回到最新」的唯一实现：浮标按钮与历史视图保存后的 toast 共用，避免两处各写一遍。
+  // 两种情形两种过场（用户 2026-09-17 报「下滑很生硬，像直接刷新」）：
+  // - 已在最新窗口：平滑滚到底，离底太远先瞬移到离底两屏处再滚（scrollToLatest）。滚动期间
+  //   atBottom 由 handleScroll 按真实位置更新，浮标到底才消失——不预先 setAtBottom(true)，否则
+  //   它先消失、动画中又冒出来、到底再消失，闪三下。
+  // - 不在最新窗口：换数据窗口无路可滚，只能硬切；落定那一刻列表整块淡入（revealOnLatestRef）。
   function jumpToLatest() {
     cancelPendingStuckScan();
     setSearchParams({});
     stickBottomRef.current = true;
     pendingJumpRef.current = null;
-    setAtBottom(true);
     if (!timeline.atLatest) {
+      revealOnLatestRef.current = displayItems;
+      setAtBottom(true);
       void timeline.resetToLatest();
       return;
     }
     const el = scrollRef.current;
-    if (el) el.scrollTop = el.scrollHeight;
+    if (el) scrollToLatest(el);
   }
 
   async function handleResultClick(note: QuickNote) {
@@ -685,6 +712,7 @@ export default function QuickNotesPage() {
     cancelPendingStuckScan();
     setSearchParams(localDate === today ? {} : { date: localDate });
     stickBottomRef.current = false;
+    revealOnLatestRef.current = null;
     // 定位交给 focusNoteId 的 scrollIntoView，别让残留的日期定位请求抢滚动。
     pendingJumpRef.current = null;
     await timeline.jumpToNote(note);
@@ -1014,6 +1042,7 @@ export default function QuickNotesPage() {
     cancelPendingStuckScan();
     setSearchParams(nextDate === today ? {} : { date: nextDate });
     stickBottomRef.current = false;
+    revealOnLatestRef.current = null;
     pendingJumpRef.current = { localDate: nextDate, utcStart: localDateTimeToUtc(`${nextDate}T00:00:00`) };
     setPendingJumpSeq((seq) => seq + 1);
     void timeline.jumpToDate(nextDate);

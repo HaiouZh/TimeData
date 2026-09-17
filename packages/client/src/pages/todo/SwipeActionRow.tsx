@@ -1,6 +1,7 @@
 import type { Icon as PhosphorIcon } from "@phosphor-icons/react";
 import { type ReactNode, type RefObject, useEffect, useRef } from "react";
 import { Icon } from "../../components/Icon.js";
+import { prefersReducedMotion } from "../../lib/prefersReducedMotion.js";
 import {
   ROW_SWIPE_ACTION_WIDTH_PX,
   ROW_SWIPE_SETTLE_EASING,
@@ -46,10 +47,6 @@ interface RowController {
   close: () => void;
   reset: () => void;
   isOpen: () => boolean;
-}
-
-function prefersReducedMotion(): boolean {
-  return typeof window.matchMedia === "function" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 }
 
 /**

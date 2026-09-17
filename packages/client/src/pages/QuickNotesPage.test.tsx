@@ -1481,6 +1481,172 @@ describe("QuickNotesPage", () => {
   });
 }, PAGE_TEST_TIMEOUT_MS);
 
+describe("回到最新的过场", () => {
+  // matchMedia 桩按查询串给值：只有 prefers-reduced-motion 那条按参数回答，其余（宽屏判定）恒 false。
+  function stubReducedMotion(reduced: boolean) {
+    vi.stubGlobal(
+      "matchMedia",
+      vi.fn((query: string) => ({
+        matches: reduced && query.includes("prefers-reduced-motion"),
+        media: query,
+        onchange: null,
+        addEventListener: () => {},
+        removeEventListener: () => {},
+        addListener: () => {},
+        removeListener: () => {},
+        dispatchEvent: () => false,
+      })),
+    );
+  }
+
+  // 一条速记 + 可跟踪的滚动几何：内容 5000 高、视口 800 高，底部 scrollTop = 4200；起点 0（离底超过两屏）。
+  async function renderFarFromBottom() {
+    await db.quickNotes.add({
+      id: "n1",
+      text: "最新窗口里的一条",
+      occurredAt: "2026-06-01T04:00:00.000Z",
+      createdAt: "2026-06-01T04:00:00.000Z",
+      updatedAt: "2026-06-01T04:00:00.000Z",
+    });
+    const { host, root } = await renderPage();
+    const list = host.querySelector('[aria-label="速记列表"]');
+    if (!(list instanceof HTMLElement)) throw new Error("missing quick notes list");
+    let scrollTopValue = 0;
+    Object.defineProperty(list, "scrollTop", {
+      configurable: true,
+      get: () => scrollTopValue,
+      set: (value: number) => {
+        scrollTopValue = value;
+      },
+    });
+    Object.defineProperty(list, "scrollHeight", { configurable: true, get: () => 5000 });
+    Object.defineProperty(list, "clientHeight", { configurable: true, get: () => 800 });
+    // jsdom 没有 Element.scrollTo，装一个记录用的。
+    const scrollTo = vi.fn();
+    (list as HTMLElement & { scrollTo: typeof scrollTo }).scrollTo = scrollTo;
+    // 上滑离底 → 浮标出现。
+    await act(async () => {
+      list.dispatchEvent(new Event("scroll", { bubbles: true }));
+    });
+    await flush();
+    const button = host.querySelector<HTMLButtonElement>('button[aria-label="回到最新"]');
+    if (!button) throw new Error("missing jump-to-latest button");
+    return { host, root, list, button, scrollTo, readScrollTop: () => scrollTopValue };
+  }
+
+  it("已在最新窗口、离底超过两屏：先瞬移到离底两屏处，再 smooth 滚到底——不再一步硬切", async () => {
+    stubReducedMotion(false);
+    const { root, button, scrollTo, readScrollTop } = await renderFarFromBottom();
+
+    await click(button);
+
+    expect(readScrollTop()).toBe(4200 - 2 * 800);
+    expect(scrollTo).toHaveBeenCalledTimes(1);
+    expect(scrollTo).toHaveBeenCalledWith({ top: 4200, behavior: "smooth" });
+
+    await unmount(root);
+  });
+
+  it("系统减弱动态效果：一步瞬移到底，不调 smooth", async () => {
+    stubReducedMotion(true);
+    const { root, button, scrollTo, readScrollTop } = await renderFarFromBottom();
+
+    await click(button);
+
+    expect(readScrollTop()).toBe(4200);
+    expect(scrollTo).not.toHaveBeenCalled();
+
+    await unmount(root);
+  });
+
+  // 6月1日满 50 条 + 6月20日满 50 条：?date=2026-06-01 落到历史窗口，「回到最新」要换数据窗口。
+  // 两个窗口刻意**同样是 1 天 + 50 条**——displayItems 条数（含日期分隔项）完全相等，真浏览器里
+  // 7 天 + 50 条对 7 天 + 50 条就是这个局面；只要天数不等条数就会变、吸底 effect 就会碰巧再跑一次，
+  // 闸就是假的。
+  async function renderHistoryWindow() {
+    const day = (localDate: string, prefix: string) =>
+      Array.from({ length: 50 }, (_, index) => {
+        const at = `${localDate}T04:${String(index).padStart(2, "0")}:00.000Z`;
+        return { id: `${prefix}-${index}`, text: `${prefix} ${index}`, occurredAt: at, createdAt: at, updatedAt: at };
+      });
+    await db.quickNotes.bulkAdd([...day("2026-06-01", "旧记录"), ...day("2026-06-20", "新记录")]);
+    const { host, root } = await renderPage("/quick-notes?date=2026-06-01");
+    const list = host.querySelector('[aria-label="速记列表"]');
+    if (!(list instanceof HTMLElement)) throw new Error("missing quick notes list");
+    const wrapper = list.firstElementChild;
+    if (!(wrapper instanceof HTMLElement)) throw new Error("missing list wrapper");
+    // jsdom 不排版：让 scrollHeight 跟着**渲染出来的内容**走（正文总长度当高度），历史窗口与最新
+    // 窗口都是 50 条、条数一样但内容不同，只有内容变了高度才变——正是要卡的那个洞。
+    let scrollTopValue = 0;
+    Object.defineProperty(list, "scrollTop", {
+      configurable: true,
+      get: () => scrollTopValue,
+      set: (value: number) => {
+        scrollTopValue = value;
+      },
+    });
+    Object.defineProperty(list, "scrollHeight", { configurable: true, get: () => list.textContent?.length ?? 0 });
+    Object.defineProperty(list, "clientHeight", { configurable: true, get: () => 0 });
+    // jsdom 没有 Element.animate，装一个记录用的；列表内层在换窗口前后是同一个节点。
+    // 记下淡入那一刻列表里是什么内容：淡入必须发生在新窗口已经渲染出来之后，淡的是新列表。
+    let textAtReveal = "";
+    const animate = vi.fn(() => {
+      textAtReveal = host.textContent ?? "";
+    });
+    (wrapper as HTMLElement & { animate: typeof animate }).animate = animate;
+    const button = host.querySelector<HTMLButtonElement>('button[aria-label="回到最新"]');
+    if (!button) throw new Error("missing jump-to-latest button");
+    return { host, root, list, button, animate, readScrollTop: () => scrollTopValue, readTextAtReveal: () => textAtReveal };
+  }
+
+  it("从历史窗口回到最新：新窗口落定后贴到**新内容**的底——两窗都是 50 条、条数不变也得贴", async () => {
+    // 改动前就有的洞（真浏览器实测停在离底 3587px、浮标不消失）：吸底 effect 只认条数变化，而
+    // atLatest 在新数据到达前就翻 true，effect 拿旧内容贴了一次底，新内容落下后没人再贴。
+    stubReducedMotion(false);
+    const { host, root, list, button, readScrollTop } = await renderHistoryWindow();
+    expect(host.textContent).not.toContain("新记录");
+
+    await click(button);
+    await flush();
+
+    expect(host.textContent).toContain("新记录");
+    expect(readScrollTop()).toBe(list.scrollHeight);
+
+    await unmount(root);
+  });
+
+  it("从历史窗口回到最新：新窗口落定那一刻列表整块淡入，淡的是新列表不是旧列表", async () => {
+    stubReducedMotion(false);
+    const { host, root, button, animate, readTextAtReveal } = await renderHistoryWindow();
+    expect(host.textContent).not.toContain("新记录");
+
+    await click(button);
+    await flush();
+
+    expect(host.textContent).toContain("新记录");
+    expect(animate).toHaveBeenCalledTimes(1);
+    const [keyframes, options] = animate.mock.calls[0] as unknown as [Keyframe[], KeyframeAnimationOptions];
+    expect(keyframes).toEqual([{ opacity: 0 }, { opacity: 1 }]);
+    expect(options.duration).toBe(150);
+    expect(readTextAtReveal()).toContain("新记录");
+
+    await unmount(root);
+  });
+
+  it("系统减弱动态效果：换窗口不做淡入", async () => {
+    stubReducedMotion(true);
+    const { host, root, button, animate } = await renderHistoryWindow();
+
+    await click(button);
+    await flush();
+
+    expect(host.textContent).toContain("新记录");
+    expect(animate).not.toHaveBeenCalled();
+
+    await unmount(root);
+  });
+}, PAGE_TEST_TIMEOUT_MS);
+
 describe("捕捉中心", () => {
   beforeEach(async () => {
     await db.tasks.clear();

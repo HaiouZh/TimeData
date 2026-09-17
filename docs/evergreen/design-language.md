@@ -14,6 +14,7 @@ covers:
   - packages/client/src/pages/stats/chartColors.ts
   - packages/client/src/lib/contentTint.ts
   - packages/client/src/hooks/useKeyboardHeight.ts
+  - packages/client/src/lib/prefersReducedMotion.ts
   - packages/client/src/lib/bottomInset.ts
   - packages/client/src/lib/keyboardMotion.ts
   - packages/client/src/lib/fastFocus.ts
@@ -25,7 +26,7 @@ covers:
 contracts:
   - packages/client/src/index.css
   - packages/client/src/lib/navigation/navRegistry.ts
-last-reviewed: 2026-09-14
+last-reviewed: 2026-09-17
 ---
 
 # 设计语言
@@ -63,7 +64,7 @@ last-reviewed: 2026-09-14
 - **黑白命名色已 token 化**：Tailwind `white`/`black` 命名色不直接进 UI chrome（棘轮 `bare-black-white`，见 [ratchets](design-language/ratchets.md)）。弹层遮罩用 `bg-backdrop/*`（`--color-backdrop`），accent 实心面上的反白文字用 `text-accent-contrast`；用户内容色需要黑白表达时显式走业务数据路径。
 - **滚动条**：`--color-scrollbar-thumb` / `--color-scrollbar-thumb-hover`（滑块常态 / 悬停提亮，色值同边框灰蓝档但语义独立）。`html` 上 `scrollbar-width: thin` + `scrollbar-color` 全站继承，轨道透明；hover 提亮走零特异性 `:where(:hover)`，局部隐藏特例（如转盘 `.wheel-scroll`）可直接压过。**只用标准属性，不用 `::-webkit-scrollbar` 伪元素**——后者会让 Chrome/Edge 从 overlay 条退化成常驻占位条（`indexCssTokens.test.ts` 有计数闸守着，全站仅转盘的 display:none 隐藏一处豁免）。
 - **阴影**：`--shadow-elev1`（小表面）/ `--shadow-elev2`（浮层），仅大表面用；两者均叠了顶部 `inset 0 1px 0` hairline 高光，暗色下给大表面一道微亮上沿。
-- **动效**：普通过渡使用 Tailwind `duration-150/200/300`、`duration-0` 与 `ease-out`；sheet `150/200ms ease-out`、Todo occurrence `300ms cubic-bezier(0.2, 0, 0, 1)` 等 keyframe 在 `index.css` 邻近声明具体值。长循环动画保留自身值；所有动画尊重 `prefers-reduced-motion`。
+- **动效**：普通过渡使用 Tailwind `duration-150/200/300`、`duration-0` 与 `ease-out`；sheet `150/200ms ease-out`、Todo occurrence `300ms cubic-bezier(0.2, 0, 0, 1)` 等 keyframe 在 `index.css` 邻近声明具体值。长循环动画保留自身值；所有动画尊重 `prefers-reduced-motion`——CSS transition / animation 靠 `index.css` 里的媒体查询归零，JS 驱动的动效（Web Animations、`scrollTo({ behavior: "smooth" })`、手势位移）没有这层自动兜底，统一经 `lib/prefersReducedMotion.ts` 先问一声再决定做不做。
 - **z-index 层级**：`--z-dropdown`(30) / `--z-backdrop`(40) / `--z-modal`(50) / `--z-top`(70)，只治理**全局浮层**；普通 sticky header、画布 HUD 与 notice 属局部 stacking，使用 `z-10`/`z-20`。CSS 是单一事实源，内联 `style.zIndex` 走 JS 镜像 `lib/zLayers.ts` 的 `Z`（类比图表色镜像），`zLayers.test.ts` 守 JS 与 CSS 阶梯一致。
 - **键盘避让语义类**：`--keyboard-inset` / `--keyboard-scroll-padding` 两个全局变量由 `KeyboardAvoidanceBridge` 在键盘真挡着页面时写入 `documentElement`（安卓壳层已让位 / 桌面浏览器下不落地，消费点默认 0px 恒无副作用）；消费类 `.app-main`（滚动容器聚焦滚动落点）与 `.keyboard-inset-pad`（固定填高容器让底）定义在 `index.css`，弹层族（`.sheet-overlay` / `.sheet-panel` / `.task-detail-sheet(-expanded)`）同源扣减。信号口径、消费点清单与闸见 [invariants](design-language/invariants.md) 第 12 条。
 - **安全区语义类**：安全区值统一由 `:root` 的 `--safe-*` 变量供给（`--safe-top/right/bottom/left`，默认 `env(safe-area-inset-*)`；`html[data-platform="android"]` 时清零——Android 壳由 MainActivity 在原生层做唯一让位，WebView 里 `env()` 照常报非零值、会与原生 inset padding 叠成双倍留白，见 [android](android.md#android-s2)）。`.td-safe-top`（`padding-top: var(--safe-top)`）、`.td-safe-x`（左右）、`.td-safe-bottom`（底部）定义在 `index.css` 的 `@layer components`（同 [ratchets](design-language/ratchets.md) 里「功能几何语义类」的理由：顶层规则会压过 Tailwind utilities，调用方盖不住）。生效前置是 `index.html` 的 viewport meta 带 `viewport-fit=cover`；桌面浏览器 `env()` 恒为 0，挂上即零变化。挂点必须是**非滚动根容器**——padding 区域由容器自身底色绘制，内容不会钻进刘海/圆角底下。当前消费方只有 AppShell 根 div（`td-safe-top td-safe-x`）；`.td-safe-bottom` 尚无消费方，底部让位由各实际占位者自己做（分工见 [invariants](design-language/invariants.md) 第 11 条）。
