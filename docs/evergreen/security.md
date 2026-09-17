@@ -54,7 +54,7 @@ last-reviewed: 2026-09-16
 | 凭据与连接 | `apiToken`（见上两段）、`apiUrl` | **敏感**：明文存本机 |
 | **用户内容** | **`quickNoteComposerDraft`**（速记页）、**`captureComposerDraft`**（桌面速记浮窗）—— 用户尚未发出的速记正文 | **含用户内容**：纯本地，不进同步域、不进备份 |
 | 业务 id 引用 | `sleepCategoryId`（睡眠分类 id） | 引用 id，不含内容 |
-| 同步游标 / 诊断 / UI 偏好 | `lastSyncedSeq`、`clockSkewMs`、`syncFailureCount`、`syncPhaseTimings`、`schemaNormalizationVersion`、`reloadTombstone` / `pendingReports` / `droppedReports` / `lastColdStart` / `lastHiddenAt` / `schedulerProbes`（冷启动、打开会话与调度器看门狗的观测记录与计数，只有耗时数字与归因标签）、各页分栏比例与折叠态、`goalsViewMode`、`galaxyEngine`（`/goals` 星图用确定性还是本地 settle 引擎）等 | 不含用户内容、不含凭据 |
+| 同步游标 / 诊断 / UI 偏好 | `lastSyncedSeq`、`clockSkewMs`、`syncFailureCount`、`syncPhaseTimings`、`schemaNormalizationVersion`、`reloadTombstone` / `pendingReports` / `droppedReports` / `lastColdStart` / `lastHiddenAt` / `schedulerProbes`（冷启动、打开会话与调度器看门狗的观测记录与计数，只有耗时数字与归因标签）、`keyboardMotion` / `keyboardProbe` / `keyboardDebug`（键盘动画的实测时长与调参 override、探针开关与剩余采样数、读数浮层开关——纯数字、布尔与曲线名）、各页分栏比例与折叠态、`goalsViewMode`、`galaxyEngine`（`/goals` 星图用确定性还是本地 settle 引擎）等 | 不含用户内容、不含凭据 |
 
 两个 `…ComposerDraft` 是仅有的把用户正文落到 localStorage 的 key——清本机数据、共享设备场景要按"含用户内容"对待，不能套用"UI 偏好无所谓"的判断。两者是**各自独立的 key**（共用会让浮窗里打了一半的话凭空出现在速记页）。
 

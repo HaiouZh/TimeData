@@ -64,7 +64,7 @@ last-reviewed: 2026-09-16
 
 设置页同步卡片展示最近一次各阶段耗时、p50/p95，以及最新一条的 `waitMs` / `reason` / `connection` / `transport`。带 push 或补差的那一轮，客户端审计日志会多写 `action: "phase_timings"`；服务端侧 push/pull 在 `sync_logs.detail.timings` 记录 parse / validate / apply / read / total 等阶段耗时。这套观测纯附加，不改变任何同步判定或行为。
 
-同一条上报通道还搭载几类与同步无关的客户端观测：冷启动分段 `action: "cold_start"`、调度器看门狗现场 `action: "scheduler_probe"`、一次打开的全程 `action: "open_session"`。它们不单独发请求，先攒在 localStorage `timedata_pending_reports`（上限 30 条），随下一次带上报的同步轮一起 POST；因此服务端 `timestamp` 是上报时刻而非发生时刻，同一秒出现多条即是一次补投。
+同一条上报通道还搭载几类与同步无关的客户端观测：冷启动分段 `action: "cold_start"`、调度器看门狗现场 `action: "scheduler_probe"`、一次打开的全程 `action: "open_session"`。 键盘探针会话 `action: "kbd_session"`（设置 → 数据 → 高级 · 诊断 打开后才产生，每次打开最多 20 条；字段与读法见 [design-language/invariants 第 12 条](../design-language/invariants.md)，报告走 `node scripts/kbd-report.mjs`）。它们不单独发请求，先攒在 localStorage `timedata_pending_reports`（上限 30 条），随下一次带上报的同步轮一起 POST；因此服务端 `timestamp` 是上报时刻而非发生时刻，同一秒出现多条即是一次补投。
 
 读这条通道的数据前先认三件事：
 

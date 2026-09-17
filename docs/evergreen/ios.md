@@ -67,6 +67,8 @@ last-reviewed: 2026-09-16
 
 **两平台键盘让位统一 overlay 模型**：壳完全不动、键盘盖在 WebView 上，网页层 JS 按插件高度抬升（fixed 输入条走 `useKeyboardHeight` + transform 过渡，文档流表单 / 弹层走 `KeyboardAvoidanceBridge` 的全局 CSS 变量与显式差值滚动，见 invariants 第 12 条）。iOS 的「壳不动」= 本节 `resize: none`；Android 的「壳不动」= manifest `adjustResize` 禁 pan + `MainActivity` 不消费 `ime()` inset（壳层让位两条老路的淘汰理由见 [android](android.md#android-s2)）——两端共用同一份网页层代码与同一个口径。
 
+**锁外层滚动**：`KeyboardAvoidanceBridge` 挂载时（只 iOS）调 `Keyboard.setScroll({ isDisabled: true })`。`resize: none` 只拦插件自己 resize，拦不住 WebKit 为露出聚焦框滚整个文档（真机观感「弹起时页面先整体上滑、键盘再出、输入条最后到」）；本应用窗口滚动没有合法来源（滚动全在内层容器），锁掉零副作用。插件的实现是 `scrollEnabled = NO` + 把**自己**设成 `webView.scrollView.delegate`、`scrollViewDidScroll` 里 `contentOffset` 归零（`Keyboard.m`）——日后任何要接 scrollView delegate 的原生补丁都会与它撞车，得先看这条。收起后的 `scrollTo(0, 0)`（invariants 第 12 条）保留作兜底。
+
 <a id="ios-s4"></a>
 
 ## 4. Release 契约：latest 只由带 APK 的发布步骤打

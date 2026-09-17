@@ -17,6 +17,7 @@ covers:
   - packages/client/src/lib/prefersReducedMotion.ts
   - packages/client/src/lib/bottomInset.ts
   - packages/client/src/lib/keyboardMotion.ts
+  - packages/client/src/lib/keyboard/**
   - packages/client/src/lib/fastFocus.ts
   - packages/client/src/components/Keyboard*.tsx
   - packages/client/src/App.tsx
