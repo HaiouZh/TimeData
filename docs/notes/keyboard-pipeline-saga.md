@@ -3,6 +3,7 @@
 > 给下一个碰输入框的人（包括未来的自己）：先读完这页再动手。本页是流水与结论的汇总；
 > 现行口径的权威在 `docs/evergreen/design-language/invariants.md` 第 12 条，
 > 对抗验证与 TG 源码采掘的原始报告在 `.dispatch/20260822-{ios-flash,kbd-statemachine,tg-reference}/REPORT.md`。
+> 本页只写 2026-08-22 ~ 23 这一轮的结论；跨轮次的根因表 / 试错编年 / 否决方案 / 三端矩阵在长期台账 `docs_local/notes/keyboard-ledger.md`（本地过程文档，不入 git），之前之后的轮次去那里查。
 
 ## 一、已钉死的根因（5 个，全部有真机证据或穷举证明）
 
