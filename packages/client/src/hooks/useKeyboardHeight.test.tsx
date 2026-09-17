@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { act, createElement } from "react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { renderDom, unmount } from "../test/domHarness.js";
 
 const getPlatformMock = vi.hoisted(() => vi.fn(() => "web"));
@@ -185,7 +185,14 @@ describe("useKeyboardHeight — native", () => {
     (window as unknown as { visualViewport?: unknown }).visualViewport = viewport;
 
     const { root } = await renderDom(createElement(Probe));
-    expect(addListenerMock).toHaveBeenCalledTimes(2);
+    // will/did × show/hide 四个事件：will 驱动高度与在场，did 学系统时长并提交 settled（R7）。
+    expect(addListenerMock).toHaveBeenCalledTimes(4);
+    expect(addListenerMock.mock.calls.map((c) => c[0]).sort()).toEqual([
+      "keyboardDidHide",
+      "keyboardDidShow",
+      "keyboardWillHide",
+      "keyboardWillShow",
+    ]);
 
     await unmount(root);
   });
@@ -889,5 +896,197 @@ describe("useKeyboardHeight — web 兜底", () => {
     expect(readHeight(host)).toBe("0");
 
     await unmount(root);
+  });
+});
+
+// ── R7：did 事件学时长、settled 高度、探针总线 ────────────────────────────
+import { readStoredMotion } from "../lib/keyboard/keyboardMotionPrefs.js";
+import {
+  type KeyboardProbeEvent,
+  getKeyboardPlatform,
+  subscribeKeyboardEvents,
+  useKeyboardHeightSettled,
+  useKeyboardMotion,
+} from "./useKeyboardHeight.js";
+
+type NativeHandlers = Record<string, (info?: { keyboardHeight: number }) => void>;
+
+/** 收集四个插件事件的处理函数，测试里按名触发。 */
+function captureNative(): NativeHandlers {
+  const handlers: NativeHandlers = {};
+  addListenerMock.mockImplementation((name: string, cb: NativeHandlers[string]) => {
+    handlers[name] = cb;
+    return Promise.resolve({ remove: vi.fn() });
+  });
+  return handlers;
+}
+
+function MotionProbe() {
+  const m = useKeyboardMotion();
+  return createElement("div", {
+    "data-show": String(m.showMs),
+    "data-hide": String(m.hideMs),
+    "data-ease": m.easingName,
+  });
+}
+
+function SettledProbe() {
+  const h = useKeyboardHeightSettled();
+  return createElement("div", { "data-settled": String(h) });
+}
+
+function readAttr(host: HTMLElement, name: string): string | null {
+  return host.firstElementChild?.getAttribute(name) ?? null;
+}
+
+describe("did 事件：时长学习、settled 高度、探针总线", () => {
+  let nowMs = 1000;
+  beforeEach(() => {
+    localStorage.clear();
+    vi.useFakeTimers();
+    nowMs = 1000;
+    vi.spyOn(performance, "now").mockImplementation(() => nowMs);
+    getPlatformMock.mockReturnValue("android");
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+  });
+
+  it("willShow→didShow 的间隔写进实测时长，下一次 useKeyboardMotion 按它给", async () => {
+    const native = captureNative();
+    const { host, root } = await renderDom(createElement(MotionProbe));
+    expect(readAttr(host, "data-show")).toBe("285");
+    await act(async () => {
+      native.keyboardWillShow?.({ keyboardHeight: 300 });
+    });
+    await act(async () => {
+      nowMs += 257;
+      native.keyboardDidShow?.({ keyboardHeight: 300 });
+    });
+    expect(readStoredMotion().showMs).toBe(257);
+    expect(readAttr(host, "data-show")).toBe("257");
+    expect(readAttr(host, "data-hide")).toBe("285");
+    expect(readAttr(host, "data-ease")).toBe("android");
+    await unmount(root);
+  });
+
+  it("did 先于 will、或间隔越界，不写时长", async () => {
+    const native = captureNative();
+    const { root } = await renderDom(createElement(MotionProbe));
+    await act(async () => {
+      native.keyboardDidShow?.({ keyboardHeight: 300 });
+    });
+    expect(readStoredMotion().showMs).toBeUndefined();
+    await act(async () => {
+      native.keyboardWillHide?.();
+    });
+    await act(async () => {
+      nowMs += 2000;
+      native.keyboardDidHide?.();
+    });
+    expect(readStoredMotion().hideMs).toBeUndefined();
+    await unmount(root);
+  });
+
+  it("新的 willShow 覆盖未闭合的起点：候选条加高的第二次 willShow 后，didShow 按第二次算", async () => {
+    const native = captureNative();
+    const { root } = await renderDom(createElement(MotionProbe));
+    await act(async () => {
+      native.keyboardWillShow?.({ keyboardHeight: 300 });
+    });
+    await act(async () => {
+      nowMs += 400;
+      native.keyboardWillShow?.({ keyboardHeight: 340 });
+    });
+    await act(async () => {
+      nowMs += 120;
+      native.keyboardDidShow?.({ keyboardHeight: 340 });
+    });
+    expect(readStoredMotion().showMs).toBe(120);
+    await unmount(root);
+  });
+
+  it("settled 高度在 didShow 到达前保持旧值，到达后才等于即时高度；did 缺席时靠超时兜底", async () => {
+    const native = captureNative();
+    const { host, root } = await renderDom(createElement(SettledProbe));
+    expect(readAttr(host, "data-settled")).toBe("0");
+    await act(async () => {
+      native.keyboardWillShow?.({ keyboardHeight: 300 });
+    });
+    expect(readAttr(host, "data-settled")).toBe("0");
+    await act(async () => {
+      native.keyboardDidShow?.({ keyboardHeight: 300 });
+    });
+    expect(readAttr(host, "data-settled")).toBe("300");
+    await act(async () => {
+      native.keyboardWillHide?.();
+    });
+    expect(readAttr(host, "data-settled")).toBe("300");
+    await act(async () => {
+      vi.advanceTimersByTime(285 + 50);
+    });
+    expect(readAttr(host, "data-settled")).toBe("0");
+    await unmount(root);
+  });
+
+  it("web 平台 settled 与即时高度同步（没有 did 事件也没有零重排诉求）", async () => {
+    getPlatformMock.mockReturnValue("web");
+    const viewport = createViewportMock({ height: 768, offsetTop: 0 });
+    (window as unknown as { visualViewport?: unknown }).visualViewport = viewport;
+    const { host, root } = await renderDom(createElement(SettledProbe));
+    await act(async () => {
+      viewport.height = 468;
+      viewport.fire("resize");
+    });
+    expect(readAttr(host, "data-settled")).toBe("300");
+    await unmount(root);
+  });
+
+  it("subscribeKeyboardEvents 按序收到 fi/ws/ds/wh/dh/fo，带时刻与当时高度；focusin 不改任何状态", async () => {
+    const native = captureNative();
+    const seen: KeyboardProbeEvent[] = [];
+    const { host, root } = await renderDom(createElement(SettledProbe));
+    const off = subscribeKeyboardEvents((e) => seen.push(e));
+    const input = document.createElement("input");
+    host.appendChild(input);
+    await act(async () => {
+      input.dispatchEvent(new FocusEvent("focusin", { bubbles: true }));
+    });
+    // focusin 只广播，不预测在场
+    expect(readAttr(host, "data-settled")).toBe("0");
+    await act(async () => {
+      native.keyboardWillShow?.({ keyboardHeight: 300 });
+      native.keyboardDidShow?.({ keyboardHeight: 300 });
+      native.keyboardWillHide?.();
+      native.keyboardDidHide?.();
+      input.dispatchEvent(new FocusEvent("focusout", { bubbles: true }));
+    });
+    expect(seen.map((e) => e.type)).toEqual(["fi", "ws", "ds", "wh", "dh", "fo"]);
+    expect(seen[1]?.height).toBe(300);
+    expect(seen.every((e) => e.t === nowMs)).toBe(true);
+    off();
+    await unmount(root);
+  });
+
+  it("取消订阅后不再收到事件", async () => {
+    const native = captureNative();
+    const seen: KeyboardProbeEvent[] = [];
+    const { root } = await renderDom(createElement(SettledProbe));
+    const off = subscribeKeyboardEvents((e) => seen.push(e));
+    off();
+    await act(async () => {
+      native.keyboardWillShow?.({ keyboardHeight: 300 });
+    });
+    expect(seen).toEqual([]);
+    await unmount(root);
+  });
+
+  it("getKeyboardPlatform 把插件平台名收敛成三态", () => {
+    getPlatformMock.mockReturnValue("ios");
+    expect(getKeyboardPlatform()).toBe("ios");
+    getPlatformMock.mockReturnValue("electron");
+    expect(getKeyboardPlatform()).toBe("web");
   });
 });

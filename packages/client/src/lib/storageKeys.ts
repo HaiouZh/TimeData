@@ -37,4 +37,10 @@ export const STORAGE_KEYS = {
   diaryReviewYearRange: "timedata_diary_review_year_range",
   diaryReviewLayoutB: "timedata_diary_review_layout_b",
   diaryReviewMode: "timedata_diary_review_mode",
+  // 键盘运动参数：实测的系统动画时长 + 真机调参 override（mobile-keyboard R7）。纯数字与曲线名。
+  keyboardMotion: "timedata_keyboard_motion",
+  // 键盘探针开关与剩余采样数 {on, left}；探针记录本身走 pendingReports。
+  keyboardProbe: "timedata_keyboard_probe",
+  // 键盘读数浮层是否显示（探针开着才生效）。
+  keyboardDebug: "timedata_keyboard_debug",
 } as const;

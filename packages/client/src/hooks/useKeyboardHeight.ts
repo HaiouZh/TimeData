@@ -1,6 +1,13 @@
 import { Capacitor } from "@capacitor/core";
 import { Keyboard, type KeyboardInfo } from "@capacitor/keyboard";
 import { useSyncExternalStore } from "react";
+import {
+  type KeyboardMotion,
+  type MotionPlatform,
+  readStoredMotion,
+  recordMeasuredDuration,
+  resolveMotion,
+} from "../lib/keyboard/keyboardMotionPrefs.js";
 
 // 地址栏收合等无关抖动也会让 visualViewport 与 innerHeight 出现小差值；只有差值超过这个阈值
 // 才当作键盘遮挡，避免误报。
@@ -28,7 +35,31 @@ export function readViewportBottomGap(): number {
   return bottomGap > KEYBOARD_BOTTOM_GAP_THRESHOLD_PX ? bottomGap : 0;
 }
 
-type KeyboardState = { height: number; visible: boolean };
+type KeyboardState = {
+  height: number;
+  visible: boolean;
+  /** 键盘动画结束（did 事件或超时）后才跟上的遮挡量，给会触发重排的消费方（内容留白）。 */
+  settledHeight: number;
+  /** 输入条位移该用的时长与曲线：override > 实测 > 平台默认。 */
+  motion: KeyboardMotion;
+};
+
+export type KeyboardProbeEvent = {
+  type: "fi" | "fo" | "ws" | "ds" | "wh" | "dh";
+  /** performance.now()，与探针会话同一时钟。 */
+  t: number;
+  /** 事件那一刻的即时高度（ws 是插件报的原始键盘高）。 */
+  height: number;
+};
+
+export function getKeyboardPlatform(): MotionPlatform {
+  const p = Capacitor.getPlatform();
+  return p === "ios" || p === "android" ? p : "web";
+}
+
+function currentMotion(): KeyboardMotion {
+  return resolveMotion(getKeyboardPlatform(), readStoredMotion());
+}
 
 /**
  * 键盘状态的**单一信源**：一处监听、一份状态、所有消费方订阅同一份。
@@ -43,16 +74,42 @@ type KeyboardState = { height: number; visible: boolean };
  *（visible 侧按「缩量 ≤ 阈值」校准，height 侧按「插件报的键盘高度 ≤ 0」校准），合并会改语义。
  * 共享的只是那套 DOM / 插件监听与订阅分发。
  */
-let state: KeyboardState = { height: 0, visible: false };
+let state: KeyboardState = { height: 0, visible: false, settledHeight: 0, motion: currentMotion() };
 const subscribers = new Set<() => void>();
+const probeSubscribers = new Set<(e: KeyboardProbeEvent) => void>();
 let stopListening: (() => void) | null = null;
 
 function publish(next: Partial<KeyboardState>): void {
   const merged = { ...state, ...next };
   // 值没变就不通知：useSyncExternalStore 按快照身份判定，无谓的新值会招来多余重渲染。
-  if (merged.height === state.height && merged.visible === state.visible) return;
+  if (
+    merged.height === state.height &&
+    merged.visible === state.visible &&
+    merged.settledHeight === state.settledHeight &&
+    merged.motion === state.motion
+  )
+    return;
   state = merged;
   for (const notify of [...subscribers]) notify();
+}
+
+function emitProbe(type: KeyboardProbeEvent["type"], height: number): void {
+  if (probeSubscribers.size === 0) return;
+  const e: KeyboardProbeEvent = { type, t: performance.now(), height };
+  for (const fn of [...probeSubscribers]) fn(e);
+}
+
+/** 探针订阅：store 不认识探针，只广播「发生了什么」。订阅本身不启动监听——要有消费方在场才有事件。 */
+export function subscribeKeyboardEvents(fn: (e: KeyboardProbeEvent) => void): () => void {
+  probeSubscribers.add(fn);
+  return () => {
+    probeSubscribers.delete(fn);
+  };
+}
+
+/** 浮层调参后让所有消费方拿到新的时长曲线。 */
+export function refreshKeyboardMotion(): void {
+  publish({ motion: currentMotion() });
 }
 
 function startListening(): () => void {
@@ -60,6 +117,8 @@ function startListening(): () => void {
 
   const webPlatform = Capacitor.getPlatform() === "web";
   const nativePlatform = !webPlatform;
+  // 模块加载时平台可能还没定（桥未就绪 / 测试换平台），起监听时按当前平台重算一次运动参数。
+  publish({ motion: currentMotion() });
 
   // ── visible 侧内部状态 ──────────────────────────────────────────────
   // 壳还没让位时的 innerHeight 基线。壳缩 webview 的设备上，缩量与 IME 动画同步，
@@ -96,9 +155,11 @@ function startListening(): () => void {
   };
 
   const recomputeHeight = () => {
-    // web：实测是唯一信源（无插件桥接，rawKeyboardPx 恒 0）。
+    // web：实测是唯一信源（无插件桥接，rawKeyboardPx 恒 0）；没有 did 事件、也没有零重排诉求，
+    // settled 与即时值同步。
     if (webPlatform) {
-      publish({ height: readViewportBottomGap() });
+      const gap = readViewportBottomGap();
+      publish({ height: gap, settledHeight: gap });
       return;
     }
 
@@ -126,6 +187,30 @@ function startListening(): () => void {
     recomputeHeight();
   };
 
+  // ── settled 高度（native 零重排用）────────────────────────────────
+  // 键盘动画期间内容留白不动，did 事件（或超时兜底：时长 + 50ms）到了才把即时高度提交成 settled。
+  let settleTimer: ReturnType<typeof setTimeout> | null = null;
+  const settleNow = () => {
+    if (settleTimer !== null) {
+      clearTimeout(settleTimer);
+      settleTimer = null;
+    }
+    publish({ settledHeight: state.height });
+  };
+  const scheduleSettle = (afterMs: number) => {
+    if (settleTimer !== null) clearTimeout(settleTimer);
+    settleTimer = setTimeout(settleNow, afterMs + 50);
+  };
+
+  // ── 时长学习：will 记起点，did 到达算间隔 ──────────────────────────
+  // 新的 will 覆盖未闭合的起点（iOS 候选条加高会再发一次 willShow）；did 先于 will 或越界不采信。
+  let showStartedAt: number | null = null;
+  let hideStartedAt: number | null = null;
+  const learn = (kind: "show" | "hide", startedAt: number | null) => {
+    if (startedAt === null) return;
+    if (recordMeasuredDuration(kind, performance.now() - startedAt)) publish({ motion: currentMotion() });
+  };
+
   const viewport = window.visualViewport;
   window.addEventListener("resize", handleViewportChange);
   viewport?.addEventListener("resize", handleViewportChange);
@@ -144,10 +229,17 @@ function startListening(): () => void {
     publish({ visible: false });
     rawKeyboardPx = 0;
     recomputeHeight();
+    emitProbe("fo", state.height);
   };
   if (nativePlatform) {
     window.addEventListener("focusout", handleFocusOut);
   }
+  // focusin **只广播给探针**，不改任何状态——不是预测在场（见上）。不分平台：web 的探针会话也要边界。
+  const handleFocusIn = (event: FocusEvent) => {
+    if (!isEditableTarget(event.target)) return;
+    emitProbe("fi", state.height);
+  };
+  window.addEventListener("focusin", handleFocusIn);
 
   let removeNative = () => {};
   if (nativePlatform) {
@@ -161,16 +253,38 @@ function startListening(): () => void {
         publish({ visible: true });
         rawKeyboardPx = Number.isFinite(info?.keyboardHeight) ? info.keyboardHeight : 0;
         recomputeHeight();
+        showStartedAt = performance.now();
+        hideStartedAt = null;
+        scheduleSettle(state.motion.showMs);
+        emitProbe("ws", rawKeyboardPx);
+      }).catch(() => null);
+      // did 事件在动画结束发（Android onEnd / iOS UIKeyboardDid*Notification）：学时长 + 提交 settled。
+      const didShowListener = Keyboard.addListener("keyboardDidShow", () => {
+        learn("show", showStartedAt);
+        showStartedAt = null;
+        settleNow();
+        emitProbe("ds", state.height);
       }).catch(() => null);
       const hideListener = Keyboard.addListener("keyboardWillHide", () => {
         shrinkSuppressed = true;
         publish({ visible: false });
         rawKeyboardPx = 0;
         recomputeHeight();
+        hideStartedAt = performance.now();
+        showStartedAt = null;
+        scheduleSettle(state.motion.hideMs);
+        emitProbe("wh", 0);
+      }).catch(() => null);
+      const didHideListener = Keyboard.addListener("keyboardDidHide", () => {
+        learn("hide", hideStartedAt);
+        hideStartedAt = null;
+        settleNow();
+        emitProbe("dh", 0);
       }).catch(() => null);
       removeNative = () => {
-        void showListener.then((handle) => handle?.remove()).catch(() => {});
-        void hideListener.then((handle) => handle?.remove()).catch(() => {});
+        for (const listener of [showListener, didShowListener, hideListener, didHideListener]) {
+          void listener.then((handle) => handle?.remove()).catch(() => {});
+        }
       };
     } catch {
       // addListener 同步抛（旧桥 shim / 插件对象缺失）：native 无信源，高度恒 0——
@@ -187,9 +301,11 @@ function startListening(): () => void {
     if (nativePlatform) {
       window.removeEventListener("focusout", handleFocusOut);
     }
+    window.removeEventListener("focusin", handleFocusIn);
     removeNative();
+    if (settleTimer !== null) clearTimeout(settleTimer);
     // 最后一个消费方走了：状态复位，下次挂载重新从「键盘不在场」起步并重取基线。
-    state = { height: 0, visible: false };
+    state = { height: 0, visible: false, settledHeight: 0, motion: currentMotion() };
   };
 }
 
@@ -246,5 +362,29 @@ export function useKeyboardHeight(): number {
     subscribe,
     () => state.height,
     () => 0,
+  );
+}
+
+/**
+ * 键盘动画结束后才更新的遮挡量：给内容留白这类会触发重排的消费方，动画期间零重排
+ *（mobile-keyboard R7 design §1.3）。native 在 did 事件或「时长 + 50ms」超时后跟上即时值；
+ * web 与即时值同步。输入条位移（KeyboardDock）与 Bridge 的差值滚动仍用即时值。
+ */
+export function useKeyboardHeightSettled(): number {
+  return useSyncExternalStore(
+    subscribe,
+    () => state.settledHeight,
+    () => 0,
+  );
+}
+
+const MOTION_SSR: KeyboardMotion = resolveMotion("web", {});
+
+/** 输入条位移该用的时长与曲线：override（浮层调参）> 实测（did − will）> 平台默认。 */
+export function useKeyboardMotion(): KeyboardMotion {
+  return useSyncExternalStore(
+    subscribe,
+    () => state.motion,
+    () => MOTION_SSR,
   );
 }
