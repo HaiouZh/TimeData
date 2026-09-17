@@ -7,13 +7,16 @@ export interface QuickNoteActionMenuProps {
   onCopy: () => void;
   onEdit: () => void;
   onDelete: () => void;
-  onSelect: () => void;
+  /** 不传就没有「选择」项：搜索态进多选会自动退出搜索，那里不提供它。 */
+  onSelect?: () => void;
   onTogglePin: () => void;
   onClose: () => void;
 }
 
 const MENU_WIDTH = 140;
-const MENU_HEIGHT = 216;
+/** 单项高度（py-2 + td-text-label 行高）+ 容器 py-1，用来算菜单总高做视口内钳位。 */
+const MENU_ITEM_HEIGHT = 40;
+const MENU_PADDING = 16;
 
 export default function QuickNoteActionMenu({
   x,
@@ -28,8 +31,10 @@ export default function QuickNoteActionMenu({
 }: QuickNoteActionMenuProps) {
   const viewportWidth = typeof window === "undefined" ? 360 : window.innerWidth;
   const viewportHeight = typeof window === "undefined" ? 640 : window.innerHeight;
+  const itemCount = onSelect ? 5 : 4;
+  const menuHeight = itemCount * MENU_ITEM_HEIGHT + MENU_PADDING;
   const left = Math.max(8, Math.min(x, viewportWidth - MENU_WIDTH - 8));
-  const top = Math.max(8, Math.min(y, viewportHeight - MENU_HEIGHT - 8));
+  const top = Math.max(8, Math.min(y, viewportHeight - menuHeight - 8));
 
   const menuRef = useRef<HTMLDivElement>(null);
 
@@ -93,14 +98,16 @@ export default function QuickNoteActionMenu({
         >
           {pinned ? "取消置顶" : "置顶"}
         </button>
-        <button
-          type="button"
-          role="menuitem"
-          onClick={() => run(onSelect)}
-          className="block w-full px-4 py-2 text-left td-text-label text-ink hover:bg-surface-hover"
-        >
-          选择
-        </button>
+        {onSelect && (
+          <button
+            type="button"
+            role="menuitem"
+            onClick={() => run(onSelect)}
+            className="block w-full px-4 py-2 text-left td-text-label text-ink hover:bg-surface-hover"
+          >
+            选择
+          </button>
+        )}
         <button
           type="button"
           role="menuitem"

@@ -719,6 +719,13 @@ export default function QuickNotesPage() {
     setFocusNoteId(note.id);
   }
 
+  // 搜索态菜单里的「编辑」：composer 只在时间线才有，先按「定位到时间线」那条路跳过去（保留搜索词、
+  // 落点高亮，与卡片角上的定位按钮同一条路），落点后直接进入编辑。复制 / 置顶 / 删除都留在搜索态原地做。
+  async function editFromSearch(note: QuickNote) {
+    await handleResultClick(note);
+    await startEditing(note);
+  }
+
   // 轻提示（已复制 / 已导出 / 已清理）几秒后自动消失，避免一直挂在底部直到切换页面。
   function showStatus(message: string) {
     if (statusTimerRef.current) clearTimeout(statusTimerRef.current);
@@ -1352,11 +1359,18 @@ export default function QuickNotesPage() {
                     {group.notes.map((entry) => {
                       const note = entry.note;
                       const isAgentNote = note.source === "agent";
-                      // 卡片本体不再可点（误触就被拽离搜索流）；跳时间线走角上的定位小按钮。
+                      // 卡片本体不可**点**（误触就被拽离搜索流）；跳时间线走角上的定位小按钮。
+                      // 长按 / 右键 / 键盘唤起的操作菜单与主线气泡同一套接线（搜索态多选恒关，
+                      // noteInteractionProps 里的选择分支天然不走）；菜单项见下方 QuickNoteActionMenu。
                       return (
                         <div
                           key={entry.key}
+                          role="button"
+                          tabIndex={0}
                           data-note-id={note.id}
+                          aria-label={quickNoteAriaLabel(note)}
+                          {...noteInteractionProps(note)}
+                          style={{ WebkitTouchCallout: "none" }}
                           className={`${NOTE_CARD_BASE} rounded-card ${isAgentNote ? NOTE_CARD_AGENT : NOTE_CARD_DEFAULT}`}
                         >
                           <span className="float-right ml-2 flex items-center gap-1.5">
@@ -1678,9 +1692,10 @@ export default function QuickNotesPage() {
           y={menu.y}
           pinned={menu.note.pinned ?? false}
           onCopy={() => void handleCopy(menu.note)}
-          onEdit={() => void startEditing(menu.note)}
+          onEdit={() => void (searchOpen ? editFromSearch(menu.note) : startEditing(menu.note))}
           onDelete={() => void handleDelete(menu.note)}
-          onSelect={() => enterSelection(menu.note)}
+          // 搜索态不给「选择」：进多选会自动退出搜索，等于把人拽离搜索流。
+          onSelect={searchOpen ? undefined : () => enterSelection(menu.note)}
           onTogglePin={() => void handleTogglePin(menu.note)}
           onClose={() => setMenu(null)}
         />

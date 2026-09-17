@@ -2302,6 +2302,112 @@ describe("主线日期条", () => {
   });
 }, PAGE_TEST_TIMEOUT_MS);
 
+describe("搜索结果长按", () => {
+  // 用户 2026-09-17 报：搜索出来的条目没法长按操作，只能点定位跳过去才能操作。
+  // 搜索结果卡片接主线气泡同一套长按 / 右键 / 键盘唤起菜单的接线；卡片本体仍不可**点击**。
+  async function renderSearch(text: string, term: string) {
+    const originalScrollIntoView = Element.prototype.scrollIntoView;
+    const scrollSpy = vi.fn();
+    Element.prototype.scrollIntoView = scrollSpy;
+    const target = await addQuickNote(text, { occurredAt: "2026-05-20T04:00:00.000Z" });
+    await addQuickNote("今天无关", {});
+    const { host, root } = await renderPage();
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    await click(composerButton(host, "搜索速记"));
+    await typeIntoSearch(searchInput(host), term);
+    await waitForSearchDebounce();
+    const card = host.querySelector<HTMLElement>(`[data-note-id="${target.id}"]`);
+    if (!card) throw new Error("missing search result card");
+    return {
+      host,
+      root,
+      target,
+      card,
+      scrollSpy,
+      cleanup: async () => {
+        Element.prototype.scrollIntoView = originalScrollIntoView;
+        vi.useRealTimers();
+        await unmount(root);
+      },
+    };
+  }
+
+  function menuLabels(host: HTMLElement): string[] {
+    return Array.from(host.querySelectorAll('button[role="menuitem"]')).map((button) => button.textContent ?? "");
+  }
+
+  it("右键 / 长按搜索结果弹出四项菜单：复制、编辑、置顶、删除——没有「选择」", async () => {
+    const { host, card, cleanup } = await renderSearch("蓝莓 目标", "蓝莓");
+    try {
+      await act(async () => {
+        card.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, clientX: 10, clientY: 10 }));
+      });
+      await flush();
+
+      expect(menuLabels(host)).toEqual(["复制", "编辑", "置顶", "删除"]);
+      // 还在搜索态：弹菜单本身不把人拽离搜索流。
+      expect(searchInput(host).value).toBe("蓝莓");
+    } finally {
+      await cleanup();
+    }
+  });
+
+  it("键盘 Enter 在搜索结果上也能打开菜单——卡片是可聚焦的 role=button", async () => {
+    const { host, card, cleanup } = await renderSearch("蓝莓 目标", "蓝莓");
+    try {
+      expect(card.getAttribute("role")).toBe("button");
+      expect(card.tabIndex).toBe(0);
+      await act(async () => {
+        card.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+      });
+      await flush();
+
+      expect(menuLabels(host)).toContain("复制");
+    } finally {
+      await cleanup();
+    }
+  });
+
+  it("搜索态里复制：写入剪贴板后仍留在搜索态", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true });
+    const { host, card, cleanup } = await renderSearch("蓝莓 目标", "蓝莓");
+    try {
+      await act(async () => {
+        card.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, clientX: 10, clientY: 10 }));
+      });
+      await flush();
+      await click(menuItem(host, "复制"));
+
+      expect(writeText).toHaveBeenCalledWith("蓝莓 目标");
+      expect(searchInput(host).value).toBe("蓝莓");
+      expect(host.querySelector(`[data-note-id="${card.dataset.noteId}"]`)).not.toBeNull();
+    } finally {
+      await cleanup();
+    }
+  });
+
+  it("搜索态里编辑：先按「定位到时间线」那条路跳过去，再进入编辑、草稿是那条正文", async () => {
+    const { host, target, card, scrollSpy, cleanup } = await renderSearch("蓝莓 目标", "蓝莓");
+    try {
+      await act(async () => {
+        card.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, clientX: 10, clientY: 10 }));
+      });
+      await flush();
+      await click(menuItem(host, "编辑"));
+      await flush();
+
+      // 退出了搜索（搜索输入框不在了、composer 回来了），定位滚动发生过，编辑框里是那条正文。
+      expect(host.querySelector('input[aria-label="搜索速记"]')).toBeNull();
+      expect(scrollSpy).toHaveBeenCalled();
+      expect(input(host).value).toBe("蓝莓 目标");
+      expect(host.querySelector(`[data-note-id="${target.id}"][role="button"]`)).not.toBeNull();
+    } finally {
+      await cleanup();
+    }
+  });
+}, PAGE_TEST_TIMEOUT_MS);
+
 describe("搜索态日期条", () => {
   it("搜索结果的日期条同样粘顶，但不是跳转入口", async () => {
     await db.quickNotes.add({
