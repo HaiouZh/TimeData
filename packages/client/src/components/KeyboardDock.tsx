@@ -1,6 +1,7 @@
+import { Capacitor } from "@capacitor/core";
 import { type CSSProperties, type HTMLAttributes, type ReactNode, useCallback, useEffect, useRef } from "react";
 import { BOTTOM_NAV_HEIGHT_PX, useBottomNav } from "../contexts/BottomNavContext.tsx";
-import { useKeyboardHeight, useKeyboardVisible } from "../hooks/useKeyboardHeight.ts";
+import { useKeyboardHeight, useKeyboardMotion, useKeyboardVisible } from "../hooks/useKeyboardHeight.ts";
 import { useShellResizeGlide } from "../lib/keyboardMotion.ts";
 import { useIsWideScreen } from "../lib/useIsWideScreen.ts";
 import { Z } from "../lib/zLayers.ts";
@@ -13,12 +14,19 @@ import { Z } from "../lib/zLayers.ts";
  * 速记页此前用 `composerFocused || …` 在聚焦瞬间就收底栏，与待办页「等键盘信号」时序不同，
  * 正是「两页每次测试效果都独立」的一条来源；统一到键盘信号驱动（TG 口径：聚焦到键盘出现
  * 之间一切原地不动）。
+ *
+ * **native 一律不收**（mobile-keyboard R7，design §1.3）：overlay 模型下键盘盖在页面上、底栏本来就在
+ * 键盘背后，收它只产生一段 200ms 的高度 / 布局动画，恰好挤在输入条位移的首帧——重列表（待办）
+ * 就卡一下。`navOffsetPx` 的 `!keyboardVisible` 守卫仍让输入条压在键盘上沿、不留缝。web / PWA
+ * 保留：iOS Safari 会滚文档、底栏会露到键盘上方。
  */
 export function useKeyboardNavCollapse(): void {
   const keyboardVisible = useKeyboardVisible();
   const { setHidden } = useBottomNav();
   const causedRef = useRef(false);
+  const collapseEnabled = Capacitor.getPlatform() === "web";
   useEffect(() => {
+    if (!collapseEnabled) return;
     if (keyboardVisible) {
       causedRef.current = true;
       setHidden(true);
@@ -27,7 +35,7 @@ export function useKeyboardNavCollapse(): void {
     if (!causedRef.current) return;
     causedRef.current = false;
     setHidden(false);
-  }, [keyboardVisible, setHidden]);
+  }, [collapseEnabled, keyboardVisible, setHidden]);
 }
 
 export interface KeyboardDockProps extends HTMLAttributes<HTMLElement> {
@@ -49,10 +57,11 @@ export interface KeyboardDockProps extends HTMLAttributes<HTMLElement> {
  * 职责（全部集中在此，页面不许自算）：
  * - fixed 定位 + 安全区组成式（bottom 只装 var(--safe-bottom)，恒定不动；env() 失效环境由
  *   兜底类 [bottom:var(--bottom-offset)] 落回 0px——见 invariants 第 11/12 条）。
- * - 抬升 = navOffset + 键盘高，走 transform 吃 .td-kbd-motion 过渡（250ms TG 曲线）。
+ * - 抬升 = navOffset + 键盘高，走 transform 吃 .td-kbd-motion 过渡；**时长与曲线由
+ *   useKeyboardMotion 给**（浮层 override > 实测的系统时长 did − will > 平台默认，见
+ *   lib/keyboard/keyboardMotionPrefs.ts）：在场用 showMs、不在场用 hideMs，两端与 IME 同段滑动。
  *   navOffset 带 !keyboardVisible 守卫：键盘在场时底栏不占避让空间（防首帧 49px 双计）。
- * - 收起提速：键盘不在场时过渡缩到 200ms——安卓 IME 收起动画比弹出快半拍，250ms 的
- *   落条会拖在 IME 后面（真机「输入法先落、输入框再掉」）。
+ * - 根元素带 data-kbd-dock：探针（KeyboardProbe）据此捕获 transitionstart/end 量输入条动画时刻。
  * - 壳缩量抹平（useShellResizeGlide）与 zIndex（backdrop=40，与 toast 带的关系见
  *   TodoSelectionBar 的层级注释）。
  */
@@ -67,13 +76,14 @@ export function KeyboardDock({
 }: KeyboardDockProps) {
   const keyboardHeight = useKeyboardHeight();
   const keyboardVisible = useKeyboardVisible();
+  const motion = useKeyboardMotion();
   const wide = useIsWideScreen();
   const { hidden: navHidden } = useBottomNav();
   const navOffsetPx = !wide && !navHidden && !keyboardVisible ? BOTTOM_NAV_HEIGHT_PX : 0;
   const liftPx = Math.ceil(navOffsetPx + keyboardHeight);
 
   const glideRef = useRef<HTMLElement | null>(null);
-  useShellResizeGlide(glideRef);
+  useShellResizeGlide(glideRef, motion.showMs, motion.easing);
   const setRef = useCallback(
     (el: HTMLElement | null) => {
       glideRef.current = el;
@@ -86,13 +96,15 @@ export function KeyboardDock({
   return (
     <El
       ref={setRef}
+      data-kbd-dock="1"
       className={`td-kbd-motion fixed left-0 right-0 [bottom:var(--bottom-offset)] ${className}`}
       style={
         {
           "--bottom-offset": "0px",
           bottom: "calc(0px + var(--safe-bottom))",
           transform: hiddenByScroll ? "translateY(100%)" : `translateY(${-liftPx}px)`,
-          transitionDuration: keyboardVisible ? undefined : "200ms",
+          transitionDuration: `${keyboardVisible ? motion.showMs : motion.hideMs}ms`,
+          transitionTimingFunction: motion.easing,
           zIndex: Z.backdrop,
           ...style,
         } as CSSProperties

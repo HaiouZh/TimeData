@@ -18,9 +18,22 @@ import { renderDom, unmount } from "../test/domHarness.js";
 const keyboardHeightMock = vi.hoisted(() => vi.fn(() => 0));
 // 「键盘在不在场」独立信号：安卓壳层让位后 height 恒 0，inputInteractionActive 的在场判断走它。
 const keyboardVisibleMock = vi.hoisted(() => vi.fn(() => false));
+const keyboardHeightSettledMock = vi.hoisted(() => vi.fn((): number => keyboardHeightMock()));
+const MOTION_STUB = vi.hoisted(() => ({
+  showMs: 250,
+  hideMs: 200,
+  easing: "cubic-bezier(0.25, 0.1, 0.25, 1)",
+  easingName: "tg" as const,
+}));
 vi.mock("../hooks/useKeyboardHeight.ts", () => ({
   useKeyboardHeight: keyboardHeightMock,
   useKeyboardVisible: keyboardVisibleMock,
+  // R7：Dock / 浮层 / 探针新增的导出——页面级用例不关心时长曲线与探针，给稳定桩即可。
+  useKeyboardHeightSettled: () => keyboardHeightSettledMock(),
+  useKeyboardMotion: () => MOTION_STUB,
+  subscribeKeyboardEvents: () => () => {},
+  getKeyboardPlatform: () => "web",
+  refreshKeyboardMotion: () => {},
 }));
 
 import QuickNotesPage from "./QuickNotesPage.js";
@@ -129,7 +142,9 @@ describe("QuickNotesPage 底部避让接线（键盘高并入合成）", () => {
     );
     expect(status).toBeInstanceOf(HTMLElement);
     // floatBottomInsetPx = barHeightPx（128）+ navOffsetPx（结算后归零）+ 键盘高（300）。
-    expect((status as HTMLElement).style.bottom).toBe(`calc(${DEFAULT_COMPOSER_INSET_PX + 300}px + var(--safe-bottom))`);
+    expect((status as HTMLElement).style.bottom).toBe(
+      `calc(${DEFAULT_COMPOSER_INSET_PX + 300}px + var(--safe-bottom))`,
+    );
 
     await unmount(root);
   });

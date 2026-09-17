@@ -10,9 +10,22 @@ import { renderDom, unmount } from "./test/domHarness.js";
 
 const keyboardHeightMock = vi.hoisted(() => vi.fn(() => 0));
 const keyboardVisibleMock = vi.hoisted(() => vi.fn(() => false));
+const keyboardHeightSettledMock = vi.hoisted(() => vi.fn((): number => keyboardHeightMock()));
+const MOTION_STUB = vi.hoisted(() => ({
+  showMs: 250,
+  hideMs: 200,
+  easing: "cubic-bezier(0.25, 0.1, 0.25, 1)",
+  easingName: "tg" as const,
+}));
 vi.mock("./hooks/useKeyboardHeight.ts", () => ({
   useKeyboardHeight: keyboardHeightMock,
   useKeyboardVisible: keyboardVisibleMock,
+  // R7：Dock / 浮层 / 探针新增的导出——页面级用例不关心时长曲线与探针，给稳定桩即可。
+  useKeyboardHeightSettled: () => keyboardHeightSettledMock(),
+  useKeyboardMotion: () => MOTION_STUB,
+  subscribeKeyboardEvents: () => () => {},
+  getKeyboardPlatform: () => "web",
+  refreshKeyboardMotion: () => {},
 }));
 vi.mock("./components/AppUpdatePrompt.tsx", () => ({ default: () => null }));
 vi.mock("./components/AndroidBackButtonHandler.tsx", () => ({ default: () => null }));

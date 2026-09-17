@@ -12,7 +12,7 @@ import { useShellResizeGlide } from "./keyboardMotion.js";
 
 function Probe({ animateSpy }: { animateSpy: (...args: unknown[]) => unknown }) {
   const ref = useRef<HTMLDivElement | null>(null);
-  useShellResizeGlide(ref);
+  useShellResizeGlide(ref, 250, "cubic-bezier(0.25, 0.1, 0.25, 1)");
   return createElement("div", {
     ref: (el: HTMLDivElement | null) => {
       ref.current = el;
@@ -105,7 +105,7 @@ describe("useShellResizeGlide — 壳缩/恢复 webview 的单帧跳变用附加
     const { root } = await renderDom(
       createElement(function NoAnimateProbe() {
         const ref = useRef<HTMLDivElement | null>(null);
-        useShellResizeGlide(ref);
+        useShellResizeGlide(ref, 250, "cubic-bezier(0.25, 0.1, 0.25, 1)");
         return createElement("div", { ref });
       }),
     );

@@ -19,9 +19,22 @@ import { renderDom, unmount } from "../test/domHarness.js";
 const keyboardHeightMock = vi.hoisted(() => vi.fn(() => 0));
 // 「键盘在不在场」独立信号：安卓壳层让位后 height 恒 0，收底栏/守 composer 的在场判断走它。
 const keyboardVisibleMock = vi.hoisted(() => vi.fn(() => false));
+const keyboardHeightSettledMock = vi.hoisted(() => vi.fn((): number => keyboardHeightMock()));
+const MOTION_STUB = vi.hoisted(() => ({
+  showMs: 250,
+  hideMs: 200,
+  easing: "cubic-bezier(0.25, 0.1, 0.25, 1)",
+  easingName: "tg" as const,
+}));
 vi.mock("../hooks/useKeyboardHeight.ts", () => ({
   useKeyboardHeight: keyboardHeightMock,
   useKeyboardVisible: keyboardVisibleMock,
+  // R7：Dock / 浮层 / 探针新增的导出——页面级用例不关心时长曲线与探针，给稳定桩即可。
+  useKeyboardHeightSettled: () => keyboardHeightSettledMock(),
+  useKeyboardMotion: () => MOTION_STUB,
+  subscribeKeyboardEvents: () => () => {},
+  getKeyboardPlatform: () => "web",
+  refreshKeyboardMotion: () => {},
 }));
 
 import { TodoPage } from "./TodoPage.js";
@@ -210,12 +223,13 @@ describe("TodoPage 底部输入条键盘避让（fix round 1；抬升载体自 b
   // 再让位），但键盘确实在场。在场判断若还看 height，三件事一起坏：底栏不收（杵在输入条与
   // 键盘之间一条 tab 行）、composer 被 navHidden 联动误藏、守卫全部失灵。在场判断必须走
   // useKeyboardVisible（插件事件驱动，壳让位后事件照发）。
-  it("安卓壳已让位（height=0 但键盘在场）：底栏收起、composer 不自藏、bottom 不再叠避让", async () => {
+  it("壳已让位（height=0 但键盘在场）：底栏收起、composer 不自藏、bottom 不再叠避让", async () => {
     keyboardHeightMock.mockReturnValue(0);
     keyboardVisibleMock.mockReturnValue(true);
     const { host, root } = await renderPageWithNavProbe();
 
-    // 底栏收起（否则 webview 缩短后它杵在键盘正上方）。
+    // 底栏收起（否则视口缩短后它杵在键盘正上方）。本文件没 mock Capacitor、跑在 web 平台——
+    // R7 起 native 不收底栏（overlay 下它在键盘背后），那一半由 KeyboardDock.test 钉。
     expect(navHidden(host)).toBe("true");
 
     const form = composerForm(host);

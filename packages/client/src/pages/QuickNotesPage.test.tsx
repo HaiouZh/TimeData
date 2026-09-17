@@ -575,6 +575,7 @@ describe("QuickNotesPage", () => {
 
   it("键盘在场信号收起底栏；聚焦本身不收（TG 口径：聚焦到键盘出现之间一切原地不动）", async () => {
     // 收底栏统一由 useKeyboardNavCollapse 按「键盘在不在场」驱动（components/KeyboardDock.tsx）。
+    // 本文件跑在 web 平台；R7 起 native 不收底栏，见 KeyboardDock.test「useKeyboardNavCollapse 按平台」。
     // web 平台的在场信号是 visualViewport 实测遮挡——装一个可控 viewport，缩一个键盘高即在场。
     const viewport = {
       height: 768,
