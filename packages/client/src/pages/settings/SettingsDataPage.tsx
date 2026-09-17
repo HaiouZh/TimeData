@@ -20,7 +20,9 @@ import {
 } from "../../db/index.ts";
 import { useConfirm } from "../../hooks/useConfirm.tsx";
 import { getCloudSyncEnabled } from "../../lib/cloudSyncSetting.ts";
-import { safeGetItem } from "../../lib/safeStorage.js";
+import { KEYBOARD_PROBE_SWITCH_EVENT } from "../../components/KeyboardProbe.tsx";
+import { PROBE_BUDGET, readProbeSwitch, writeProbeSwitch } from "../../lib/keyboard/kbdProbe.js";
+import { safeGetItem, safeRemoveItem, safeSetItem } from "../../lib/safeStorage.js";
 import { requestServerBackup } from "../../lib/serverBackup.ts";
 import { STORAGE_KEYS } from "../../lib/storageKeys.js";
 import { formatAppDateTime, getDateString } from "../../lib/time.ts";
@@ -69,6 +71,22 @@ export default function SettingsDataPage() {
   const [dataBusy, setDataBusy] = useState(false);
   const [dataStatus, setDataStatus] = useState(initialDataStatus);
   const [recoveryOpen, setRecoveryOpen] = useState(false);
+  // 高级 · 诊断（mobile-keyboard R7）：键盘探针开关 + 读数浮层开关。翻动即广播，AppShell 里的探针 / 浮层
+  // 不用重启就跟上。开关本体与预算在 lib/keyboard/kbdProbe.ts。
+  const [probeSwitch, setProbeSwitch] = useState(() => readProbeSwitch());
+  const [keyboardDebugOn, setKeyboardDebugOn] = useState(() => safeGetItem(STORAGE_KEYS.keyboardDebug) === "1");
+  const handleProbeToggle = (on: boolean) => {
+    const next = on ? { on: true, left: PROBE_BUDGET } : { on: false, left: 0 };
+    writeProbeSwitch(next);
+    setProbeSwitch(next);
+    window.dispatchEvent(new Event(KEYBOARD_PROBE_SWITCH_EVENT));
+  };
+  const handleKeyboardDebugToggle = (on: boolean) => {
+    if (on) safeSetItem(STORAGE_KEYS.keyboardDebug, "1");
+    else safeRemoveItem(STORAGE_KEYS.keyboardDebug);
+    setKeyboardDebugOn(on);
+    window.dispatchEvent(new Event(KEYBOARD_PROBE_SWITCH_EVENT));
+  };
   const [forcePushPhrase, setForcePushPhrase] = useState("");
   const [forcePushConfirmation, setForcePushConfirmation] = useState(false);
   const today = getDateString(new Date());
@@ -210,7 +228,9 @@ export default function SettingsDataPage() {
               分类数量：{summary.categoryCount}，记录数量：{summary.entryCount}
               {describeDomainCounts(summary.domainCounts) ? `，${describeDomainCounts(summary.domainCounts)}` : ""}
             </p>
-            <p>恢复会替换当前设备上的本地分类、时间记录、任务、速记、健康数据和同步队列。恢复前会先下载一份当前本地数据的安全备份。</p>
+            <p>
+              恢复会替换当前设备上的本地分类、时间记录、任务、速记、健康数据和同步队列。恢复前会先下载一份当前本地数据的安全备份。
+            </p>
           </>
         ),
         danger: true,
@@ -419,7 +439,9 @@ export default function SettingsDataPage() {
             >
               立即在服务器备份
             </button>
-            <div className="td-text-caption text-ink-3">在服务器拍一份当前数据快照（永久保留，可在 admin 备份列表删除）。</div>
+            <div className="td-text-caption text-ink-3">
+              在服务器拍一份当前数据快照（永久保留，可在 admin 备份列表删除）。
+            </div>
           </div>
 
           <div className="space-y-2">
@@ -438,7 +460,9 @@ export default function SettingsDataPage() {
             >
               从完整备份恢复
             </button>
-            <div className="td-text-caption text-ink-3">恢复会替换本地核心数据，并在恢复前下载当前本地数据的安全备份。</div>
+            <div className="td-text-caption text-ink-3">
+              恢复会替换本地核心数据，并在恢复前下载当前本地数据的安全备份。
+            </div>
           </div>
         </div>
       </section>
@@ -618,12 +642,7 @@ export default function SettingsDataPage() {
 
           <section className="space-y-3">
             <h3 className="td-text-label font-medium text-ink-2">数据重置</h3>
-            <button
-              type="button"
-              onClick={handleResetLocalData}
-              disabled={dataBusy}
-              className={dangerButtonClassName}
-            >
+            <button type="button" onClick={handleResetLocalData} disabled={dataBusy} className={dangerButtonClassName}>
               清空本地并恢复预设
             </button>
             {hasPrerequisiteSnapshot && (
@@ -642,6 +661,32 @@ export default function SettingsDataPage() {
               </div>
             )}
           </section>
+        </div>
+      </details>
+
+      <details className="rounded-card border border-border bg-surface">
+        <summary className="cursor-pointer px-4 py-3 td-text-label font-medium text-ink-2">
+          高级 · 诊断
+          <span className="ml-2 td-text-caption text-ink-3">键盘探针、读数浮层</span>
+        </summary>
+        <div className="space-y-4 p-4 pt-0">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <div className="td-text-label text-ink">键盘探针</div>
+              <div className="td-text-caption text-ink-3">
+                记录每次键盘弹起 / 收起的时序，随同步上报；
+                {probeSwitch.on ? `剩余 ${probeSwitch.left} 条，采满自动关` : "关闭中"}
+              </div>
+            </div>
+            <Switch ariaLabel="键盘探针" checked={probeSwitch.on} onChange={handleProbeToggle} />
+          </div>
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <div className="td-text-label text-ink">读数浮层</div>
+              <div className="td-text-caption text-ink-3">左上角显示实时读数与调参按钮（探针开着才显示）</div>
+            </div>
+            <Switch ariaLabel="读数浮层" checked={keyboardDebugOn} onChange={handleKeyboardDebugToggle} />
+          </div>
         </div>
       </details>
 

@@ -212,9 +212,7 @@ describe("SettingsDataPage 前置依赖快照恢复按钮", () => {
   }
 
   function restoreButtonOf(host: HTMLElement): HTMLButtonElement | undefined {
-    return [...host.querySelectorAll("button")].find((button) =>
-      button.textContent?.includes("从快照重建前置依赖"),
-    );
+    return [...host.querySelectorAll("button")].find((button) => button.textContent?.includes("从快照重建前置依赖"));
   }
 
   it("快照存在时按钮出现，不存在时不出现", async () => {
@@ -253,8 +251,9 @@ describe("SettingsDataPage 前置依赖快照恢复按钮", () => {
       restoreButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
 
-    const dialogTitle = [...document.body.querySelectorAll("button")]
-      .find((button) => button.textContent?.trim() === "确认");
+    const dialogTitle = [...document.body.querySelectorAll("button")].find(
+      (button) => button.textContent?.trim() === "确认",
+    );
     expect(dialogTitle).toBeDefined();
     expect(document.body.textContent).toContain("确认从快照重建前置依赖");
 
@@ -294,8 +293,9 @@ describe("SettingsDataPage 前置依赖快照恢复按钮", () => {
       await act(async () => {
         restoreButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
       });
-      const dialogTitle = [...document.body.querySelectorAll("button")]
-        .find((button) => button.textContent?.trim() === "确认");
+      const dialogTitle = [...document.body.querySelectorAll("button")].find(
+        (button) => button.textContent?.trim() === "确认",
+      );
       expect(dialogTitle).toBeDefined();
       await act(async () => {
         dialogTitle?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
@@ -316,5 +316,60 @@ describe("SettingsDataPage 前置依赖快照恢复按钮", () => {
     } finally {
       restoreSpy.mockRestore();
     }
+  });
+});
+
+describe("SettingsDataPage 高级 · 诊断（mobile-keyboard R7）", () => {
+  beforeEach(() => {
+    localStorage.removeItem("timedata_keyboard_probe");
+    localStorage.removeItem("timedata_keyboard_debug");
+  });
+
+  async function clickSwitch(host: HTMLElement, label: string) {
+    const sw = host.querySelector(`[aria-label="${label}"]`);
+    expect(sw).toBeInstanceOf(HTMLElement);
+    await act(async () => {
+      sw?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+  }
+
+  it("打开键盘探针写 {on:true,left:20} 并广播；显示剩余条数；关闭清 key", async () => {
+    const { host, root } = await renderDom(createElement(MemoryRouter, null, createElement(SettingsDataPage)));
+    const summaries = [...host.querySelectorAll("summary")].map((s) => s.textContent ?? "");
+    expect(summaries.some((t) => t.includes("高级 · 诊断"))).toBe(true);
+
+    const spy = vi.fn();
+    window.addEventListener("td:keyboard-probe", spy);
+    await clickSwitch(host, "键盘探针");
+    expect(JSON.parse(localStorage.getItem("timedata_keyboard_probe") ?? "{}")).toEqual({ on: true, left: 20 });
+    expect(spy).toHaveBeenCalledTimes(1);
+    expect(host.textContent).toContain("剩余 20 条");
+
+    await clickSwitch(host, "键盘探针");
+    expect(localStorage.getItem("timedata_keyboard_probe")).toBeNull();
+    expect(spy).toHaveBeenCalledTimes(2);
+    window.removeEventListener("td:keyboard-probe", spy);
+    await unmount(root);
+  });
+
+  it("读数浮层开关写 timedata_keyboard_debug=1 / 清除，并广播", async () => {
+    const { host, root } = await renderDom(createElement(MemoryRouter, null, createElement(SettingsDataPage)));
+    const spy = vi.fn();
+    window.addEventListener("td:keyboard-probe", spy);
+    await clickSwitch(host, "读数浮层");
+    expect(localStorage.getItem("timedata_keyboard_debug")).toBe("1");
+    await clickSwitch(host, "读数浮层");
+    expect(localStorage.getItem("timedata_keyboard_debug")).toBeNull();
+    expect(spy).toHaveBeenCalledTimes(2);
+    window.removeEventListener("td:keyboard-probe", spy);
+    await unmount(root);
+  });
+
+  it("挂载时按已存的开关渲染（采到一半重进设置页，剩余数如实）", async () => {
+    localStorage.setItem("timedata_keyboard_probe", JSON.stringify({ on: true, left: 7 }));
+    const { host, root } = await renderDom(createElement(MemoryRouter, null, createElement(SettingsDataPage)));
+    expect(host.querySelector('[aria-label="键盘探针"]')?.getAttribute("aria-checked")).toBe("true");
+    expect(host.textContent).toContain("剩余 7 条");
+    await unmount(root);
   });
 });
