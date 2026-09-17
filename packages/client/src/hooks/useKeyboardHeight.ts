@@ -231,9 +231,14 @@ function startListening(): () => void {
     recomputeHeight();
     emitProbe("fo", state.height);
   };
-  if (nativePlatform) {
-    window.addEventListener("focusout", handleFocusOut);
-  }
+  // web 没有插件事件，focusout 不参与状态（实测是唯一信源），只把离场广播给探针——否则 PWA 上的
+  // 探针会话等不到任何闭合信号。
+  const handleFocusOutWeb = (event: FocusEvent) => {
+    if (!isEditableTarget(event.target)) return;
+    if (isEditableTarget(event.relatedTarget)) return;
+    emitProbe("fo", state.height);
+  };
+  window.addEventListener("focusout", nativePlatform ? handleFocusOut : handleFocusOutWeb);
   // focusin **只广播给探针**，不改任何状态——不是预测在场（见上）。不分平台：web 的探针会话也要边界。
   const handleFocusIn = (event: FocusEvent) => {
     if (!isEditableTarget(event.target)) return;
@@ -298,9 +303,7 @@ function startListening(): () => void {
     window.removeEventListener("resize", handleViewportChange);
     viewport?.removeEventListener("resize", handleViewportChange);
     viewport?.removeEventListener("scroll", handleViewportChange);
-    if (nativePlatform) {
-      window.removeEventListener("focusout", handleFocusOut);
-    }
+    window.removeEventListener("focusout", nativePlatform ? handleFocusOut : handleFocusOutWeb);
     window.removeEventListener("focusin", handleFocusIn);
     removeNative();
     if (settleTimer !== null) clearTimeout(settleTimer);

@@ -1070,6 +1070,27 @@ describe("did 事件：时长学习、settled 高度、探针总线", () => {
     await unmount(root);
   });
 
+  it("web 平台 focusout 只广播 fo、不动状态（PWA 探针会话要有闭合信号）", async () => {
+    getPlatformMock.mockReturnValue("web");
+    const viewport = createViewportMock({ height: 468, offsetTop: 0 });
+    (window as unknown as { visualViewport?: unknown }).visualViewport = viewport;
+    const seen: KeyboardProbeEvent[] = [];
+    const { host, root } = await renderDom(createElement(SettledProbe));
+    // 实测：768 - 468 = 300 在场
+    expect(readAttr(host, "data-settled")).toBe("300");
+    const off = subscribeKeyboardEvents((e) => seen.push(e));
+    const input = document.createElement("input");
+    host.appendChild(input);
+    await act(async () => {
+      input.dispatchEvent(new FocusEvent("focusout", { bubbles: true }));
+    });
+    expect(seen.map((e) => e.type)).toEqual(["fo"]);
+    // web 的离场不改状态：实测仍报 300
+    expect(readAttr(host, "data-settled")).toBe("300");
+    off();
+    await unmount(root);
+  });
+
   it("取消订阅后不再收到事件", async () => {
     const native = captureNative();
     const seen: KeyboardProbeEvent[] = [];
