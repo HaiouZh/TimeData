@@ -13,6 +13,7 @@ import EdgeSwipeBack from "./components/EdgeSwipeBack.tsx";
 import { ErrorBoundary, RouteErrorFallback } from "./components/ErrorBoundary.tsx";
 import { KeyboardAvoidanceBridge } from "./components/KeyboardAvoidanceBridge.tsx";
 import { KeyboardDebugOverlay } from "./components/KeyboardDebugOverlay.tsx";
+import { KeyboardProbe } from "./components/KeyboardProbe.tsx";
 import { SchedulerWatchdog } from "./components/SchedulerWatchdog.tsx";
 import { TotpPromptDialog } from "./components/TotpPromptDialog.tsx";
 import { BottomNavProvider } from "./contexts/BottomNavContext.tsx";
@@ -61,8 +62,9 @@ export function AppShell() {
       <EdgeSwipeBack />
       {/* 键盘遮挡量 → 全局 CSS 变量 + 聚焦跟随滚动，两条渲染路径共用（见组件注释）。 */}
       <KeyboardAvoidanceBridge />
-      {/* 临时诊断浮层：native 常显、web 需 td.kbdDebug=1；键盘根因钉死后整体移除。 */}
+      {/* 键盘读数浮层与探针：都按设置页「高级 · 诊断」开关 gate，默认零痕迹（mobile-keyboard R7）。 */}
       <KeyboardDebugOverlay />
+      <KeyboardProbe />
       {/* 回前台时探一枚 transition 探针，卡住即判定调度器死锁并自救；正常路径永不触发。 */}
       <SchedulerWatchdog />
       {isWideScreen && <DesktopSidebar />}
