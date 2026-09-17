@@ -95,6 +95,10 @@ export const STUCK_HIDE_DELAY_MS = 300;
  * 像素，也是 `findStuckDivider` 判定区间的上界。三处独立字面量（这个常量 + 主线/搜索两处
  * className），改一处不同步既不报错也不 typecheck 失败，故导出给用例做绊线（见测试
  * 「STICKY_TOP_PX 与两处 JSX top-2 必须同步」）。Tailwind 的 `top-{n}` = n × 0.25rem。
+ *
+ * 「同一个值」还有一个前提：**滚动容器自己不能带 padding-top**。Chrome 与 WebKit 都按滚动容器
+ * 的内容盒算 sticky 的约束矩形，容器带 padding 时日期条实际粘在 top + padding 处（曾经 py-5 →
+ * 28px），这个常量就不再是真值，区间框不到粘顶那条，药丸常驻。顶部留白因此放在列表内层。
  */
 export const STICKY_TOP_PX = 8;
 const SEARCH_RESULT_PAGE_SIZE = 100;
@@ -1279,7 +1283,11 @@ export default function QuickNotesPage() {
       <section
         ref={scrollRef}
         onScroll={handleScroll}
-        className="min-h-0 flex-1 overflow-y-auto px-4 py-5 [padding-bottom:var(--pad-bottom)] [scroll-padding-bottom:var(--pad-bottom)]"
+        // 顶部留白 pt-5 在下面的列表内层、**不在这个滚动容器上**：Chrome 与 WebKit 都按滚动容器的
+        // 内容盒算 sticky 的约束矩形，容器自己带 padding-top 时 `top-2` 的日期条会粘在 8 + padding
+        // 处（实测 py-5 → 28px），findStuckDivider 的上界 STICKY_TOP_PX=8 就框不到它，.stuck
+        // 永远打不上、药丸常驻，浮动药丸拦日历那条也一起失效。有结构闸用例锁这条。
+        className="min-h-0 flex-1 overflow-y-auto px-4 [padding-bottom:var(--pad-bottom)] [scroll-padding-bottom:var(--pad-bottom)]"
         // 兜底类 [padding-bottom/scroll-padding-bottom:var(--pad-bottom)]：env() 未定义环境
         //（Firefox 桌面 / 旧 WebView）里 calc 整条失效、内联 padding 被丢弃，由它还原批次前的纯数值
         // contentBottomInsetPx（桌面浏览器 env()=0，calc 有效时内联样式优先，兜底类不生效）。
@@ -1292,7 +1300,7 @@ export default function QuickNotesPage() {
         }
         aria-label="速记列表"
       >
-        <div className="mx-auto flex w-full max-w-3xl flex-col gap-4">
+        <div className="mx-auto flex w-full max-w-3xl flex-col gap-4 pt-5">
           {searchOpen ? (
             !hasQuery ? (
               <EmptyState variant="card" title="输入关键词搜索速记，空格分隔多个词表示同时包含" />

@@ -2218,6 +2218,32 @@ describe("sticky 偏移常量与 JSX 同步", () => {
     await unmount(root);
   });
 
+  // 上一条守的是「top-{n} 与常量同值」，这条守的是那个值在真浏览器里**真的等于粘住时的像素**：
+  // Chrome 与 WebKit 都把 sticky 的约束矩形按滚动容器的**内容盒**算，容器自己带 padding-top 时，
+  // `top: 8px` 的日期条会粘在离容器顶边 8 + padding-top 处（实测 py-5 → 28px），而
+  // findStuckDivider 的区间上界仍是 8——粘顶那条永远落不进区间，.stuck 一次都打不上，药丸常驻；
+  // blockPickerWhileFloating 共用同一区间，「浮动药丸点了不开日历」也一并失效。jsdom 不排版，
+  // 量不出这 20px，只能在结构上锁死：顶部留白归列表内层，滚动容器自己不许带任何 padding-top。
+  it("滚动容器自己不带 padding-top——否则 sticky 粘住的像素是 top + padding，STICKY_TOP_PX 就不是真值了", async () => {
+    await db.quickNotes.add({
+      id: "t2",
+      text: "容器内距样本",
+      occurredAt: "2026-06-01T04:00:00.000Z",
+      createdAt: "2026-06-01T04:00:00.000Z",
+      updatedAt: "2026-06-01T04:00:00.000Z",
+    });
+    const { host, root } = await renderPage();
+
+    const list = host.querySelector<HTMLElement>('[aria-label="速记列表"]');
+    if (!list) throw new Error("missing quick notes list");
+    const topPaddingClasses = list.className.split(/\s+/).filter((c) => /^(p|py|pt)-/.test(c) || /^\[padding-top:/.test(c));
+    expect(topPaddingClasses).toEqual([]);
+    expect(list.style.paddingTop).toBe("");
+    expect(list.style.padding).toBe("");
+
+    await unmount(root);
+  });
+
   // 主线药丸是 DateField(bare) 的触发钮、搜索态药丸是纯 div，两处观感必须同款；几何与颜色全在
   // index.css 的 .quick-note-date-pill 一个类里（对齐 Telegram Android），JSX 不再各写一串工具类——
   // 否则改一处漏一处，两态药丸静默分家。
