@@ -31,7 +31,7 @@ import { BOTTOM_NAV_HEIGHT_PX, useBottomNav } from "../contexts/BottomNavContext
 import { db } from "../db/index.js";
 import { useActionToast } from "../hooks/useActionToast.js";
 import { useConfirm } from "../hooks/useConfirm.tsx";
-import { useKeyboardHeight, useKeyboardVisible } from "../hooks/useKeyboardHeight.ts";
+import { useKeyboardHeight, useKeyboardHeightSettled, useKeyboardVisible } from "../hooks/useKeyboardHeight.ts";
 import { composeBottomInset } from "../lib/bottomInset.ts";
 import {
   assignTasksToProject,
@@ -269,6 +269,8 @@ export function TodoPage() {
   // 避让量（还挡着多少，进合成）与在场信号（键盘弹没弹，管收底栏/守 composer）分开取：
   // 安卓壳层让位后 height 恒 0 而键盘确实在场，在场判断混用 height 会让底栏不收、composer 误藏。
   const keyboardHeightPx = useKeyboardHeight();
+  // 键盘动画结束后才跟上的遮挡量：给会触发重排的消费方（内容留白 / sticky 偏移），动画期零重排。
+  const keyboardHeightSettledPx = useKeyboardHeightSettled();
   const keyboardVisible = useKeyboardVisible();
   const rootIdsWithChildren =
     useLiveQuery(async () => {
@@ -310,7 +312,14 @@ export function TodoPage() {
   // keyboardHeightPx=0（桌面浏览器 / 键盘收起）时 = Math.ceil(bottomBarHeightPx +
   // navOffsetPx)，与合成前的批 1 值逐值相等，见 bottomInset.test.ts 回归护栏。
   const composerAvoidancePx = composeBottomInset({ barHeightPx: bottomBarHeightPx, navOffsetPx, keyboardHeightPx });
-  const contentBottomPaddingPx = Math.max(192, composerAvoidancePx + TODO_COMPOSER_CONTENT_GAP_PX);
+  // 内容留白与 sticky 偏移喂 settled 值（mobile-keyboard R7，design §1.3）：键盘动画那几百毫秒里
+  // 列表不重排，输入条位移（KeyboardDock 自取即时值）是纯合成器动画；贴 composer 的浮层仍用即时值。
+  const composerAvoidanceSettledPx = composeBottomInset({
+    barHeightPx: bottomBarHeightPx,
+    navOffsetPx,
+    keyboardHeightPx: keyboardHeightSettledPx,
+  });
+  const contentBottomPaddingPx = Math.max(192, composerAvoidanceSettledPx + TODO_COMPOSER_CONTENT_GAP_PX);
   // TodoComposer/TodoSelectionBar 自身的 bottom 定位由 KeyboardDock 统一计算（navOffset 守卫 +
   // 键盘高，components/KeyboardDock.tsx），本页不再自算——「两页各持一份手工时序」正是每轮
   // 修一处坏另一处的结构性根源（docs/notes/keyboard-pipeline-saga.md §二）。
@@ -1377,7 +1386,7 @@ export function TodoPage() {
     >
       <DayGroupedList
         segments={groupCompletedByDay(completedFiltered)}
-        stickyBottomOffsetPx={composerAvoidancePx}
+        stickyBottomOffsetPx={composerAvoidanceSettledPx}
         renderTasks={(tasks) => <TaskList pool="completed" tasks={tasks} metaChip={trackChipFor} {...rowHandlers} />}
       />
     </CollapsibleSection>
@@ -1430,11 +1439,11 @@ export function TodoPage() {
         ) : (
           <DayGroupedList
             segments={groupInboxByDay(inboxFiltered)}
-            stickyBottomOffsetPx={composerAvoidancePx}
+            stickyBottomOffsetPx={composerAvoidanceSettledPx}
             expandedFooter={
               <SunkenInboxTail
                 sunkenTasks={sunkenFiltered}
-                stickyBottomOffsetPx={composerAvoidancePx}
+                stickyBottomOffsetPx={composerAvoidanceSettledPx}
                 extraAction={sunkenExtraAction}
                 goalLinkedIds={goalLinkedIds}
                 {...selectionProps}

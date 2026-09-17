@@ -1,4 +1,5 @@
 import { Capacitor } from "@capacitor/core";
+import { Keyboard } from "@capacitor/keyboard";
 import { useEffect, useRef } from "react";
 import { readViewportBottomGap, useKeyboardHeight, useKeyboardVisible } from "../hooks/useKeyboardHeight.ts";
 
@@ -48,8 +49,7 @@ function revealFocusedInput(keyboardHeightFallback: number): void {
   // 只补不足、绝不回滚：重复触发幂等（滚过之后 rect.bottom 已上移、deficit 归零），键盘动画中间值 /
   // 拼音候选条加高只会朝「还不够」的方向继续补。滚动空间由 .keyboard-scroll-pad 的 padding 制造
   //（短表单整页放得下时滚动容器原本无溢出，scrollTop 被 clamp 在 0，没这刀 padding 本函数同样 no-op）。
-  const deficit =
-    active.getBoundingClientRect().bottom + SCROLL_EXTRA_PX - readVisualBottom(keyboardHeightFallback);
+  const deficit = active.getBoundingClientRect().bottom + SCROLL_EXTRA_PX - readVisualBottom(keyboardHeightFallback);
   if (deficit > 0) scroller.scrollTop += deficit;
 }
 
@@ -82,6 +82,21 @@ export function KeyboardAvoidanceBridge() {
   // resize 监听里不能读 state（壳缩 WebView 瞬间事件先于 React 提交，读到的是旧值），render 期镜像最新高度。
   const latestHeightRef = useRef(0);
   latestHeightRef.current = keyboardHeight;
+
+  // iOS：锁 WKWebView 外层 scrollView（mobile-keyboard R7，台账 O1-①）。resize:none 只拦插件自己
+  // resize，拦不住 WebKit 为露出聚焦框滚整个文档——真机即「弹起时页面先整体上滑、键盘再出、输入条
+  // 最后到」。本应用窗口滚动没有合法来源（滚动全在内层容器），锁掉零副作用；下方「收起归零」保留作
+  // 兜底。插件实现是 scrollEnabled=NO + 把自己设成 scrollView delegate、scrollViewDidScroll 里
+  // contentOffset 归零（Keyboard.m）——日后任何要接 scrollView delegate 的原生补丁都会撞上，见 ios.md §3.3。
+  useEffect(() => {
+    if (Capacitor.getPlatform() !== "ios") return;
+    try {
+      // 插件缺席时返回 rejected promise 而非同步抛（与 addListener 同款），返回处同步 .catch 接住。
+      void Keyboard.setScroll({ isDisabled: true }).catch(() => {});
+    } catch {
+      // 旧桥同步抛：不锁就是今天的行为，不更差。
+    }
+  }, []);
 
   useEffect(() => {
     const rootStyle = document.documentElement.style;

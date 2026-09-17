@@ -36,7 +36,7 @@ import { useActionToast } from "../hooks/useActionToast.ts";
 import { useConfirm } from "../hooks/useConfirm.tsx";
 import { useDebouncedValue } from "../hooks/useDebouncedValue.ts";
 import { useEntryMutations } from "../hooks/useEntries.js";
-import { useKeyboardHeight, useKeyboardVisible } from "../hooks/useKeyboardHeight.ts";
+import { useKeyboardHeight, useKeyboardHeightSettled, useKeyboardVisible } from "../hooks/useKeyboardHeight.ts";
 import { useLongPress } from "../hooks/useLongPress.ts";
 import { composeBottomInset } from "../lib/bottomInset.ts";
 import { focusOnPointerDown } from "../lib/fastFocus.ts";
@@ -70,10 +70,7 @@ import {
 import { findStuckDivider, isStuckCandidate } from "../quick-notes/currentDate.ts";
 import { groupDisplayItemsByDay } from "../quick-notes/dayGroups.ts";
 import { deleteQuickNotesByIds } from "../quick-notes/deleteQuickNotesByIds.ts";
-import {
-  exportQuickNotesJsonForNotes,
-  quickNotesMarkdown,
-} from "../quick-notes/exportQuickNotes.ts";
+import { exportQuickNotesJsonForNotes, quickNotesMarkdown } from "../quick-notes/exportQuickNotes.ts";
 import { downloadQuickNotesJson, downloadQuickNotesMarkdown } from "../quick-notes/fileDownload.ts";
 import HighlightedText from "../quick-notes/HighlightedText.tsx";
 import { shouldShowJumpToLatest } from "../quick-notes/jumpToLatest.ts";
@@ -167,6 +164,8 @@ export default function QuickNotesPage() {
   // 宽屏（≥1024px）回车发送；窄屏（手机）回车交给 textarea 默认换行，靠「记录」按钮发送。
   const isWideScreen = useIsWideScreen();
   const keyboardHeight = useKeyboardHeight();
+  // 键盘动画结束后才跟上的遮挡量：给内容留白这类会触发重排的消费方，动画期零重排（R7）。
+  const keyboardHeightSettled = useKeyboardHeightSettled();
   const keyboardVisible = useKeyboardVisible();
 
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -245,10 +244,11 @@ export default function QuickNotesPage() {
   //（keyboardHeight 是「键盘还挡着多少」，壳自己让过位时为 0，见 useKeyboardHeight）。
   // keyboardHeightPx=0（桌面浏览器 / 键盘收起）时逐值等于合成前的批 1 值，见该文件回归护栏测试。
   // 内容留白：原口径只有 bottomInsetPx（不含 navOffsetPx），故 navOffsetPx 传 0，只加键盘遮挡量。
+  // 喂 settled 值（mobile-keyboard R7，design §1.3）：键盘动画期间列表不重排；贴 composer 的浮层仍用即时值。
   const contentBottomInsetPx = composeBottomInset({
     barHeightPx: bottomInsetPx,
     navOffsetPx: 0,
-    keyboardHeightPx: keyboardHeight,
+    keyboardHeightPx: keyboardHeightSettled,
   });
   // 贴 composer 上沿的浮层（跳到最新按钮 / 错误 / 状态提示）：原口径 navOffsetPx + bottomInsetPx。
   const floatBottomInsetPx = composeBottomInset({
@@ -1135,7 +1135,6 @@ export default function QuickNotesPage() {
     );
   }
 
-
   return (
     <div className="relative flex h-full min-h-0 flex-col bg-page text-ink">
       {/* 顶部间距走 --page-top-gap（原 pt-3 / sm:pt-4）：有系统安全区时归零，避免与安全区自带的
@@ -1311,7 +1310,9 @@ export default function QuickNotesPage() {
                 </button>
               )}
             </div>
-            {pinnedOpen && pinnedNotes.length > 0 && <div className="pointer-events-auto mt-2">{renderPinnedPanel()}</div>}
+            {pinnedOpen && pinnedNotes.length > 0 && (
+              <div className="pointer-events-auto mt-2">{renderPinnedPanel()}</div>
+            )}
           </div>
         </div>
       )}

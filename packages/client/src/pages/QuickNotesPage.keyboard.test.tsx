@@ -95,6 +95,19 @@ describe("QuickNotesPage 底部避让接线（键盘高并入合成）", () => {
     await unmount(root);
   });
 
+  it("键盘动画进行中（即时 300、settled 仍 0）：composer 已抬升，内容区留白纹丝不动——动画期零重排（R7）", async () => {
+    keyboardHeightMock.mockReturnValue(300);
+    keyboardHeightSettledMock.mockReturnValue(0);
+    keyboardVisibleMock.mockReturnValue(true);
+    const { host, root } = await renderPage();
+
+    const list = contentSection(host) as HTMLElement;
+    expect(list.style.paddingBottom).toBe(`calc(${DEFAULT_COMPOSER_INSET_PX}px + var(--safe-bottom))`);
+    expect(composerForm(host)?.style.transform).toBe("translateY(-300px)");
+
+    await unmount(root);
+  });
+
   it("键盘收起（keyboard=0）时，内容区与 composer 输入条都回落到合成前口径", async () => {
     const { host, root } = await renderPage();
 

@@ -28,6 +28,8 @@ vi.mock("../hooks/useKeyboardHeight.ts", () => ({
 }));
 const platformMock = vi.hoisted(() => vi.fn(() => "web"));
 vi.mock("@capacitor/core", () => ({ Capacitor: { getPlatform: platformMock } }));
+const setScrollMock = vi.hoisted(() => vi.fn((_opts: { isDisabled: boolean }) => Promise.resolve()));
+vi.mock("@capacitor/keyboard", () => ({ Keyboard: { setScroll: setScrollMock } }));
 
 import { KeyboardAvoidanceBridge } from "./KeyboardAvoidanceBridge.js";
 
@@ -49,6 +51,8 @@ beforeEach(() => {
   gapMock.mockReturnValue(0);
   platformMock.mockReset();
   platformMock.mockReturnValue("web");
+  setScrollMock.mockReset();
+  setScrollMock.mockImplementation(() => Promise.resolve());
 });
 
 afterEach(() => {
@@ -362,6 +366,36 @@ describe("KeyboardAvoidanceBridge — 键盘落下时释放输入焦点", () => 
     expect(document.activeElement).toBe(button);
 
     button.remove();
+    await unmount(root);
+  });
+});
+
+describe("iOS 锁外层滚动（R7）", () => {
+  // WebKit 为露出聚焦框会滚整个文档（真机「弹起时页面先整体上滑」）；resize:none 拦不住它。
+  // 本应用窗口滚动没有合法来源，挂载即用插件的 setScroll 锁掉；下方「收起归零」保留作兜底。
+  it("iOS 挂载即 setScroll({isDisabled:true})；android / web 不调", async () => {
+    platformMock.mockReturnValue("ios");
+    const { root } = await renderDom(createElement(KeyboardAvoidanceBridge));
+    expect(setScrollMock).toHaveBeenCalledTimes(1);
+    expect(setScrollMock).toHaveBeenCalledWith({ isDisabled: true });
+    await unmount(root);
+
+    for (const platform of ["android", "web"]) {
+      setScrollMock.mockClear();
+      platformMock.mockReturnValue(platform);
+      const r = await renderDom(createElement(KeyboardAvoidanceBridge));
+      expect(setScrollMock).not.toHaveBeenCalled();
+      await unmount(r.root);
+    }
+  });
+
+  it("setScroll 返回 rejected promise（插件缺席）时静默，不炸 unhandled rejection", async () => {
+    platformMock.mockReturnValue("ios");
+    setScrollMock.mockImplementation(() => Promise.reject(new Error("UNIMPLEMENTED")));
+    const { root } = await renderDom(createElement(KeyboardAvoidanceBridge));
+    await act(async () => {
+      await Promise.resolve();
+    });
     await unmount(root);
   });
 });

@@ -190,6 +190,34 @@ describe("TodoPage 底部输入条键盘避让（fix round 1；抬升载体自 b
     await unmount(root);
   });
 
+  it("键盘动画进行中（即时 300、settled 仍 0）：composer 已抬升，内容留白纹丝不动——动画期零重排（R7）", async () => {
+    mockKeyboardShown(300);
+    keyboardHeightSettledMock.mockReturnValue(0);
+    const { host, root } = await renderPage();
+
+    const content = host.querySelector("[style*='--pad-bottom']") as HTMLElement | null;
+    expect(content).not.toBeNull();
+    // jsdom 量不出 composer 高（0），nav 键盘态归 0，settled 0 → 留白停在 192 地板；输入条已按即时值抬升。
+    expect(content?.style.getPropertyValue("--pad-bottom")).toBe("192px");
+    expect(composerForm(host)?.style.transform).toBe("translateY(-300px)");
+
+    // settled 跟上（did 事件到了）→ 留白才加上键盘高
+    keyboardHeightSettledMock.mockReturnValue(300);
+    await act(async () => {
+      root.render(
+        createElement(
+          MemoryRouter,
+          { initialEntries: ["/todo"] },
+          createElement(BottomNavProvider, null, createElement(SyncProvider, null, createElement(TodoPage))),
+        ),
+      );
+    });
+    // 0（composer）+ 0（nav）+ 300（settled 键盘高）+ 24（gap）= 324。
+    expect(content?.style.getPropertyValue("--pad-bottom")).toBe("324px");
+
+    await unmount(root);
+  });
+
   it("键盘收起（keyboardHeightPx=0）时，输入条抬升与本轮前完全一致（= navOffsetPx）", async () => {
     keyboardHeightMock.mockReturnValue(0);
     const { host, root } = await renderPage();
