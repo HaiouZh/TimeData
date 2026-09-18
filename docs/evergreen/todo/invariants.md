@@ -6,7 +6,7 @@ contracts:
   - packages/shared/src/types.ts:Task
   - packages/shared/src/entitySchemas.ts
   - packages/shared/src/taskCompletion.ts
-last-reviewed: 2026-09-14
+last-reviewed: 2026-09-18
 ---
 
 # 待办任务 · 不变量与坑

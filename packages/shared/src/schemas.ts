@@ -70,6 +70,9 @@ export const SyncPushReasonCodeSchema = z.enum([
   "foreign_key_failed",
   "applied",
   "validated",
+  // 写入生效，但 guardedColumns 拦下了来包对完成语义列的改写（服务器现值与来包不同）。
+  // 推送方收到它就不得跳过回声 pull——否则服务器保住的那份值永远回不到本地。
+  "guarded_columns_preserved",
 ]);
 
 export const SyncPushRequestSchema = z.object({

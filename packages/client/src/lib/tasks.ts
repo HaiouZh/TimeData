@@ -12,7 +12,8 @@ import {
 } from "@timedata/shared";
 import { v4 as uuid } from "uuid";
 import { db } from "../db/index.js";
-import { recordSyncLog } from "../sync/engine.js";
+import { hasSyncAttemptThisSession, recordSyncLog } from "../sync/engine.js";
+import { getCloudSyncEnabled } from "./cloudSyncSetting.js";
 import { assignProjectTints } from "./contentTint.js";
 import { getActiveSession } from "./sessions.js";
 import { occurrenceChildId } from "./tasks/occurrenceChildId.js";
@@ -424,7 +425,32 @@ export async function markOccurrenceSkipped(id: string, options: { now?: Date } 
 let materializationInFlight: Promise<void> | null = null;
 
 /** 遍历所有重复规则，对没有活跃 pending occurrence 的 rule 物化当前该做的一条到库。并发调用合并为同一个 in-flight Promise。 */
+/**
+ * 本会话还没和服务器对过账时，本地账本可能落后好几天：此时物化会按陈旧账本补出一条服务器
+ * **早已完成**的「幽灵发」。它推上去会被服务端完成语义守卫拦下（guarded_columns_preserved），
+ * 本地却仍是 pending—2026-09-15 现场就是这么卡出一条永不消失的逾期发的。
+ *
+ * 闸只拦第一次对账之前：同步失败（离线）同样置位，离线设备照常看到今天的重复任务，不会被无限推迟。
+ * 云同步没开时本地就是唯一真相，不存在落后，直接放行。
+ */
+function shouldDeferMaterialization(): boolean {
+  return getCloudSyncEnabled() && !hasSyncAttemptThisSession();
+}
+
+// 闸真的拦下过一次物化（欠账）。让 `useSync` 能在对完账后只补跑那一次：
+// 无条件每轮都补跑等于在同步返回的关键路径上塞一次 Dexie 全表扫，会打乱别的页面的时序。
+let materializationDeferred = false;
+
+export function hasDeferredMaterialization(): boolean {
+  return materializationDeferred;
+}
+
 export async function runMaterialization(now: Date = new Date()): Promise<void> {
+  if (shouldDeferMaterialization()) {
+    materializationDeferred = true;
+    return;
+  }
+  materializationDeferred = false;
   if (materializationInFlight) return materializationInFlight;
   materializationInFlight = runMaterializationOnce(now).finally(() => {
     materializationInFlight = null;

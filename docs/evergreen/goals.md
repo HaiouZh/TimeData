@@ -16,7 +16,7 @@ contracts:
   - packages/shared/src/goalLayoutPins.ts
   - packages/shared/src/syncDomains.ts
   - packages/server/src/sync/domains.ts
-last-reviewed: 2026-08-21
+last-reviewed: 2026-09-18
 ---
 
 # 目标层

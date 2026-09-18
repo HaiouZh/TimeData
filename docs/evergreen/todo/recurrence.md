@@ -13,7 +13,7 @@ contracts:
   - packages/shared/src/entitySchemas.ts
   - packages/shared/src/recurrence.ts
   - packages/shared/src/occurrence.ts
-last-reviewed: 2026-08-21
+last-reviewed: 2026-09-18
 ---
 
 # 待办 · 重复规则引擎
@@ -68,6 +68,8 @@ last-reviewed: 2026-08-21
 - **逾期保留**：`until` 已过但仍有逾期未完成发生时，留在“今天”区（`placement.ts` 的 `hasOutstandingUntilOccurrence`，legacy 兜底口径）。
 - **模板复选框只做代理反馈**：重复模板复选框恒不长期勾选/不划线；有下一发（含未到期）即可点击，短暂显示已勾反馈并代理完成 occurrence。已耗尽无下一发时置灰。提前完成不加确认、不节流、不加“提前”徽标；事后靠 occurrence 的 `scheduledAt`（应发生日）与 `completedAt`（实际完成时刻）区分。
 - **重锚 = 移锚点 + 删活跃发，历史发保留但不计入**：改 `recurrence` 或 `startAt` 视为重新锚定——`updateTask` 把 `startAt` 移到显式新值或当下，同事务级联删除该 rule 的活跃 pending occurrence 及其 children，再按新规则即时尝试物化。引擎只把 **`scheduledAt` 不早于锚点（`startAt` 本地日）** 的已处理发计入 count 配额与游标（`countedProcessedOccurrences`）；锚点前的历史发保留为账本事实但不再影响新周期（#4 方案 b）。锚点当天的发仍计入，故同日重锚不会重发同日、不撞确定性 id。规则/起始日未变则保留进度。转普通（`none`）或一次性排期（`scheduled`）也同事务清孤儿 occurrence。
+- <a id="todo-recurrence-gate"></a>**物化闸：本会话没和服务器对过账就不物化**（`lib/tasks.ts` 的 `shouldDeferMaterialization`）。离线跨天的设备冷启动时本地账本可能落后好几天，而 `materializeDue` 是「逐次追平」的：它会把一个 **别的设备早已完成 / 跳过** 的日子当成「最早未处理的一发」重建出来。确定性 id 只保证不重复建行，**不保证状态一致**：这条幽灵发是 `done=false`，推上去被服务端完成语义守卫拦下（见 [sync 守卫如实回执](../sync.md#sync-guarded-preserved)），本地却仍是 pending，于是今天区永久挂着一条逾期红字发。
+  闸的尺度：**云同步开着 且 本会话尚未对账**才拦（`hasSyncAttemptThisSession`，进程内状态、冷启动天然复位）。同步**失败也算对过账**（`regularSync` 的 finally 置位），离线设备不会被无限推迟；云同步没开时本地即唯一真相，直接放行。被闸挡下时记一笔**欠账**（`hasDeferredMaterialization`），`useSync` 在对账结束后（成功或失败）**只补跑欠账那一次**，否则单设备用户在切走又切回之前看不到今天的重复任务。**不能每轮同步都无条件补跑**：物化是 `tasks.filter()` 全表扫，塞在同步返回的关键路径上会打乱别的页面的时序（速记页「回到最新」的窗口竞争对这类插队敏感）。
 - **occurrence 物化 + today 切读（P3）**：`runMaterialization` 遍历重复规则，对无活跃 pending occurrence 的 rule 调 `materializeDue` 写一条 occurrence，并克隆模板当前 children 为 `parentId=occurrence.id` 的 occurrence children（确定性 id `${occ.id}:child:${templateChild.id}`，保留标题 / tags / 顺序，`done=false`、`completedAt=null` 起步，不继承模板子任务完成态）；children 仅在 occurrence **创建事务**内按确定性 id 克隆一次；模板 mid-cycle 新增的子任务**下一发**才带上；用户删除的 occurrence child **不会被补回**。（勾模板子任务仍会按确定性 id 兜底建镜像，那是 `toggleTaskDone` 的独立路径。）并发调用合并为模块级 in-flight Promise，写事务内二次检查。物化时机：冷启动 bootstrap、跨日 timer、focus、visibilitychange、规则重锚保存后、单发完成/删·跳后即时触发。`listTasks` 的 today 桶只含 pending occurrence（`ruleId!==null && !skipped && !done`），重复模板退 scheduled 管理区、不投影 today；skipped occurrence 不进活跃桶。
 - **规则行子任务勾选映射**：scheduled 管理区展开重复模板时，模板子任务只提供标题 / 结构；复选框显示和点击代理到该 rule 名下 **active（未完成未跳过）那一发**的确定性 occurrence child。无 active 发（含最新一发已完成、下一发未物化的空档期——规则行代表下一发，子任务显示全新未勾）时复选框置灰；写入层 `toggleTaskDone` 的代理选发仍走 `latestOccurrenceForRule`（无 active 回看最新已处理发），但空档期 UI 已置灰不可达。目标 child 缺失时 `toggleTaskDone` 在同事务内按 `${occ.id}:child:${templateChild.id}` 兜底创建并写 `tasks/create` syncLog。模板子任务本体不承载完成态，历史脏 `done=true` 不再影响规则行显示，也不会污染未来物化。
 - **单发动作**：勾 occurrence 无需新代码（`recurrence=null` 天然走 `toggleTaskDone` 非重复分支）。删·跳 = `markOccurrenceSkipped`（置 `skipped=true` 留痕、写 update syncLog，不删行让 P2 游标前进）；`TodoPage.remove` 对 `ruleId!==null` 的 occurrence 调 `markOccurrenceSkipped`，其余行走 `deleteTaskCascade` 级联删除。`done` / 已 `skipped` 的 occurrence 从详情抽屉删除同样走 `markOccurrenceSkipped` 留痕（保留 `done`/`completedAt` 不翻面）。撤勾 done occurrence（reopen）会在同事务删掉同 rule 后来物化的 active 发及其 children——它是这发完成的推进产物，删除后游标回退一格、保证同 rule 至多一条 active。

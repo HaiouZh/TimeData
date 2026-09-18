@@ -310,7 +310,9 @@ function outcomeFromApplyResult(result: ApplyChangeResult, backupId: string | nu
     recordId: result.recordId,
     action: result.action,
     status: result.status === "applied" ? "accepted" : "conflict",
-    reasonCode: result.status === "applied" ? "applied" : (result.skipReason ?? "server_version_newer_or_same"),
+    reasonCode: result.status === "applied"
+      ? (result.guardedPreserved ? "guarded_columns_preserved" : "applied")
+      : (result.skipReason ?? "server_version_newer_or_same"),
     message: result.reason,
     incomingTimestamp: result.incomingTimestamp,
     serverUpdatedAt: result.serverUpdatedAt,

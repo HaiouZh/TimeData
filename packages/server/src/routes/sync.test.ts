@@ -1,7 +1,7 @@
 import Database from "better-sqlite3";
 import { Hono } from "hono";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { SyncChange, SyncStreamBump, Task, TaskCompletionOp } from "@timedata/shared";
+import type { SyncChange, SyncPushResponse, SyncStreamBump, Task, TaskCompletionOp } from "@timedata/shared";
 import { createEntryFromCliInput } from "../lib/entry-service.js";
 import { computeAndPersistCommitHash, getCommitHash } from "../sync/state.js";
 import { totpCode } from "../lib/totp.js";
@@ -3922,5 +3922,45 @@ describe("sync route additional guards", () => {
     // 老记录确实被删，新记录已落库
     expect(db.prepare("SELECT id FROM time_entries WHERE id = ?").get("entry-unknown-old")).toBeUndefined();
     expect(db.prepare("SELECT id FROM time_entries WHERE id = ?").get("entry-unknown-new")).toBeTruthy();
+  });
+});
+
+describe("守卫列保留必须如实回报（幽灵 occurrence 分裂修复）", () => {
+  // 背景：离线设备冷启动时先物化后同步，会用陈旧账本重建一条服务器上早已完成的 occurrence，
+  // 并以 action=create、无 op 推上来。guardedColumns 保住了服务器的完成态（对的），但回执若谎报
+  // 纯 "applied"，推送方的 canSkipEchoPull 就会跳过回声 pull 并推进游标——服务器的修正永远回不去，
+  // 本地那条 pending 幽灵永久卡住（2026-09-15 现场）。
+  it("无 op 的来包撞上已完成的行：回执带 guarded_columns_preserved，不谎报 applied", async () => {
+    const seeded = taskData({ id: "occ-ghost", done: true, completedAt: "2026-09-15T14:11:29.301Z" });
+    const createRes = await pushChanges(
+      [taskChange("create", seeded, { type: "complete", at: "2026-09-15T14:11:29.301Z" })],
+      0,
+    );
+    expect(createRes.status).toBe(200);
+
+    // 陈旧账本重建：同 id、done=false、无 op。
+    const ghost = taskData({ id: "occ-ghost", done: false, completedAt: null, updatedAt: "2026-09-16T01:32:57.433Z" });
+    const res = await pushChanges([taskChange("create", ghost)]);
+    expect(res.status).toBe(200);
+
+    const body = (await res.json()) as SyncPushResponse;
+    const outcome = body.outcomes.find((o) => o.recordId === "occ-ghost");
+    expect(outcome?.status).toBe("accepted");
+    expect(outcome?.reasonCode).toBe("guarded_columns_preserved");
+
+    // 守卫本身照旧生效：服务器的完成态没被翻回去。
+    expect(db.prepare("SELECT done FROM tasks WHERE id = ?").get("occ-ghost")).toEqual({ done: 1 });
+  });
+
+  it("守卫列值与来包一致时不误报：回执仍是 applied", async () => {
+    const seeded = taskData({ id: "occ-same", done: false });
+    expect((await pushChanges([taskChange("create", seeded)], 0)).status).toBe(200);
+
+    const sameCompletion = taskData({ id: "occ-same", done: false, title: "只改标题", updatedAt: "2026-09-16T02:00:00.000Z" });
+    const res = await pushChanges([taskChange("update", sameCompletion)]);
+    expect(res.status).toBe(200);
+
+    const body = (await res.json()) as SyncPushResponse;
+    expect(body.outcomes.find((o) => o.recordId === "occ-same")?.reasonCode).toBe("applied");
   });
 });

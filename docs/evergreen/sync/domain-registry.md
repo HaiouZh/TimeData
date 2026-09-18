@@ -21,7 +21,7 @@ contracts:
   - packages/shared/src/types.ts:SyncChange
   - packages/server/src/sync/domains.ts
   - packages/client/src/sync/clientDomains.ts
-last-reviewed: 2026-08-21
+last-reviewed: 2026-09-18
 ---
 
 # 同步 · 域登记簿
@@ -91,7 +91,7 @@ last-reviewed: 2026-08-21
 
 `applyChange` 按登记簿分发：有 `apply` 钩子走钩子，否则走通用 LWW 路径。**所有路径的 `updated_at` / `deleted_at` 都取服务器当前时间 `serverNow`，不取 `change.timestamp`**。push 路由对 `baseSeq` 重叠或 unknown-base 记录启用的 staleGuard 是登记簿分发前的通用守卫，不改变任何域的 `validate` / `apply` 钩子归属。
 
-- **通用 LWW**（settings、quick_notes、tasks、tracks、track_steps、goals、sessions 及未来的零钩子域）：delete = 真删除 + tombstone upsert；upsert = 删 tombstone + `INSERT ... ON CONFLICT DO UPDATE`（列来自域的 `toRow()`，主键与 `created_at` 只在插入时写）。域可以声明 `guardedColumns`：来包无 `op` 时这些列不进 `DO UPDATE SET`；tasks 用它保护完成语义字段，tracks 用于保护 `status`。`track_steps.track_id` 不建 SQL 外键，轨道删除必须由客户端或未来服务端受控入口显式发每条步骤删除。
+- **通用 LWW**（settings、quick_notes、tasks、tracks、track_steps、goals、sessions 及未来的零钩子域）：delete = 真删除 + tombstone upsert；upsert = 删 tombstone + `INSERT ... ON CONFLICT DO UPDATE`（列来自域的 `toRow()`，主键与 `created_at` 只在插入时写）。域可以声明 `guardedColumns`：来包无 `op` 时这些列不进 `DO UPDATE SET`；tasks 用它保护完成语义字段，tracks 用于保护 `status`。守卫实际拦下改写（服务器现值 ≠ 来包）时，`ApplyChangeResult.guardedPreserved` 置位、回执 reasonCode 为 `guarded_columns_preserved`，让推送方必须走一次回声 pull 拿回服务器现值。`track_steps.track_id` 不建 SQL 外键，轨道删除必须由客户端或未来服务端受控入口显式发每条步骤删除。
 - **复合键 LWW**（`goal_layout_pins`）：语义仍是 LWW，但不能走单列主键通用 SQL。server 用 `identity` 从 payload 算 `recordId`，custom apply/read 按 `(goal_id,node_kind,node_id)` 读写，delete 仍真删除 + tombstone。
 - **categories 钩子**：delete = 级联删除目标分类、后代分类与关联 entries，每条都写 tombstone + delete seq；根分类先记账，再记关联 entries/后代分类，分页客户端可先建立整树冲突保护；upsert 清旧 tombstone 后正常写入。
 - **time_entries 钩子**：upsert 先清该 record 的旧 tombstone，再删除与该记录时间段重叠的旧远端记录（写 tombstone + delete seq，outcome 带 `overriddenRecordIds` 和 `backupId`）；分类不存在时 skip 并带结构化 `skipReason`。分类级联与 overlap 的隐式影响集合同时进入 baseSeq 冲突分析和 staleGuard。

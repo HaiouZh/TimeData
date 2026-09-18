@@ -1,6 +1,8 @@
 import { occurrenceId, type Task } from "@timedata/shared";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { db, resetDb } from "../test/dbReset.js";
+import { setCloudSyncEnabled } from "./cloudSyncSetting.js";
+import { markSyncAttempted, resetSyncAttempt } from "../sync/engine.js";
 import { addGoal, addGoalMember } from "./goals.js";
 import { endActiveSession, grabTaskToHand } from "./sessions.js";
 import { occurrenceChildId } from "./tasks/occurrenceChildId.js";
@@ -2222,5 +2224,64 @@ describe("在等桶：被未完成前置挡住的任务（界面分流）", () =
     const buckets = await listTasks(NOW);
     expect(buckets.projects[0]?.tasks.map((t) => t.id)).toEqual([root.id]);
     expect(buckets.projects[0]?.blockedByMember.size).toBe(0);
+  });
+});
+
+describe("物化闸：本会话还没和服务器对过账时不造发", () => {
+  // 幽灵 occurrence 现场（2026-09-15）：电脑端冷启动先物化、后同步，用落后几天的本地账本
+  // 造出一条服务器早已完成的发，推上去被守卫拦下，本地那条 pending 就永久卡住了。
+  const now = new Date("2026-09-16T01:32:57.433Z");
+
+  async function addDailyRule() {
+    return addTask({
+      title: "每日习惯",
+      recurrence: { freq: "daily", interval: 1, basis: "due" },
+      startAt: localDateOf(new Date(2026, 8, 14)),
+      now,
+    });
+  }
+
+  beforeEach(() => {
+    resetSyncAttempt();
+    setCloudSyncEnabled(false);
+  });
+
+  it("云同步开着且本会话未对账：不物化", async () => {
+    setCloudSyncEnabled(true);
+    const rule = await addDailyRule();
+    const before = await db.tasks.where("ruleId").equals(rule.id).count();
+
+    await runMaterialization(now);
+
+    await expect(db.tasks.where("ruleId").equals(rule.id).count()).resolves.toBe(before);
+  });
+
+  it("对过账之后照常物化", async () => {
+    setCloudSyncEnabled(true);
+    const rule = await addDailyRule();
+    markSyncAttempted();
+
+    await runMaterialization(now);
+
+    expect(await db.tasks.where("ruleId").equals(rule.id).count()).toBeGreaterThan(0);
+  });
+
+  it("离线（同步失败也算对过账）不被无限推迟：闸只拦第一次对账之前", async () => {
+    setCloudSyncEnabled(true);
+    const rule = await addDailyRule();
+    markSyncAttempted(); // 同步失败路径同样置位——离线设备照样要看到今天的重复任务
+
+    await runMaterialization(now);
+
+    expect(await db.tasks.where("ruleId").equals(rule.id).count()).toBeGreaterThan(0);
+  });
+
+  it("云同步关着时不受闸影响（单机没有分裂风险）", async () => {
+    setCloudSyncEnabled(false);
+    const rule = await addDailyRule();
+
+    await runMaterialization(now);
+
+    expect(await db.tasks.where("ruleId").equals(rule.id).count()).toBeGreaterThan(0);
   });
 });

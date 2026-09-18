@@ -25,7 +25,7 @@ contracts:
   - packages/shared/src/constants.ts
   - packages/server/src/db/schema.ts
   - packages/client/src/db/index.ts
-last-reviewed: 2026-08-21
+last-reviewed: 2026-09-18
 ---
 
 # 数据模型与契约
@@ -140,6 +140,7 @@ type SyncChange =
 | reasonCode | 含义 |
 |---|---|
 | `applied` | 接受并已写入（仅出现在 200 响应） |
+| `guarded_columns_preserved` | 接受并已写入，但域的 `guardedColumns` 拦下了来包对完成语义列的改写（服务器现值 ≠ 来包）；推送方据此禁止跳过回声 pull，见 [sync](sync.md#sync-guarded-preserved) |
 | `validated` | 仅通过校验、未写入（仅出现在 409 原子拒绝批的 accepted outcome，不得据此确认日志） |
 | `missing_payload` | create/update 没带 data |
 | `invalid_shape` | 字段类型或格式错误 |

@@ -60,6 +60,9 @@ export interface SyncPushResult {
   issues: SyncPushOutcome[];
   clientBugIssues: SyncPushOutcome[];
   userActionableIssues: SyncPushOutcome[];
+  /** 服务端守卫列拦下了来包的改写（guarded_columns_preserved）的条数。
+   *  不是故障、不进 issues，但只要 >0 就必须回声 pull 把服务器现值拉回来。 */
+  serverAdjusted: number;
   baseSeq: number | null;
   serverLatestSeq: number | null;
   appliedCount: number | null;
@@ -69,6 +72,9 @@ export interface SyncPushResult {
 // 且 [baseSeq → latestSeq] 全部增量恰好等于本次 push 记账数（无别的设备插队）。
 export function canSkipEchoPull(result: SyncPushResult): boolean {
   if (result.rejected > 0 || result.conflicts > 0 || result.issues.length > 0) return false;
+  // 服务端守卫拦下过来包：本地这份与服务器现值不同，跳过 pull 就等于让两边永久分裂
+  // （幽灵 occurrence 现场：本地 pending、服务器已完成，谁也纠正不了谁）。
+  if (result.serverAdjusted > 0) return false;
   const { baseSeq, serverLatestSeq, appliedCount } = result;
   if (baseSeq == null || serverLatestSeq == null || appliedCount == null) return false;
   return serverLatestSeq - baseSeq === appliedCount;
@@ -115,6 +121,23 @@ export const SYNC_LOG_QUARANTINED = 2;
 // 独立函数便于测试 spy，避免真实定时等待进入断言路径。
 export function yieldToMainThread(): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, 0));
+}
+
+// 本会话是否已经和服务器对过一次账（成功或失败都算「尝试过」）。进程内状态，冷启动天然复位。
+// 用途：在对完账之前，别拿可能落后好几天的本地账本去推算派生数据（见 lib/tasks 的物化闸）。
+let syncAttemptedThisSession = false;
+
+export function markSyncAttempted(): void {
+  syncAttemptedThisSession = true;
+}
+
+export function hasSyncAttemptThisSession(): boolean {
+  return syncAttemptedThisSession;
+}
+
+/** 复位到「本会话尚未对账」。换服务器 / 清空本地数据后本地账本重新变得不可信，测试隔离同样用它。 */
+export function resetSyncAttempt(): void {
+  syncAttemptedThisSession = false;
 }
 
 export function getLastSyncedSeq(): number | null {
@@ -430,6 +453,7 @@ async function applyPushResponse(
 ): Promise<SyncPushResult> {
   const acceptedLogIds: string[] = [];
   const clientBugLogIds: string[] = [];
+  let serverAdjusted = 0;
   const clientBugIssues: SyncPushOutcome[] = [];
   const userActionableIssues: SyncPushOutcome[] = [];
   const issues: SyncPushOutcome[] = [];
@@ -476,6 +500,12 @@ async function applyPushResponse(
         issues.push(outcome);
         break;
       }
+      case "server_adjusted":
+        // 写入生效了（非守卫列已落库），本地主张不必重推 → 标 synced。
+        // 但服务器守住了自己的守卫列，本地那份是错的：靠 serverAdjusted 逼出回声 pull 来纠正。
+        acceptedLogIds.push(...logIds);
+        serverAdjusted++;
+        break;
       case "conflict":
       case "unknown":
         issues.push(outcome);
@@ -522,6 +552,7 @@ async function applyPushResponse(
     issues,
     clientBugIssues,
     userActionableIssues,
+    serverAdjusted,
     baseSeq,
     serverLatestSeq: response.latestSeq ?? null,
     appliedCount: response.appliedCount ?? null,
@@ -657,6 +688,7 @@ async function applyAtomicRejectedPushResponse(
       issues,
       clientBugIssues,
       userActionableIssues,
+      serverAdjusted: 0, // 409 = 整批未落库，谈不上守卫保留
       baseSeq,
       serverLatestSeq: response.latestSeq ?? null,
       appliedCount: response.appliedCount ?? 0,
@@ -675,6 +707,7 @@ async function applyAtomicRejectedPushResponse(
     issues: [...issues, ...(retryResult?.issues ?? [])],
     clientBugIssues: [...clientBugIssues, ...(retryResult?.clientBugIssues ?? [])],
     userActionableIssues: [...userActionableIssues, ...(retryResult?.userActionableIssues ?? [])],
+    serverAdjusted: retryResult?.serverAdjusted ?? 0,
     baseSeq,
     serverLatestSeq: retryResult?.serverLatestSeq ?? response.latestSeq ?? null,
     appliedCount: retryResult?.appliedCount ?? response.appliedCount ?? 0,
@@ -713,7 +746,7 @@ async function submitPushBatch(
 export async function syncPush(): Promise<SyncPushResult> {
   const baseSeq = getLastSyncedSeq();
   const unsynced = await db.syncLog.where("synced").equals(0).toArray();
-  if (unsynced.length === 0) return { accepted: 0, rejected: 0, conflicts: 0, issues: [], clientBugIssues: [], userActionableIssues: [], baseSeq, serverLatestSeq: null, appliedCount: null };
+  if (unsynced.length === 0) return { accepted: 0, rejected: 0, conflicts: 0, issues: [], clientBugIssues: [], userActionableIssues: [], serverAdjusted: 0, baseSeq, serverLatestSeq: null, appliedCount: null };
 
   const compacted = compactSyncLogs(unsynced);
   const changes: SyncChange[] = [];
@@ -772,7 +805,7 @@ export async function syncPush(): Promise<SyncPushResult> {
     if (omittedLogIds.length > 0) {
       await db.syncLog.bulkUpdate(omittedLogIds.map((id) => ({ key: id, changes: { synced: 1 } })));
     }
-    return { accepted: 0, rejected: 0, conflicts: 0, issues: [], clientBugIssues: [], userActionableIssues: [], baseSeq, serverLatestSeq: null, appliedCount: null };
+    return { accepted: 0, rejected: 0, conflicts: 0, issues: [], clientBugIssues: [], userActionableIssues: [], serverAdjusted: 0, baseSeq, serverLatestSeq: null, appliedCount: null };
   }
 
   const result = await submitPushBatch(changes, sourceLogIdsByChangeKey, changeKey, baseSeq);
@@ -1193,7 +1226,10 @@ let regularSyncInFlight: Promise<RegularSyncResult> | null = null;
 
 export async function regularSync(options: RegularSyncOptions = {}): Promise<RegularSyncResult> {
   if (regularSyncInFlight) return regularSyncInFlight;
+  // 成功失败都置位：失败（离线）时本地账本依旧不可信，但不能让派生数据被无限推迟——
+  // 闸的语义是「对账之前别推算」，不是「没对上账就不干活」。
   regularSyncInFlight = runRegularSync(options).finally(() => {
+    markSyncAttempted();
     regularSyncInFlight = null;
   });
   return regularSyncInFlight;

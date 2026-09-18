@@ -62,6 +62,9 @@ export interface ApplyChangeResult {
   skipReason?: SyncPushOutcome["reasonCode"];
   overriddenRecordIds?: string[];
   primarySeqRecorded?: boolean;
+  /** 通用 LWW 的 guardedColumns 实际拦下了来包的改写（服务器现值与来包不同）。
+   *  必须如实回执：推送方据此放弃「跳过回声 pull」，否则它永远看不到服务器保住的那份值。 */
+  guardedPreserved?: boolean;
 }
 
 export interface ValidateContext {

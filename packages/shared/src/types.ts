@@ -268,4 +268,6 @@ export type SyncReasonCategory =
   | "needs_arbitration" // unseen_record_deletion_rejected — 服务端拦下"会删掉本设备没见过的记录"的写入；
   // 客户端放弃本地主张（隔离）+ 保住内容 + 等人裁决
   | "conflict" // server_version_newer_or_same — 进入冲突流程
+  | "server_adjusted" // guarded_columns_preserved — 写入生效但服务器保住了自己的守卫列；
+  // 客户端标 synced（本地主张已推出、不重推），但必须回声 pull 把服务器现值拉回来
   | "unknown";

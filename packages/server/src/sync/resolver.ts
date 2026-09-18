@@ -162,15 +162,21 @@ function applyLwwChange(
 
   db.prepare("DELETE FROM sync_tombstones WHERE table_name = ? AND record_id = ?").run(table, change.recordId);
 
-  const existing = db.prepare(`SELECT updated_at FROM ${table} WHERE ${lww.idColumn} = ?`).get(change.recordId) as
-    | { updated_at: string }
+  const hasOp = (change as { op?: unknown }).op != null;
+  const guardedColumns = !hasOp && lww.guardedColumns ? lww.guardedColumns : null;
+  const guarded = guardedColumns ? new Set(guardedColumns) : null;
+  // 守卫列一并读出来：要判断守卫是否真的拦下了什么（现值 ≠ 来包），才能如实回执。
+  const selectColumns = ["updated_at", ...(guardedColumns ?? [])].join(", ");
+  const existing = db.prepare(`SELECT ${selectColumns} FROM ${table} WHERE ${lww.idColumn} = ?`).get(change.recordId) as
+    | Record<string, string | number | null>
     | undefined;
 
   const row: Record<string, string | number | null> = { ...lww.toRow(change.data), updated_at: serverNow };
   const columns = Object.keys(row);
   const placeholders = columns.map(() => "?").join(", ");
-  const hasOp = (change as { op?: unknown }).op != null;
-  const guarded = !hasOp && lww.guardedColumns ? new Set(lww.guardedColumns) : null;
+  const guardedPreserved = existing != null
+    && guardedColumns != null
+    && guardedColumns.some((column) => (existing[column] ?? null) !== (row[column] ?? null));
   const updatable = columns.filter(
     (column) => column !== lww.idColumn && column !== "created_at" && !(guarded?.has(column) ?? false),
   );
@@ -182,10 +188,11 @@ function applyLwwChange(
     ON CONFLICT(${lww.idColumn}) DO UPDATE SET ${setClause}
   `).run(...columns.map((column) => row[column]));
 
-  return applyResult(
+  const result = applyResult(
     change,
     "applied",
     existing ? `updated ${table} record` : `inserted ${table} record`,
-    existing?.updated_at,
+    existing?.updated_at as string | undefined,
   );
+  return guardedPreserved ? { ...result, guardedPreserved: true } : result;
 }

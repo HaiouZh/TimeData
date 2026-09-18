@@ -10,7 +10,7 @@ contracts:
   - packages/server/src/sync/domains.ts
   - packages/server/src/db/reset.ts
   - packages/server/src/routes/data.ts
-last-reviewed: 2026-08-20
+last-reviewed: 2026-09-18
 ---
 
 # 同步 · 推拉协议详解
@@ -39,7 +39,7 @@ last-reviewed: 2026-08-20
 3. 从业务表读最新数据填进 `change.data`（delete 除外）。`tasks` 域的完成语义还会把压缩组里时间序最后一条 `op` 带进 change：完成后又改标题时，最后一条日志本身无 `op`，压缩结果仍保留前一条完成 `op`，避免 push 快照失去“有意修改完成字段”的授权。
 4. **附带分类依赖**（`categoryDependencyChangesForEntry`）：push 的 entry 引用的分类还没在服务器上时，把分类（和它的父分类）一起塞进 changes，避免"先 push entry 因分类不存在被拒"的死锁。
 5. POST `/api/sync/push`，请求体 `{ changes, baseSeq, requestId? }`。`baseSeq` 来自本地读数，服务端用它判断快进、非重叠合并、重叠冲突还是 unknown-base 保守路径。`requestId` 是对冲/重试幂等键（每批 `crypto.randomUUID()`，409 拆出的子批换新 id）：命中服务端 `sync_push_requests` 回放表时直接原样返回首发的状态码与响应体，不重复 apply、不占新 seq；备份竞态 409 与内部 500 不进回放表，详见 [ADR 0020](../../adr/0020-sync-push-request-idempotency.md)。入口先过 `SyncPushRequestSchema`，不合法返回 400 `invalid_request`。
-6. 服务器 200 返回后按 `SyncPushOutcome.reasonCode` 分类处理本地 syncLog：`applied`、`client_bug` 和 `stale_rejected` 类标已同步；`user_actionable` / `conflict` / `unknown` 保留。HTTP 409 有**两种形状，别混**：校验失败的 409 返回完整 `SyncPushResponse`（带 accepted/rejected outcomes、`latestSeq`、`appliedCount`），表示整批原子拒绝，accepted outcome 的 reasonCode 为 `validated`、只代表"通过校验"、不能确认日志；客户端把被拒项按类归置（client_bug/stale 标 synced=1，其余隔离为 `synced=2` 死信）后立即重试合法子批，只有重试 200 后才确认。**备份竞态的 409（`push_retry_after_backup_race`）走的是通用 error 形状**，只带错误与 `backupId`，没有 outcomes / `latestSeq` / `appliedCount`；客户端靠 `isSyncPushResponse()` 判形状，不满足就不进拆批分支、直接抛错走整轮重试。`stale_change_rejected` 会进入 `pushIssues`，但客户端放弃本地主张，随后回声 pull 落地服务器权威版本。
+6. 服务器 200 返回后按 `SyncPushOutcome.reasonCode` 分类处理本地 syncLog：`applied`、`client_bug`、`stale_rejected` 和 `server_adjusted`（`guarded_columns_preserved`）类标已同步；`user_actionable` / `conflict` / `unknown` 保留。HTTP 409 有**两种形状，别混**：校验失败的 409 返回完整 `SyncPushResponse`（带 accepted/rejected outcomes、`latestSeq`、`appliedCount`），表示整批原子拒绝，accepted outcome 的 reasonCode 为 `validated`、只代表"通过校验"、不能确认日志；客户端把被拒项按类归置（client_bug/stale 标 synced=1，其余隔离为 `synced=2` 死信）后立即重试合法子批，只有重试 200 后才确认。**备份竞态的 409（`push_retry_after_backup_race`）走的是通用 error 形状**，只带错误与 `backupId`，没有 outcomes / `latestSeq` / `appliedCount`；客户端靠 `isSyncPushResponse()` 判形状，不满足就不进拆批分支、直接抛错走整轮重试。`stale_change_rejected` 会进入 `pushIssues`，但客户端放弃本地主张，随后回声 pull 落地服务器权威版本。
 7. `pushIssues` / `clientBugIssues` / `userActionableIssues` 暴露给 UI / 诊断。
 
 <a id="sync-server-push"></a>
@@ -54,7 +54,7 @@ last-reviewed: 2026-08-20
    **这一步同时是「判据快照在事务外算」的兜底，不是可有可无的优化**：影响集合分析（`impactRecordsByChange` / `analyzePushBaseSeq` / `staleGuardKeys`）跑在 `db.transaction` 之前，中间还隔着一次 `await createServerBackup`——单看这段，并发 push 确实可能拿着过期快照走到 apply。拦住它的正是这条 seq 比对：任何并发写入都必然推进 `sync_seq`，于是那一路被改判 409 重试、带着新鲜快照重来。所以判据分析**不需要**搬进事务；反过来说，**谁要动这条 seq 比对，得先把判据分析一起搬进事务**，否则守卫就空了。
 5. 在一个 SQLite 事务里逐条 `applyChange`（登记簿驱动，规则见 [sync/domain-registry](domain-registry.md)）。冲突记录按时间戳线性化：`analyzePushBaseSeq` 命中的 `overlappingRecords` 启用 staleGuard，`unknown_base` 全量保守启用；比较基线冻结在本批 apply 开始前，来包 `change.timestamp <=` 当时的服务器现存行 `updated_at` 或 tombstone `deleted_at` 时返回 `stale_change_rejected`，不写库、不占 seq。同批前序变更新产生的 tombstone 不得误伤后序 change。快进和非重叠记录不比时间戳，避免同设备快速连续编辑被服务器分配的 `updated_at` 误拒。每条成功写入都追加 `sync_seq` 并把 commit hash 标 dirty。
 6. 写一条 server-side `sync_logs` 摘要，事务后 `notifySyncChange(getLatestSeq(), buildBumpPayload(...))`——bump 在条数与字节上限内直接带上本批增量 changes，超限则只推游标。
-7. 响应带 `latestSeq`（apply 后账本最新号）与 `appliedCount`（本批记账数 = apply 事务前后 `getLatestSeq()` 之差）；客户端据 `latestSeq − baseSeq === appliedCount` 判定无插队、跳过回声 pull（见 [ADR 0016](../../adr/0016-push-latestseq-and-pull-pagination.md)）。rejected 的 409 响应同样带这两字段（`appliedCount: 0`）。
+7. 响应带 `latestSeq`（apply 后账本最新号）与 `appliedCount`（本批记账数 = apply 事务前后 `getLatestSeq()` 之差）；客户端据 `latestSeq − baseSeq === appliedCount` 判定无插队、跳过回声 pull（见 [ADR 0016](../../adr/0016-push-latestseq-and-pull-pagination.md)）。**另一条否决项是守卫列保留**：只要本批有 `guarded_columns_preserved`（`SyncPushResult.serverAdjusted > 0`），`canSkipEchoPull` 即返回 `false`——服务器保住的那份值与本地不同，跳过 pull 就是让两边永久分裂（见 [sync 守卫如实回执](../sync.md#sync-guarded-preserved)）。rejected 的 409 响应同样带这两字段（`appliedCount: 0`）。
 
 登记簿的校验、通用 LWW、复合键 LWW 和 manual 域钩子细节统一维护在 [sync/domain-registry](domain-registry.md)，避免新增域时主流程文档和登记簿文档分叉。
 
@@ -69,7 +69,7 @@ last-reviewed: 2026-08-20
 - `skip`：`skipped` 从 false 变 true，或 create 出 skipped occurrence。
 - `amend`：其他完成语义字段有意变化，例如重复规则重锚时重置 `lastDoneAt` / `completedCount`。
 
-`op` 是授权标志，不是服务端重算指令；服务端不会理解 occurrence 业务，只把带 `op` 的 tasks upsert 视为“允许这次快照写完成字段”。`SERVER_SYNC_DOMAINS.tasks.lww.guardedColumns` 将 SQLite 列 `done`、`completed_at`、`skipped`、`last_done_at`、`completed_count` 标为守卫列：无 `op` 的 upsert 在 `ON CONFLICT DO UPDATE SET` 里排除这些列，保留服务器现值；INSERT 分支仍全列写入，因为行不存在时没有现值可保护。
+`op` 是授权标志，不是服务端重算指令；服务端不会理解 occurrence 业务，只把带 `op` 的 tasks upsert 视为“允许这次快照写完成字段”。`SERVER_SYNC_DOMAINS.tasks.lww.guardedColumns` 将 SQLite 列 `done`、`completed_at`、`skipped`、`last_done_at`、`completed_count` 标为守卫列：无 `op` 的 upsert 在 `ON CONFLICT DO UPDATE SET` 里排除这些列，保留服务器现值；INSERT 分支仍全列写入，因为行不存在时没有现值可保护。守卫真拦下东西（服务器现值 ≠ 来包）时回执 `guarded_columns_preserved` 而非 `applied`，推送方据此放弃跳过回声 pull。
 
 这解决 R2 场景：设备 A 勾选任务并带 `op: complete` 上行后，设备 B 基于旧快照只改标题或排序，即使整行 payload 里仍是 `done=false`，无 `op` 的 update 也只能更新标题/排序，不能把服务器上的完成态翻回。部署顺序为客户端先行、服务端后行：旧客户端遇到新服务端时无 `op` 的勾选无法写入完成字段，但旧客户端的拖拽/改标题也无法误翻完成态；新客户端遇到旧服务端时 `op` 会被旧契约剥离，行为退回旧整行覆盖，不比现状更差。完整决策见 [ADR 0018](../../adr/0018-tasks-completion-op.md)。
 

@@ -32,7 +32,7 @@ contracts:
   - packages/shared/src/types.ts:TimeEntry
   - packages/shared/src/entitySchemas.ts
   - packages/client/src/lib/time.ts
-last-reviewed: 2026-08-21
+last-reviewed: 2026-09-18
 ---
 
 # 时间轴与记录时间规则

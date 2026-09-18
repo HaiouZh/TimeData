@@ -13,6 +13,7 @@ import {
 import { resolveConflicts, type ConflictResolution } from "../sync/conflicts.ts";
 import { db } from "../db/index.ts";
 import { getCloudSyncEnabled } from "../lib/cloudSyncSetting.ts";
+import { hasDeferredMaterialization, runMaterialization } from "../lib/tasks.ts";
 import { safeGetItem, safeSetItem } from "../lib/safeStorage.js";
 import { STORAGE_KEYS } from "../lib/storageKeys.js";
 import type { SyncStreamState } from "../lib/syncStream.js";
@@ -145,6 +146,13 @@ export function useSync({ autoSyncOnMount = false }: UseSyncOptions = {}) {
       });
       setSyncFailureCount(getConsecutiveSyncFailureCount());
       setSyncing(false);
+      // 对完账（成功或失败）才解开物化闸：只补跑闸真拦下过的那一次。
+      // 无条件每轮都跑会在同步返回的关键路径上塞一次 Dexie 全表扫，打乱别的页面的时序。
+      if (hasDeferredMaterialization()) {
+        void runMaterialization().catch((error: unknown) => {
+          console.error("[sync] 对账后物化失败:", error);
+        });
+      }
     }
   }, [refreshSyncStatus]);
 

@@ -27,6 +27,8 @@ export async function runStartupTasks(): Promise<void> {
   }
 }
 
+// 云同步开着时这次预热会被物化闸挡下（本会话还没对过账，账本不可信，见 lib/tasks 的 shouldDeferMaterialization），
+// 由 useSync 在对账结束后补跑；单机（云同步关）时它仍是真正的预热。
 // occurrence 物化从启动链里移出来单跑：它是 `tasks.filter()` 全表扫（Dexie 的 filter 不走索引）
 // 加逐规则事务，是冷启动里最贵的一段，而 TodoPage 挂载时本就会自跑。这里只当空闲预热。
 export async function warmMaterialization(): Promise<void> {

@@ -14,7 +14,7 @@ covers:
 contracts:
   - packages/server/src/routes/sync.ts
   - packages/shared/src/schemas.ts
-last-reviewed: 2026-08-20
+last-reviewed: 2026-09-18
 ---
 
 # 同步 · 实时通道与调度器

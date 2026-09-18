@@ -55,3 +55,9 @@ describe("classifyReasonCode", () => {
     expect(category).not.toBe("stale_rejected");
   });
 });
+
+describe("guarded_columns_preserved", () => {
+  it("归类为 server_adjusted：写入生效了，但服务器保住了自己的完成语义列", () => {
+    expect(classifyReasonCode("guarded_columns_preserved")).toBe("server_adjusted");
+  });
+});

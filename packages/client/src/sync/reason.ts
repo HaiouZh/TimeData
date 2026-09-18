@@ -21,6 +21,9 @@ export function classifyReasonCode(reasonCode: string): SyncReasonCategory {
     return "stale_rejected";
   if (reasonCode === "unseen_record_deletion_rejected") return "needs_arbitration";
   if (reasonCode === "server_version_newer_or_same") return "conflict";
+  // 写入生效了，只是服务器守卫住了自己的完成语义列。不是故障、不进 issues，
+  // 但推送方必须据此放弃跳过回声 pull，否则服务器保住的那份值永远回不到本地。
+  if (reasonCode === "guarded_columns_preserved") return "server_adjusted";
   if (CLIENT_BUG.has(reasonCode)) return "client_bug";
   if (USER_ACTIONABLE.has(reasonCode)) return "user_actionable";
   return "unknown";

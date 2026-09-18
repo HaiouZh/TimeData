@@ -20,7 +20,7 @@ contracts:
   - packages/server/src/routes/admin/sync.ts
   - packages/server/src/routes/sync.ts
   - packages/server/src/routes/syncLog.ts
-last-reviewed: 2026-09-16
+last-reviewed: 2026-09-18
 ---
 
 # 同步 · 观测与排障

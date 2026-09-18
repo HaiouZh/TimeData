@@ -15,6 +15,11 @@ vi.mock("../sync/engine.ts", () => ({
   syncForceReplace: vi.fn(),
 }));
 
+vi.mock("../lib/tasks.ts", () => ({
+  hasDeferredMaterialization: vi.fn(() => false),
+  runMaterialization: vi.fn(async () => {}),
+}));
+
 vi.mock("../sync/conflicts.ts", () => ({
   resolveConflicts: vi.fn(),
 }));
@@ -266,6 +271,80 @@ describe("useSync", () => {
     });
 
     expect(outcome).toEqual({ ok: false, retryAfterMs: 9_000 });
+    await unmount(root);
+  });
+});
+
+describe("对账完成后补跑物化（物化闸的另一半）", () => {
+  // 闸挡住了冷启动那次物化；对完账必须补跑一次，否则单设备用户在切走又切回之前
+  // 根本看不到今天的重复任务。
+  async function syncOnce() {
+    const captured: { value: ReturnType<typeof useSync> | null } = { value: null };
+    function Probe() {
+      captured.value = useSync();
+      return createElement("span", null, "probe");
+    }
+    const { root } = await renderDom(createElement(Probe));
+    await act(async () => {
+      await captured.value?.sync();
+    });
+    return root;
+  }
+
+  it("闸拦下过（有欠账）时，同步成功后补跑 runMaterialization", async () => {
+    const { regularSync } = await import("../sync/engine.ts");
+    const { hasDeferredMaterialization, runMaterialization } = await import("../lib/tasks.ts");
+    vi.mocked(runMaterialization).mockClear();
+    vi.mocked(hasDeferredMaterialization).mockReturnValue(true);
+    vi.mocked(regularSync).mockResolvedValueOnce({
+      checked: true,
+      identical: true,
+      pushed: 0,
+      rejected: 0,
+      pushConflicts: 0,
+      pushIssues: [],
+      pulled: 0,
+      conflicts: [],
+    });
+
+    const root = await syncOnce();
+
+    expect(vi.mocked(runMaterialization)).toHaveBeenCalled();
+    await unmount(root);
+  });
+
+  it("同步失败但有欠账时同样补跑：闸已解，离线设备照常看到今天的重复任务", async () => {
+    const { regularSync } = await import("../sync/engine.ts");
+    const { hasDeferredMaterialization, runMaterialization } = await import("../lib/tasks.ts");
+    vi.mocked(runMaterialization).mockClear();
+    vi.mocked(hasDeferredMaterialization).mockReturnValue(true);
+    vi.mocked(regularSync).mockRejectedValueOnce(new Error("网络请求失败：boom"));
+
+    const root = await syncOnce();
+
+    expect(vi.mocked(runMaterialization)).toHaveBeenCalled();
+    await unmount(root);
+  });
+
+  it("没有欠账就不打扰：每轮同步都补跑会在关键路径上塞一次 Dexie 全表扫，打乱别的页面时序", async () => {
+    const { regularSync } = await import("../sync/engine.ts");
+    const { hasDeferredMaterialization, runMaterialization } = await import("../lib/tasks.ts");
+    vi.mocked(runMaterialization).mockClear();
+    vi.mocked(hasDeferredMaterialization).mockReturnValue(false);
+    vi.mocked(regularSync).mockResolvedValueOnce({
+      checked: true,
+      identical: true,
+      pushed: 0,
+      rejected: 0,
+      pushConflicts: 0,
+      pushIssues: [],
+      pulled: 0,
+      conflicts: [],
+    });
+
+    const root = await syncOnce();
+
+    expect(vi.mocked(runMaterialization)).not.toHaveBeenCalled();
     await unmount(root);
   });
 });

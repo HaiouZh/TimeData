@@ -20,7 +20,7 @@ vi.mock("../lib/api.js", () => ({
   apiFetch: apiFetchMock,
 }));
 
-import { advanceSeqCursor, canSkipEchoPull, clearBumpStash, compactSyncLogs, getClockSkewMs, getConsecutiveSyncFailureCount, getLastSyncedSeq, getQuarantinedSyncLogs, getSyncHealth, localContentHash, prepareForcePush, pruneSyncedLogs, requeueQuarantinedSyncLogs, recordClockSkew, recordRegularSyncFailure, recordSyncLog, recordSyncLogs, regularSync, resetConsecutiveSyncFailures, setLastSyncedSeq, shouldOpenSyncDiagnostics, stashBumpPayload, syncForcePushToServer, syncPush, syncPull, syncPullSinceSeq, syncForceReplace, yieldToMainThread, SYNC_HEDGE_DELAY_MS, SYNC_LOG_QUARANTINED } from "./engine.js";
+import { advanceSeqCursor, canSkipEchoPull, clearBumpStash, compactSyncLogs, getClockSkewMs, getConsecutiveSyncFailureCount, getLastSyncedSeq, getQuarantinedSyncLogs, getSyncHealth, hasSyncAttemptThisSession, localContentHash, prepareForcePush, pruneSyncedLogs, requeueQuarantinedSyncLogs, recordClockSkew, recordRegularSyncFailure, recordSyncLog, recordSyncLogs, regularSync, resetConsecutiveSyncFailures, resetSyncAttempt, setLastSyncedSeq, shouldOpenSyncDiagnostics, stashBumpPayload, syncForcePushToServer, syncPush, syncPull, syncPullSinceSeq, syncForceReplace, yieldToMainThread, SYNC_HEDGE_DELAY_MS, SYNC_LOG_QUARANTINED } from "./engine.js";
 import { listPendingArbitrations } from "./arbitration.ts";
 import { createPhaseRecorder } from "./phaseTimings.js";
 import { syncScheduler } from "./scheduler.js";
@@ -3056,7 +3056,7 @@ describe("syncPullSinceSeq", () => {
 });
 
 describe("canSkipEchoPull", () => {
-  const base = { accepted: 1, rejected: 0, conflicts: 0, issues: [], clientBugIssues: [], userActionableIssues: [] };
+  const base = { accepted: 1, rejected: 0, conflicts: 0, issues: [], clientBugIssues: [], userActionableIssues: [], serverAdjusted: 0 };
 
   it("无插队（latestSeq − baseSeq === appliedCount）且干净 → 可跳过", () => {
     expect(canSkipEchoPull({ ...base, baseSeq: 5, serverLatestSeq: 6, appliedCount: 1 })).toBe(true);
@@ -3080,6 +3080,10 @@ describe("canSkipEchoPull", () => {
 
   it("push 含 rejected/issues → 一律 pull", () => {
     expect(canSkipEchoPull({ ...base, rejected: 1, issues: [{} as never], baseSeq: 5, serverLatestSeq: 6, appliedCount: 1 })).toBe(false);
+  });
+
+  it("服务器守卫拦下过来包（serverAdjusted>0）→ 一律 pull，把服务器现值拉回来", () => {
+    expect(canSkipEchoPull({ ...base, serverAdjusted: 1, baseSeq: 5, serverLatestSeq: 6, appliedCount: 1 })).toBe(false);
   });
 });
 
@@ -4907,3 +4911,93 @@ describe("changeByKey 落空分支", () => {
   });
 });
 
+
+describe("guarded_columns_preserved：服务器守卫拦下来包时不许跳过回声 pull", () => {
+  // 幽灵 occurrence 分裂（2026-09-15 现场）：本地用陈旧账本重建了一条服务器上已完成的记录，
+  // 推上去被 guardedColumns 拦住完成态却回执 applied，客户端便跳过回声 pull 并推进游标——
+  // 服务器保住的那份值再也回不到本地，两边永久分裂。
+  it("计入 serverAdjusted 并把源 syncLog 标 synced（本地主张已推出，不重推）", async () => {
+    await db.tasks.add({
+      id: "occ-ghost",
+      parentId: null,
+      title: "每日习惯",
+      done: false,
+      recurrence: null,
+      lastDoneAt: null,
+      startAt: null,
+      scheduledAt: "2026-09-15T00:00:00.000Z",
+      completedCount: 0,
+      weight: 0,
+      completedAt: null,
+      tags: [],
+      ruleId: "rule-1",
+      skipped: false,
+      sortOrder: 0,
+      createdAt: "2026-09-16T01:32:57.433Z",
+      updatedAt: "2026-09-16T01:32:57.433Z",
+    } as never);
+    await db.syncLog.add({
+      id: "ghost-log",
+      tableName: "tasks",
+      recordId: "occ-ghost",
+      action: "create",
+      timestamp: "2026-09-16T01:32:57.433Z",
+      synced: 0,
+    });
+
+    apiFetchMock.mockResolvedValue({
+      outcomes: [{
+        tableName: "tasks",
+        recordId: "occ-ghost",
+        action: "create",
+        status: "accepted",
+        reasonCode: "guarded_columns_preserved",
+        message: "updated tasks record",
+        incomingTimestamp: "2026-09-16T01:32:57.433Z",
+        serverUpdatedAt: "2026-09-15T14:11:29.976Z",
+      }],
+      accepted: 1,
+      rejected: 0,
+      conflicts: 0,
+      backupId: null,
+      serverTime: "2026-09-16T01:33:20.000Z",
+      latestSeq: 6,
+      appliedCount: 1,
+    });
+
+    const result = await syncPush();
+
+    expect(result.serverAdjusted).toBe(1);
+    // 不当成问题弹给用户：这是正常的自愈路径，不是同步故障。
+    expect(result.issues).toHaveLength(0);
+    await expect(db.syncLog.get("ghost-log")).resolves.toMatchObject({ synced: 1 });
+  });
+});
+
+describe("本会话对账标记（物化闸的解闸信号）", () => {
+  beforeEach(() => {
+    resetSyncAttempt();
+  });
+
+  it("一轮同步跑完就置位：派生数据（重复任务物化）可以放心用本地账本了", async () => {
+    apiFetchMock.mockImplementation(async (url: string) => {
+      if (url.toString().endsWith("/api/sync/status")) {
+        return { categoryCount: 0, entryCount: 0, quickNoteCount: 0, lastUpdatedAt: null, latestSeq: 0, serverTime: "2026-09-18T00:00:00.000Z", contentHash: "empty" };
+      }
+      return { changes: [], serverTime: "2026-09-18T00:00:01.000Z", latestSeq: 0 };
+    });
+    expect(hasSyncAttemptThisSession()).toBe(false);
+
+    await regularSync();
+
+    expect(hasSyncAttemptThisSession()).toBe(true);
+  });
+
+  it("同步失败也置位：离线设备不能被闸无限推迟，照样要看到今天的重复任务", async () => {
+    apiFetchMock.mockRejectedValue(new Error("网络请求失败：boom"));
+
+    await expect(regularSync()).rejects.toThrow();
+
+    expect(hasSyncAttemptThisSession()).toBe(true);
+  });
+});
