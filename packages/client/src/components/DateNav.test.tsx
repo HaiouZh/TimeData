@@ -86,18 +86,14 @@ describe("DateNav", () => {
     expect(findButton(container, "选择日期").textContent).toContain("1月15日");
   });
 
-  it("默认两端都留箭头；narrowSwipeSwitchesDate 只把窄屏那份藏起来", async () => {
-    // 藏箭头的前提是「本页窄屏另有横滑切日」。日记页没有横滑，所以它不传这个 prop，
-    // 箭头必须在窄屏照常渲染——两种形态在这里一起钉住，改错一边就红。
-    const plain = await mount("2026-06-03", () => {});
-    expect(findButton(plain, "前一天").className).not.toContain("hidden");
-
-    const { host } = await renderDom(
-      createElement(DateNav, { date: "2026-06-03", onDateChange: () => {}, narrowSwipeSwitchesDate: true }),
-    );
-    const arrow = findButton(host, "前一天");
-    expect(arrow.className).toContain("hidden");
-    expect(arrow.className).toContain("sm:inline-flex");
+  it("两端箭头在所有断点恒显——没有「窄屏收起来」这种形态", async () => {
+    // 本组件同时供时间轴页和日记页使用，两边都必须在手机上看得到箭头：日记页压根没有
+    // 横滑切日，时间轴页的横滑又被圆环的 data-swipe-exempt 挖掉了最大一块落手区。
+    // 曾经的 narrowSwipeSwitchesDate 开关已删；谁想再引入条件隐藏，这条先红。
+    const container = await mount("2026-06-03", () => {});
+    for (const label of ["前一天", "后一天"]) {
+      expect(findButton(container, label).className, `${label} 不能带断点隐藏`).not.toContain("hidden");
+    }
   });
 
   it("传入 onSearch 时渲染搜索按钮并回调", async () => {

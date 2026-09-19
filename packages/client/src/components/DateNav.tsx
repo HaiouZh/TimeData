@@ -7,23 +7,21 @@ interface DateNavProps {
   date: string;
   onDateChange: (date: string) => void;
   onSearch?: () => void;
-  /**
-   * 本页窄屏另有横滑切日时传 true：左右箭头改为只在宽屏出现，窄屏把那 72px 让给内容
-   * （桌面没有横滑，所以宽屏一定保留）。**没有横滑的页面绝不能传**——日记页就没有，
-   * 传了会让它窄屏只剩「点日期开月历」一条切日路径。
-   */
-  narrowSwipeSwitchesDate?: boolean;
 }
 
-const ARROW_BASE =
+/**
+ * 左右箭头**在所有断点恒显**，不分宽窄屏。时间轴页一度把窄屏那份收成
+ * `hidden sm:inline-flex`，理由是「本页有横滑切日兜底」——但它的圆环带着
+ * `data-swipe-exempt`，手机上占屏最大的那块恰恰滑不动，横滑只剩顶部窄带和下方列表可落手。
+ * 省下的 72px 也没被内容吃掉（日期那侧是 flex-1，本来就富余）。别再加回条件隐藏。
+ */
+const ARROW_CLASS =
   "hotarea-md rounded-ctl leading-none text-ink-3 transition-colors hover:bg-surface-hover hover:text-ink-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-ink-3";
-const ARROW_WIDE_ONLY = " hidden sm:inline-flex sm:items-center sm:justify-center";
 
-export default function DateNav({ date, onDateChange, onSearch, narrowSwipeSwitchesDate }: DateNavProps) {
+export default function DateNav({ date, onDateChange, onSearch }: DateNavProps) {
   const today = getDateString(new Date());
   const isToday = date === today;
   const weekday = formatWeekday(date);
-  const arrowClass = narrowSwipeSwitchesDate ? ARROW_BASE + ARROW_WIDE_ONLY : ARROW_BASE;
 
   return (
     // 整条不带纵向内边距：高度由 DateField 触发钮的 min-h-11 单独决定（44px 触控底线，
@@ -57,10 +55,10 @@ export default function DateNav({ date, onDateChange, onSearch, narrowSwipeSwitc
             回到今天
           </button>
         )}
-        <button onClick={() => onDateChange(addDays(date, -1))} className={arrowClass} aria-label="前一天">
+        <button onClick={() => onDateChange(addDays(date, -1))} className={ARROW_CLASS} aria-label="前一天">
           <Icon icon={CaretLeft} size={18} />
         </button>
-        <button onClick={() => onDateChange(addDays(date, 1))} className={arrowClass} disabled={isToday} aria-label="后一天">
+        <button onClick={() => onDateChange(addDays(date, 1))} className={ARROW_CLASS} disabled={isToday} aria-label="后一天">
           <Icon icon={CaretRight} size={18} />
         </button>
         {onSearch && (

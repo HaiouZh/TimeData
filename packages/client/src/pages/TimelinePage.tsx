@@ -123,12 +123,7 @@ export default function TimelinePage() {
         swipeStartRef.current = null;
       }}
     >
-      <DateNav
-        date={date}
-        onDateChange={handleDateChange}
-        onSearch={() => navigate("/search")}
-        narrowSwipeSwitchesDate
-      />
+      <DateNav date={date} onDateChange={handleDateChange} onSearch={() => navigate("/search")} />
       <ArbitrationBanner onGoToDate={handleDateChange} />
       <div data-swipe-exempt="true">
         <CircularTimeline

@@ -92,6 +92,7 @@
   "dirty-in-clean-bucket:pages/SettingsPage.test.tsx",
   "dirty-in-clean-bucket:pages/StatsPage.test.tsx",
   "dirty-in-clean-bucket:pages/TimeStatsPage.test.tsx",
+  "dirty-in-clean-bucket:pages/TimelinePage.dateNav.test.tsx",
   "dirty-in-clean-bucket:pages/TimelinePage.punch.test.tsx",
   "dirty-in-clean-bucket:pages/TimelinePage.selection.test.tsx",
   "dirty-in-clean-bucket:pages/TimelinePage.swipe.test.tsx",
