@@ -37,6 +37,7 @@ function harness(sw: ProbeSwitch = { on: true, left: PROBE_BUDGET }, navCollapse
       current = n;
     },
     navCollapsed: () => navCollapsed,
+    layers: () => 2,
     setTimer: (fn, ms) => {
       timers.push({ fn, ms, cleared: false });
       return timers.length - 1;
@@ -114,11 +115,49 @@ describe("kbdProbe tracker", () => {
     expect(last.stashed).toHaveLength(1);
   });
 
-  it("没有 fi 的孤儿事件不开会话（页面加载时键盘已弹着）", () => {
+  it("没有 fi 也没有 ws 的孤儿事件（ds / wh / dh）不开会话", () => {
     const h = harness();
-    h.tracker.push({ type: "ws", t: 10, ...zero, height: 300 });
+    h.tracker.push({ type: "ds", t: 10, ...zero });
     h.tracker.push({ type: "dh", t: 500, ...zero });
     expect(h.stashed).toHaveLength(0);
+  });
+
+  it("mo 记的是会话开段时正在用的时长，不是闭合时（学完后）的值", () => {
+    let motion = { showMs: 250, hideMs: 250, easingName: "ios" as const };
+    const stashed: PendingReport[] = [];
+    const tracker = createKeyboardProbeTracker({
+      platform: "ios", os: "18", build: "b1", route: () => "/todo",
+      motion: () => motion,
+      stash: (r) => void stashed.push(r),
+      readSwitch: () => ({ on: true, left: 5 }), writeSwitch: () => {},
+      navCollapsed: () => false, layers: () => 1,
+      setTimer: () => 0, clearTimer: () => {},
+    });
+    tracker.push({ type: "fi", t: 0, ...zero });
+    motion = { showMs: 449, hideMs: 400, easingName: "ios" };
+    tracker.push({ type: "ws", t: 40, height: 357, ...zero });
+    tracker.push({ type: "wh", t: 2000, ...zero });
+    tracker.push({ type: "dh", t: 2300, ...zero });
+    const s = JSON.parse(stashed[0].detail) as KbdSession;
+    expect(s.mo).toEqual([250, 250, "ios"]);
+    expect(s.ly).toBe(1);
+  });
+
+  it("ws 先于 fi 到达（iOS 原生通知早于 DOM focusin）：以 ws 开段，t0 = ws 时刻，in 取最近一次 focusTarget", () => {
+    const h = harness();
+    h.tracker.focusTarget(true);
+    h.tracker.push({ type: "ws", t: 100, height: 300, ...zero });
+    h.tracker.push({ type: "fi", t: 130, ...zero });
+    h.tracker.push({ type: "ds", t: 400, ...zero });
+    h.tracker.push({ type: "wh", t: 2000, ...zero });
+    h.tracker.push({ type: "dh", t: 2300, ...zero });
+    expect(h.stashed).toHaveLength(1);
+    const s = JSON.parse(h.stashed[0].detail) as KbdSession;
+    expect(s.ev[0]).toEqual(["ws", 0, 0, 0]);
+    expect(s.ev[1]).toEqual(["fi", 30, 0, 0]);
+    expect(s.in).toBe("dock");
+    expect(s.dur[0]).toBe(300);
+    expect(s.ly).toBe(2);
   });
 
   it("fo 之后 1 s 没有 will 事件，也闭合会话（外接键盘 / 事件丢失）；期间来了 ws 则取消闭合", () => {
@@ -166,6 +205,7 @@ describe("kbdProbe tracker", () => {
       dur: [250, 250],
       mo: [250, 250, "ios"],
       nav: 0,
+      ly: 1,
     });
     expect(s.length).toBeLessThanOrEqual(SYNC_LOG_DETAIL_MAX);
     expect((JSON.parse(s) as KbdSession).trunc).toBe(true);

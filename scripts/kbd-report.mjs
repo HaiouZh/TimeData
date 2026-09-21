@@ -9,6 +9,7 @@
  * 读法：ff（事件到下一帧的毫秒）> 50 = 主线程被同帧的重排 / 脚本堵住；dur 是这台机系统键盘动画的
  * 真实时长（did − will），与 mo（本次输入条用的时长）对不上就是「一快一慢露空白」的来源；
  * ws 那一格带 sy（scrollY）≠ 0 = 引擎在滚文档（iOS 「页面先上滑」的证据）。
+ * ly=2 的会话 ff 明显高于 ly=1 = 隐身的保留层也在重渲染（design §6）。
  *
  * 用法：
  *   TIMEDATA_PROD_SSH=<ssh 目标> TIMEDATA_PROD_DB=<生产库路径> node scripts/kbd-report.mjs [--days 7]
@@ -86,6 +87,7 @@ export function renderTimeline({ session: s }) {
     `nav=${s.nav}`,
     `kh=${s.kh}`,
     `in=${s.in}`,
+    `ly=${fmt(s.ly)}`,
     s.trunc ? "trunc" : "",
   ]
     .filter(Boolean)

@@ -68,6 +68,8 @@ export function KeyboardProbe() {
       readSwitch: readProbeSwitch,
       writeSwitch: writeProbeSwitch,
       navCollapsed: () => latestRef.current.navHidden,
+      // 保留路由层数：iOS KeptRouteStack 给每层打 data-kept-layer；非 iOS 没有该属性，记 1。
+      layers: () => Math.max(1, document.querySelectorAll("[data-kept-layer]").length),
       setTimer: (fn, ms) => setTimeout(fn, ms),
       clearTimer: (handle) => {
         clearTimeout(handle as ReturnType<typeof setTimeout>);
