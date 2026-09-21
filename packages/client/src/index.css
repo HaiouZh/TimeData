@@ -361,7 +361,7 @@ details[open] > summary .ts-collapse-caret {
 @layer components {
   /* 键盘运动角色：底部固定条跟随键盘的 transform 过渡，显示与收起同一条管线——事件
      （keyboardWillShow/Hide）到达即起步，与 IME 同向滑动。时长与曲线**不在这里**：由 KeyboardDock
-     内联（useKeyboardMotion：浮层 override > 实测系统时长 did − will > 平台默认，单一来源在
+     内联（useKeyboardMotion：浮层 override > 平台默认，实测 did − will 只记不用，单一来源在
      lib/keyboard/keyboardMotionPrefs.ts），这里只声明过渡属性——此前 CSS 与 keyboardMotion.ts 各写
      一份常量、靠人肉同步，R7 起关闭这个坑。 */
   .td-kbd-motion {

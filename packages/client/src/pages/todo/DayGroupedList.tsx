@@ -8,7 +8,7 @@ export interface DayGroupedListProps {
   segments: InboxDaySegment[];
   renderTasks: (tasks: Task[]) => ReactNode;
   initialGroups?: number;
-  /** sticky「收起」按钮的底部避让输入；缺省 = 只吃键盘高。 */
+  /** sticky「收起」按钮的底部避让输入；缺省 `{ barPx: 0, navOffsetBasePx: 0 }` = 键盘不在场 0、在场叠加键盘高（settled）。 */
   stickyInset?: BottomInsetInput;
   /** 列表已完全展开（或天然 ≤ initialGroups）时渲染的尾部插槽。 */
   expandedFooter?: ReactNode;
