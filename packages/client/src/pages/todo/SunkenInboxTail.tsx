@@ -7,7 +7,6 @@ import { TaskList } from "./TaskList.js";
 
 interface SunkenInboxTailProps {
   sunkenTasks: Task[];
-  stickyBottomOffsetPx: number;
   extraAction?: (task: Task) => ReactNode;
   /** 被任一 active 目标引用的 task id 集合：命中的水下行也渲染「已有去处」竖条。 */
   goalLinkedIds?: ReadonlySet<string>;
@@ -29,7 +28,6 @@ interface SunkenInboxTailProps {
  */
 export function SunkenInboxTail({
   sunkenTasks,
-  stickyBottomOffsetPx: _stickyBottomOffsetPx,
   extraAction,
   goalLinkedIds,
   // 三个 selection prop 显式解构、显式下传：混在 `...rowHandlers` 里流过去虽然也能跑，

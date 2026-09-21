@@ -40,14 +40,14 @@ beforeEach(() => {
 
 describe("SunkenInboxTail", () => {
   it("renders null when sunkenTasks is empty", async () => {
-    const { host, root } = await renderDom(<SunkenInboxTail sunkenTasks={[]} stickyBottomOffsetPx={0} {...handlers} />);
+    const { host, root } = await renderDom(<SunkenInboxTail sunkenTasks={[]} {...handlers} />);
     expect(host.children.length).toBe(0);
     await unmount(root);
   });
 
   it("collapsed state shows only 水下 X 条", async () => {
     const { host, root } = await renderDom(
-      <SunkenInboxTail sunkenTasks={[task({ id: "a" }), task({ id: "b" })]} stickyBottomOffsetPx={0} {...handlers} />,
+      <SunkenInboxTail sunkenTasks={[task({ id: "a" }), task({ id: "b" })]} {...handlers} />,
     );
     expect(host.textContent).toContain("水下 2 条");
     // 折叠状态不显示任务标题
@@ -57,7 +57,7 @@ describe("SunkenInboxTail", () => {
 
   it("clicking opens full list", async () => {
     const { host, root } = await renderDom(
-      <SunkenInboxTail sunkenTasks={[task({ id: "a", title: "沉没想法" })]} stickyBottomOffsetPx={0} {...handlers} />,
+      <SunkenInboxTail sunkenTasks={[task({ id: "a", title: "沉没想法" })]} {...handlers} />,
     );
     const btn = host.querySelector("button") as HTMLButtonElement;
     expect(btn).toBeTruthy();
@@ -72,7 +72,7 @@ describe("SunkenInboxTail", () => {
       task({ id: "b", title: "任务B", updatedAt: "2026-06-27T00:00:00.000Z" }),
     ];
     const { host, root } = await renderDom(
-      <SunkenInboxTail sunkenTasks={tasks} stickyBottomOffsetPx={0} {...handlers} />,
+      <SunkenInboxTail sunkenTasks={tasks} {...handlers} />,
     );
     await click(host.querySelector("button") as HTMLButtonElement);
     expect(host.textContent).toContain("任务A");
@@ -82,7 +82,7 @@ describe("SunkenInboxTail", () => {
 
   it("does not pass sortable or containerId to TaskList", async () => {
     const { host, root } = await renderDom(
-      <SunkenInboxTail sunkenTasks={[task({ id: "a" })]} stickyBottomOffsetPx={0} {...handlers} />,
+      <SunkenInboxTail sunkenTasks={[task({ id: "a" })]} {...handlers} />,
     );
     await click(host.querySelector("button") as HTMLButtonElement);
     // 水下尾部不应有拖拽抓取区
@@ -94,7 +94,6 @@ describe("SunkenInboxTail", () => {
     const { host, root } = await renderDom(
       <SunkenInboxTail
         sunkenTasks={[task({ id: "g1", title: "已归目标" }), task({ id: "n1", title: "未归目标" })]}
-        stickyBottomOffsetPx={0}
         goalLinkedIds={new Set(["g1"])}
         {...handlers}
       />,
@@ -121,7 +120,6 @@ describe("SunkenInboxTail", () => {
     const { host, root } = await renderDom(
       <SunkenInboxTail
         sunkenTasks={[task({ id: "a", title: "可顶" })]}
-        stickyBottomOffsetPx={0}
         extraAction={extraAction}
         {...handlers}
       />,

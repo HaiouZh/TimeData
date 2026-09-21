@@ -1,12 +1,15 @@
 import type { Task } from "@timedata/shared";
 import { type CSSProperties, type ReactNode, useState } from "react";
+import { KeyboardInsetSlot } from "../../components/KeyboardInsetSlot.js";
+import type { BottomInsetInput } from "../../hooks/useBottomInset.js";
 import type { InboxDaySegment } from "../../lib/tasks/inboxGrouping.js";
 
 export interface DayGroupedListProps {
   segments: InboxDaySegment[];
   renderTasks: (tasks: Task[]) => ReactNode;
   initialGroups?: number;
-  stickyBottomOffsetPx?: number;
+  /** sticky「收起」按钮的底部避让输入；缺省 = 只吃键盘高。 */
+  stickyInset?: BottomInsetInput;
   /** 列表已完全展开（或天然 ≤ initialGroups）时渲染的尾部插槽。 */
   expandedFooter?: ReactNode;
 }
@@ -19,7 +22,7 @@ export function DayGroupedList({
   segments,
   renderTasks,
   initialGroups = 3,
-  stickyBottomOffsetPx = 0,
+  stickyInset,
   expandedFooter,
 }: DayGroupedListProps) {
   const [expanded, setExpanded] = useState(false);
@@ -55,22 +58,22 @@ export function DayGroupedList({
       {fullyVisible && expandedFooter}
       {expanded && segments.length > initialGroups && (
         // sticky 贴底：展开后浏览到中途也能随手收起，不必拉到列表最末或回到顶部分区标题。
-        <button
-          type="button"
-          aria-label="收起"
-          onClick={() => setExpanded(false)}
-          className="sticky z-10 mt-1 w-full rounded-ctl bg-surface px-2 py-1.5 td-text-caption text-ink-3 shadow-sm hover:bg-surface-hover [bottom:var(--bottom-offset)]"
-          // 兜底类 [bottom:var(--bottom-offset)]：env() 未定义环境（Firefox 桌面 / 旧 WebView）里 calc
-          // 整条失效、内联 bottom 被丢弃，由它还原批次前的纯数值位置（stickyBottomOffsetPx + 4）。
-          style={
-            {
-              "--bottom-offset": `${stickyBottomOffsetPx + 4}px`,
-              bottom: `calc(${stickyBottomOffsetPx + 4}px + var(--safe-bottom))`,
-            } as CSSProperties
-          }
-        >
-          收起
-        </button>
+        // 避让量在 KeyboardInsetSlot 里取（settled：布局量，键盘动画期不动），本组件不订阅键盘。
+        <KeyboardInsetSlot inset={stickyInset ?? { barPx: 0, navOffsetBasePx: 0 }} settled>
+          {(px) => (
+            <button
+              type="button"
+              aria-label="收起"
+              onClick={() => setExpanded(false)}
+              className="sticky z-10 mt-1 w-full rounded-ctl bg-surface px-2 py-1.5 td-text-caption text-ink-3 shadow-sm hover:bg-surface-hover [bottom:var(--bottom-offset)]"
+              // 兜底类 [bottom:var(--bottom-offset)]：env() 未定义环境（Firefox 桌面 / 旧 WebView）里 calc
+              // 整条失效、内联 bottom 被丢弃，由它还原批次前的纯数值位置（px + 4）。
+              style={{ "--bottom-offset": `${px + 4}px`, bottom: `calc(${px + 4}px + var(--safe-bottom))` } as CSSProperties}
+            >
+              收起
+            </button>
+          )}
+        </KeyboardInsetSlot>
       )}
     </div>
   );
