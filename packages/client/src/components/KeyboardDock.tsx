@@ -38,10 +38,19 @@ export function useKeyboardNavCollapse(): void {
   }, [collapseEnabled, keyboardVisible, setHidden]);
 }
 
+/**
+ * 不渲染任何东西的壳：useKeyboardNavCollapse 内部订阅 useKeyboardVisible，挂在哪个组件里哪个组件就
+ * 跟着键盘重渲染——页面根必须用本组件而不是直接调 hook（mobile-keyboard R8 design §3.1）。
+ */
+export function KeyboardNavCollapse() {
+  useKeyboardNavCollapse();
+  return null;
+}
+
 export interface KeyboardDockProps extends HTMLAttributes<HTMLElement> {
   /** 渲染成什么元素：速记 / 待办 composer 是 form，多选操作栏是 div。 */
   as?: "div" | "form";
-  /** 下滑收起：整体 translateY(100%) 滑出视口（滚动隐藏协议，Todo composer 用）。 */
+  /** 滚动收起：`translateY(100%)` 滑出视口；**键盘在场时不生效**（原 TodoPage 的 `!keyboardVisible` 守卫下沉至此：键盘弹起会触发 web 的收底栏 effect，不守卫会把它误判成滚动收起、composer 滑进键盘后面）。 */
   hiddenByScroll?: boolean;
   /** 外部要拿驻坞元素本体（高度测量 / 自增高联动）时的 ref，与内部 glide ref 合流。 */
   dockRef?: (el: HTMLElement | null) => void;
@@ -81,6 +90,7 @@ export function KeyboardDock({
   const { hidden: navHidden } = useBottomNav();
   const navOffsetPx = !wide && !navHidden && !keyboardVisible ? BOTTOM_NAV_HEIGHT_PX : 0;
   const liftPx = Math.ceil(navOffsetPx + keyboardHeight);
+  const hidden = hiddenByScroll && !keyboardVisible;
 
   const glideRef = useRef<HTMLElement | null>(null);
   useShellResizeGlide(glideRef, motion.showMs, motion.easing);
@@ -102,7 +112,7 @@ export function KeyboardDock({
         {
           "--bottom-offset": "0px",
           bottom: "calc(0px + var(--safe-bottom))",
-          transform: hiddenByScroll ? "translateY(100%)" : `translateY(${-liftPx}px)`,
+          transform: hidden ? "translateY(100%)" : `translateY(${-liftPx}px)`,
           transitionDuration: `${keyboardVisible ? motion.showMs : motion.hideMs}ms`,
           transitionTimingFunction: motion.easing,
           zIndex: Z.backdrop,
