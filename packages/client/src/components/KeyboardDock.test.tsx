@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
-import { act, createElement } from "react";
+import { act, createElement, useEffect } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { BottomNavProvider, useBottomNav } from "../contexts/BottomNavContext.js";
+import { STORAGE_KEYS } from "../lib/storageKeys.js";
 import { renderDom, unmount } from "../test/domHarness.js";
 
 const getPlatformMock = vi.hoisted(() => vi.fn((): string => "android"));
@@ -67,7 +68,7 @@ describe("KeyboardDock", () => {
   });
 
   it("实测时长落在 localStorage 也不生效——Dock 只吃 override 与平台默认（R8）", async () => {
-    localStorage.setItem("timedata_keyboard_motion", JSON.stringify({ showMs: 300, hideMs: 180 }));
+    localStorage.setItem(STORAGE_KEYS.keyboardMotion, JSON.stringify({ showMs: 300, hideMs: 180 }));
     const keyboard = mockNativeKeyboard();
     const { host, root } = await renderDock();
     const el = dockEl(host);
@@ -102,6 +103,18 @@ describe("KeyboardDock", () => {
       keyboard.fire("keyboardWillShow", { keyboardHeight: 300 });
     });
     expect(dockEl(host).style.transform).toBe("translateY(-300px)");
+    await unmount(root);
+  });
+
+  it("hiddenByScroll：在场但高度 0（壳让位）也不自藏——守卫看在场信号不看高度", async () => {
+    getPlatformMock.mockReturnValue("android");
+    const keyboard = mockNativeKeyboard();
+    const { host, root } = await renderDock({ hiddenByScroll: true });
+    expect(dockEl(host).style.transform).toBe("translateY(100%)");
+    await act(async () => {
+      keyboard.fire("keyboardWillShow", { keyboardHeight: 0 });
+    });
+    expect(dockEl(host).style.transform).toBe("translateY(0px)");
     await unmount(root);
   });
 });
@@ -165,6 +178,47 @@ describe("useKeyboardNavCollapse 按平台", () => {
       viewport.fire();
     });
     expect(navHidden(host)).toBe("false");
+    await unmount(root);
+    (window as unknown as { visualViewport?: unknown }).visualViewport = undefined;
+  });
+
+  it("web：底栏已因别的原因藏着时，键盘弹起不记账、收起不顶回", async () => {
+    getPlatformMock.mockReturnValue("web");
+    const viewport = {
+      height: 768,
+      offsetTop: 0,
+      listeners: [] as Array<() => void>,
+      addEventListener(_e: string, cb: () => void) {
+        this.listeners.push(cb);
+      },
+      removeEventListener() {},
+      fire() {
+        for (const cb of [...this.listeners]) cb();
+      },
+    };
+    Object.defineProperty(window, "innerHeight", { value: 768, configurable: true });
+    (window as unknown as { visualViewport?: unknown }).visualViewport = viewport;
+    function HideOnMount() {
+      const { setHidden } = useBottomNav();
+      useEffect(() => {
+        setHidden(true);
+      }, [setHidden]);
+      return null;
+    }
+    const { host, root } = await renderDom(
+      createElement(BottomNavProvider, null, createElement(HideOnMount), createElement(NavProbe)),
+    );
+    expect(navHidden(host)).toBe("true");
+    await act(async () => {
+      viewport.height = 468;
+      viewport.fire();
+    });
+    expect(navHidden(host)).toBe("true");
+    await act(async () => {
+      viewport.height = 768;
+      viewport.fire();
+    });
+    expect(navHidden(host)).toBe("true");
     await unmount(root);
     (window as unknown as { visualViewport?: unknown }).visualViewport = undefined;
   });

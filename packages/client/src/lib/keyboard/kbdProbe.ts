@@ -195,6 +195,7 @@ export function createKeyboardProbeTracker(deps: KeyboardProbeTrackerDeps) {
           break;
         case "wh":
           willHideAt = e.t;
+          awaitingFi = false;
           break;
         case "dh":
           if (willHideAt !== null) s.dur[1] = Math.round(e.t - willHideAt);

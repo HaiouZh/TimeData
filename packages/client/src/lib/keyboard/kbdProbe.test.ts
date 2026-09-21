@@ -160,6 +160,18 @@ describe("kbdProbe tracker", () => {
     expect(s.ly).toBe(2);
   });
 
+  it("ws 开段后来的是 wh 而非 fi：下一次 fi 关旧开新，不被当成配对", () => {
+    const h = harness();
+    h.tracker.push({ type: "ws", t: 100, height: 300, ...zero });
+    h.tracker.push({ type: "wh", t: 500, ...zero });
+    h.tracker.push({ type: "fi", t: 2000, ...zero });
+    expect(h.stashed).toHaveLength(1);
+    expect((JSON.parse(h.stashed[0]?.detail ?? "{}") as KbdSession).ev.map((e) => e[0])).toEqual(["ws", "wh"]);
+    h.tracker.push({ type: "dh", t: 2500, ...zero });
+    expect(h.stashed).toHaveLength(2);
+    expect((JSON.parse(h.stashed[1]?.detail ?? "{}") as KbdSession).ev[0]).toEqual(["fi", 0, 0, 0]);
+  });
+
   it("fo 之后 1 s 没有 will 事件，也闭合会话（外接键盘 / 事件丢失）；期间来了 ws 则取消闭合", () => {
     const h = harness();
     h.tracker.push({ type: "fi", t: 0, ...zero });

@@ -32,7 +32,6 @@ import { ActionToastBar } from "../components/ui/ActionToastBar.js";
 import { BOTTOM_NAV_HEIGHT_PX, useBottomNav } from "../contexts/BottomNavContext.tsx";
 import { db } from "../db/index.js";
 import { useActionToast } from "../hooks/useActionToast.js";
-import type { BottomInsetInput } from "../hooks/useBottomInset.ts";
 import { useConfirm } from "../hooks/useConfirm.tsx";
 import {
   assignTasksToProject,
@@ -119,6 +118,7 @@ import { TodoDragDock } from "./todo/TodoDragDock.js";
 import { ProjectNameChip, TodoProjectSection } from "./todo/TodoProjectSection.js";
 import { TodoSelectionBar } from "./todo/TodoSelectionBar.js";
 import { HandTrackRows, ProjectTrackRows, TrackBucketSection } from "./todo/TrackBucketSection.js";
+import { todoBottomInset } from "./todo/todoBottomInset.js";
 import {
   clampTodoIndentPreview,
   hoveredRootIdFromOver,
@@ -286,9 +286,13 @@ export function TodoPage() {
    * 取 `max(上次量到的 composer 高, 常量)` 而不是另开测量：两者高度相近，常量只兜「量不到高度」（首帧、jsdom）。
    * `barPxWhileKeyboard`：滚动藏起的 composer 在键盘在场时不算隐藏（原 `composerHiddenByScroll` 的 `!keyboardVisible`）。
    */
-  const bottomInset: BottomInsetInput = selectionMode
-    ? { barPx: Math.max(composerHeightPx, TODO_SELECTION_BAR_HEIGHT_PX), navOffsetBasePx }
-    : { barPx: composerScrollHidden ? 0 : composerHeightPx, barPxWhileKeyboard: composerHeightPx, navOffsetBasePx };
+  const bottomInset = todoBottomInset({
+    selectionMode,
+    composerHeightPx,
+    composerScrollHidden,
+    navOffsetBasePx,
+    selectionBarHeightPx: TODO_SELECTION_BAR_HEIGHT_PX,
+  });
   // TodoComposer/TodoSelectionBar 自身的 bottom 定位由 KeyboardDock 统一计算（navOffset 守卫 +
   // 键盘高，components/KeyboardDock.tsx），本页不再自算——「两页各持一份手工时序」正是每轮
   // 修一处坏另一处的结构性根源（docs/notes/keyboard-pipeline-saga.md §二）。
