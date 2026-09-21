@@ -36,7 +36,7 @@ describe("keyboardMotionPrefs", () => {
     expect(PLATFORM_DEFAULTS.web).toEqual({ showMs: 250, hideMs: 200, easing: EASINGS.tg, easingName: "tg" });
   });
 
-  it("实测时长落在 [80,700] 才采信并覆盖同向旧值；越界拒收返回 false 且不写", () => {
+  it("实测时长落在 [80,700] 才落盘并覆盖同向旧值；越界拒收——但 resolveMotion 不采信实测（R8：读数证明 did−will 被主线程拥堵污染）", () => {
     const kv = memoryKV();
     expect(recordMeasuredDuration("show", 257, kv)).toBe(true);
     expect(recordMeasuredDuration("show", 301, kv)).toBe(true);
@@ -46,7 +46,7 @@ describe("keyboardMotionPrefs", () => {
     const stored = readStoredMotion(kv);
     expect(stored.showMs).toBe(301);
     expect(stored.hideMs).toBeUndefined();
-    expect(resolveMotion("android", stored).showMs).toBe(301);
+    expect(resolveMotion("android", stored).showMs).toBe(285);
     expect(resolveMotion("android", stored).hideMs).toBe(285);
   });
 
@@ -56,7 +56,7 @@ describe("keyboardMotionPrefs", () => {
     expect(readStoredMotion(kv).hideMs).toBe(260);
   });
 
-  it("override 压过实测与默认；clear 后回到实测", () => {
+  it("override 压过默认；clear 后回到平台默认（实测不参与）", () => {
     const kv = memoryKV();
     recordMeasuredDuration("show", 300, kv);
     setMotionOverride({ overrideShowMs: 180, overrideEasing: "tg" }, kv);
@@ -66,7 +66,7 @@ describe("keyboardMotionPrefs", () => {
     expect(m.easing).toBe(EASINGS.tg);
     expect(m.easingName).toBe("tg");
     clearMotionOverride(kv);
-    expect(resolveMotion("ios", readStoredMotion(kv)).showMs).toBe(300);
+    expect(resolveMotion("ios", readStoredMotion(kv)).showMs).toBe(250);
     expect(resolveMotion("ios", readStoredMotion(kv)).easingName).toBe("ios");
   });
 

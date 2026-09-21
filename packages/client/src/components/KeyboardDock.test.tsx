@@ -66,20 +66,20 @@ describe("KeyboardDock", () => {
     await unmount(root);
   });
 
-  it("实测到的系统时长（localStorage）压过平台默认，收放各用各的", async () => {
+  it("实测时长落在 localStorage 也不生效——Dock 只吃 override 与平台默认（R8）", async () => {
     localStorage.setItem("timedata_keyboard_motion", JSON.stringify({ showMs: 300, hideMs: 180 }));
     const keyboard = mockNativeKeyboard();
     const { host, root } = await renderDock();
     const el = dockEl(host);
-    expect(el.style.transitionDuration).toBe("180ms");
+    expect(el.style.transitionDuration).toBe("285ms");
     await act(async () => {
       keyboard.fire("keyboardWillShow", { keyboardHeight: 300 });
     });
-    expect(el.style.transitionDuration).toBe("300ms");
+    expect(el.style.transitionDuration).toBe("285ms");
     await act(async () => {
       keyboard.fire("keyboardWillHide");
     });
-    expect(el.style.transitionDuration).toBe("180ms");
+    expect(el.style.transitionDuration).toBe("285ms");
     await unmount(root);
   });
 
