@@ -193,10 +193,11 @@ export function sessionMetrics(rows) {
   }
   const errTotal = Object.values(errNames).reduce((a, b) => a + b, 0);
 
-  // 阶段2 的信道账：回前台里信道「慢过」（兜底或换过道）与「正常」的 M2 分开看——慢会话若集中在慢过那一列，
-  // 慢的就是信道；反之慢的在 React 自己身上（design §6 F3）。deadPort 是根因命中数（§6 F1）。
+  // 信道账：回前台里「兜底过」（50 ms 没送达才换道）与「信道正常」的 M2 分开看——慢会话若集中在兜底过那一列，
+  // 慢的就是信道；反之慢的在 React 自己身上（design §6 F3）。回前台命中死端口的快路径换道不算慢——那是零等待的
+  // 换道，混进来会把 F3 的判据稀释。deadPort 是根因命中数（§6 F1）。
   const transportOf = (s) => (s.transport && typeof s.transport === "object" ? s.transport : null);
-  const channelSlow = (t) => t.fallbacks > 0 || t.rotations > 0;
+  const channelSlow = (t) => t.fallbacks > 0;
   const withTransport = resumes.filter((s) => transportOf(s) !== null);
   const slowChannel = withTransport.filter((s) => channelSlow(transportOf(s)));
   const cleanChannel = withTransport.filter((s) => !channelSlow(transportOf(s)));
@@ -364,7 +365,7 @@ export function renderReport(report, { days }) {
 
   out.push("## M2 打开到能点", "");
   out.push(
-    "| 构建 · 设备 | 回前台 n | p50 | p90 | 信道慢过 n | p90 | 信道正常 n | p90 | 无信道账 | 冷启 n | p50 | p90 |",
+    "| 构建 · 设备 | 回前台 n | p50 | p90 | 兜底过 n | p90 | 信道正常 n | p90 | 无信道账 | 冷启 n | p50 | p90 |",
     "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |",
   );
   for (const g of report.groups) {

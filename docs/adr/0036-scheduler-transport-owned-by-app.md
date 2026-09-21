@@ -1,7 +1,7 @@
 # ADR 0036：React 调度器的排队信道归应用管（早期注入 `setImmediate`）
 
 - 状态：已采纳（2026-09-21）
-- 关联：延续 [ADR 0011](./0011-server-api-as-write-boundary.md) 之外无修订关系；机制见 evergreen [ios/scheduler-resilience](../evergreen/ios/scheduler-resilience.md)
+- 关联：无修订关系；机制见 evergreen [ios/scheduler-resilience](../evergreen/ios/scheduler-resilience.md)
 - 设计来源：本地 spec `docs_local/specs/2026-09-21-ios-instant-open-换道自愈-design.md`（ios-instant-open 阶段2）
 
 ## 决策

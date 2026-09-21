@@ -122,7 +122,7 @@ test("sessionMetrics：M1 比例、M3 只算 complete/cap 且 cap 缺值记 > �
   const sessions = [
     { kind: "resume", stall: null, ttiMs: 80, syncMs: 900, endedBy: "complete", storageMs: 20, storageErr: null, dropped: 0, sync: { outcome: "identical" }, net: { connectMs: 200, ttfbMs: 300, xferMs: 10, reused: false }, transport: { rotations: 0, fallbacks: 0, deadPort: false, mode: "confirmed" } },
     { kind: "resume", stall: "reload", ttiMs: null, syncMs: null, endedBy: "reload", storageMs: null, storageErr: "UnknownError", dropped: 1, sync: null, net: null, transport: { rotations: 2, fallbacks: 1, deadPort: true, mode: "degraded" } },
-    { kind: "resume", stall: null, ttiMs: 60, syncMs: null, endedBy: "cap", storageMs: 30, storageErr: null, dropped: 0, sync: null, net: null, transport: { rotations: 1, fallbacks: 0, deadPort: true, mode: "confirmed" } },
+    { kind: "resume", stall: null, ttiMs: 60, syncMs: null, endedBy: "cap", storageMs: 30, storageErr: null, dropped: 0, sync: null, net: null, transport: { rotations: 1, fallbacks: 1, deadPort: true, mode: "confirmed" } },
     { kind: "resume", stall: null, ttiMs: 50, syncMs: null, endedBy: "hidden", storageMs: 10, storageErr: null, dropped: 0, sync: null, net: null },
     { kind: "cold", stall: null, ttiMs: 400, syncMs: 1500, endedBy: "complete", storageMs: 40, storageErr: null, dropped: 2, sync: { outcome: "pull_only" }, net: null },
   ].map((detail, i) => withParsed(row("open_session", { id: `s${i}`, ...detail })));
@@ -131,7 +131,7 @@ test("sessionMetrics：M1 比例、M3 只算 complete/cap 且 cap 缺值记 > �
   assert.equal(m.sessions, 5);
   assert.deepEqual(m.m1, { resumes: 4, reload: 1, held: 0, recovered: 0, rate: 0.25, deadPort: 2 });
   assert.equal(m.m2.resume.p50, 60);
-  // 信道账：换过道 / 兜底过的回前台单列；没带账的（旧包）不进两列
+  // 信道账：兜底过的回前台单列（死端口快路径换道不算慢）；没带账的（旧包）不进两列
   assert.deepEqual([m.m2.resumeSlowChannel.n, m.m2.resumeSlowChannel.p50], [1, 60]);
   assert.deepEqual([m.m2.resumeCleanChannel.n, m.m2.resumeCleanChannel.p50], [1, 80]);
   assert.equal(m.m2.resumeNoTransport, 1);
@@ -187,7 +187,7 @@ test("buildReport：按 build · device 分组、剔除后台噪声、网络对�
   const text = renderReport(report, { days: 7 });
   assert.match(text, /## M1 卡死率/);
   assert.match(text, /死端口/);
-  assert.match(text, /信道慢过/);
+  assert.match(text, /兜底过/);
   assert.match(text, /## 卡死诊断/);
   assert.match(text, /b2 · iOS/);
 });

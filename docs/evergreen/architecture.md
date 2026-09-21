@@ -30,7 +30,7 @@ covers:
   - packages/mobile/android/app/src/main/AndroidManifest.xml
 contracts:
   - packages/client/src/components/app-shell/AppRoutes.tsx
-last-reviewed: 2026-09-16
+last-reviewed: 2026-09-21
 ---
 
 # 架构总览
@@ -144,7 +144,7 @@ CLI 不直接读写 SQLite。命令面见 [cli](cli.md)。
 
 ### 4.6 iOS 壳：调度器死锁
 
-WKWebView 在 App 挂起时会丢掉 React 调度器赖以排队的 `MessageChannel` 消息，令其永久停摆：**凡走调度器的更新一起瘫**（路由导航、liveQuery 回流），而点击里直接改 state 走微任务通道、照常生效——现场是「弹层点得开、底栏 tab 点不动」。判据、补拍解法与回前台探针见 [ios/scheduler-resilience](ios/scheduler-resilience.md)。
+WebKit 在 App 后台期间网络进程断连时会把页面里所有 `MessagePort` 永久清空且不重建，React 调度器自建的排队信道从此哑掉：**凡走调度器的更新一起瘫**（路由导航、liveQuery 回流），而点击里直接改 state 走微任务通道、照常生效——现场是「弹层点得开、底栏 tab 点不动」。修法是信道归应用管：`index.html` 的内联脚本在 `scheduler` 求值前定义 `setImmediate`，`main.tsx` 一开头 `installSchedulerTransportPolicy()` 接管，回前台发现端口死了就换新信道；判据、三态策略与看门狗兜底见 [ios/scheduler-resilience](ios/scheduler-resilience.md)。
 
 ## 5. 关键约定
 

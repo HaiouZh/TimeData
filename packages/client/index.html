@@ -128,7 +128,8 @@
             }
           };
           t.schedule = function (fn) {
-            const item = { id: ++seq, fn, args: Array.prototype.slice.call(arguments, 1), cancelled: false };
+            const args = arguments.length > 1 ? Array.prototype.slice.call(arguments, 1) : [];
+            const item = { id: ++seq, fn, args, cancelled: false };
             queue.push(item);
             post();
             callHook(t.onSchedule);

@@ -8,7 +8,7 @@ contracts:
   - scripts/check-test-hygiene.mjs
   - scripts/ios-report.mjs
   - scripts/kbd-report.mjs
-last-reviewed: 2026-09-16
+last-reviewed: 2026-09-21
 ---
 
 # 本地开发 · 命令与测试
@@ -63,7 +63,7 @@ pnpm check:diary       # 日记日期闸：本地日界与 UTC 存储的换算
 pnpm check:roadmap     # ROADMAP 程序门（docs_local 不入 Git，本地是唯一执行点）
 pnpm gate              # 全量门禁唯一入口，本机全局互斥
 pnpm icons:generate    # 从根目录 icon.png 生成 PWA / Android / favicon / iOS 全套图标
-node scripts/ios-report.mjs      # iOS 打开体验固定口径报告（只读生产库，不写任何东西）
+node scripts/ios-report.mjs      # iOS 打开体验固定口径报告：M1~M4、卡死甲乙丙、回前台按信道账拆「兜底过 / 正常」、死端口命中数（只读生产库，不写任何东西）
 node scripts/kbd-report.mjs      # 键盘探针报告：按构建·设备·平台·页面打印每次弹起收起的时间线与 dur/ff 分位数（只读生产库）
                                  # 需 TIMEDATA_PROD_SSH=<ssh 目标> TIMEDATA_PROD_DB=<生产库路径>
                                  # 可选 --days 1..90（默认 7）、--json

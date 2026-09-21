@@ -20,7 +20,7 @@ contracts:
   - packages/server/src/routes/admin/sync.ts
   - packages/server/src/routes/sync.ts
   - packages/server/src/routes/syncLog.ts
-last-reviewed: 2026-09-18
+last-reviewed: 2026-09-21
 ---
 
 # 同步 · 观测与排障
@@ -76,7 +76,7 @@ last-reviewed: 2026-09-18
 
 **两处接线断了，指标会静默变空而不是报错**，排查时先确认它们还在：`main.tsx` 里的 `installResourceTimingCache()` 一旦没装，`net` 全为 null，报告 M3 的建连 / 首字节列整列是「—」，看起来像服务端没发 `Timing-Allow-Origin`；`SchedulerWatchdog` 里订阅 `phaseTimings` 的 `onSyncTimingRecorded` 一旦被当成死代码删掉，`syncMs` 恒为 null、三件事永远齐不了，M3 会整列变成「> 20 s」，看起来像网络全挂。两者都不会抛错、不会有测试变红。
 
-固定口径的报告由 `node scripts/ios-report.mjs` 出（用法见 [development/commands-and-testing](../development/commands-and-testing.md)），它按构建号 × 设备分组、剔重、剔后台噪声，再把端上分段与服务端 `api_request_logs` 摆在一起对表。看门狗的探针累计计数存 `timedata_scheduler_probes`，跨重载存活，两条 `scheduler_probe` 记录的 `probes` 之差等于期间探针总次数——这是队列上限会挤掉早期记录时仍然可信的唯一分母。字段含义与判定机制见 [ios/scheduler-resilience](../ios/scheduler-resilience.md)。
+固定口径的报告由 `node scripts/ios-report.mjs` 出（用法见 [development/commands-and-testing](../development/commands-and-testing.md)），它按构建号 × 设备分组、剔重、剔后台噪声，再把端上分段与服务端 `api_request_logs` 摆在一起对表；回前台的 M2 按 `open_session.transport` 的信道账拆成「兜底过 / 信道正常」两列，卡死记录按 `transport`（换道钩子）或 `paired`（更早的配对钩子）识别诊断字段。看门狗的探针累计计数存 `timedata_scheduler_probes`，跨重载存活，两条 `scheduler_probe` 记录的 `probes` 之差等于期间探针总次数——这是队列上限会挤掉早期记录时仍然可信的唯一分母。字段含义与判定机制见 [ios/scheduler-resilience](../ios/scheduler-resilience.md)。
 
 ## 4. 同步慢排查入口
 

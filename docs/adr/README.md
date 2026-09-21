@@ -44,6 +44,7 @@ status: living
 | [0033](0033-agent-task-create-endpoint.md) | agent 可经受控端点新建任务 | 2026-08-15 | agent 原本只能改已有任务、建不了新任务，而待办的捕捉入口已经跑进 ClaudeCode 会话里。新开 `POST /api/agent/tasks` 建 root task（请求体不含 `parentId`），`requestId` 幂等，调用方拥有语义时间（`createdAt` / `completedAt` 可回填历史，向未来卡 5 分钟容差），`updatedAt` 与 `op.at` 仍由服务端分配 | 延续 [0011](0011-server-api-as-write-boundary.md) |
 | [0034](0034-task-relations-as-own-table.md) | 前置关系独立成表，父子仍留在 `Task.parentId` | 2026-08-16 | 前置挂在 `Goal.prerequisites` 这类实体字段上时，一条边的增删是整行写，LWW 下两台设备各连一条会互相覆盖、先连的静默消失。独立成表后每条边是自己的同步单元。父子不跟着搬：恒一层、承载排序与级联删除，搬进通用关系表要把这三样摊平成额外校验；子任务松绑改为逐条解除守卫达成，`parentId` 结构未动 | 修正 metaspec 拍板③措辞 |
 | [0035](0035-track-milestones-and-signal-priority.md) | 阶段骨架独立成表 `track_milestones`，调度信号显式宣告优先 | 2026-08-20 | 轨道用不起来的根因是没有推进感：阶段骨架给「离目标多远」一个家（刻度出生、可挂任务镜像完成、七种修改操作第一类公民、进度=手动分段条且 dropped 剔除分母）；调度台判定反转为 等我接>agent在跑>等外部>推进中，停滞退出分组降为 `stalledDays` 提醒——信号是用户宣告的，系统只提醒不改判 | 改写 tracks.md §8 判定优先级；track-workbench metaspec 阶段1 |
+| [0036](0036-scheduler-transport-owned-by-app.md) | React 调度器的排队信道归应用管：index.html 早期注入 `setImmediate`，死了就换 | 2026-09-21 | WebKit 在网络进程断连时把页面里所有 MessagePort 永久清空且不重建，scheduler 自建的信道从此哑掉、补拍与直驱都救不了；注入 setImmediate 让 scheduler 走应用持有的可换信道，回前台死端口即换、50 ms 兜底、看门狗降为最后防线 | ios-instant-open 阶段2；重写 ios/scheduler-resilience §1/§3/§4/§5 |
 
 ## 按主题速查
 
@@ -54,3 +55,4 @@ status: living
 - **日记编辑器**：0022（列表识别口径）、0023（跨断点重挂）
 - **设计语言**：0026（用户内容身份色共用 tint 色板 + 形状分型）→ 0027（退役 data palette + Track agent scoped tone）
 - **范围决策**：0005、0009、0024（健康子系统退役）→ 0031（健康数据层删除）、0029（桌面壳内嵌前端）→ 0032（桌面自动更新）
+- **iOS 壳韧性**：0036（调度器信道归应用管）
