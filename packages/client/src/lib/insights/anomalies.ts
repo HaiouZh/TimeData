@@ -1,5 +1,6 @@
 import type { Category, TimeEntry } from "@timedata/shared";
 import { APP_TIME_ZONE } from "@timedata/shared";
+import { cachedDateTimeFormat } from "../time.js";
 import { buildInsightBaseline } from "./baseline.js";
 import { INSIGHT_CONSTANTS } from "./constants.js";
 import { buildDailyRollups } from "./dailyRollup.js";
@@ -12,7 +13,7 @@ const r1 = (x: number) => Math.round(x * 10) / 10;
 
 // 某 UTC ISO 时刻在本地（APP_TIME_ZONE）一天内的分钟数 0..1439。
 function localMinuteOfDay(iso: string): number {
-  const parts = new Intl.DateTimeFormat("en-GB", {
+  const parts = cachedDateTimeFormat("en-GB", {
     timeZone: APP_TIME_ZONE,
     hour: "2-digit",
     minute: "2-digit",
@@ -25,7 +26,7 @@ function localMinuteOfDay(iso: string): number {
 
 // 本地日期串（YYYY-MM-DD）。
 function localDate(iso: string): string {
-  return new Intl.DateTimeFormat("en-CA", {
+  return cachedDateTimeFormat("en-CA", {
     timeZone: APP_TIME_ZONE,
     year: "numeric",
     month: "2-digit",
