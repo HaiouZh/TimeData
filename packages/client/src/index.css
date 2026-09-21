@@ -153,9 +153,12 @@ html[data-platform="android"] {
    速记 / 待办的列表各自算过内容 padding，全局加会叠成双倍留白。 */
 .keyboard-scroll-pad { padding-bottom: var(--keyboard-scroll-padding, 0px); }
 
-/* 固定填高、内部滚动的编辑器容器（日记页）：滚动落点那套帮不了它——键盘盖住容器下半截时
-   光标行照样看不见。padding-bottom 让出键盘遮挡量后 flex-1 的 textarea 变矮，浏览器原生
-   保证光标在缩短后的内滚窗里可见。变量语义同上：键盘没挡着时不落地，恒零让位。 */
+/* 手写的整屏 overlay（任务详情弹层，`fixed inset-0` + items-end）：padding-bottom 让出键盘遮挡量，
+   把贴底的面板连同里面的输入框整体抬到键盘上方。与 .sheet-overlay 同款，只是那套走 Sheet 组件。
+   变量语义同上：键盘没挡着时不落地，恒零让位。
+   **只给底边贴着屏幕底的元素用**（fixed / inset-0）：--keyboard-inset 是「键盘从屏幕底往上挡了多少」，
+   文档流容器的底边被底部导航顶高了一截，照搬这个量会多让一个底栏高、露出容器底色（日记页曾如此，
+   真机表现是「输入法上方一行黑条」）。文档流那侧走 components/KeyboardInsetFrame.tsx 的减法口径。 */
 .keyboard-inset-pad { padding-bottom: var(--keyboard-inset, 0px); }
 
 /* 全站正文用书卷体（霞鹭文楷+Times）；markdown 代码块保留等宽。 */

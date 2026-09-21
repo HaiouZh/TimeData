@@ -2,11 +2,13 @@ import { ClockCounterClockwise } from "@phosphor-icons/react";
 import { type KeyboardEvent, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useNavigate, useSearchParams } from "react-router";
 import DateNav from "../components/DateNav.js";
+import { KeyboardInsetFrame } from "../components/KeyboardInsetFrame.js";
 import { Icon } from "../components/Icon.js";
 import { PageBackButton } from "../components/ui/PageBackButton.js";
 import { PageHeader } from "../components/ui/PageHeader.js";
 import { LoadingState } from "../components/ui/LoadingState.js";
 import { StatusBanner } from "../components/ui/StatusBanner.js";
+import { BOTTOM_NAV_HEIGHT_PX, useBottomNav } from "../contexts/BottomNavContext.js";
 import { useConfirm } from "../hooks/useConfirm.tsx";
 import { useNowMinute } from "../hooks/useNowMinute.js";
 import { useUnsavedChangesGuard } from "../hooks/useUnsavedChangesGuard.js";
@@ -61,6 +63,11 @@ export default function DiaryPage() {
     followAnchor,
   });
   const wide = useIsWideScreen();
+  // 底栏在文档流里时的占位（与 TodoPage / QuickNotesPage 逐字同款）。键盘让位要扣掉它：
+  // 底栏是 flex 兄弟、实打实占着布局高，编辑器容器底边本来就离屏幕底有这一段（见 KeyboardInsetFrame）。
+  // 这里只读 navHidden，不碰任何键盘 hook——页面根不订阅键盘（闸：pagesNoKeyboardSubscription.test.ts）。
+  const { hidden: navHidden } = useBottomNav();
+  const navOffsetBasePx = !wide && !navHidden ? BOTTOM_NAV_HEIGHT_PX : 0;
 
   // 深链 ?date=<今天> / 非法 / 未来：归一成无参形态，让它与裸 /diary 完全一致。
   // replace 不新增历史条目，返回键行为不变。这个 effect 自终止：清完 param 后
@@ -460,9 +467,15 @@ export default function DiaryPage() {
   );
 
   return (
-    // keyboard-inset-pad：键盘弹起（iOS resize:none 悬浮遮挡）时给底部让出遮挡量，flex-1 的
-    // textarea 随之变矮、内滚窗缩到键盘上方——光标行才看得见（安卓壳层已让位 / 桌面时恒 0）。
-    <div className="keyboard-inset-pad flex h-full min-h-0 flex-col bg-page text-ink">
+    // KeyboardInsetFrame：键盘弹起（两端 overlay 模型、键盘悬浮遮挡）时给底部让出「遮挡量 − 底栏占位」，
+    // flex-1 的 textarea 随之变矮、内滚窗缩到键盘上方——光标行才看得见（键盘不在场 / 安卓壳已让位时恒 0）。
+    // 扣底栏占位是必须的：底栏占着布局高，本容器底边离屏幕底本来就差这一段，照搬遮挡量会多让一个底栏高，
+    // 内容底边停在键盘上沿之上、中间露出 bg-page（真机「输入法上方一行黑条」）。
+    <KeyboardInsetFrame
+      navOffsetBasePx={navOffsetBasePx}
+      data-testid="diary-frame"
+      className="flex h-full min-h-0 flex-col bg-page text-ink"
+    >
       {dialog}
       <PageHeader
         title="日记"
@@ -581,6 +594,6 @@ export default function DiaryPage() {
           {editor}
         </>
       )}
-    </div>
+    </KeyboardInsetFrame>
   );
 }

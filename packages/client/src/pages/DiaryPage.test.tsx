@@ -4,6 +4,7 @@ import { flushSync } from "react-dom";
 import { createMemoryRouter } from "react-router";
 import { RouterProvider } from "react-router/dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { BottomNavProvider } from "../contexts/BottomNavContext.js";
 import { type Root, renderDom, unmount } from "../test/domHarness.js";
 import DiaryPage from "./DiaryPage.js";
 
@@ -79,7 +80,9 @@ async function renderPage(
     ],
     { initialEntries: ["/todo", entry], initialIndex: 1 },
   );
-  const { host, root } = await renderDom(createElement(RouterProvider, { router }));
+  const { host, root } = await renderDom(
+    createElement(BottomNavProvider, null, createElement(RouterProvider, { router })),
+  );
   await flush();
   return { host, root, router };
 }
@@ -106,7 +109,9 @@ async function renderPageNoHistory(): Promise<{
     ],
     { initialEntries: ["/diary"] },
   );
-  const { host, root } = await renderDom(createElement(RouterProvider, { router }));
+  const { host, root } = await renderDom(
+    createElement(BottomNavProvider, null, createElement(RouterProvider, { router })),
+  );
   await flush();
   return { host, root, router };
 }
@@ -172,13 +177,14 @@ describe("DiaryPage", () => {
   });
 
   // 用户实测：内容长了之后，正在输入的内容（光标行）被键盘盖住看不见。textarea 是固定填高 +
-  // 内部滚动，键盘弹起时它自己不知道下半截被盖了；容器挂 keyboard-inset-pad（消费
-  // KeyboardAvoidanceBridge 写的 --keyboard-inset）让出键盘高后 textarea 变矮，
-  // 浏览器原生保证光标在缩短后的内滚窗里可见。键盘收起 / 安卓壳已让位时变量不落地、恒零让位。
-  it("编辑器容器挂 keyboard-inset-pad，键盘弹起时给光标行让出键盘高", async () => {
+  // 内部滚动，键盘弹起时它自己不知道下半截被盖了；容器（KeyboardInsetFrame）让出底部后
+  // textarea 变矮，浏览器原生保证光标在缩短后的内滚窗里可见。键盘收起 / 安卓壳已让位时恒零让位。
+  // 这条只守「编辑器确实在让位容器里」这层从属关系；让位量算得对不对（要扣掉底栏占位，
+  // 不扣就是那条黑条）在 DiaryPage.keyboard.test.tsx。
+  it("编辑器在键盘让位容器内，键盘弹起时给光标行让出位置", async () => {
     const { host, root } = await renderPage();
 
-    expect(textarea(host).closest(".keyboard-inset-pad")).not.toBeNull();
+    expect(textarea(host).closest('[data-testid="diary-frame"]')).not.toBeNull();
 
     await unmount(root);
   });

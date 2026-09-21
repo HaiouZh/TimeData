@@ -66,9 +66,10 @@ describe("index.css design tokens", () => {
     expect(css).not.toMatch(/scroll-padding-bottom/);
   });
 
-  it("keyboard-inset-pad 让固定填高容器给键盘让出底部（日记编辑器一类）", () => {
-    // 固定高、内部滚动的编辑器（日记 textarea flex-1）不走滚动落点那套：键盘盖住容器下半截时
-    // 光标行照样看不见。容器 padding-bottom 让高后 textarea 变矮，浏览器原生保证光标在其内滚窗可见。
+  it("keyboard-inset-pad 让手写 overlay（任务详情）把贴底面板抬到键盘上方", () => {
+    // 与 .sheet-overlay 同款，只服务底边贴着屏幕底的 fixed/inset-0 元素——--keyboard-inset 是
+    // 「键盘从屏幕底往上挡了多少」。文档流容器（日记编辑器）底边被底栏顶高一截，照搬这个量会
+    // 多让一个底栏高、露出容器底色（真机「输入法上方一行黑条」），那侧走 KeyboardInsetFrame。
     expect(css).toMatch(/\.keyboard-inset-pad\s*\{[^}]*padding-bottom:\s*var\(--keyboard-inset,\s*0px\)/);
   });
 

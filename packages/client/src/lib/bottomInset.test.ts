@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { composeBottomInset } from "./bottomInset.js";
+import { composeBottomInset, composeFlowKeyboardInset } from "./bottomInset.js";
 
 describe("composeBottomInset（底部避让量单一合成来源）", () => {
   /**
@@ -42,5 +42,36 @@ describe("composeBottomInset（底部避让量单一合成来源）", () => {
 
   it("三者皆 0 时结果为 0", () => {
     expect(composeBottomInset({ barHeightPx: 0, navOffsetPx: 0, keyboardHeightPx: 0 })).toBe(0);
+  });
+});
+
+describe("composeFlowKeyboardInset（文档流容器的键盘让位）", () => {
+  /**
+   * 这条是日记页黑条的本体闸：底栏在文档流里占着 49px 时，容器底边离屏幕底就有 49px，
+   * 让位量必须扣掉这一段——不扣就多让一个底栏高，textarea 底边停在键盘上沿之上 49px，
+   * 中间露出容器自己的 bg-page（真机表现即「输入法上方一行黑条」）。
+   * 拆了这个扣减（改回直接吃 keyboardHeightPx）这条即红。
+   */
+  it("底栏在文档流里时，让位量扣掉底栏占位（含安全区接口）", () => {
+    expect(composeFlowKeyboardInset({ keyboardHeightPx: 300, navOffsetPx: 49 })).toBe(
+      "max(0px, calc(300px - 49px - var(--safe-bottom)))",
+    );
+  });
+
+  it("底栏不在场（宽屏 / 已隐）时让整个遮挡量，不留 max/calc 包装", () => {
+    expect(composeFlowKeyboardInset({ keyboardHeightPx: 300, navOffsetPx: 0 })).toBe("300px");
+  });
+
+  /** 回归护栏：键盘不在场（桌面浏览器 / 收起 / 安卓壳已让位）时恒零让位。 */
+  it("keyboardHeightPx=0 时恒为 0px", () => {
+    expect(composeFlowKeyboardInset({ keyboardHeightPx: 0, navOffsetPx: 49 })).toBe("0px");
+    expect(composeFlowKeyboardInset({ keyboardHeightPx: 0, navOffsetPx: 0 })).toBe("0px");
+  });
+
+  it("Math.ceil：遮挡量为小数时向上取整（与 composeBottomInset 同口径）", () => {
+    expect(composeFlowKeyboardInset({ keyboardHeightPx: 299.2, navOffsetPx: 0 })).toBe("300px");
+    expect(composeFlowKeyboardInset({ keyboardHeightPx: 299.2, navOffsetPx: 49 })).toBe(
+      "max(0px, calc(300px - 49px - var(--safe-bottom)))",
+    );
   });
 });

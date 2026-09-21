@@ -4,6 +4,7 @@ import { flushSync } from "react-dom";
 import { createMemoryRouter } from "react-router";
 import { RouterProvider } from "react-router/dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { BottomNavProvider } from "../contexts/BottomNavContext.js";
 import { renderDom, unmount } from "../test/domHarness.js";
 import DiaryPage from "./DiaryPage.js";
 
@@ -117,7 +118,9 @@ describe("DiaryPage · execCommand 成功路径（页面级，此前零覆盖）
       const router = createMemoryRouter([{ path: "/diary", element: createElement(DiaryPage) }], {
         initialEntries: ["/diary"],
       });
-      const { host, root } = await renderDom(createElement(RouterProvider, { router }));
+      const { host, root } = await renderDom(
+    createElement(BottomNavProvider, null, createElement(RouterProvider, { router })),
+  );
       await flush();
       const field = host.querySelector("textarea") as HTMLTextAreaElement;
       counter.writes.length = 0; // 忽略首次挂载的写
