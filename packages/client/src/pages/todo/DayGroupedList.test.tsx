@@ -63,7 +63,7 @@ describe("DayGroupedList", () => {
   it("展开后的『收起』按钮可按底部输入框高度上移避让", async () => {
     const segs = ["今天", "昨天", "6月10日", "6月9日", "6月8日"].map(seg);
     const { host, root } = await renderDom(
-      <DayGroupedList segments={segs} renderTasks={renderTasks} stickyBottomOffsetPx={120} />,
+      <DayGroupedList segments={segs} renderTasks={renderTasks} stickyInset={{ barPx: 120, navOffsetBasePx: 0 }} />,
     );
     await click(host.querySelector('[aria-label^="显示更多"]') as HTMLButtonElement);
 

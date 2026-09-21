@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
-import { act, createElement } from "react";
+import { act, createElement, useEffect } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { BottomNavProvider, useBottomNav } from "../contexts/BottomNavContext.js";
+import { STORAGE_KEYS } from "../lib/storageKeys.js";
 import { renderDom, unmount } from "../test/domHarness.js";
 
 const getPlatformMock = vi.hoisted(() => vi.fn((): string => "android"));
@@ -17,7 +18,7 @@ vi.mock("../lib/useIsWideScreen.ts", () => ({
   useIsWideScreen: () => false,
 }));
 
-import { KeyboardDock, useKeyboardNavCollapse } from "./KeyboardDock.js";
+import { KeyboardDock, KeyboardNavCollapse, useKeyboardNavCollapse } from "./KeyboardDock.js";
 
 function mockNativeKeyboard() {
   // dock 内两个 hook 实例（height / visible）各注册一份监听，得广播不能只留最后一个。
@@ -66,20 +67,20 @@ describe("KeyboardDock", () => {
     await unmount(root);
   });
 
-  it("实测到的系统时长（localStorage）压过平台默认，收放各用各的", async () => {
-    localStorage.setItem("timedata_keyboard_motion", JSON.stringify({ showMs: 300, hideMs: 180 }));
+  it("实测时长落在 localStorage 也不生效——Dock 只吃 override 与平台默认（R8）", async () => {
+    localStorage.setItem(STORAGE_KEYS.keyboardMotion, JSON.stringify({ showMs: 300, hideMs: 180 }));
     const keyboard = mockNativeKeyboard();
     const { host, root } = await renderDock();
     const el = dockEl(host);
-    expect(el.style.transitionDuration).toBe("180ms");
+    expect(el.style.transitionDuration).toBe("285ms");
     await act(async () => {
       keyboard.fire("keyboardWillShow", { keyboardHeight: 300 });
     });
-    expect(el.style.transitionDuration).toBe("300ms");
+    expect(el.style.transitionDuration).toBe("285ms");
     await act(async () => {
       keyboard.fire("keyboardWillHide");
     });
-    expect(el.style.transitionDuration).toBe("180ms");
+    expect(el.style.transitionDuration).toBe("285ms");
     await unmount(root);
   });
 
@@ -93,13 +94,27 @@ describe("KeyboardDock", () => {
     await unmount(root);
   });
 
-  it("hiddenByScroll：整体 translateY(100%) 滑出视口，压过抬升", async () => {
+  it("hiddenByScroll：键盘不在场整体 translateY(100%) 滑出；键盘在场不自藏、照常抬升（原 TodoPage 的 !keyboardVisible 守卫下沉到 Dock）", async () => {
+    getPlatformMock.mockReturnValue("android");
     const keyboard = mockNativeKeyboard();
     const { host, root } = await renderDock({ hiddenByScroll: true });
+    expect(dockEl(host).style.transform).toBe("translateY(100%)");
     await act(async () => {
       keyboard.fire("keyboardWillShow", { keyboardHeight: 300 });
     });
+    expect(dockEl(host).style.transform).toBe("translateY(-300px)");
+    await unmount(root);
+  });
+
+  it("hiddenByScroll：在场但高度 0（壳让位）也不自藏——守卫看在场信号不看高度", async () => {
+    getPlatformMock.mockReturnValue("android");
+    const keyboard = mockNativeKeyboard();
+    const { host, root } = await renderDock({ hiddenByScroll: true });
     expect(dockEl(host).style.transform).toBe("translateY(100%)");
+    await act(async () => {
+      keyboard.fire("keyboardWillShow", { keyboardHeight: 0 });
+    });
+    expect(dockEl(host).style.transform).toBe("translateY(0px)");
     await unmount(root);
   });
 });
@@ -165,5 +180,84 @@ describe("useKeyboardNavCollapse 按平台", () => {
     expect(navHidden(host)).toBe("false");
     await unmount(root);
     (window as unknown as { visualViewport?: unknown }).visualViewport = undefined;
+  });
+
+  it("web：底栏已因别的原因藏着时，键盘弹起不记账、收起不顶回", async () => {
+    getPlatformMock.mockReturnValue("web");
+    const viewport = {
+      height: 768,
+      offsetTop: 0,
+      listeners: [] as Array<() => void>,
+      addEventListener(_e: string, cb: () => void) {
+        this.listeners.push(cb);
+      },
+      removeEventListener() {},
+      fire() {
+        for (const cb of [...this.listeners]) cb();
+      },
+    };
+    Object.defineProperty(window, "innerHeight", { value: 768, configurable: true });
+    (window as unknown as { visualViewport?: unknown }).visualViewport = viewport;
+    function HideOnMount() {
+      const { setHidden } = useBottomNav();
+      useEffect(() => {
+        setHidden(true);
+      }, [setHidden]);
+      return null;
+    }
+    const { host, root } = await renderDom(
+      createElement(BottomNavProvider, null, createElement(HideOnMount), createElement(NavProbe)),
+    );
+    expect(navHidden(host)).toBe("true");
+    await act(async () => {
+      viewport.height = 468;
+      viewport.fire();
+    });
+    expect(navHidden(host)).toBe("true");
+    await act(async () => {
+      viewport.height = 768;
+      viewport.fire();
+    });
+    expect(navHidden(host)).toBe("true");
+    await unmount(root);
+    (window as unknown as { visualViewport?: unknown }).visualViewport = undefined;
+  });
+
+  it("KeyboardNavCollapse 壳：web 平台键盘在场收底栏、离场恢复，与直接调 hook 等价", async () => {
+    getPlatformMock.mockReturnValue("web");
+    const viewport = {
+      height: 768,
+      offsetTop: 0,
+      listeners: [] as Array<() => void>,
+      addEventListener(_e: string, cb: () => void) {
+        this.listeners.push(cb);
+      },
+      removeEventListener() {},
+      fire() {
+        for (const cb of [...this.listeners]) cb();
+      },
+    };
+    Object.defineProperty(window, "innerHeight", { value: 768, configurable: true });
+    (window as unknown as { visualViewport?: unknown }).visualViewport = viewport;
+    function NavReader() {
+      const { hidden } = useBottomNav();
+      return createElement("div", { "data-nav-hidden": String(hidden) });
+    }
+    const { host, root } = await renderDom(
+      createElement(BottomNavProvider, null, createElement(KeyboardNavCollapse), createElement(NavReader)),
+    );
+    const read = () => host.querySelector("[data-nav-hidden]")?.getAttribute("data-nav-hidden");
+    expect(read()).toBe("false");
+    await act(async () => {
+      viewport.height = 468;
+      viewport.fire();
+    });
+    expect(read()).toBe("true");
+    await act(async () => {
+      viewport.height = 768;
+      viewport.fire();
+    });
+    expect(read()).toBe("false");
+    await unmount(root);
   });
 });

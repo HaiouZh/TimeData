@@ -1,8 +1,10 @@
 import type { TimeEntry } from "@timedata/shared";
+import { APP_TIME_ZONE } from "@timedata/shared";
 import { describe, expect, it } from "vitest";
 import {
   addMonths,
   buildTimeSlots,
+  cachedDateTimeFormat,
   formatAppDateTime,
   formatDateTimeRange,
   formatMinutesDuration,
@@ -10,7 +12,9 @@ import {
   formatRelativeTime,
   formatTime,
   formatTimelineTimeRange,
+  formatWeekday,
   formatYearAwareMonthDay,
+  getDateString,
   isValidDateString,
   isFutureLocalDateTime,
   resolveClockRangeAroundEndDate,
@@ -18,6 +22,7 @@ import {
   startOfWeek,
   summarizeDay,
   type TimeSlot,
+  toLocalDateTimeString,
   weekdayIndex,
 } from "./time.js";
 
@@ -585,5 +590,23 @@ describe("summarizeDay", () => {
     expect(summary.recordedMinutes).toBe(0);
     expect(summary.gapMinutes).toBe(0);
     expect(summary.coverageRatio).toBe(0);
+  });
+});
+
+describe("cachedDateTimeFormat（R8：每个任务行 new 一个格式器是键盘首帧的 JS 大头）", () => {
+  it("同 locale + 同 options 返回同一个实例；options 不同各自一份", () => {
+    const a = cachedDateTimeFormat("en-CA", { timeZone: APP_TIME_ZONE, year: "numeric", month: "2-digit", day: "2-digit" });
+    const b = cachedDateTimeFormat("en-CA", { timeZone: APP_TIME_ZONE, year: "numeric", month: "2-digit", day: "2-digit" });
+    const c = cachedDateTimeFormat("en-CA", { timeZone: APP_TIME_ZONE, hour: "2-digit" });
+    expect(a).toBe(b);
+    expect(a).not.toBe(c);
+  });
+
+  it("getDateString / toLocalDateTimeString / formatWeekday / weekdayIndex 输出与缓存前逐字相同", () => {
+    const d = new Date("2026-09-21T16:30:05.000Z");
+    expect(getDateString(d)).toBe("2026-09-22");
+    expect(toLocalDateTimeString(d)).toBe("2026-09-22T00:30:05");
+    expect(formatWeekday("2026-09-22")).toBe("周二");
+    expect(weekdayIndex("2026-09-22")).toBe(1);
   });
 });

@@ -32,7 +32,7 @@ contracts:
   - packages/shared/src/types.ts:TimeEntry
   - packages/shared/src/entitySchemas.ts
   - packages/client/src/lib/time.ts
-last-reviewed: 2026-09-18
+last-reviewed: 2026-09-21
 ---
 
 # 时间轴与记录时间规则
@@ -78,6 +78,8 @@ type TimeEntry = {
 ```
 
 客户端写入前会把表单本地时间转换为 UTC，展示和时间轴计算时再按应用时区 `Asia/Shanghai` 转回本地时间。`packages/client/src/lib/time.ts` 的 `buildTimeSlots`、`formatTime`、`formatDateTimeRange` 会接受 UTC 输入；内部比较先解析为毫秒时间戳，避免混用历史本地字符串和新 UTC 字符串时产生字典序误判。
+
+**`Intl.DateTimeFormat` 实例按 locale + options 复用**：客户端所有按应用时区拆日期 / 格式化的路径（`lib/time.ts` 自身、`lib/insights` 的异常与惯例统计）统一经 `cachedDateTimeFormat(locale, options)` 取实例（模块级 `Map`，key 是 locale 与 options 的 JSON 串，不淘汰），不得在渲染路径里 `new Intl.DateTimeFormat`——构造一个实例约 0.3 ms，待办页每行一个曾是键盘事件整页重渲染里最大的单项耗时。`packages/shared/src/time.ts` 持一份同款私有缓存（shared 不能反向依赖 client）。
 
 ## 2. 时间轴数据来源
 

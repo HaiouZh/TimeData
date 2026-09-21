@@ -38,8 +38,8 @@ export function TodoSelectionBar({ selectedCount, projects, onCreate, onAssign, 
       // **本栏与待办页的 toast 容器同层（都是 z-backdrop=40）、且在 DOM 里排它之后 → 后绘制的本栏赢。**
       // 所以本栏（含向上展开的「放进…」列表）绝不许压到 toast 那条带上，而多选态里 toast 是唯一的
       // 失败反馈通道（两种提交失败都不退出多选、只靠它说原因），压住就等于「点了没反应」。
-      // 两处各自让路，别改层级：页面用 composerAvoidancePx 把 toast 顶到操作栏上沿之外
-      //（TodoPage 的 bottomBarHeightPx），列表则「选完即收起」（见下面 onClick）。
+      // 两处各自让路，别改层级：页面把 toast 交给 KeyboardInsetSlot，避让输入由 todo/todoBottomInset.ts 算
+      //（多选态 barPx = max(composer 高, 本栏高)）把它顶到操作栏上沿之外；列表则「选完即收起」（见下面 onClick）。
     >
       <div className="mx-auto w-full max-w-2xl">
         {pickerOpen && projects.length > 0 && (

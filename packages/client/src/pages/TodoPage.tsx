@@ -25,14 +25,14 @@ import {
   useState,
 } from "react";
 import { useNavigate, useSearchParams } from "react-router";
-import { useKeyboardNavCollapse } from "../components/KeyboardDock.tsx";
+import { KeyboardNavCollapse } from "../components/KeyboardDock.tsx";
+import { KeyboardInsetPad } from "../components/KeyboardInsetPad.tsx";
+import { KeyboardInsetSlot } from "../components/KeyboardInsetSlot.tsx";
 import { ActionToastBar } from "../components/ui/ActionToastBar.js";
 import { BOTTOM_NAV_HEIGHT_PX, useBottomNav } from "../contexts/BottomNavContext.tsx";
 import { db } from "../db/index.js";
 import { useActionToast } from "../hooks/useActionToast.js";
 import { useConfirm } from "../hooks/useConfirm.tsx";
-import { useKeyboardHeight, useKeyboardHeightSettled, useKeyboardVisible } from "../hooks/useKeyboardHeight.ts";
-import { composeBottomInset } from "../lib/bottomInset.ts";
 import {
   assignTasksToProject,
   assignTaskToProject,
@@ -118,6 +118,7 @@ import { TodoDragDock } from "./todo/TodoDragDock.js";
 import { ProjectNameChip, TodoProjectSection } from "./todo/TodoProjectSection.js";
 import { TodoSelectionBar } from "./todo/TodoSelectionBar.js";
 import { HandTrackRows, ProjectTrackRows, TrackBucketSection } from "./todo/TrackBucketSection.js";
+import { todoBottomInset } from "./todo/todoBottomInset.js";
 import {
   clampTodoIndentPreview,
   hoveredRootIdFromOver,
@@ -266,60 +267,32 @@ export function TodoPage() {
   const [composerHeightPx, setComposerHeightPx] = useState(0);
   const { hidden: navHidden } = useBottomNav();
   const wide = useIsWideScreen();
-  // 避让量（还挡着多少，进合成）与在场信号（键盘弹没弹，管收底栏/守 composer）分开取：
-  // 安卓壳层让位后 height 恒 0 而键盘确实在场，在场判断混用 height 会让底栏不收、composer 误藏。
-  const keyboardHeightPx = useKeyboardHeight();
-  // 键盘动画结束后才跟上的遮挡量：给会触发重排的消费方（内容留白 / sticky 偏移），动画期零重排。
-  const keyboardHeightSettledPx = useKeyboardHeightSettled();
-  const keyboardVisible = useKeyboardVisible();
   const rootIdsWithChildren =
     useLiveQuery(async () => {
       const children = await db.tasks.filter((task) => task.parentId !== null).toArray();
       return new Set(children.map((child) => child.parentId).filter((id): id is string => Boolean(id)));
     }, []) ?? new Set<string>();
-  // 键盘弹起时 nav 不该再占避让空间，故加 !keyboardVisible 守卫；键盘收起（桌面浏览器恒如此）
-  // 时 = 原公式，逐值不变，安全不变量守住（fix round 1，见 task-3-report.md）。
-  // 与下方「收起 nav 实体」的 effect 是两回事：本条只管避让量，effect 才动 nav 本身；
-  // effect 结算前的那一帧也靠本守卫兜住，避免输入条闪跳。
-  const navOffsetPx = !wide && !navHidden && !keyboardVisible ? BOTTOM_NAV_HEIGHT_PX : 0;
-  // !keyboardVisible 守卫：键盘弹起会触发下方「收起底栏实体」的 effect（setNavHidden(true)），
-  // 不加守卫时这里把「键盘引起的收 nav」误判成「滚动收起」，composer 自己 translateY(100%) 滑进
-  // 键盘后面——用户实测两平台「唤起输入法后看不见输入框」的根因。键盘态下 composer 恒可见。
-  // 用在场信号而非 height：安卓壳让位后 height 恒 0，判不出「这次收 nav 是键盘引起的」。
-  const composerHiddenByScroll = !wide && navHidden && !keyboardVisible;
+  // 键盘量不在页面根取（mobile-keyboard R8，design §3.1）：页面每次键盘事件整页重渲染是「输入条不跟手」
+  // 的主因。这里只算「底部站着谁」与底栏基础占位，交给 KeyboardInsetPad / KeyboardInsetSlot / KeyboardDock
+  // 这些叶子在各自内部合成（composeBottomInset 口径不变，`!keyboardVisible` 的 nav 守卫在 useBottomInset 里）。
+  const navOffsetBasePx = !wide && !navHidden ? BOTTOM_NAV_HEIGHT_PX : 0;
+  // 滚动收起：只有键盘不在场时才成立——这一半守卫由 KeyboardDock（composer 自藏）与 useBottomInset
+  //（避让量归零）各自做，本页只说「滚动要它藏」。
+  const composerScrollHidden = !wide && navHidden;
   /**
-   * 底部**实际占位者**的高度。照 QuickNotesPage 的 `bottomInsetPx` 那条路子：避让量按「此刻底部
-   * 站着谁」算，不是按 composer 一个人算。
-   *
-   * 多选态下站着的是 `TodoSelectionBar`，它 `hiddenByScroll` 管不着、滚动时原地不动。
-   * 只看 `composerHiddenByScroll` 会在窄屏滚动后把避让量归零，而操作栏还占着底部约 42px，
-   * 与 toast 容器同为 `Z.backdrop`(40) 且在 DOM 里排其后 → 后绘制 → 把 toast 完全盖住。
-   * 多选态下 toast 是唯一的失败反馈通道（两种提交失败都不退出多选、只靠它说原因），
-   * 盖住就等于「点了没反应」。同一个量还喂 `DayGroupedList` 的 sticky「收起」，一并跟着修正。
-   *
-   * 取 `max(上次量到的 composer 高, 常量)` 而不是给操作栏另开一套测量：两者高度本就相近
-   *（见下方操作栏处的注释），常量只是兜住「量不到高度」的场景（首帧、jsdom）——
-   * 这条避让的唯一职责是别把 toast 压住，宁可多留几像素。
+   * 底部**实际占位者**：多选态站着的是 `TodoSelectionBar`，它 `hiddenByScroll` 管不着、滚动时原地不动。
+   * 只看滚动隐藏会在窄屏滚动后把避让量归零，而操作栏还占着底部约 42px，与 toast 容器同为
+   * `Z.backdrop`(40) 且在 DOM 里排其后 → 后绘制 → 把 toast 完全盖住；多选态下 toast 是唯一的失败反馈通道。
+   * 取 `max(上次量到的 composer 高, 常量)` 而不是另开测量：两者高度相近，常量只兜「量不到高度」（首帧、jsdom）。
+   * `barPxWhileKeyboard`：滚动藏起的 composer 在键盘在场时不算隐藏（原 `composerHiddenByScroll` 的 `!keyboardVisible`）。
    */
-  const bottomBarHeightPx = selectionMode
-    ? Math.max(composerHeightPx, TODO_SELECTION_BAR_HEIGHT_PX)
-    : composerHiddenByScroll
-      ? 0
-      : composerHeightPx;
-  // 底部避让量单一合成来源（composeBottomInset，见 lib/bottomInset.ts，与 QuickNotesPage 共用）：
-  // bottomBarHeightPx/navOffsetPx 仍是本页私有的「此刻底部站着谁」判断，这里只把结果连同键盘遮挡量
-  // 一起喂进合成（keyboardHeightPx 是「键盘还挡着多少」，壳自己让过位时为 0，见 useKeyboardHeight）。
-  // keyboardHeightPx=0（桌面浏览器 / 键盘收起）时 = Math.ceil(bottomBarHeightPx +
-  // navOffsetPx)，与合成前的批 1 值逐值相等，见 bottomInset.test.ts 回归护栏。
-  const composerAvoidancePx = composeBottomInset({ barHeightPx: bottomBarHeightPx, navOffsetPx, keyboardHeightPx });
-  // 内容留白与 sticky 偏移喂 settled 值（mobile-keyboard R7，design §1.3）：键盘动画那几百毫秒里
-  // 列表不重排，输入条位移（KeyboardDock 自取即时值）是纯合成器动画；贴 composer 的浮层仍用即时值。
-  const composerAvoidanceSettledPx = composeBottomInset({
-    barHeightPx: bottomBarHeightPx,
-    navOffsetPx,
-    keyboardHeightPx: keyboardHeightSettledPx,
+  const bottomInset = todoBottomInset({
+    selectionMode,
+    composerHeightPx,
+    composerScrollHidden,
+    navOffsetBasePx,
+    selectionBarHeightPx: TODO_SELECTION_BAR_HEIGHT_PX,
   });
-  const contentBottomPaddingPx = Math.max(192, composerAvoidanceSettledPx + TODO_COMPOSER_CONTENT_GAP_PX);
   // TodoComposer/TodoSelectionBar 自身的 bottom 定位由 KeyboardDock 统一计算（navOffset 守卫 +
   // 键盘高，components/KeyboardDock.tsx），本页不再自算——「两页各持一份手工时序」正是每轮
   // 修一处坏另一处的结构性根源（docs/notes/keyboard-pipeline-saga.md §二）。
@@ -346,8 +319,7 @@ export function TodoPage() {
   //
   // 记账式收起/恢复的实现提升为两页共用的 useKeyboardNavCollapse（components/KeyboardDock.tsx），
   // 语义不变：只有键盘引起的隐藏才在收起时恢复，滚动驱动的隐藏不碰。
-  // TodoPage.test.tsx 的 hideBottomNav 用例仍钉「挂载时不冲掉已有隐藏态」。
-  useKeyboardNavCollapse();
+  // 实现在 KeyboardNavCollapse 组件里，JSX 根部渲染。
 
   const measureComposer = useCallback(() => {
     const composer = composerRef.current;
@@ -1386,7 +1358,7 @@ export function TodoPage() {
     >
       <DayGroupedList
         segments={groupCompletedByDay(completedFiltered)}
-        stickyBottomOffsetPx={composerAvoidanceSettledPx}
+        stickyInset={bottomInset}
         renderTasks={(tasks) => <TaskList pool="completed" tasks={tasks} metaChip={trackChipFor} {...rowHandlers} />}
       />
     </CollapsibleSection>
@@ -1439,11 +1411,10 @@ export function TodoPage() {
         ) : (
           <DayGroupedList
             segments={groupInboxByDay(inboxFiltered)}
-            stickyBottomOffsetPx={composerAvoidanceSettledPx}
+            stickyInset={bottomInset}
             expandedFooter={
               <SunkenInboxTail
                 sunkenTasks={sunkenFiltered}
-                stickyBottomOffsetPx={composerAvoidanceSettledPx}
                 extraAction={sunkenExtraAction}
                 goalLinkedIds={goalLinkedIds}
                 {...selectionProps}
@@ -1675,18 +1646,16 @@ export function TodoPage() {
       }}
     >
       <div className={`min-h-full bg-page text-ink${dragging ? " todo-dnd-dragging" : ""}`}>
-        <div
+        <KeyboardNavCollapse />
+        <KeyboardInsetPad
+          inset={bottomInset}
+          minPx={192}
+          extraPx={TODO_COMPOSER_CONTENT_GAP_PX}
           // 顶部间距走 --page-top-gap-lg（原 py-4 的上半，下半从来就被 pad-bottom 覆盖）：有系统安全区
           // 时归零，避免与安全区自带的呼吸位叠成刘海下方那条空带；桌面 / 无刘海设备上仍是 16px。
+          // 兜底类 [padding-bottom:var(--pad-bottom)]：env() 未定义环境里 calc 整条失效、内联 padding 被丢弃，
+          // 由它还原纯数值留白（KeyboardInsetPad 写 --pad-bottom 与 calc 组成式）。
           className="mx-auto w-full max-w-2xl px-4 [padding-top:var(--page-top-gap-lg)] lg:max-w-none [padding-bottom:var(--pad-bottom)]"
-          // 兜底类 [padding-bottom:var(--pad-bottom)]：env() 未定义环境（Firefox 桌面 / 旧 WebView）里
-          // calc 整条失效、内联 padding 被丢弃，由它还原批次前的纯数值 contentBottomPaddingPx。
-          style={
-            {
-              "--pad-bottom": `${contentBottomPaddingPx}px`,
-              paddingBottom: `calc(${contentBottomPaddingPx}px + var(--safe-bottom))`,
-            } as CSSProperties
-          }
         >
           {wide ? (
             <ResizableSplit
@@ -1725,32 +1694,31 @@ export function TodoPage() {
               {inboxBlock}
             </div>
           )}
-        </div>
+        </KeyboardInsetPad>
 
-        {/* 贴着 composer 上沿浮起：composerAvoidancePx = composer 高 + 底部导航高，
-            与 DayGroupedList 的 sticky 头同源，保证 toast 不被输入框压住。 */}
-        <div
-          data-testid="todo-toast-dock"
-          className="pointer-events-none fixed inset-x-0 z-[var(--z-backdrop)] px-4 [bottom:var(--bottom-offset)]"
-          // 兜底类 [bottom:var(--bottom-offset)]：env() 未定义环境（Firefox 桌面 / 旧 WebView）里 calc
-          // 整条失效、内联 bottom 被丢弃，由它还原批次前的纯数值位置（composerAvoidancePx + 8）。
-          style={
-            {
-              "--bottom-offset": `${composerAvoidancePx + 8}px`,
-              bottom: `calc(${composerAvoidancePx + 8}px + var(--safe-bottom))`,
-            } as CSSProperties
-          }
-        >
-          <div className="pointer-events-auto mx-auto flex w-full max-w-2xl flex-col gap-2">
-            {/* 撤销槽在上：两条同时在时它更靠近视线，且它有时限、另一条没有。
-                ActionToastBar 在 toast 为 null 时不渲染，gap 不会留空档。 */}
-            <ActionToastBar toast={undoToast} onDismiss={clearUndoToast} ariaLabel="待办撤销提示" />
-            <ActionToastBar toast={actionToast} onDismiss={clearActionToast} ariaLabel="待办操作反馈" />
-          </div>
-        </div>
+        {/* 贴着 composer 上沿浮起：避让量与 DayGroupedList 的 sticky 同源（useBottomInset），保证 toast 不被输入框压住。
+            即时值：它跟着输入条走。 */}
+        <KeyboardInsetSlot inset={bottomInset}>
+          {(px) => (
+            <div
+              data-testid="todo-toast-dock"
+              className="pointer-events-none fixed inset-x-0 z-[var(--z-backdrop)] px-4 [bottom:var(--bottom-offset)]"
+              // 兜底类 [bottom:var(--bottom-offset)]：env() 未定义环境（Firefox 桌面 / 旧 WebView）里 calc
+              // 整条失效、内联 bottom 被丢弃，由它还原批次前的纯数值位置（px + 8）。
+              style={{ "--bottom-offset": `${px + 8}px`, bottom: `calc(${px + 8}px + var(--safe-bottom))` } as CSSProperties}
+            >
+              <div className="pointer-events-auto mx-auto flex w-full max-w-2xl flex-col gap-2">
+                {/* 撤销槽在上：两条同时在时它更靠近视线，且它有时限、另一条没有。
+                    ActionToastBar 在 toast 为 null 时不渲染，gap 不会留空档。 */}
+                <ActionToastBar toast={undoToast} onDismiss={clearUndoToast} ariaLabel="待办撤销提示" />
+                <ActionToastBar toast={actionToast} onDismiss={clearActionToast} ariaLabel="待办操作反馈" />
+              </div>
+            </div>
+          )}
+        </KeyboardInsetSlot>
 
         {/* 多选态下操作栏顶替记录框：两者同一位置、同一层级（见 TodoSelectionBar 的 zIndex 注释）。
-            TodoComposer 不渲染时 composerHeightPx 保持上一次测量值，contentBottomPaddingPx 因此不跳动——
+            TodoComposer 不渲染时 composerHeightPx 保持上一次测量值，留白因此不跳动——
             操作栏高度与 composer 相近，沿用旧值即可，不为此加新的测量逻辑。 */}
         {wide && (
           <TodoDragDock
@@ -1788,7 +1756,7 @@ export function TodoPage() {
             onToggleMode={toggleMode}
             onToggleNotMode={toggleNotMode}
             onClear={clearTags}
-            hiddenByScroll={composerHiddenByScroll}
+            hiddenByScroll={composerScrollHidden}
             formRef={composerRef}
           />
         )}

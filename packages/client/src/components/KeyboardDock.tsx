@@ -1,7 +1,8 @@
 import { Capacitor } from "@capacitor/core";
 import { type CSSProperties, type HTMLAttributes, type ReactNode, useCallback, useEffect, useRef } from "react";
 import { BOTTOM_NAV_HEIGHT_PX, useBottomNav } from "../contexts/BottomNavContext.tsx";
-import { useKeyboardHeight, useKeyboardMotion, useKeyboardVisible } from "../hooks/useKeyboardHeight.ts";
+import { useBottomInset } from "../hooks/useBottomInset.js";
+import { useKeyboardMotion, useKeyboardVisible } from "../hooks/useKeyboardHeight.ts";
 import { useShellResizeGlide } from "../lib/keyboardMotion.ts";
 import { useIsWideScreen } from "../lib/useIsWideScreen.ts";
 import { Z } from "../lib/zLayers.ts";
@@ -11,6 +12,7 @@ import { Z } from "../lib/zLayers.ts";
  *
  * 只把「这次隐藏是键盘引起的」记账后收起，收起原因消失时才恢复——不能无条件
  * `setNavHidden(keyboardVisible)`：挂载时键盘不在场会把用户滚动收起的底栏顶回来。
+ * 底栏已因滚动 / 搜索藏着时不记账，收键盘不会把它顶回。
  * 速记页此前用 `composerFocused || …` 在聚焦瞬间就收底栏，与待办页「等键盘信号」时序不同，
  * 正是「两页每次测试效果都独立」的一条来源；统一到键盘信号驱动（TG 口径：聚焦到键盘出现
  * 之间一切原地不动）。
@@ -22,14 +24,19 @@ import { Z } from "../lib/zLayers.ts";
  */
 export function useKeyboardNavCollapse(): void {
   const keyboardVisible = useKeyboardVisible();
-  const { setHidden } = useBottomNav();
+  const { hidden, setHidden } = useBottomNav();
   const causedRef = useRef(false);
+  // 只读不订阅：记账那一刻底栏是不是已经因别的原因藏着（滚动 / 搜索），是就不记、收键盘时也不动它。
+  const hiddenRef = useRef(hidden);
+  hiddenRef.current = hidden;
   const collapseEnabled = Capacitor.getPlatform() === "web";
   useEffect(() => {
     if (!collapseEnabled) return;
     if (keyboardVisible) {
-      causedRef.current = true;
-      setHidden(true);
+      if (!hiddenRef.current) {
+        causedRef.current = true;
+        setHidden(true);
+      }
       return;
     }
     if (!causedRef.current) return;
@@ -38,10 +45,22 @@ export function useKeyboardNavCollapse(): void {
   }, [collapseEnabled, keyboardVisible, setHidden]);
 }
 
+/**
+ * 不渲染任何东西的壳：useKeyboardNavCollapse 内部订阅 useKeyboardVisible，挂在哪个组件里哪个组件就
+ * 跟着键盘重渲染——页面根必须用本组件而不是直接调 hook（mobile-keyboard R8 design §3.1）。
+ *
+ * 页面与其他组件一律渲染 `<KeyboardNavCollapse />`，不要直接调本 hook——调用方会跟着键盘重渲染。
+ * hook 导出只为壳与测试。
+ */
+export function KeyboardNavCollapse() {
+  useKeyboardNavCollapse();
+  return null;
+}
+
 export interface KeyboardDockProps extends HTMLAttributes<HTMLElement> {
   /** 渲染成什么元素：速记 / 待办 composer 是 form，多选操作栏是 div。 */
   as?: "div" | "form";
-  /** 下滑收起：整体 translateY(100%) 滑出视口（滚动隐藏协议，Todo composer 用）。 */
+  /** 滚动收起：`translateY(100%)` 滑出视口；**键盘在场时不生效**（原 TodoPage 的 `!keyboardVisible` 守卫下沉至此：键盘弹起会触发 web 的收底栏 effect，不守卫会把它误判成滚动收起、composer 滑进键盘后面）。 */
   hiddenByScroll?: boolean;
   /** 外部要拿驻坞元素本体（高度测量 / 自增高联动）时的 ref，与内部 glide ref 合流。 */
   dockRef?: (el: HTMLElement | null) => void;
@@ -58,8 +77,8 @@ export interface KeyboardDockProps extends HTMLAttributes<HTMLElement> {
  * - fixed 定位 + 安全区组成式（bottom 只装 var(--safe-bottom)，恒定不动；env() 失效环境由
  *   兜底类 [bottom:var(--bottom-offset)] 落回 0px——见 invariants 第 11/12 条）。
  * - 抬升 = navOffset + 键盘高，走 transform 吃 .td-kbd-motion 过渡；**时长与曲线由
- *   useKeyboardMotion 给**（浮层 override > 实测的系统时长 did − will > 平台默认，见
- *   lib/keyboard/keyboardMotionPrefs.ts）：在场用 showMs、不在场用 hideMs，两端与 IME 同段滑动。
+ *   useKeyboardMotion 给**（浮层 override > 平台默认（实测时长只记不用），见
+ *   packages/client/src/lib/keyboard/keyboardMotionPrefs.ts）：在场用 showMs、不在场用 hideMs，两端与 IME 同段滑动。
  *   navOffset 带 !keyboardVisible 守卫：键盘在场时底栏不占避让空间（防首帧 49px 双计）。
  * - 根元素带 data-kbd-dock：探针（KeyboardProbe）据此捕获 transitionstart/end 量输入条动画时刻。
  * - 壳缩量抹平（useShellResizeGlide）与 zIndex（backdrop=40，与 toast 带的关系见
@@ -74,13 +93,15 @@ export function KeyboardDock({
   children,
   ...rest
 }: KeyboardDockProps) {
-  const keyboardHeight = useKeyboardHeight();
-  const keyboardVisible = useKeyboardVisible();
   const motion = useKeyboardMotion();
   const wide = useIsWideScreen();
   const { hidden: navHidden } = useBottomNav();
-  const navOffsetPx = !wide && !navHidden && !keyboardVisible ? BOTTOM_NAV_HEIGHT_PX : 0;
-  const liftPx = Math.ceil(navOffsetPx + keyboardHeight);
+  // 抬升量走 useBottomInset 的即时侧（bar 0：Dock 自己就是那条 bar）：nav 的 !keyboardVisible 守卫只此一份。
+  const { immediatePx: liftPx, keyboardVisible } = useBottomInset({
+    barPx: 0,
+    navOffsetBasePx: !wide && !navHidden ? BOTTOM_NAV_HEIGHT_PX : 0,
+  });
+  const hidden = hiddenByScroll && !keyboardVisible;
 
   const glideRef = useRef<HTMLElement | null>(null);
   useShellResizeGlide(glideRef, motion.showMs, motion.easing);
@@ -102,7 +123,7 @@ export function KeyboardDock({
         {
           "--bottom-offset": "0px",
           bottom: "calc(0px + var(--safe-bottom))",
-          transform: hiddenByScroll ? "translateY(100%)" : `translateY(${-liftPx}px)`,
+          transform: hidden ? "translateY(100%)" : `translateY(${-liftPx}px)`,
           transitionDuration: `${keyboardVisible ? motion.showMs : motion.hideMs}ms`,
           transitionTimingFunction: motion.easing,
           zIndex: Z.backdrop,

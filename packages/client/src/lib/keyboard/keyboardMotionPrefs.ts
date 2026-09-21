@@ -107,13 +107,17 @@ export function clearMotionOverride(kv: RecoveryKV = defaultRecoveryKV): void {
   writeStoredMotion(next, kv);
 }
 
-/** 优先级：override > 实测 > 平台默认。曲线只有 override 一档（实测量不出曲线）。 */
+/**
+ * 优先级：override > 平台默认。实测（stored.showMs / hideMs）**只记不用**（R8 拍板 4）：真机读数里
+ * did − will 在 192~449ms 间乱跳——will 事件本身被键盘首帧的主线程拥堵拖后，差值失真；
+ * 「取最近一次」让输入条每次速度都不一样。ff < 50 之后再复核是否重开（design §6）。
+ */
 export function resolveMotion(platform: MotionPlatform, stored: StoredMotion): KeyboardMotion {
   const base = PLATFORM_DEFAULTS[platform];
   const easingName = stored.overrideEasing ?? base.easingName;
   return {
-    showMs: stored.overrideShowMs ?? stored.showMs ?? base.showMs,
-    hideMs: stored.overrideHideMs ?? stored.hideMs ?? base.hideMs,
+    showMs: stored.overrideShowMs ?? base.showMs,
+    hideMs: stored.overrideHideMs ?? base.hideMs,
     easing: EASINGS[easingName],
     easingName,
   };

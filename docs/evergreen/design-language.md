@@ -14,6 +14,7 @@ covers:
   - packages/client/src/pages/stats/chartColors.ts
   - packages/client/src/lib/contentTint.ts
   - packages/client/src/hooks/useKeyboardHeight.ts
+  - packages/client/src/hooks/useBottomInset.ts
   - packages/client/src/lib/prefersReducedMotion.ts
   - packages/client/src/lib/bottomInset.ts
   - packages/client/src/lib/keyboardMotion.ts
@@ -27,7 +28,7 @@ covers:
 contracts:
   - packages/client/src/index.css
   - packages/client/src/lib/navigation/navRegistry.ts
-last-reviewed: 2026-09-17
+last-reviewed: 2026-09-21
 ---
 
 # 设计语言
@@ -105,7 +106,7 @@ last-reviewed: 2026-09-17
 | 自绘控件 / 无原生控件棘轮 / 图标 | → [design-language/controls](design-language/controls.md) |
 | 图表 chrome 取色（token→JS 常量镜像） | `packages/client/src/pages/stats/chartColors.ts`（只有 `CHART_CHROME`；数据序列走用户分类色，见 [invariants](design-language/invariants.md) 第 5 条；守序测试 `chartColors.test.ts`） |
 | z-index 层级 JS 镜像 | `packages/client/src/lib/zLayers.ts`（`Z`，与 `--z-*` 同步，`zLayers.test.ts` 守一致） |
-| 键盘遮挡量单一来源 / 底部避让量单一合成 | `packages/client/src/hooks/useKeyboardHeight.ts`、`packages/client/src/lib/bottomInset.ts`（见 [invariants](design-language/invariants.md) 第 12 条；守序测试 `useKeyboardHeight.test.tsx`、`bottomInset.test.ts`） |
+| 键盘遮挡量单一来源 / 底部避让量单一合成 / 叶子侧唯一消费入口 | `packages/client/src/hooks/useKeyboardHeight.ts`、`packages/client/src/lib/bottomInset.ts`、`packages/client/src/hooks/useBottomInset.ts`（页面根不订阅键盘，见 [invariants](design-language/invariants.md) 第 12 条；守序测试 `useKeyboardHeight.test.tsx`、`bottomInset.test.ts`、`pages/pagesNoKeyboardSubscription.test.ts`） |
 | 触感语义函数 + 强度映射 | `packages/client/src/lib/haptics.ts`（见 [invariants](design-language/invariants.md) 第 13 条；守序测试 `haptics.test.ts`） |
 | 设计语言预览 / 验收台 | `packages/client/src/pages/dev/StyleguidePage.tsx`（路由 `/dev/styleguide`，渲染全部 token + `.td-*` + 自绘控件） |
 

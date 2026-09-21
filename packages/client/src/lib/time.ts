@@ -28,6 +28,23 @@ interface BuildTimeSlotsOptions {
 const PREVIOUS_DAY_GAP_CONTINUATION_HOURS = 4;
 const OVERNIGHT_ROLLBACK_THRESHOLD_MS = 12 * 60 * 60 * 1000;
 
+/**
+ * 按 locale + options 复用 Intl.DateTimeFormat 实例。构造一个格式器比 formatToParts 贵一个量级，
+ * 待办页每个任务行都在渲染期调 getDateString，键盘弹起那一帧整页重跑时它是 CPU profile 的 self-time
+ * 第一名（mobile-keyboard R8 design §0.2）。实例无状态，跨调用共享安全。
+ */
+const dateTimeFormatCache = new Map<string, Intl.DateTimeFormat>();
+
+export function cachedDateTimeFormat(locale: string, options: Intl.DateTimeFormatOptions): Intl.DateTimeFormat {
+  const key = `${locale}|${JSON.stringify(options)}`;
+  let fmt = dateTimeFormatCache.get(key);
+  if (!fmt) {
+    fmt = new Intl.DateTimeFormat(locale, options);
+    dateTimeFormatCache.set(key, fmt);
+  }
+  return fmt;
+}
+
 function parseAppLocalDateTime(value: string): Date {
   if (/[zZ]|[+-]\d{2}:?\d{2}$/.test(value)) {
     return new Date(value);
@@ -36,7 +53,7 @@ function parseAppLocalDateTime(value: string): Date {
 }
 
 function datePartsInAppTimeZone(date: Date): { year: string; month: string; day: string } {
-  const parts = new Intl.DateTimeFormat("en-CA", {
+  const parts = cachedDateTimeFormat("en-CA", {
     timeZone: APP_TIME_ZONE,
     year: "numeric",
     month: "2-digit",
@@ -302,7 +319,7 @@ export function getDateString(date: Date): string {
 
 export function toLocalDateTimeString(date: Date): string {
   const { year, month, day } = datePartsInAppTimeZone(date);
-  const timeParts = new Intl.DateTimeFormat("en-GB", {
+  const timeParts = cachedDateTimeFormat("en-GB", {
     timeZone: APP_TIME_ZONE,
     hour12: false,
     hour: "2-digit",
@@ -340,7 +357,7 @@ export function isValidDateString(value: string): boolean {
 }
 
 export function formatWeekday(dateStr: string): string {
-  return new Intl.DateTimeFormat("zh-CN", {
+  return cachedDateTimeFormat("zh-CN", {
     timeZone: APP_TIME_ZONE,
     weekday: "short",
   }).format(new Date(`${dateStr}T00:00:00+08:00`));
@@ -365,7 +382,7 @@ const WEEKDAY_SHORT_TO_INDEX: Record<string, number> = {
 // 0 = 周一 ... 6 = 周日。用正午 +08:00 锚点 + APP_TIME_ZONE 格式化，避开偏移边界。
 export function weekdayIndex(dateStr: string): number {
   const noon = new Date(`${dateStr}T12:00:00+08:00`);
-  const short = new Intl.DateTimeFormat("en-US", {
+  const short = cachedDateTimeFormat("en-US", {
     timeZone: APP_TIME_ZONE,
     weekday: "short",
   }).format(noon);

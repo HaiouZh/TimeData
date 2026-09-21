@@ -25,7 +25,7 @@ contracts:
   - packages/shared/src/constants.ts
   - packages/server/src/db/schema.ts
   - packages/client/src/db/index.ts
-last-reviewed: 2026-09-18
+last-reviewed: 2026-09-21
 ---
 
 # 数据模型与契约
@@ -185,7 +185,7 @@ type SyncChange =
 
 ## 7. 时间字段约定
 
-所有时间字段一律使用 UTC ISO 字符串（带 `Z`）存储和传输，展示时再转本地时区。共享 `time.ts` 固定应用时区为 `Asia/Shanghai`，并提供本地挂钟时间与 UTC `.sssZ` 字符串之间的转换；服务端、CLI 与客户端表单不得各自发明时区转换。
+所有时间字段一律使用 UTC ISO 字符串（带 `Z`）存储和传输，展示时再转本地时区。共享 `time.ts` 固定应用时区为 `Asia/Shanghai`，并提供本地挂钟时间与 UTC `.sssZ` 字符串之间的转换；服务端、CLI 与客户端表单不得各自发明时区转换。共享 `time.ts` 内部按 locale + options 复用 `Intl.DateTimeFormat` 实例（模块级私有缓存，与客户端 `lib/time.ts` 的 `cachedDateTimeFormat` 同款、互不依赖，见 [timeline §1](timeline.md)）。
 
 - **存字符串、比较靠字典序**：固定宽度的 UTC ISO 串其字典序等同时间先后，所以 SQLite/Dexie 直接对字符串字段排序/范围查询即可，无需时间类型。
 - Dexie / SQLite 的 `*_at` 字段使用 `new Date().toISOString()`。

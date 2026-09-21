@@ -1,5 +1,6 @@
 import type { Category, TimeEntry } from "@timedata/shared";
 import { APP_TIME_ZONE } from "@timedata/shared";
+import { cachedDateTimeFormat } from "../time.js";
 import { INSIGHT_CONSTANTS } from "./constants.js";
 import { buildSessions, resolveParentId } from "./sessions.js";
 
@@ -56,7 +57,7 @@ const toMs = (iso: string) => new Date(iso).getTime();
 const round1 = (value: number) => Math.round(value * 10) / 10;
 
 function localDate(iso: string): string {
-  return new Intl.DateTimeFormat("en-CA", {
+  return cachedDateTimeFormat("en-CA", {
     timeZone: APP_TIME_ZONE,
     year: "numeric",
     month: "2-digit",
@@ -65,7 +66,7 @@ function localDate(iso: string): string {
 }
 
 function localMinuteOfDay(iso: string): number {
-  const parts = new Intl.DateTimeFormat("en-GB", {
+  const parts = cachedDateTimeFormat("en-GB", {
     timeZone: APP_TIME_ZONE,
     hour: "2-digit",
     minute: "2-digit",

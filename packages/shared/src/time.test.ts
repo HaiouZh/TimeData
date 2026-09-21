@@ -100,3 +100,11 @@ describe("nowUtcIso", () => {
     expect(UtcIsoStringSchema.safeParse(nowUtcIso()).success).toBe(true);
   });
 });
+
+describe("time（R8 格式器缓存后口径不变）", () => {
+  it("utc ↔ local 往返逐字不变，连续调用不互相污染", () => {
+    expect(utcToLocalDateTime("2026-09-21T16:30:05.000Z")).toBe("2026-09-22T00:30:05");
+    expect(localDateTimeToUtc("2026-09-22T00:30:05")).toBe("2026-09-21T16:30:05.000Z");
+    expect(utcToLocalDateTime("2026-01-01T00:00:00.000Z")).toBe("2026-01-01T08:00:00");
+  });
+});

@@ -40,7 +40,7 @@ type KeyboardState = {
   visible: boolean;
   /** 键盘动画结束（did 事件或超时）后才跟上的遮挡量，给会触发重排的消费方（内容留白）。 */
   settledHeight: number;
-  /** 输入条位移该用的时长与曲线：override > 实测 > 平台默认。 */
+  /** 输入条位移该用的时长与曲线：override > 平台默认（实测 did − will 只记不用）。 */
   motion: KeyboardMotion;
 };
 
@@ -352,7 +352,7 @@ export function useKeyboardVisible(): boolean {
  *
  * - **native 只听插件事件**。安卓 willShow 在 IME inset 动画 onStart 即发、带最终高度（CSS px，
  *   插件源码 imeHeight/density）；iOS 走 UIKit WillShow/WillHide 通知。事件到达即起步，输入条的
- *   `.td-kbd-motion` 过渡（时长曲线由 useKeyboardMotion 给：override > did−will 实测 > 平台默认）与 IME 动画同向同段滑动。
+ *   `.td-kbd-motion` 过渡（时长曲线由 useKeyboardMotion 给：override > 平台默认，实测 did−will 只记不用）与 IME 动画同向同段滑动。
  *   Telegram 双端同款：不预测（focusin 不预抬——预测值与校正值的两段运动就是「唤起卡顿」）、
  *   不拿 visualViewport 实测与事件互相校正（多源竞态正是「飞半空 / 收起悬空」的温床）。
  * - **壳缩量兜底**：壳真的缩了 webview 的设备（本仓配置下不该发生，OEM 兜底），按
@@ -383,7 +383,7 @@ export function useKeyboardHeightSettled(): number {
 
 const MOTION_SSR: KeyboardMotion = resolveMotion("web", {});
 
-/** 输入条位移该用的时长与曲线：override（浮层调参）> 实测（did − will）> 平台默认。 */
+/** 输入条位移该用的时长与曲线：override（浮层调参）> 平台默认；实测（did − will）只记不用。 */
 export function useKeyboardMotion(): KeyboardMotion {
   return useSyncExternalStore(
     subscribe,

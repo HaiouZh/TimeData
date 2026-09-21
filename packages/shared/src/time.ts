@@ -1,5 +1,22 @@
 import { UtcIsoStringSchema } from "./schemas.js";
 
+/**
+ * 按 locale + options 复用 Intl.DateTimeFormat 实例。构造一个格式器比 formatToParts 贵一个量级，
+ * 待办页每个任务行都在渲染期调 getDateString，键盘弹起那一帧整页重跑时它是 CPU profile 的 self-time
+ * 第一名（mobile-keyboard R8 design §0.2）。实例无状态，跨调用共享安全。
+ */
+const dateTimeFormatCache = new Map<string, Intl.DateTimeFormat>();
+
+function cachedDateTimeFormat(locale: string, options: Intl.DateTimeFormatOptions): Intl.DateTimeFormat {
+  const key = `${locale}|${JSON.stringify(options)}`;
+  let fmt = dateTimeFormatCache.get(key);
+  if (!fmt) {
+    fmt = new Intl.DateTimeFormat(locale, options);
+    dateTimeFormatCache.set(key, fmt);
+  }
+  return fmt;
+}
+
 export type UtcIsoString = string & { readonly _brand: "UtcIsoString" };
 export type LocalDateTimeString = string & { readonly _brand: "LocalDateTimeString" };
 
@@ -71,7 +88,7 @@ export function localDateTimeToUtc(localStr: string, timeZone = APP_TIME_ZONE): 
 
   const approxUtc = new Date(Date.UTC(y, mo - 1, d, h, mi, s));
 
-  const fmt = new Intl.DateTimeFormat("en-CA", {
+  const fmt = cachedDateTimeFormat("en-CA", {
     timeZone,
     year: "numeric",
     month: "2-digit",
@@ -106,7 +123,7 @@ export function localDateTimeToUtc(localStr: string, timeZone = APP_TIME_ZONE): 
 
 export function utcToLocalDateTime(utcStr: string, timeZone = APP_TIME_ZONE): LocalDateTimeString {
   const date = new Date(utcStr);
-  const fmt = new Intl.DateTimeFormat("en-CA", {
+  const fmt = cachedDateTimeFormat("en-CA", {
     timeZone,
     year: "numeric",
     month: "2-digit",

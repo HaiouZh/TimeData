@@ -63,6 +63,8 @@ export interface KbdSession {
   /** 本次输入条实际用的 [showMs, hideMs, 曲线名] */
   mo: [number, number, string];
   nav: 0 | 1;
+  /** 当前保留路由层数（iOS 1|2，其余平台 1）：判「两页一起重渲染」。 */
+  ly: number;
   trunc?: true;
 }
 
@@ -87,6 +89,7 @@ export interface KeyboardProbeTrackerDeps {
   readSwitch: () => ProbeSwitch;
   writeSwitch: (next: ProbeSwitch) => void;
   navCollapsed: () => boolean;
+  layers: () => number;
   setTimer: (fn: () => void, ms: number) => unknown;
   clearTimer: (handle: unknown) => void;
 }
@@ -106,6 +109,7 @@ export function createKeyboardProbeTracker(deps: KeyboardProbeTrackerDeps) {
   let willHideAt: number | null = null;
   let inDock = false;
   let idleTimer: unknown = null;
+  let awaitingFi = false;
 
   const clearIdle = () => {
     if (idleTimer === null) return;
@@ -115,13 +119,12 @@ export function createKeyboardProbeTracker(deps: KeyboardProbeTrackerDeps) {
 
   const close = () => {
     clearIdle();
+    awaitingFi = false;
     const s = session;
     session = null;
     if (!s) return;
     const sw = deps.readSwitch();
     if (!sw.on) return;
-    const m = deps.motion();
-    s.mo = [m.showMs, m.hideMs, m.easingName];
     s.nav = deps.navCollapsed() ? 1 : 0;
     deps.stash({ action: "kbd_session", detail: encodeSession(s) });
     const left = Math.max(0, sw.left - 1);
@@ -132,6 +135,7 @@ export function createKeyboardProbeTracker(deps: KeyboardProbeTrackerDeps) {
     t0 = e.t;
     willShowAt = null;
     willHideAt = null;
+    const m = deps.motion();
     session = {
       v: 1,
       p: deps.platform,
@@ -143,8 +147,9 @@ export function createKeyboardProbeTracker(deps: KeyboardProbeTrackerDeps) {
       ev: [],
       ff: [null, null],
       dur: [null, null],
-      mo: [0, 0, ""],
+      mo: [m.showMs, m.hideMs, m.easingName],
       nav: 0,
+      ly: deps.layers(),
     };
   };
 
@@ -156,7 +161,16 @@ export function createKeyboardProbeTracker(deps: KeyboardProbeTrackerDeps) {
     push(e: ProbeInput) {
       if (!deps.readSwitch().on) return;
       if (e.type === "fi") {
-        if (session) close();
+        if (session && awaitingFi) {
+          // ws 先到、已开段：这是它配对的 focusin，归入同一段，不重开。
+          awaitingFi = false;
+        } else {
+          if (session) close();
+          open(e);
+          awaitingFi = false;
+        }
+      } else if (e.type === "ws" && !session) {
+        awaitingFi = true;
         open(e);
       }
       const s = session;
@@ -181,6 +195,7 @@ export function createKeyboardProbeTracker(deps: KeyboardProbeTrackerDeps) {
           break;
         case "wh":
           willHideAt = e.t;
+          awaitingFi = false;
           break;
         case "dh":
           if (willHideAt !== null) s.dur[1] = Math.round(e.t - willHideAt);
@@ -196,6 +211,7 @@ export function createKeyboardProbeTracker(deps: KeyboardProbeTrackerDeps) {
     },
     dispose() {
       clearIdle();
+      awaitingFi = false;
       session = null;
     },
   };

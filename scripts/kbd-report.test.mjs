@@ -41,6 +41,7 @@ const sample = {
   dur: [257, 260],
   mo: [250, 250, "ios"],
   nav: 0,
+  ly: 2,
 };
 
 test("parseRows 跳过坏 JSON 与非 v1，保留设备与时间", () => {
@@ -109,6 +110,11 @@ test("renderReport 每组一段：标题行 + 汇总行 + 每条时间线", () =
   assert.match(text, /b9 · Pixel · android · \/todo/);
   assert.match(text, /n=1 dur p50=257\/260 p90=257\/260 ff p50=18\/34 p90=18\/34/);
   assert.match(text, /2026-09-17 10:00:00 {2}fi → ws\+213/);
+});
+
+test("renderTimeline 尾巴带 ly（保留层数，判双层重渲染）", () => {
+  const line = renderTimeline(parseRows([row(sample)])[0]);
+  assert.match(line, /ly=2/);
 });
 
 test("main：缺环境变量退 2 并提示；ssh 目标非法退 2", () => {

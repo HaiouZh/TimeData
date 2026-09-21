@@ -954,7 +954,7 @@ describe("did 事件：时长学习、settled 高度、探针总线", () => {
     vi.restoreAllMocks();
   });
 
-  it("willShow→didShow 的间隔写进实测时长，下一次 useKeyboardMotion 按它给", async () => {
+  it("willShow→didShow 的间隔写进实测时长，但只记不用：useKeyboardMotion 仍给平台默认（R8）", async () => {
     const native = captureNative();
     const { host, root } = await renderDom(createElement(MotionProbe));
     expect(readAttr(host, "data-show")).toBe("285");
@@ -966,7 +966,8 @@ describe("did 事件：时长学习、settled 高度、探针总线", () => {
       native.keyboardDidShow?.({ keyboardHeight: 300 });
     });
     expect(readStoredMotion().showMs).toBe(257);
-    expect(readAttr(host, "data-show")).toBe("257");
+    // R8：did − will 被首帧主线程拥堵污染（真机 192~449ms 乱跳），实测只落盘供探针 / 浮层读，不驱动输入条。
+    expect(readAttr(host, "data-show")).toBe("285");
     expect(readAttr(host, "data-hide")).toBe("285");
     expect(readAttr(host, "data-ease")).toBe("android");
     await unmount(root);
