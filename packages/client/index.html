@@ -43,27 +43,136 @@
         /* 地址缺失或非法：跳过预热即可 */
       }
     </script>
-    <!-- 调度器信道配对（ios-instant-open 阶段1 design §2.1）：React 的 scheduler 在自己的模块求值时就
-         new MessageChannel() 并把处理函数挂到 port1.onmessage，应用模块里的任何钩子都赶不上。
-         classic 内联脚本在解析期同步执行，非 async 的 module 脚本一律在解析完成后才执行——与位置无关，
-         所以只能写在 HTML 里，且不得加 type/src/async/defer。只记 port2 → port1、原样返回原生实例，
-         不改任何投递行为；出错即放弃（schedulerHostGuard 把 paired 记为 false，只丢诊断数据）。 -->
-    <script id="td-boot-channel-tap">
+    <!-- 调度器换道钩子（ios-instant-open 阶段2 design §3.1）：React 的 scheduler 在自己的模块求值时选信道——
+         有 setImmediate 就用它，否则自建一条 MessageChannel。WebKit 在 App 后台期间网络进程一断连，页面里
+         所有 MessagePort 都被永久清空（onmessage 也被删）而 React 从不换道，调度器于是永久停摆。这里在 scheduler
+         求值前把 setImmediate 装上，信道（MessageChannel + 队列）归我们持有、随时可换新。只装机制不装策略：
+         什么时候换、兜底定时器怎么挂，在 lib/schedulerTransport.ts。classic 内联脚本在解析期同步执行，非 async 的
+         module 脚本一律在解析完成后才执行——与位置无关，所以只能写在 HTML 里，且不得加 type/src/async/defer。
+         整段 try/catch，失败即当作未安装（scheduler 退回自建信道，行为等于阶段1 之前）。 -->
+    <script id="td-boot-scheduler-transport">
       try {
-        const NativeMessageChannel = window.MessageChannel;
-        if (typeof NativeMessageChannel === "function") {
-          const channelPairs = new WeakMap();
-          const TappedMessageChannel = function MessageChannel() {
-            const channel = new NativeMessageChannel();
-            channelPairs.set(channel.port2, channel.port1);
-            return channel;
+        if (typeof window.setImmediate !== "function" && typeof window.MessageChannel === "function") {
+          const queue = [];
+          let seq = 0;
+          const t = {
+            gen: 0,
+            posted: 0,
+            delivered: 0,
+            ran: 0,
+            lastPostedAt: null,
+            lastDeliveredAt: null,
+            port1: null,
+            port2: null,
+            onSchedule: null,
+            onDeliver: null,
           };
-          TappedMessageChannel.prototype = NativeMessageChannel.prototype;
-          window.MessageChannel = TappedMessageChannel;
-          window.__timedataBoot = Object.assign(window.__timedataBoot || {}, { channelPairs });
+          const now = () => window.performance.now();
+          const callHook = (hook) => {
+            if (typeof hook !== "function") return;
+            try {
+              hook();
+            } catch {
+              /* 策略层的错不影响投递 */
+            }
+          };
+          // 只跑此刻已在队里的 n 项：跑的过程中新入队的由它自己的 wake 跑——否则等于吃掉调度器的让出，
+          // 一整段 transition 会被同步跑完。单项抛错不阻塞其余，错误异步重抛给 window.onerror。
+          const runQueued = () => {
+            let count = 0;
+            for (let n = queue.length; n > 0; n -= 1) {
+              const item = queue.shift();
+              if (item.cancelled) continue;
+              count += 1;
+              t.ran += 1;
+              try {
+                item.fn.apply(null, item.args);
+              } catch (err) {
+                window.setTimeout(() => {
+                  throw err;
+                }, 0);
+              }
+            }
+            return count;
+          };
+          const wake = () => {
+            t.delivered += 1;
+            t.lastDeliveredAt = now();
+            callHook(t.onDeliver);
+            runQueued();
+          };
+          const post = () => {
+            try {
+              t.port2.postMessage(null);
+              t.posted += 1;
+              t.lastPostedAt = now();
+            } catch {
+              /* 端口已关：项还在队里，等换道或 drain */
+            }
+          };
+          const open = () => {
+            const old1 = t.port1;
+            const old2 = t.port2;
+            const channel = new window.MessageChannel();
+            channel.port1.onmessage = wake;
+            t.port1 = channel.port1;
+            t.port2 = channel.port2;
+            t.gen += 1;
+            for (const old of [old1, old2]) {
+              if (!old) continue;
+              try {
+                old.close();
+              } catch {
+                /* 已被 WebKit 清掉的端口 close 可能抛 */
+              }
+            }
+          };
+          t.schedule = function (fn) {
+            const item = { id: ++seq, fn, args: Array.prototype.slice.call(arguments, 1), cancelled: false };
+            queue.push(item);
+            post();
+            callHook(t.onSchedule);
+            return item.id;
+          };
+          t.cancel = (id) => {
+            for (const item of queue) {
+              if (item.id === id) {
+                item.cancelled = true;
+                return;
+              }
+            }
+          };
+          t.queued = () => {
+            let n = 0;
+            for (const item of queue) if (!item.cancelled) n += 1;
+            return n;
+          };
+          t.rotate = () => {
+            open();
+            if (t.queued() > 0) post();
+          };
+          t.drain = runQueued;
+          t.portDead = () => t.port1 !== null && t.port1.onmessage === null;
+          t.snapshot = () => ({
+            gen: t.gen,
+            posted: t.posted,
+            delivered: t.delivered,
+            ran: t.ran,
+            queued: t.queued(),
+            lastPostedAt: t.lastPostedAt,
+            lastDeliveredAt: t.lastDeliveredAt,
+          });
+          open();
+          window.setImmediate = function setImmediate() {
+            return t.schedule.apply(t, arguments);
+          };
+          window.clearImmediate = function clearImmediate(id) {
+            t.cancel(id);
+          };
+          window.__timedataBoot = Object.assign(window.__timedataBoot || {}, { schedulerTransport: t });
         }
       } catch {
-        /* 配对失败只丢诊断数据 */
+        /* 钩子失败 = 未安装 */
       }
     </script>
     <title>TimeData</title>

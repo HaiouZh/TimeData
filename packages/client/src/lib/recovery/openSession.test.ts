@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
 import type { SyncTimingEntry } from "../../sync/phaseTimings.js";
+import type { TransportSnapshot } from "../schedulerTransport.js";
 import {
   OPEN_SESSION_CAP_MS,
   type OpenSessionDeps,
+  type OpenSessionRecord,
   buildOpenSessionReport,
   createOpenSessionTracker,
 } from "./openSession.js";
@@ -30,6 +32,7 @@ function harness(overrides: Partial<OpenSessionDeps> = {}) {
     },
     takeDropped: () => 0,
     netTiming: () => null,
+    transport: () => null,
     setTimer: (fn, ms) => {
       const timer = { fn, ms, cleared: false };
       timers.push(timer);
@@ -118,6 +121,7 @@ describe("打开会话收集器", () => {
         net: { connectMs: 240, ttfbMs: 350, xferMs: 20, reused: false },
         storageMs: 180,
         storageErr: null,
+        transport: null,
         resumes: 1,
         trigger: "visibilitychange",
         endedBy: "complete",
@@ -247,6 +251,7 @@ describe("buildOpenSessionReport", () => {
       net: { connectMs: 1, ttfbMs: 1, xferMs: 1, reused: true },
       storageMs: 1,
       storageErr: null,
+      transport: null,
       resumes: 1,
       trigger: null,
       endedBy: "complete",
@@ -257,5 +262,99 @@ describe("buildOpenSessionReport", () => {
     expect(report.detail?.length ?? 0).toBeLessThanOrEqual(SYNC_LOG_DETAIL_MAX);
     expect(detail.net).toBeNull();
     expect(detail.trunc).toBe(true);
+  });
+});
+
+describe("打开会话 · 调度信道账（阶段2 design §3.3）", () => {
+  function snap(overrides: Partial<TransportSnapshot> = {}): TransportSnapshot {
+    return {
+      installed: true,
+      mode: "confirmed",
+      gen: 1,
+      rotations: 0,
+      fallbacks: 0,
+      deadPorts: 0,
+      posted: 0,
+      delivered: 0,
+      ran: 0,
+      queued: 0,
+      lastPostedAt: null,
+      lastDeliveredAt: null,
+      ...overrides,
+    };
+  }
+
+  // 真闸：记页面级累计值而不做差 → 第二次打开会把第一次的换道也算在自己头上。
+  it("只记会话内增量：以 begin 时为基线做差，deadPort 看计数有没有涨，mode 取收尾那一刻", () => {
+    let current = snap({ rotations: 3, fallbacks: 1, deadPorts: 1, mode: "confirmed" });
+    const h = harness({ transport: () => current });
+    h.tracker.begin({ kind: "resume", startedAt: 10_000, cause: null, hiddenMs: 100, trigger: "visibilitychange" });
+    current = snap({ rotations: 5, fallbacks: 2, deadPorts: 2, mode: "degraded" });
+    h.tracker.end("hidden");
+    expect(h.records()[0].transport).toEqual({ rotations: 2, fallbacks: 1, deadPort: true, mode: "degraded" });
+
+    h.tracker.begin({ kind: "resume", startedAt: 20_000, cause: null, hiddenMs: 100, trigger: "visibilitychange" });
+    h.tracker.end("hidden");
+    expect(h.records()[1].transport).toEqual({ rotations: 0, fallbacks: 0, deadPort: false, mode: "degraded" });
+  });
+
+  it("钩子没装上 → transport 为 null；读快照抛错也不影响收尾", () => {
+    const a = harness({ transport: () => snap({ installed: false }) });
+    a.tracker.begin({ kind: "cold", startedAt: 0, cause: "cold", hiddenMs: null, trigger: null });
+    a.tracker.end("hidden");
+    expect(a.records()[0].transport).toBeNull();
+
+    const b = harness({
+      transport: () => {
+        throw new Error("boom");
+      },
+    });
+    b.tracker.begin({ kind: "cold", startedAt: 0, cause: "cold", hiddenMs: null, trigger: null });
+    expect(() => b.tracker.end("hidden")).not.toThrow();
+    expect(b.records()[0].transport).toBeNull();
+  });
+
+  // 逃逸变异：把 transport 那步挪到 phases 之后 → 中间档会先清 phases 而保留 transport。
+  it("超长降级顺序：net → transport → sync.phases，每档只丢到够为止", () => {
+    const base: OpenSessionRecord = {
+      id: "x",
+      build: "",
+      kind: "resume",
+      cause: null,
+      hiddenMs: 1,
+      ttiMs: 1,
+      stall: null,
+      syncMs: 1,
+      sync: { outcome: "pushed", reason: "resume", waitMs: 1, totalMs: 1, phases: { status: 1, pull: 2, push: 3, bumpApply: 4 }, connection: "open", protocol: "h2" },
+      net: { connectMs: 1, ttfbMs: 1, xferMs: 1, reused: true },
+      storageMs: 1,
+      storageErr: null,
+      transport: { rotations: 1, fallbacks: 1, deadPort: true, mode: "degraded" },
+      resumes: 1,
+      trigger: null,
+      endedBy: "complete",
+      dropped: 0,
+    };
+    const size = (record: OpenSessionRecord) => JSON.stringify(record).length;
+    const pad = (record: OpenSessionRecord) => "b".repeat(SYNC_LOG_DETAIL_MAX - size(record));
+    const parse = (record: OpenSessionRecord) => {
+      const report = buildOpenSessionReport(record);
+      expect(report.detail?.length ?? 0).toBeLessThanOrEqual(SYNC_LOG_DETAIL_MAX);
+      return JSON.parse(report.detail ?? "{}") as Record<string, unknown>;
+    };
+
+    // 丢 net（并打上 trunc）后恰好放得下 → transport 保留
+    const one = parse({ ...base, build: pad({ ...base, net: null, trunc: true }) });
+    expect(one).toMatchObject({ net: null, trunc: true });
+    expect(one.transport).toEqual(base.transport);
+
+    // 丢 net 还不够、再丢 transport 恰好放得下 → phases 保留
+    const two = parse({ ...base, build: pad({ ...base, net: null, transport: null, trunc: true }) });
+    expect(two).toMatchObject({ net: null, transport: null, trunc: true });
+    expect((two.sync as { phases: Record<string, number> }).phases).toEqual(base.sync?.phases);
+
+    // 再不够 → 清 phases
+    const three = parse({ ...base, build: `${pad({ ...base, net: null, transport: null, trunc: true })}b` });
+    expect((three.sync as { phases: Record<string, number> }).phases).toEqual({});
   });
 });

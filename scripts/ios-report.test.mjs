@@ -95,6 +95,9 @@ test("classifyStall：design §2.8 的判定顺序", () => {
   const suspended = { p: 512, s: 512, pg: 0, cb: false, cpc: false };
   assert.equal(classifyStall({ delivered: false, direct: "none", recovered: false }), "甲");
   assert.equal(classifyStall({ delivered: false, direct: "ran", recovered: true }), "甲·直驱救活");
+  // 阶段2 记录：救活即换道救活，不看 direct；没救活仍是甲
+  assert.equal(classifyStall({ transport: true, delivered: false, direct: "none", recovered: true }), "甲·换道救活");
+  assert.equal(classifyStall({ transport: true, delivered: false, direct: "ran", recovered: false }), "甲");
   assert.equal(classifyStall({ delivered: true, rootPost: suspended, lazy: [["TodoPage", 9000]] }), "乙·懒加载");
   assert.equal(classifyStall({ delivered: true, rootPost: suspended, lazy: [] }), "乙·未知挂起源");
   // 挂起 lane 已被清、但没有排着的任务：同样是等 ping 的形状
@@ -117,17 +120,21 @@ test("isStorageSuspect：有错误名或库没开", () => {
 
 test("sessionMetrics：M1 比例、M3 只算 complete/cap 且 cap 缺值记 > 上限、hidden 单列、M4 错误名计数", () => {
   const sessions = [
-    { kind: "resume", stall: null, ttiMs: 80, syncMs: 900, endedBy: "complete", storageMs: 20, storageErr: null, dropped: 0, sync: { outcome: "identical" }, net: { connectMs: 200, ttfbMs: 300, xferMs: 10, reused: false } },
-    { kind: "resume", stall: "reload", ttiMs: null, syncMs: null, endedBy: "reload", storageMs: null, storageErr: "UnknownError", dropped: 1, sync: null, net: null },
-    { kind: "resume", stall: null, ttiMs: 60, syncMs: null, endedBy: "cap", storageMs: 30, storageErr: null, dropped: 0, sync: null, net: null },
+    { kind: "resume", stall: null, ttiMs: 80, syncMs: 900, endedBy: "complete", storageMs: 20, storageErr: null, dropped: 0, sync: { outcome: "identical" }, net: { connectMs: 200, ttfbMs: 300, xferMs: 10, reused: false }, transport: { rotations: 0, fallbacks: 0, deadPort: false, mode: "confirmed" } },
+    { kind: "resume", stall: "reload", ttiMs: null, syncMs: null, endedBy: "reload", storageMs: null, storageErr: "UnknownError", dropped: 1, sync: null, net: null, transport: { rotations: 2, fallbacks: 1, deadPort: true, mode: "degraded" } },
+    { kind: "resume", stall: null, ttiMs: 60, syncMs: null, endedBy: "cap", storageMs: 30, storageErr: null, dropped: 0, sync: null, net: null, transport: { rotations: 1, fallbacks: 0, deadPort: true, mode: "confirmed" } },
     { kind: "resume", stall: null, ttiMs: 50, syncMs: null, endedBy: "hidden", storageMs: 10, storageErr: null, dropped: 0, sync: null, net: null },
     { kind: "cold", stall: null, ttiMs: 400, syncMs: 1500, endedBy: "complete", storageMs: 40, storageErr: null, dropped: 2, sync: { outcome: "pull_only" }, net: null },
   ].map((detail, i) => withParsed(row("open_session", { id: `s${i}`, ...detail })));
 
   const m = sessionMetrics(sessions);
   assert.equal(m.sessions, 5);
-  assert.deepEqual(m.m1, { resumes: 4, reload: 1, held: 0, recovered: 0, rate: 0.25 });
+  assert.deepEqual(m.m1, { resumes: 4, reload: 1, held: 0, recovered: 0, rate: 0.25, deadPort: 2 });
   assert.equal(m.m2.resume.p50, 60);
+  // 信道账：换过道 / 兜底过的回前台单列；没带账的（旧包）不进两列
+  assert.deepEqual([m.m2.resumeSlowChannel.n, m.m2.resumeSlowChannel.p50], [1, 60]);
+  assert.deepEqual([m.m2.resumeCleanChannel.n, m.m2.resumeCleanChannel.p50], [1, 80]);
+  assert.equal(m.m2.resumeNoTransport, 1);
   assert.equal(m.m2.cold.p50, 400);
   assert.equal(m.m3.n, 3); // complete 900 / 1500 + cap 记为 Infinity
   assert.equal(m.m3.p90, Number.POSITIVE_INFINITY);
@@ -143,16 +150,17 @@ test("diagnose：只统计带诊断字段的记录，旧记录单列；未定过
     { outcome: "reload", delivered: false, direct: "none", paired: true, storageErr: "UnknownError" },
     { outcome: "reload", delivered: null, paired: false },
     { outcome: "reload", delivered: null, paired: false },
-    { outcome: "reload", hadPort: true, kicked: true }, // 旧记录：无 paired 字段
+    { outcome: "reload", delivered: null, transport: false }, // 阶段2 记录：钩子没装上
+    { outcome: "reload", hadPort: true, kicked: true }, // 旧记录：无 paired / transport 字段
   ].map((detail, i) => withParsed(row("scheduler_probe", { id: `p${i}`, ...detail })));
 
   const d = diagnose(probes);
-  assert.equal(d.withDiag, 3);
+  assert.equal(d.withDiag, 4);
   assert.equal(d.legacy, 1);
-  assert.deepEqual(d.classes, { 甲: 1, 未定: 2 });
+  assert.deepEqual(d.classes, { 甲: 1, 未定: 3 });
   assert.deepEqual(d.storageByClass, { 甲: 1 });
   assert.equal(d.undecidedMajority, true);
-  assert.equal(d.unpairedMajority, true);
+  assert.equal(d.uninstalledMajority, true);
 });
 
 test("buildReport：按 build · device 分组、剔除后台噪声、网络对照、数据质量", () => {
@@ -178,6 +186,8 @@ test("buildReport：按 build · device 分组、剔除后台噪声、网络对�
 
   const text = renderReport(report, { days: 7 });
   assert.match(text, /## M1 卡死率/);
+  assert.match(text, /死端口/);
+  assert.match(text, /信道慢过/);
   assert.match(text, /## 卡死诊断/);
   assert.match(text, /b2 · iOS/);
 });

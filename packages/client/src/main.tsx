@@ -11,11 +11,11 @@ import "./index.css";
 import { CaptureApp } from "./capture/CaptureApp.tsx";
 import { isCaptureWindow } from "./lib/desktop/shell.ts";
 import { runWhenIdle } from "./lib/recovery/idle.ts";
-import { installSchedulerPortTap } from "./lib/schedulerHostGuard.ts";
+import { installSchedulerTransportPolicy } from "./lib/schedulerTransport.ts";
 import { installResourceTimingCache } from "./sync/resourceTimingCache.ts";
 
-// 挂在 React 首次调度之前即可（渲染在下面才发生），与 import 求值顺序无关——原因见该模块注释。
-installSchedulerPortTap();
+// 接管 index.html 早期钩子装上的调度器信道：挂在 React 首次排队之前即可（渲染在下面才发生）。原因见该模块注释。
+installSchedulerTransportPolicy();
 // 同步请求的资源计时走观察者缓存：长驻页面的资源计时缓冲（250 条）早已写满，按需扫描读不到新条目。
 installResourceTimingCache();
 

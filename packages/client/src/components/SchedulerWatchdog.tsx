@@ -22,12 +22,13 @@ import { timeStorageProbe } from "../lib/recovery/storageTiming.ts";
 import { onSyncTimingRecorded } from "../sync/phaseTimings.ts";
 import {
   deliveredSince,
-  driveSchedulerDirectly,
-  hasSchedulerPort,
-  kickScheduler,
+  drainSchedulerTransport,
+  hasSchedulerTransport,
+  kickSchedulerTransport,
   pendingMessageMs,
   schedulerDeliveryState,
-} from "../lib/schedulerHostGuard.ts";
+  transportState,
+} from "../lib/schedulerTransport.ts";
 
 /**
  * 探针从发出到判定死锁的等待窗口。
@@ -45,7 +46,7 @@ export const SCHEDULER_PROBE_TIMEOUT_MS = 5000;
 export const SCHEDULER_KICK_GRACE_MS = 1000;
 
 /**
- * 补拍后等多久看信送没送到；没送到就绕过信道直驱（ios-instant-open 阶段1 design §2.6）。
+ * 补拍（换新信道 + 直排）后等多久看新信道送没送到；没送到就再直排一次（ios-instant-open 阶段1 design §2.6、阶段2 §3.3）。
  * 必须小于宽限：直驱与判定都在原 1 秒宽限之内完成，不延长用户可见的等待。
  */
 export const SCHEDULER_DIRECT_DRIVE_AFTER_MS = 250;
@@ -104,12 +105,11 @@ interface ArmedProbe {
 /** 一条 scheduler_probe 里由判定分支决定的字段。全部必填：漏传时 TS 当场报错（前身残留账 Q1）。 */
 interface ProbeVerdict {
   outcome: SchedulerProbeOutcome;
-  hadPort: boolean;
+  transport: boolean;
   kicked: boolean;
   recovered: boolean;
   visible: string;
   waitedMs: number;
-  paired: boolean;
   delivered: boolean | null;
   pendingMsgMs: number | null;
   direct: DirectDrive;
@@ -150,13 +150,14 @@ function armProbe(expected: number, trigger: ResumeSource | null, sessionId: str
 }
 
 /**
- * React 调度器死锁看门狗：每次回到前台发一枚 transition 探针，超时没落地就先补一拍、补拍没送到再直驱、
- * 仍不行才重载。
+ * React 调度器死锁看门狗：每次回到前台发一枚 transition 探针，超时没落地就先补一拍（换新信道 + 直排积压）、
+ * 新信道也没送到再直排一次，仍不行才重载。
  *
  * iOS 的 WKWebView 回前台后，走调度器的更新可能全部停摆（路由导航、liveQuery 回流），而点击里直接改 state
- * 照常生效——现场就是「弹层点得开、底栏 tab 点不动、数据写进去了但画面不刷」。2026-09 生产数据证实补拍
- * 发出去了却从未救活（ios-instant-open metaspec §0.2），病根在「信没送到」与「挂起的 transition 毒化整批」
- * 之间，本组件在超时时把两者分辨开要的现场全部记下（design §2）。
+ * 照常生效——现场就是「弹层点得开、底栏 tab 点不动、数据写进去了但画面不刷」。2026-09 生产数据判定为「甲」：
+ * 调度信道（一条 MessagePort）随 App 后台期间的网络进程断连被 WebKit 永久清空（ios-instant-open 阶段2 design §0.2）。
+ * 常态下换道由 `lib/schedulerTransport.ts` 在回前台那一刻自动完成，本组件是它失灵时的最后防线，
+ * 并把分辨甲 / 乙要的现场全部记下（阶段1 design §2）。
  *
  * **探针必须走 transition**：同步 setState 走微任务通道，那条根本没坏，探不出问题。
  *
@@ -289,9 +290,14 @@ export function SchedulerWatchdog({
     };
     const report = (verdict: ProbeVerdict) => {
       try {
+        const xport = transportState();
         stashPendingReport(
           buildSchedulerProbeReport({
             ...verdict,
+            gen: xport.gen,
+            mode: xport.mode,
+            fallbacks: xport.fallbacks,
+            deadPorts: xport.deadPorts,
             probes: armed.probes,
             maxGapMs: armed.heartbeat.maxGapMs(),
             sinceBootMs: Math.round(performance.now()),
@@ -323,12 +329,11 @@ export function SchedulerWatchdog({
           const state = schedulerDeliveryState();
           report({
             outcome: "late",
-            hadPort: hasSchedulerPort(),
+            transport: hasSchedulerTransport(),
             kicked: false,
             recovered: true,
             visible: document.visibilityState,
             waitedMs,
-            paired: state.paired,
             delivered: null,
             pendingMsgMs: pendingMessageMs(state, performance.now()),
             direct: "none",
@@ -341,31 +346,26 @@ export function SchedulerWatchdog({
         return;
       }
 
-      // 先读端口、送达状态与根快照，再补一拍。不可见也照补（前身拍板②）：补拍无害；补不出去也不早退。
-      const hadPort = hasSchedulerPort();
+      // 先读送达状态与根快照，再补一拍（换新信道 + 直排积压）。不可见也照补（前身拍板②）：补拍无害；补不出去也不早退。
+      const transport = hasSchedulerTransport();
       const before = schedulerDeliveryState();
       const pendingMsgMs = pendingMessageMs(before, performance.now());
       const rootPre = snapshotReactRoot();
       const kickAt = performance.now();
-      const kicked = kickScheduler();
+      const kicked = kickSchedulerTransport();
       let direct: DirectDrive = "none";
 
       armed.schedule(() => {
         if (firedRef.current) return;
         const state = schedulerDeliveryState();
-        if (!state.paired) {
+        if (!state.installed) {
           direct = "unavailable";
           return;
         }
-        if (deliveredSince(state, kickAt)) return; // 信送到了，不直驱：救没救活要能归到信道头上
-        // 同步驱，不用 driveSchedulerDirectly 默认的 setTimeout(task, 0)：那会让直驱比宽限判定多排一跳
-        // 宏任务，而定时器被整体冻住时（挂起恢复、主线程被长任务占住）两枚定时器都已到期、按到期时间
-        // 出队，判定就会跑在那一跳之前——本能无感救活的那次被判成 reload（终审 A1，verifier CONFIRMED）。
-        direct = driveSchedulerDirectly((task) => {
-          task();
-        })
-          ? "ran"
-          : "unavailable";
+        if (deliveredSince(state, kickAt)) return; // 新信道送到了，不直驱：救没救活要能归到信道头上
+        // 直排是同步的，不能再排一跳宏任务：定时器被整体冻住时（挂起恢复、主线程被长任务占住）多排的那一跳
+        // 会落在宽限判定之后，本能无感救活的那次被判成 reload（阶段1 终审 A1，verifier CONFIRMED）。
+        direct = drainSchedulerTransport() ? "ran" : "unavailable";
       }, SCHEDULER_DIRECT_DRIVE_AFTER_MS);
 
       armed.schedule(() => {
@@ -378,13 +378,12 @@ export function SchedulerWatchdog({
         const outcome: SchedulerProbeOutcome = recovered ? "recovered" : visible === "visible" ? "reload" : "held";
         report({
           outcome,
-          hadPort,
+          transport,
           kicked,
           recovered,
           visible,
           waitedMs,
-          paired: after.paired,
-          delivered: after.paired ? deliveredSince(after, kickAt) : null,
+          delivered: after.installed ? deliveredSince(after, kickAt) : null,
           pendingMsgMs,
           direct,
           rootPre,

@@ -17,7 +17,7 @@ describe("buildSchedulerProbeReport", () => {
   it("拼成 sync_logs 一行：action 固定、detail 是完整现场 JSON、record_count 为 0", () => {
     const input = fullInput({
       outcome: "held",
-      hadPort: true,
+      transport: true,
       kicked: true,
       recovered: false,
       visible: "hidden",
@@ -62,7 +62,7 @@ describe("bumpProbeCount", () => {
 function fullInput(overrides: Partial<SchedulerProbeInput> = {}): SchedulerProbeInput {
   return {
     outcome: "reload",
-    hadPort: true,
+    transport: true,
     kicked: true,
     recovered: false,
     visible: "visible",
@@ -76,10 +76,13 @@ function fullInput(overrides: Partial<SchedulerProbeInput> = {}): SchedulerProbe
     id: "k3j9x0a1bz",
     sessionId: "q8w7e6r5t4",
     build: "a1b2c3d4e5f6a7b8c9d0",
-    paired: true,
     delivered: false,
     pendingMsgMs: 5230,
     direct: "ran",
+    gen: 3,
+    mode: "degraded",
+    fallbacks: 2,
+    deadPorts: 1,
     rootPre: { p: 262400, s: 262144, pg: 0, cb: false, cpc: false },
     rootPost: { p: 262400, s: 262144, pg: 0, cb: false, cpc: false },
     lazy: [

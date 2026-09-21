@@ -1,5 +1,6 @@
 import type { SyncTimingEntry } from "../../sync/phaseTimings.js";
 import type { NetTiming } from "../../sync/resourceTimingCache.js";
+import type { TransportSnapshot } from "../schedulerTransport.js";
 import { type PendingReport, SYNC_LOG_DETAIL_MAX } from "./pendingReports.js";
 
 /**
@@ -26,6 +27,14 @@ export interface OpenSessionSync {
   protocol: string | null;
 }
 
+/** 会话内的调度信道账（阶段2 design §3.3）：换过几次道、兜底几次、是否命中过死端口，以及收尾时的策略状态。 */
+export interface OpenSessionTransport {
+  rotations: number;
+  fallbacks: number;
+  deadPort: boolean;
+  mode: string;
+}
+
 export interface OpenSessionRecord {
   id: string;
   build: string;
@@ -44,6 +53,8 @@ export interface OpenSessionRecord {
   /** 存储往返耗时（M4）；出错为 null。 */
   storageMs: number | null;
   storageErr: string | null;
+  /** 会话内信道增量；换道钩子没装上为 null。 */
+  transport: OpenSessionTransport | null;
   resumes: number;
   trigger: string | null;
   endedBy: OpenSessionEnd;
@@ -63,6 +74,8 @@ export interface OpenSessionDeps {
   takeDropped(): number;
   /** 发起不早于 `sinceMs`（performance.now 时基）的那次 /api/sync/status 的网络细分。 */
   netTiming(sinceMs: number): NetTiming | null;
+  /** 调度信道此刻的累计计数；begin 时记基线、收尾时做差。 */
+  transport(): TransportSnapshot | null;
   setTimer(fn: () => void, ms: number): unknown;
   clearTimer(handle: unknown): void;
 }
@@ -104,6 +117,7 @@ interface ActiveSession {
   storageDone: boolean;
   storageMs: number | null;
   storageErr: string | null;
+  transportBase: TransportSnapshot | null;
   timer: unknown;
 }
 
@@ -114,6 +128,10 @@ export function buildOpenSessionReport(record: OpenSessionRecord): PendingReport
     current = { ...current, net: null, trunc: true };
     detail = JSON.stringify(current);
   }
+  if (detail.length > SYNC_LOG_DETAIL_MAX && current.transport) {
+    current = { ...current, transport: null, trunc: true };
+    detail = JSON.stringify(current);
+  }
   if (detail.length > SYNC_LOG_DETAIL_MAX && current.sync) {
     current = { ...current, sync: { ...current.sync, phases: {} }, trunc: true };
     detail = JSON.stringify(current);
@@ -121,8 +139,28 @@ export function buildOpenSessionReport(record: OpenSessionRecord): PendingReport
   return { action: "open_session", detail, record_count: 0 };
 }
 
+/** 只记会话内的增量：页面级累计值对「这一次打开」没有意义，且会随页面存活时间无限涨。 */
+function transportDelta(base: TransportSnapshot | null, now: TransportSnapshot | null): OpenSessionTransport | null {
+  if (!now || !now.installed) return null;
+  const from = base && base.installed ? base : { rotations: 0, fallbacks: 0, deadPorts: 0 };
+  return {
+    rotations: Math.max(0, now.rotations - from.rotations),
+    fallbacks: Math.max(0, now.fallbacks - from.fallbacks),
+    deadPort: now.deadPorts > from.deadPorts,
+    mode: now.mode,
+  };
+}
+
 export function createOpenSessionTracker(deps: OpenSessionDeps): OpenSessionTracker {
   let active: ActiveSession | null = null;
+
+  function safeTransport(): TransportSnapshot | null {
+    try {
+      return deps.transport();
+    } catch {
+      return null;
+    }
+  }
 
   function finalize(by: OpenSessionEnd): void {
     const session = active;
@@ -144,6 +182,7 @@ export function createOpenSessionTracker(deps: OpenSessionDeps): OpenSessionTrac
           net: session.net,
           storageMs: session.storageMs,
           storageErr: session.storageErr,
+          transport: transportDelta(session.transportBase, safeTransport()),
           resumes: session.resumes,
           trigger: session.trigger,
           endedBy: by,
@@ -183,6 +222,7 @@ export function createOpenSessionTracker(deps: OpenSessionDeps): OpenSessionTrac
         storageDone: false,
         storageMs: null,
         storageErr: null,
+        transportBase: safeTransport(),
         timer: null,
       };
       active = session;

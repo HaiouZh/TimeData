@@ -1,5 +1,6 @@
 import { latestNetTimingSince } from "../../sync/resourceTimingCache.js";
 import { CURRENT_BUILD_ID } from "../frontendUpdate.js";
+import { transportState } from "../schedulerTransport.js";
 import { createOpenSessionTracker } from "./openSession.js";
 import { stashPendingReport, takeDroppedReportCount } from "./pendingReports.js";
 import { newReportId } from "./reportId.js";
@@ -15,6 +16,7 @@ export const openSessions = createOpenSessionTracker({
   },
   takeDropped: () => takeDroppedReportCount(),
   netTiming: (sinceMs) => latestNetTimingSince("status", sinceMs),
+  transport: () => transportState(),
   setTimer: (fn, ms) => setTimeout(fn, ms),
   clearTimer: (handle) => {
     clearTimeout(handle as ReturnType<typeof setTimeout>);

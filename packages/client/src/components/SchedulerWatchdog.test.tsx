@@ -17,17 +17,38 @@ vi.mock("../hooks/useAppResumeRefresh.ts", () => ({
 
 // 补拍能否发出由调度器端口是否被记到决定，这里直接控制它，好把「补拍救回来」与
 // 「补拍也没救回来」两条分支分开钉。送达判定的两个纯函数用真实实现。
-const kickScheduler = vi.hoisted(() => vi.fn(() => true));
-const hasSchedulerPort = vi.hoisted(() => vi.fn(() => true));
+const kickSchedulerTransport = vi.hoisted(() => vi.fn(() => true));
+const hasSchedulerTransport = vi.hoisted(() => vi.fn(() => true));
 const schedulerDeliveryState = vi.hoisted(() =>
-  vi.fn(() => ({ paired: true, lastPostedAt: 0 as number | null, lastDeliveredAt: null as number | null })),
+  vi.fn(() => ({ installed: true, lastPostedAt: 0 as number | null, lastDeliveredAt: null as number | null })),
 );
-const driveSchedulerDirectly = vi.hoisted(() =>
-  vi.fn((_schedule?: (task: () => void) => void): boolean => true),
+const drainSchedulerTransport = vi.hoisted(() => vi.fn((): boolean => true));
+const transportState = vi.hoisted(() =>
+  vi.fn(() => ({
+    installed: true,
+    mode: "degraded" as const,
+    gen: 2,
+    rotations: 1,
+    fallbacks: 0,
+    deadPorts: 1,
+    posted: 5,
+    delivered: 4,
+    ran: 5,
+    queued: 0,
+    lastPostedAt: 0 as number | null,
+    lastDeliveredAt: null as number | null,
+  })),
 );
-vi.mock("../lib/schedulerHostGuard.ts", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("../lib/schedulerHostGuard.ts")>();
-  return { ...actual, kickScheduler, hasSchedulerPort, schedulerDeliveryState, driveSchedulerDirectly };
+vi.mock("../lib/schedulerTransport.ts", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../lib/schedulerTransport.ts")>();
+  return {
+    ...actual,
+    kickSchedulerTransport,
+    hasSchedulerTransport,
+    schedulerDeliveryState,
+    drainSchedulerTransport,
+    transportState,
+  };
 });
 
 const stashPendingReport = vi.hoisted(() => vi.fn());
@@ -123,18 +144,18 @@ beforeEach(() => {
   lastHidden.hiddenMsSinceInMemory.mockReturnValue(42_000);
   lastHidden.hiddenMsSincePersisted.mockReturnValue(null);
   resume = null;
-  kickScheduler.mockReset();
-  kickScheduler.mockReturnValue(true);
-  hasSchedulerPort.mockReset();
-  hasSchedulerPort.mockReturnValue(true);
+  kickSchedulerTransport.mockReset();
+  kickSchedulerTransport.mockReturnValue(true);
+  hasSchedulerTransport.mockReset();
+  hasSchedulerTransport.mockReturnValue(true);
   stashPendingReport.mockReset();
   markReload.mockReset();
   timeStorageProbe.mockReset();
   timeStorageProbe.mockImplementation(() => Promise.resolve({ ms: 12, errorName: null }));
   schedulerDeliveryState.mockReset();
-  schedulerDeliveryState.mockImplementation(() => ({ paired: true, lastPostedAt: 0, lastDeliveredAt: null }));
-  driveSchedulerDirectly.mockReset();
-  driveSchedulerDirectly.mockReturnValue(true);
+  schedulerDeliveryState.mockImplementation(() => ({ installed: true, lastPostedAt: 0, lastDeliveredAt: null }));
+  drainSchedulerTransport.mockReset();
+  drainSchedulerTransport.mockReturnValue(true);
   snapshotReactRoot.mockReset();
   snapshotReactRoot.mockReturnValue(null);
   snapshotInFlightLazy.mockReset();
@@ -179,7 +200,7 @@ describe("SchedulerWatchdog", () => {
     resume?.();
     vi.advanceTimersByTime(TIMEOUT_MS);
 
-    expect(kickScheduler).toHaveBeenCalledTimes(1);
+    expect(kickSchedulerTransport).toHaveBeenCalledTimes(1);
     expect(onDeadlock).not.toHaveBeenCalled();
     await unmount(root);
   });
@@ -207,7 +228,7 @@ describe("SchedulerWatchdog", () => {
 
     resume?.();
     vi.advanceTimersByTime(TIMEOUT_MS);
-    expect(kickScheduler).toHaveBeenCalledTimes(1);
+    expect(kickSchedulerTransport).toHaveBeenCalledTimes(1);
 
     // 补拍奏效 = 积压被冲干净、探针这时才落地。用 act 把挂起的 transition 放行来模拟。
     await act(async () => {});
@@ -242,7 +263,7 @@ describe("SchedulerWatchdog", () => {
     resume?.();
     vi.advanceTimersByTime(TIMEOUT_MS * 3);
 
-    expect(kickScheduler).toHaveBeenCalledTimes(1);
+    expect(kickSchedulerTransport).toHaveBeenCalledTimes(1);
     expect(onDeadlock).toHaveBeenCalledTimes(1);
     await unmount(root);
   });
@@ -270,7 +291,7 @@ describe("SchedulerWatchdog", () => {
 
     resume?.();
     vi.advanceTimersByTime(TIMEOUT_MS);
-    expect(kickScheduler).toHaveBeenCalledTimes(1); // 真闸：把 kick 挪进可见分支就红
+    expect(kickSchedulerTransport).toHaveBeenCalledTimes(1); // 真闸：把 kick 挪进可见分支就红
     vi.advanceTimersByTime(GRACE_MS);
 
     expect(onDeadlock).not.toHaveBeenCalled();
@@ -280,7 +301,7 @@ describe("SchedulerWatchdog", () => {
     // firedRef 没置位：再来一次 resume，看门狗仍会补拍
     resume?.();
     vi.advanceTimersByTime(TIMEOUT_MS);
-    expect(kickScheduler).toHaveBeenCalledTimes(2);
+    expect(kickSchedulerTransport).toHaveBeenCalledTimes(2);
     await unmount(root);
   });
 
@@ -298,14 +319,14 @@ describe("SchedulerWatchdog", () => {
 
     expect(onDeadlock).not.toHaveBeenCalled();
     expect(markReload).not.toHaveBeenCalled();
-    expect(lastProbeDetail()).toMatchObject({ outcome: "recovered", recovered: true, kicked: true, hadPort: true });
+    expect(lastProbeDetail()).toMatchObject({ outcome: "recovered", recovered: true, kicked: true, transport: true });
     await unmount(root);
   });
 
   // 真闸：恢复现状的 giveUp() 早退就红——补拍没发出去不代表调度器一定死了。
   it("补拍发不出去 → 照走宽限窗口，宽限内落地就不重载", async () => {
-    kickScheduler.mockReturnValue(false);
-    hasSchedulerPort.mockReturnValue(false);
+    kickSchedulerTransport.mockReturnValue(false);
+    hasSchedulerTransport.mockReturnValue(false);
     const onDeadlock = vi.fn();
     const { root } = await renderDom(
       createElement(SchedulerWatchdog, { onDeadlock, timeoutMs: TIMEOUT_MS, kickGraceMs: GRACE_MS }),
@@ -318,13 +339,13 @@ describe("SchedulerWatchdog", () => {
     vi.advanceTimersByTime(GRACE_MS);
 
     expect(onDeadlock).not.toHaveBeenCalled();
-    expect(lastProbeDetail()).toMatchObject({ outcome: "recovered", hadPort: false, kicked: false });
+    expect(lastProbeDetail()).toMatchObject({ outcome: "recovered", transport: false, kicked: false });
     await unmount(root);
   });
 
-  it("补拍发不出去且宽限后仍没落地 → 才重载，现场记 hadPort:false / kicked:false", async () => {
-    kickScheduler.mockReturnValue(false);
-    hasSchedulerPort.mockReturnValue(false);
+  it("补拍发不出去且宽限后仍没落地 → 才重载，现场记 transport:false / kicked:false", async () => {
+    kickSchedulerTransport.mockReturnValue(false);
+    hasSchedulerTransport.mockReturnValue(false);
     const onDeadlock = vi.fn();
     const { root } = await renderDom(
       createElement(SchedulerWatchdog, { onDeadlock, timeoutMs: TIMEOUT_MS, kickGraceMs: GRACE_MS }),
@@ -337,7 +358,7 @@ describe("SchedulerWatchdog", () => {
     expect(markReload).toHaveBeenCalledWith("watchdog", expect.any(Number));
     expect(lastProbeDetail()).toMatchObject({
       outcome: "reload",
-      hadPort: false,
+      transport: false,
       kicked: false,
       recovered: false,
       visible: "visible",
@@ -411,7 +432,7 @@ describe("SchedulerWatchdog", () => {
     vi.setSystemTime(Date.now() + TIMEOUT_MS * 4); // 挂钟走了 20 秒定时器才跑——线程被冻过
     vi.advanceTimersByTime(TIMEOUT_MS);
 
-    expect(kickScheduler).not.toHaveBeenCalled();
+    expect(kickSchedulerTransport).not.toHaveBeenCalled();
     expect(onDeadlock).not.toHaveBeenCalled();
     expect(markReload).not.toHaveBeenCalled();
     expect(lastProbeDetail()).toMatchObject({ outcome: "late", recovered: true, kicked: false });
@@ -428,7 +449,7 @@ describe("SchedulerWatchdog", () => {
 
     resume?.();
     vi.advanceTimersByTime(TIMEOUT_MS);
-    expect(kickScheduler).toHaveBeenCalledTimes(1);
+    expect(kickSchedulerTransport).toHaveBeenCalledTimes(1);
     setVisibility("hidden"); // 补完拍、宽限还没走完，用户切走了
     vi.advanceTimersByTime(GRACE_MS);
 
@@ -449,7 +470,7 @@ describe("SchedulerWatchdog", () => {
     vi.advanceTimersByTime(2000);
     resume?.(); // 挂着期间第二条恢复事件
     vi.advanceTimersByTime(TIMEOUT_MS - 2000);
-    expect(kickScheduler).toHaveBeenCalledTimes(1);
+    expect(kickSchedulerTransport).toHaveBeenCalledTimes(1);
     resume?.(); // 宽限期内第三条
     vi.advanceTimersByTime(GRACE_MS);
 
@@ -540,23 +561,23 @@ describe("SchedulerWatchdog", () => {
   });
 
   // 逃逸变异：去掉「已送达就不直驱」→ 送达了也直驱，报告里分不清是信道还是直驱救的。
-  it("补拍后未送达且已配对 → 250ms 直驱，现场记 delivered:false / direct:ran", async () => {
+  it("补拍后新信道未送达且钩子在 → 250ms 直排，现场记 delivered:false / direct:ran", async () => {
     const { root } = await renderDom(
       createElement(SchedulerWatchdog, { onDeadlock: vi.fn(), timeoutMs: TIMEOUT_MS, kickGraceMs: GRACE_MS }),
     );
     resume?.();
     vi.advanceTimersByTime(TIMEOUT_MS);
-    expect(driveSchedulerDirectly).not.toHaveBeenCalled();
+    expect(drainSchedulerTransport).not.toHaveBeenCalled();
     vi.advanceTimersByTime(SCHEDULER_DIRECT_DRIVE_AFTER_MS);
-    expect(driveSchedulerDirectly).toHaveBeenCalledTimes(1);
+    expect(drainSchedulerTransport).toHaveBeenCalledTimes(1);
     vi.advanceTimersByTime(GRACE_MS - SCHEDULER_DIRECT_DRIVE_AFTER_MS);
-    expect(lastProbeDetail()).toMatchObject({ paired: true, delivered: false, direct: "ran" });
+    expect(lastProbeDetail()).toMatchObject({ transport: true, delivered: false, direct: "ran" });
     await unmount(root);
   });
 
   it("补拍已送达 → 不直驱，记 delivered:true / direct:none", async () => {
     schedulerDeliveryState.mockImplementation(() => ({
-      paired: true,
+      installed: true,
       lastPostedAt: 0,
       lastDeliveredAt: Number.MAX_SAFE_INTEGER,
     }));
@@ -565,20 +586,20 @@ describe("SchedulerWatchdog", () => {
     );
     resume?.();
     vi.advanceTimersByTime(TIMEOUT_MS + GRACE_MS);
-    expect(driveSchedulerDirectly).not.toHaveBeenCalled();
+    expect(drainSchedulerTransport).not.toHaveBeenCalled();
     expect(lastProbeDetail()).toMatchObject({ delivered: true, direct: "none" });
     await unmount(root);
   });
 
-  it("未配对 → 不直驱，记 paired:false / delivered:null / direct:unavailable", async () => {
-    schedulerDeliveryState.mockImplementation(() => ({ paired: false, lastPostedAt: null, lastDeliveredAt: null }));
+  it("钩子没装上 → 不直驱，记 delivered:null / direct:unavailable", async () => {
+    schedulerDeliveryState.mockImplementation(() => ({ installed: false, lastPostedAt: null, lastDeliveredAt: null }));
     const { root } = await renderDom(
       createElement(SchedulerWatchdog, { onDeadlock: vi.fn(), timeoutMs: TIMEOUT_MS, kickGraceMs: GRACE_MS }),
     );
     resume?.();
     vi.advanceTimersByTime(TIMEOUT_MS + GRACE_MS);
-    expect(driveSchedulerDirectly).not.toHaveBeenCalled();
-    expect(lastProbeDetail()).toMatchObject({ paired: false, delivered: null, pendingMsgMs: null, direct: "unavailable" });
+    expect(drainSchedulerTransport).not.toHaveBeenCalled();
+    expect(lastProbeDetail()).toMatchObject({ delivered: null, pendingMsgMs: null, direct: "unavailable" });
     await unmount(root);
   });
 
@@ -600,7 +621,7 @@ describe("SchedulerWatchdog", () => {
     const detail = lastProbeDetail();
     expect(detail).toEqual({
       outcome: "reload",
-      hadPort: true,
+      transport: true,
       kicked: true,
       recovered: false,
       visible: "visible",
@@ -614,10 +635,13 @@ describe("SchedulerWatchdog", () => {
       id: "rid0000001",
       sessionId: null,
       build: "test-build",
-      paired: true,
       delivered: false,
       pendingMsgMs: expect.any(Number),
       direct: "ran",
+      gen: 2,
+      mode: "degraded",
+      fallbacks: 0,
+      deadPorts: 1,
       rootPre: pre,
       rootPost: post,
       lazy: [["TodoPage", 5300]],
@@ -652,7 +676,7 @@ describe("SchedulerWatchdog", () => {
     vi.advanceTimersByTime(TIMEOUT_MS);
     await unmount(root);
     vi.advanceTimersByTime(GRACE_MS * 2);
-    expect(driveSchedulerDirectly).not.toHaveBeenCalled();
+    expect(drainSchedulerTransport).not.toHaveBeenCalled();
     expect(onDeadlock).not.toHaveBeenCalled();
     expect(stashPendingReport).not.toHaveBeenCalled();
   });
@@ -674,22 +698,16 @@ describe("SchedulerWatchdog", () => {
 
   // ↓↓↓ 终审修复波：三条 verifier CONFIRMED 的缺陷，各自一条闸 ↓↓↓
 
-  it("A1 直驱同步调——不再多排一跳宏任务，定时器被冻住时判定抢不到它前面", async () => {
+  it("A1 直排当场完成——不再多排一跳宏任务，定时器被冻住时判定抢不到它前面", async () => {
     const { root } = await renderDom(
       createElement(SchedulerWatchdog, { onDeadlock: vi.fn(), timeoutMs: TIMEOUT_MS, kickGraceMs: GRACE_MS }),
     );
     resume?.();
     vi.advanceTimersByTime(TIMEOUT_MS + SCHEDULER_DIRECT_DRIVE_AFTER_MS);
-    expect(driveSchedulerDirectly).toHaveBeenCalledTimes(1);
-    const schedule = driveSchedulerDirectly.mock.calls[0][0];
-    expect(typeof schedule).toBe("function");
-    // 传进去的 schedule 必须当场把任务跑完。默认的 setTimeout(task, 0) 会让它落到下一跳宏任务，
+    expect(drainSchedulerTransport).toHaveBeenCalledTimes(1);
+    // 直排是同步调用；此刻只许挂着宽限与心跳两枚定时器。多出一枚就是把直排推到了下一跳宏任务，
     // 而两枚定时器都已到期时浏览器按到期时间出队，宽限判定就跑在那一跳之前。
-    const pendingBefore = vi.getTimerCount();
-    const task = vi.fn();
-    schedule?.(task);
-    expect(task).toHaveBeenCalledTimes(1);
-    expect(vi.getTimerCount()).toBe(pendingBefore); // 没有多排一枚定时器
+    expect(vi.getTimerCount()).toBe(2);
     await unmount(root);
   });
 
@@ -720,16 +738,16 @@ describe("SchedulerWatchdog", () => {
 
     // 复位时刻之前：仍然只重载一次，再来的恢复事件被吞掉
     vi.advanceTimersByTime(SCHEDULER_RELOAD_ABORT_MS - 1);
-    kickScheduler.mockClear();
+    kickSchedulerTransport.mockClear();
     resume?.();
     vi.advanceTimersByTime(TIMEOUT_MS + GRACE_MS);
-    expect(kickScheduler).not.toHaveBeenCalled();
+    expect(kickSchedulerTransport).not.toHaveBeenCalled();
 
     // 过了复位时刻：看门狗回来了，下一次卡死照样补拍
     vi.advanceTimersByTime(1);
     resume?.();
     vi.advanceTimersByTime(TIMEOUT_MS);
-    expect(kickScheduler).toHaveBeenCalledTimes(1);
+    expect(kickSchedulerTransport).toHaveBeenCalledTimes(1);
     await unmount(root);
   });
 
@@ -782,7 +800,7 @@ describe("SchedulerWatchdog · 打开会话接线（ios-instant-open 阶段1 §3
     );
     vi.advanceTimersByTime(TIMEOUT_MS * 10);
     expect(localStorage.getItem(STORAGE_KEYS.schedulerProbes)).toBeNull();
-    expect(kickScheduler).not.toHaveBeenCalled();
+    expect(kickSchedulerTransport).not.toHaveBeenCalled();
     expect(onDeadlock).not.toHaveBeenCalled();
     expect(markReload).not.toHaveBeenCalled();
     expect(stashPendingReport).not.toHaveBeenCalled();

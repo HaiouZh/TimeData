@@ -2,6 +2,7 @@ import { STORAGE_KEYS } from "../storageKeys.js";
 import { type RecoveryKV, defaultRecoveryKV } from "./kv.js";
 import type { PendingReport } from "./pendingReports.js";
 import { SYNC_LOG_DETAIL_MAX } from "./pendingReports.js";
+import type { TransportMode } from "../schedulerTransport.js";
 import type { ReactRootSnapshot } from "./reactRootProbe.js";
 
 /**
@@ -13,13 +14,15 @@ import type { ReactRootSnapshot } from "./reactRootProbe.js";
  */
 export type SchedulerProbeOutcome = "recovered" | "reload" | "held" | "late";
 
-/** 直驱救援：none = 补拍已送达无需直驱；ran = 补拍未送达、已直驱；unavailable = 未配对到调度器处理函数。 */
+/** 直驱救援：none = 补拍已送达无需直驱；ran = 补拍未送达、已直排积压；unavailable = 换道钩子没装上。 */
 export type DirectDrive = "none" | "ran" | "unavailable";
 
 /** 一次判定的完整现场。字段含义与分辨哪条假说见 design §2.1 / §0.4。只有数字与标签，不含内容数据。 */
 export interface SchedulerProbeInput {
   outcome: SchedulerProbeOutcome;
-  hadPort: boolean;
+  /** index.html 的换道钩子是否装上（scheduler 走我们的信道）。false 时补拍 / 直驱都无从下手。 */
+  transport: boolean;
+  /** 是否补了拍（阶段2 起 = 强制换新信道并直排积压）。 */
   kicked: boolean;
   /** 判定那一刻探针是否已落地。late 时恒 true（落地了，只是定时器迟到）——它不是「补拍救回来了」的同义词，那要看 kicked && recovered。 */
   recovered: boolean;
@@ -45,13 +48,19 @@ export interface SchedulerProbeInput {
   sessionId: string | null;
   /** CURRENT_BUILD_ID，版本前后对比用。 */
   build: string;
-  /** index.html 内联钩子是否配对到调度器 port1（ios-instant-open 阶段1 §2.1）。 */
-  paired: boolean;
-  /** 补拍后到宽限结束，调度器处理函数是否经信道被调用过；未配对为 null。false = 甲。 */
+  /** 补拍后到宽限结束，信道是否送达过（wake）；未安装为 null。false = 甲。 */
   delivered: boolean | null;
-  /** 超时那刻「最后一次排队之后再没投递」已持续的毫秒；投递晚于排队为 0；未配对为 null。 */
+  /** 超时那刻「最后一次排队之后再没送达」已持续的毫秒；送达晚于排队为 0；未安装为 null。 */
   pendingMsgMs: number | null;
   direct: DirectDrive;
+  /** 判定时的信道代数（换过几次就是几）。 */
+  gen: number;
+  /** 判定时的策略状态（阶段2 design §3.2）。 */
+  mode: TransportMode;
+  /** 本页面累计：兜底到点信道没送达的次数。 */
+  fallbacks: number;
+  /** 本页面累计：回前台发现 port1.onmessage 被清空的次数——WebKit 断连的直接证据。 */
+  deadPorts: number;
   /** 补拍前的 React 根快照。 */
   rootPre: ReactRootSnapshot | null;
   /** 宽限结束时的 React 根快照（late 为超时那刻）。transition lane 仍挂起 = 乙。 */

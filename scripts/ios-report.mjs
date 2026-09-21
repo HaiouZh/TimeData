@@ -143,13 +143,16 @@ export function isBackgroundNoise(probe) {
 
 /**
  * 卡死分叉判定（design §2.8）。顺序即判据，别调换：
- * - `delivered === false` → 信道没把补拍送回来，是「甲」；补拍后直驱跑起来且救活了，另记一档。
+ * - `delivered === false` → 信道没把补拍送回来，是「甲」；救活了另记一档——阶段2 起补拍 = 换新信道 + 直排，
+ *   记「甲·换道救活」；阶段1 的记录（有 `paired` 无 `transport`）按直驱口径记「甲·直驱救活」。
  * - `delivered === true` 而根上还挂着 transition lane、且没有排着的回调 → 消息送到了、React 自己在等，是「乙」。
  * - 其余一律「未定」，包括没有诊断字段的旧记录——**不许往两边硬凑**，未定过半本身就是结论（design §2.8 的证伪条件）。
  */
 export function classifyStall(probe) {
   if (probe?.delivered === false) {
-    return probe.direct === "ran" && probe.recovered === true ? "甲·直驱救活" : "甲";
+    if (probe.recovered !== true) return "甲";
+    if ("transport" in probe) return "甲·换道救活";
+    return probe.direct === "ran" ? "甲·直驱救活" : "甲";
   }
   if (probe?.delivered === true) {
     const root = probe.rootPost;
@@ -190,12 +193,24 @@ export function sessionMetrics(rows) {
   }
   const errTotal = Object.values(errNames).reduce((a, b) => a + b, 0);
 
+  // 阶段2 的信道账：回前台里信道「慢过」（兜底或换过道）与「正常」的 M2 分开看——慢会话若集中在慢过那一列，
+  // 慢的就是信道；反之慢的在 React 自己身上（design §6 F3）。deadPort 是根因命中数（§6 F1）。
+  const transportOf = (s) => (s.transport && typeof s.transport === "object" ? s.transport : null);
+  const channelSlow = (t) => t.fallbacks > 0 || t.rotations > 0;
+  const withTransport = resumes.filter((s) => transportOf(s) !== null);
+  const slowChannel = withTransport.filter((s) => channelSlow(transportOf(s)));
+  const cleanChannel = withTransport.filter((s) => !channelSlow(transportOf(s)));
+  const deadPort = resumes.filter((s) => transportOf(s)?.deadPort === true).length;
+
   return {
     sessions: all.length,
-    m1: { resumes: resumes.length, reload, held, recovered, rate: resumes.length ? (reload + held) / resumes.length : null },
+    m1: { resumes: resumes.length, reload, held, recovered, rate: resumes.length ? (reload + held) / resumes.length : null, deadPort },
     m2: {
       resume: statsOf(resumes.map((s) => s.ttiMs)),
       cold: statsOf(all.filter((s) => s.kind === "cold").map((s) => s.ttiMs)),
+      resumeSlowChannel: statsOf(slowChannel.map((s) => s.ttiMs)),
+      resumeCleanChannel: statsOf(cleanChannel.map((s) => s.ttiMs)),
+      resumeNoTransport: resumes.length - withTransport.length,
     },
     m3: {
       ...statsOf(syncValues),
@@ -214,13 +229,16 @@ export function sessionMetrics(rows) {
   };
 }
 
+/** 带分叉诊断字段的记录：阶段1 的 `paired`（配对钩子）或阶段2 的 `transport`（换道钩子）。 */
+const hasDiag = (p) => Boolean(p) && ("transport" in p || "paired" in p);
+
 /**
- * 甲乙丙分布。**只统计带 `paired` 字段的记录**：阶段1 之前的 scheduler_probe 没有任何分叉信息，
+ * 甲乙丙分布。**只统计带诊断字段的记录**：阶段1 之前的 scheduler_probe 没有任何分叉信息，
  * 把它们摊进分母只会让每一类看起来都很小。旧记录单独报条数，好知道数据还要等多久才够看。
  */
 export function diagnose(rows) {
   const probes = rows.map((r) => r.parsed).filter((p) => p && typeof p.outcome === "string");
-  const withDiag = probes.filter((p) => "paired" in p);
+  const withDiag = probes.filter(hasDiag);
   const classes = {};
   const storageByClass = {};
   for (const p of withDiag) {
@@ -229,14 +247,14 @@ export function diagnose(rows) {
     if (isStorageSuspect(p)) storageByClass[cls] = (storageByClass[cls] ?? 0) + 1;
   }
   const undecided = classes["未定"] ?? 0;
-  const unpaired = withDiag.filter((p) => p.paired === false).length;
+  const uninstalled = withDiag.filter((p) => p.transport === false || p.paired === false).length;
   return {
     withDiag: withDiag.length,
     legacy: probes.length - withDiag.length,
     classes,
     storageByClass,
     undecidedMajority: withDiag.length > 0 && undecided * 2 > withDiag.length,
-    unpairedMajority: withDiag.length > 0 && unpaired * 2 > withDiag.length,
+    uninstalledMajority: withDiag.length > 0 && uninstalled * 2 > withDiag.length,
   };
 }
 
@@ -280,7 +298,7 @@ export function dataQuality(kept, removed, noise) {
     total: kept.length,
     duplicates: removed,
     backgroundNoise: noise,
-    legacy: probes.filter((r) => !("paired" in (r.parsed ?? {}))).length,
+    legacy: probes.filter((r) => !hasDiag(r.parsed)).length,
     dropped: kept
       .filter((r) => r.action === "open_session")
       .reduce((sum, r) => sum + (typeof r.parsed?.dropped === "number" ? r.parsed.dropped : 0), 0),
@@ -333,17 +351,27 @@ export function renderReport(report, { days }) {
   out.push(`# iOS 打开体验报告（最近 ${days} 天）`, "");
 
   out.push("## M1 卡死率（回前台后没能自己好）", "");
-  out.push("| 构建 · 设备 | 回前台 | 重载 | 一直卡 | 自愈 | 卡死率 |", "| --- | --- | --- | --- | --- | --- |");
+  out.push(
+    "| 构建 · 设备 | 回前台 | 重载 | 一直卡 | 自愈 | 卡死率 | 死端口 |",
+    "| --- | --- | --- | --- | --- | --- | --- |",
+  );
   for (const g of report.groups) {
-    out.push(`| ${g.key} | ${g.m1.resumes} | ${g.m1.reload} | ${g.m1.held} | ${g.m1.recovered} | ${fmtPct(g.m1.rate)} |`);
+    out.push(
+      `| ${g.key} | ${g.m1.resumes} | ${g.m1.reload} | ${g.m1.held} | ${g.m1.recovered} | ${fmtPct(g.m1.rate)} | ${g.m1.deadPort} |`,
+    );
   }
   out.push("");
 
   out.push("## M2 打开到能点", "");
-  out.push("| 构建 · 设备 | 回前台 n | p50 | p90 | 冷启 n | p50 | p90 |", "| --- | --- | --- | --- | --- | --- | --- |");
+  out.push(
+    "| 构建 · 设备 | 回前台 n | p50 | p90 | 信道慢过 n | p90 | 信道正常 n | p90 | 无信道账 | 冷启 n | p50 | p90 |",
+    "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |",
+  );
   for (const g of report.groups) {
     out.push(
       `| ${g.key} | ${g.m2.resume.n} | ${fmtMs(g.m2.resume.p50)} | ${fmtMs(g.m2.resume.p90)} |` +
+        ` ${g.m2.resumeSlowChannel.n} | ${fmtMs(g.m2.resumeSlowChannel.p90)} |` +
+        ` ${g.m2.resumeCleanChannel.n} | ${fmtMs(g.m2.resumeCleanChannel.p90)} | ${g.m2.resumeNoTransport} |` +
         ` ${g.m2.cold.n} | ${fmtMs(g.m2.cold.p50)} | ${fmtMs(g.m2.cold.p90)} |`,
     );
   }
@@ -372,7 +400,7 @@ export function renderReport(report, { days }) {
   for (const d of report.diagnosis) {
     const hints = [];
     if (d.undecidedMajority) hints.push("未定过半：甲乙都没被证实，回去看 design §2.8 的证伪条件");
-    if (d.unpairedMajority) hints.push("未配对过半：早期钩子没生效，诊断字段整体不可信");
+    if (d.uninstalledMajority) hints.push("钩子没装上过半：index.html 早期钩子没生效，诊断字段整体不可信");
     out.push(
       `| ${d.key} | ${d.withDiag} | ${fmtCounts(d.classes)} | ${fmtCounts(d.storageByClass)} | ${d.legacy} |` +
         ` ${hints.length ? hints.join("；") : "—"} |`,
