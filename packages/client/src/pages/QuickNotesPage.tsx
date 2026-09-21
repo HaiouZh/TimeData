@@ -25,7 +25,9 @@ import {
 } from "react";
 import { useNavigate, useSearchParams } from "react-router";
 import { Icon } from "../components/Icon.js";
-import { KeyboardDock, useKeyboardNavCollapse } from "../components/KeyboardDock.tsx";
+import { KeyboardDock, KeyboardNavCollapse } from "../components/KeyboardDock.tsx";
+import { KeyboardInsetPad } from "../components/KeyboardInsetPad.tsx";
+import { KeyboardInsetSlot } from "../components/KeyboardInsetSlot.tsx";
 import { ActionToastBar } from "../components/ui/ActionToastBar.tsx";
 import { DateField } from "../components/ui/DateField.js";
 import { EmptyState } from "../components/ui/EmptyState.js";
@@ -33,12 +35,11 @@ import { LoadingState } from "../components/ui/LoadingState.js";
 import { StatusBanner } from "../components/ui/StatusBanner.js";
 import { BOTTOM_NAV_HEIGHT_PX, useBottomNav } from "../contexts/BottomNavContext.tsx";
 import { useActionToast } from "../hooks/useActionToast.ts";
+import type { BottomInsetInput } from "../hooks/useBottomInset.ts";
 import { useConfirm } from "../hooks/useConfirm.tsx";
 import { useDebouncedValue } from "../hooks/useDebouncedValue.ts";
 import { useEntryMutations } from "../hooks/useEntries.js";
-import { useKeyboardHeight, useKeyboardHeightSettled, useKeyboardVisible } from "../hooks/useKeyboardHeight.ts";
 import { useLongPress } from "../hooks/useLongPress.ts";
-import { composeBottomInset } from "../lib/bottomInset.ts";
 import { focusOnPointerDown } from "../lib/fastFocus.ts";
 import { hapticDestructive } from "../lib/haptics.ts";
 import { punchNow } from "../lib/punch.js";
@@ -163,10 +164,6 @@ export default function QuickNotesPage() {
   const [pinnedOpen, setPinnedOpen] = useState(false);
   // 宽屏（≥1024px）回车发送；窄屏（手机）回车交给 textarea 默认换行，靠「记录」按钮发送。
   const isWideScreen = useIsWideScreen();
-  const keyboardHeight = useKeyboardHeight();
-  // 键盘动画结束后才跟上的遮挡量：给内容留白这类会触发重排的消费方，动画期零重排（R7）。
-  const keyboardHeightSettled = useKeyboardHeightSettled();
-  const keyboardVisible = useKeyboardVisible();
 
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -175,7 +172,7 @@ export default function QuickNotesPage() {
   const setComposerEl = useCallback((el: HTMLElement | null) => {
     composerRef.current = el;
   }, []);
-  const scrollRef = useRef<HTMLDivElement>(null);
+  const scrollRef = useRef<HTMLElement>(null);
   const composeDraftRef = useRef("");
   // 进入编辑时快照被编辑那条的原文，用来判「用户改过没」。
   // 故意用进入编辑时的快照而不是当前库里的值：编辑期间那条被另一台设备改了而用户没动，
@@ -233,29 +230,14 @@ export default function QuickNotesPage() {
   const timeline = useQuickNoteTimeline();
   const unsyncedQuickNoteIds = useUnsyncedQuickNoteIds();
   const pinnedNotes = useLiveQuery(() => listPinnedQuickNotes(), []) ?? [];
-  // !keyboardVisible 守卫与待办页同款（TodoPage.tsx）：键盘在场时 nav 不占避让空间。没有它，
-  // willShow 置起 visible 到 navHidden effect 提交之间的一帧里，composer 会按「键盘高 + 49」
-  // 定位——高出键盘一个底栏位（真机「飞半空」存活候选 C5-1，对抗验证报告
-  // .dispatch/20260822-kbd-statemachine）。两页口径必须一致，修一处两页同好。
-  const navOffsetPx = !isWideScreen && !navHidden && !keyboardVisible ? BOTTOM_NAV_HEIGHT_PX : 0;
+  // 键盘量在叶子里合成（mobile-keyboard R8，design §3.1），页面根不订阅键盘——页面每次键盘事件整页
+  // 重渲染是「输入条不跟手」的主因。`!keyboardVisible` 的 nav 守卫由 useBottomInset 做，本页只给基础占位。
+  const navOffsetBasePx = !isWideScreen && !navHidden ? BOTTOM_NAV_HEIGHT_PX : 0;
   const bottomInsetPx = selectionMode || searchOpen ? COMPOSER_BOTTOM_GAP_PX : composerInsetPx;
-  // 底部避让量单一合成来源（composeBottomInset，见 lib/bottomInset.ts）：bottomInsetPx/navOffsetPx
-  // 仍是本页私有的「此刻底部站着谁」判断，这里只把它们的结果连同键盘遮挡量一起喂进合成
-  //（keyboardHeight 是「键盘还挡着多少」，壳自己让过位时为 0，见 useKeyboardHeight）。
-  // keyboardHeightPx=0（桌面浏览器 / 键盘收起）时逐值等于合成前的批 1 值，见该文件回归护栏测试。
-  // 内容留白：原口径只有 bottomInsetPx（不含 navOffsetPx），故 navOffsetPx 传 0，只加键盘遮挡量。
-  // 喂 settled 值（mobile-keyboard R7，design §1.3）：键盘动画期间列表不重排；贴 composer 的浮层仍用即时值。
-  const contentBottomInsetPx = composeBottomInset({
-    barHeightPx: bottomInsetPx,
-    navOffsetPx: 0,
-    keyboardHeightPx: keyboardHeightSettled,
-  });
-  // 贴 composer 上沿的浮层（跳到最新按钮 / 错误 / 状态提示）：原口径 navOffsetPx + bottomInsetPx。
-  const floatBottomInsetPx = composeBottomInset({
-    barHeightPx: bottomInsetPx,
-    navOffsetPx,
-    keyboardHeightPx: keyboardHeight,
-  });
+  // 内容留白原口径只有 bottomInsetPx（不含 navOffset），故 navOffsetBasePx 传 0，只加键盘遮挡量（settled）。
+  const contentInset: BottomInsetInput = { barPx: bottomInsetPx, navOffsetBasePx: 0 };
+  // 贴 composer 上沿的浮层（跳到最新按钮 / 错误 / 状态提示）：原口径 navOffsetPx + bottomInsetPx，即时值。
+  const floatInset: BottomInsetInput = { barPx: bottomInsetPx, navOffsetBasePx };
   const displayItems = useMemo(
     () =>
       groupQuickNotesForDisplay(
@@ -358,7 +340,7 @@ export default function QuickNotesPage() {
   // 搜索态是本页私有的第二个收起原因，单独一条 effect（关搜索即恢复）。
   // 此前聚焦（composerFocused）也立即收底栏——TG 口径下聚焦到键盘出现之间一切原地不动，
   // 且该差异正是两页时序不一致的来源之一，已去除。
-  useKeyboardNavCollapse();
+  // 实现在 KeyboardNavCollapse 组件里，JSX 根部渲染。
   useEffect(() => {
     if (!searchOpen) return;
     setNavHidden(true);
@@ -1137,6 +1119,7 @@ export default function QuickNotesPage() {
 
   return (
     <div className="relative flex h-full min-h-0 flex-col bg-page text-ink">
+      <KeyboardNavCollapse />
       {/* 顶部间距走 --page-top-gap（原 pt-3 / sm:pt-4）：有系统安全区时归零，避免与安全区自带的
           呼吸位叠成刘海下方那条空带；桌面 / 无刘海设备上取值不变，见 index.css 的变量注释。 */}
       {/* 常态不占一整条顶栏：这一行只在多选 / 搜索时现身——那两个态本来就要整行放工具条。
@@ -1317,24 +1300,19 @@ export default function QuickNotesPage() {
         </div>
       )}
 
-      <section
+      <KeyboardInsetPad
+        as="section"
+        scrollPadding
+        inset={contentInset}
         ref={scrollRef}
         onScroll={handleScroll}
         // 顶部留白 pt-5 在下面的列表内层、**不在这个滚动容器上**：Chrome 与 WebKit 都按滚动容器的
         // 内容盒算 sticky 的约束矩形，容器自己带 padding-top 时 `top-2` 的日期条会粘在 8 + padding
         // 处（实测 py-5 → 28px），findStuckDivider 的上界 STICKY_TOP_PX=8 就框不到它，.stuck
         // 永远打不上、药丸常驻，浮动药丸拦日历那条也一起失效。有结构闸用例锁这条。
+        // 兜底类 [padding-bottom/scroll-padding-bottom:var(--pad-bottom)]：env() 未定义环境里 calc 整条失效、
+        // 内联 padding 被丢弃，由它还原纯数值留白（KeyboardInsetPad 写 --pad-bottom 与 calc 组成式）。
         className="min-h-0 flex-1 overflow-y-auto px-4 [padding-bottom:var(--pad-bottom)] [scroll-padding-bottom:var(--pad-bottom)]"
-        // 兜底类 [padding-bottom/scroll-padding-bottom:var(--pad-bottom)]：env() 未定义环境
-        //（Firefox 桌面 / 旧 WebView）里 calc 整条失效、内联 padding 被丢弃，由它还原批次前的纯数值
-        // contentBottomInsetPx（桌面浏览器 env()=0，calc 有效时内联样式优先，兜底类不生效）。
-        style={
-          {
-            "--pad-bottom": `${contentBottomInsetPx}px`,
-            paddingBottom: `calc(${contentBottomInsetPx}px + var(--safe-bottom))`,
-            scrollPaddingBottom: `calc(${contentBottomInsetPx}px + var(--safe-bottom))`,
-          } as CSSProperties
-        }
         aria-label="速记列表"
       >
         <div className="mx-auto flex w-full max-w-3xl flex-col gap-4 pt-5">
@@ -1534,60 +1512,72 @@ export default function QuickNotesPage() {
             </>
           )}
         </div>
-      </section>
+      </KeyboardInsetPad>
 
       {!searchOpen && shouldShowJumpToLatest({ atBottom, atLatest: timeline.atLatest }) && (
-        <button
-          type="button"
-          onClick={jumpToLatest}
-          aria-label="回到最新"
-          className="fixed right-4 flex size-11 items-center justify-center rounded-pill border border-border-strong bg-surface text-ink-2 shadow-elev1 transition hover:border-accent hover:text-ink [bottom:var(--bottom-offset)]"
-          // 兜底类 [bottom:var(--bottom-offset)]：env() 未定义环境（Firefox 桌面 / 旧 WebView）里 calc
-          // 整条失效、内联 bottom 被丢弃，由它还原批次前的纯数值位置（floatBottomInsetPx，原口径
-          // navOffsetPx + bottomInsetPx，现走合成并计入键盘高）。
-          // zIndex 必须显式给：列表里的日期气泡是 z-10，z-index:auto 的固定层会被它压住（见下方 form 注释）。
-          style={
-            {
-              "--bottom-offset": `${floatBottomInsetPx}px`,
-              bottom: `calc(${floatBottomInsetPx}px + var(--safe-bottom))`,
-              zIndex: Z.backdrop,
-            } as CSSProperties
-          }
-        >
-          <Icon icon={ArrowDown} size={18} />
-        </button>
+        <KeyboardInsetSlot inset={floatInset}>
+          {(px) => (
+            <button
+              type="button"
+              onClick={jumpToLatest}
+              aria-label="回到最新"
+              className="fixed right-4 flex size-11 items-center justify-center rounded-pill border border-border-strong bg-surface text-ink-2 shadow-elev1 transition hover:border-accent hover:text-ink [bottom:var(--bottom-offset)]"
+              // 兜底类 [bottom:var(--bottom-offset)]：env() 未定义环境（Firefox 桌面 / 旧 WebView）里 calc
+              // 整条失效、内联 bottom 被丢弃，由它还原批次前的纯数值位置（floatBottomInsetPx，原口径
+              // navOffsetPx + bottomInsetPx，现走合成并计入键盘高）。
+              // zIndex 必须显式给：列表里的日期气泡是 z-10，z-index:auto 的固定层会被它压住（见下方 form 注释）。
+              style={
+                {
+                  "--bottom-offset": `${px}px`,
+                  bottom: `calc(${px}px + var(--safe-bottom))`,
+                  zIndex: Z.backdrop,
+                } as CSSProperties
+              }
+            >
+              <Icon icon={ArrowDown} size={18} />
+            </button>
+          )}
+        </KeyboardInsetSlot>
       )}
 
       {error && (
-        <StatusBanner
-          tone="danger"
-          className="fixed left-4 right-4 mx-auto max-w-3xl shadow-elev1 [bottom:var(--bottom-offset)]"
-          // 兜底类 [bottom:var(--bottom-offset)] 与 zIndex：见「最新」按钮同款注释。
-          style={
-            {
-              "--bottom-offset": `${floatBottomInsetPx}px`,
-              bottom: `calc(${floatBottomInsetPx}px + var(--safe-bottom))`,
-              zIndex: Z.backdrop,
-            } as CSSProperties
-          }
-        >
-          {error}
-        </StatusBanner>
+        <KeyboardInsetSlot inset={floatInset}>
+          {(px) => (
+            <StatusBanner
+              tone="danger"
+              className="fixed left-4 right-4 mx-auto max-w-3xl shadow-elev1 [bottom:var(--bottom-offset)]"
+              // 兜底类 [bottom:var(--bottom-offset)] 与 zIndex：见「最新」按钮同款注释。
+              style={
+                {
+                  "--bottom-offset": `${px}px`,
+                  bottom: `calc(${px}px + var(--safe-bottom))`,
+                  zIndex: Z.backdrop,
+                } as CSSProperties
+              }
+            >
+              {error}
+            </StatusBanner>
+          )}
+        </KeyboardInsetSlot>
       )}
       {status && (
-        <StatusBanner
-          tone="info"
-          className="fixed left-4 right-4 mx-auto max-w-3xl shadow-elev1 [bottom:var(--bottom-offset)]"
-          style={
-            {
-              "--bottom-offset": `${floatBottomInsetPx}px`,
-              bottom: `calc(${floatBottomInsetPx}px + var(--safe-bottom))`,
-              zIndex: Z.backdrop,
-            } as CSSProperties
-          }
-        >
-          {status}
-        </StatusBanner>
+        <KeyboardInsetSlot inset={floatInset}>
+          {(px) => (
+            <StatusBanner
+              tone="info"
+              className="fixed left-4 right-4 mx-auto max-w-3xl shadow-elev1 [bottom:var(--bottom-offset)]"
+              style={
+                {
+                  "--bottom-offset": `${px}px`,
+                  bottom: `calc(${px}px + var(--safe-bottom))`,
+                  zIndex: Z.backdrop,
+                } as CSSProperties
+              }
+            >
+              {status}
+            </StatusBanner>
+          )}
+        </KeyboardInsetSlot>
       )}
       {!searchOpen && !selectionMode && (
         <KeyboardDock
