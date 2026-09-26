@@ -18,6 +18,7 @@ import { SchedulerWatchdog } from "./components/SchedulerWatchdog.tsx";
 import { TotpPromptDialog } from "./components/TotpPromptDialog.tsx";
 import { BottomNavProvider } from "./contexts/BottomNavContext.tsx";
 import { SyncProvider } from "./contexts/SyncContext.tsx";
+import { OffsiteBackupProvider } from "./contexts/OffsiteBackupContext.tsx";
 import { TrackAttentionProvider } from "./contexts/TrackAttentionContext.tsx";
 import { useDocumentTitle } from "./hooks/useDocumentTitle.ts";
 import { useFavicon } from "./hooks/useFavicon.ts";
@@ -108,7 +109,9 @@ export function getRouter() {
         <SyncProvider>
           <BottomNavProvider>
             <TrackAttentionProvider>
-              <AppShell />
+              <OffsiteBackupProvider>
+                <AppShell />
+              </OffsiteBackupProvider>
             </TrackAttentionProvider>
           </BottomNavProvider>
         </SyncProvider>

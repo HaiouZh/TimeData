@@ -1,7 +1,9 @@
 // @vitest-environment jsdom
+import type { AdminOffsiteBackupResponse } from "@timedata/shared";
 import { createElement } from "react";
 import { MemoryRouter } from "react-router";
 import { describe, expect, it, vi } from "vitest";
+import { OffsiteBackupContext } from "../../contexts/OffsiteBackupContext.js";
 import { BOTTOM_NAV_HEIGHT_PX, BottomNavProvider, useBottomNav } from "../../contexts/BottomNavContext.js";
 import { click, renderDom, unmount } from "../../test/domHarness.js";
 import { MobileBottomNav } from "./MobileBottomNav.js";
@@ -48,6 +50,28 @@ describe("MobileBottomNav", () => {
     expect(host.innerHTML).not.toContain(legacyPrimaryClass);
 
     await unmount(root);
+  });
+
+  it("冷备异常时「设置」入口亮红点，无状态时不亮", async () => {
+    const render = (value: AdminOffsiteBackupResponse | null) =>
+      renderDom(
+        createElement(
+          MemoryRouter,
+          null,
+          createElement(
+            BottomNavProvider,
+            null,
+            createElement(OffsiteBackupContext.Provider, { value }, createElement(MobileBottomNav)),
+          ),
+        ),
+      );
+    const alerting = await render({ verdict: "failed" as const, reason: "rsync 超时", last: null, recent: [] });
+    expect(alerting.host.querySelector('a[href="/settings"] [data-testid="nav-alert-dot"]')).not.toBeNull();
+    await unmount(alerting.root);
+
+    const quiet = await render(null);
+    expect(quiet.host.querySelector('[data-testid="nav-alert-dot"]')).toBeNull();
+    await unmount(quiet.root);
   });
 
   it("does not render hidden mobile routes or a more button", async () => {

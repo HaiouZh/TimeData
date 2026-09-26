@@ -20,10 +20,15 @@ covers:
   - packages/server/src/routes/sync.ts
   - packages/shared/src/admin-schemas.ts
   - packages/shared/src/types.ts
+  - packages/server/src/lib/offsiteBackup.ts
+  - packages/server/src/routes/admin/offsiteBackup.ts
+  - packages/client/src/contexts/OffsiteBackupContext.tsx
+  - packages/client/src/pages/settings/components/OffsiteBackupCard.tsx
 contracts:
   - packages/shared/src/admin-schemas.ts
   - packages/server/src/routes/admin/backupConfig.ts
-last-reviewed: 2026-08-04
+  - packages/server/src/lib/offsiteBackup.ts
+last-reviewed: 2026-09-26
 ---
 
 # 备份与恢复
@@ -274,6 +279,23 @@ UI 提示文案在 `SettingsDataPage.tsx`，每次改恢复流程时都要顺便
 - `POST /api/admin/backups/run-daily`：手动调用 `runDailyBackupIfDue()`。
 
 实现位置：`packages/server/src/sync/backup.ts` 的 `cleanupServerBackups()` 与 manifest 管理。`readBackupManifest()` 只把 manifest 不存在视为静默空状态；JSON 损坏、权限错误等其他读取失败会输出 `[backup] failed to read manifest`，但仍返回空 manifest，避免写入路径因观测元数据损坏而中断。
+
+## 6.5 异地冷备状态（只读展示）
+
+异地冷备**不由 TimeData 执行**：生产宿主机 cron（北京时间每天 09:30，脚本源码在 Run 仓 `deploy/backup/`）把 `timedata.db` 在线快照、`archive/`、`sleep_patch.jsonl` 推到冷备机，冷备机每天做硬链接日快照留 14 份。`garmin_tokens/`、`.env`、`backups/`、`geoip/` 不推。TimeData 只**读**脚本每次追加的 `<DB_PATH 所在目录>/backup_runs.jsonl`（生产 `/app/data/backup_runs.jsonl`），一行一个 `{ at, ok, error, remote }`；不写、不轮转它。
+
+`GET /api/admin/offsite-backup` 返回 `{ verdict, reason, last, recent }`（`recent` = 最近 7 行倒序），判定在 `packages/server/src/lib/offsiteBackup.ts` 的 `buildOffsiteBackupStatus()`，**与 Run 仓 `backend/run_track/api/system.py` 的 `backup_verdict` 同口径，阈值改动两边一起改**：
+
+| 条件（按顺序） | verdict |
+|---|---|
+| 文件不存在 / 为空 | `none`（本地开发常态，不报错） |
+| 有内容但没有一行能解析 | `failed`「冷备记录无法解析」 |
+| 最后一行 `at` 距今 > 36h | `stale`——cron 停了就不再写新行，最后一行永远是上次成功，必须先于 ok 单独判 |
+| `ok=false` | `failed`，原因取 `error` |
+| `remote` 为 null / 首词不是 `OK` / 第二词（冷备机快照时刻）> 36h 或无法解析 | `failed` |
+| 其余 | `ok` |
+
+坏行逐行跳过；文件只读尾部 64KB。客户端 `OffsiteBackupProvider` 在配了服务器时进入应用拉一次、回前台至多每 10 分钟再拉；请求失败（旧服务端 404、agent token 403、离线）静默当作无状态。`failed` / `stale` 时设置首页顶部出红色告警卡，底栏 / 侧栏「设置」入口亮红点（设置被收进侧栏「更多」时红点冒到「更多」按钮）；`ok` 只在设置首页显示一行「最近推送 x 前」；`none` 不渲染。
 
 ## 7. 改这块代码前的清单
 

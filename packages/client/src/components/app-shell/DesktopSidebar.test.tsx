@@ -2,6 +2,7 @@
 import { createElement } from "react";
 import { MemoryRouter } from "react-router";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { OffsiteBackupContext } from "../../contexts/OffsiteBackupContext.js";
 import { TrackAttentionContext } from "../../contexts/TrackAttentionContext.js";
 import { DESKTOP_NAV_DEFAULT_ITEMS } from "../../lib/navigation/navRegistry.js";
 import { click, renderDom, unmount } from "../../test/domHarness.js";
@@ -66,6 +67,28 @@ describe("DesktopSidebar", () => {
     expect(tracksLink?.querySelector('[data-testid="nav-badge"]')?.textContent).toBe("3");
     expect(host.querySelector('a[href="/todo"] [data-testid="nav-badge"]')).toBeNull();
     await unmount(root);
+  });
+
+  it("冷备异常时只在「设置」上亮红点；设置收进「更多」时红点冒到「更多」按钮", async () => {
+    const renderWithAlert = () =>
+      renderDom(
+        createElement(
+          MemoryRouter,
+          { initialEntries: ["/todo"] },
+          createElement(OffsiteBackupContext.Provider, { value: { verdict: "failed" as const, reason: "rsync 超时", last: null, recent: [] } }, createElement(DesktopSidebar)),
+        ),
+      );
+    const first = await renderWithAlert();
+    expect(first.host.querySelectorAll('[data-testid="nav-alert-dot"]')).toHaveLength(1);
+    expect(first.host.querySelector('a[href="/settings"] [data-testid="nav-alert-dot"]')).not.toBeNull();
+    await unmount(first.root);
+
+    desktopConfigMock.items = DESKTOP_NAV_DEFAULT_ITEMS.map((item) =>
+      item.to === "/settings" ? { ...item, placement: "more" as const } : item,
+    );
+    const second = await renderWithAlert();
+    expect(second.host.querySelector('button[aria-label="更多导航"] [data-testid="nav-alert-dot"]')).not.toBeNull();
+    await unmount(second.root);
   });
 
   it("hides the badge when there is nothing awaiting", async () => {

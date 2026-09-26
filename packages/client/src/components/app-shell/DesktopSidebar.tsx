@@ -1,12 +1,23 @@
 import { useMemo, useState } from "react";
 import { NavLink, useLocation } from "react-router";
+import { useOffsiteBackupAlert } from "../../contexts/OffsiteBackupContext.js";
 import { useTrackAttentionBadge } from "../../contexts/TrackAttentionContext.js";
 import { MORE_NAV_ITEM, findMainNavItem, primaryRouteForPath, type MainNavItem } from "../../lib/navigation/navRegistry.js";
 import { useDesktopSidebarConfig } from "../../lib/settings/desktopSidebarSetting.js";
 import { Icon } from "../Icon.js";
-import { NavBadge } from "./NavBadge.js";
+import { NavAlertDot, NavBadge } from "./NavBadge.js";
 
-function NavIconLink({ item, activeRoute, badge = 0 }: { item: MainNavItem; activeRoute: string; badge?: number }) {
+function NavIconLink({
+  item,
+  activeRoute,
+  badge = 0,
+  alert = false,
+}: {
+  item: MainNavItem;
+  activeRoute: string;
+  badge?: number;
+  alert?: boolean;
+}) {
   const active = item.to === activeRoute;
   return (
     <NavLink
@@ -23,6 +34,7 @@ function NavIconLink({ item, activeRoute, badge = 0 }: { item: MainNavItem; acti
       <span className="relative">
         <Icon icon={item.icon} size={22} weight="regular" />
         <NavBadge count={badge} />
+        <NavAlertDot show={alert} />
       </span>
       <span className="td-text-caption">{item.label}</span>
     </NavLink>
@@ -35,6 +47,7 @@ export function DesktopSidebar() {
   const activeRoute = primaryRouteForPath(location.pathname);
   const config = useDesktopSidebarConfig();
   const attentionCount = useTrackAttentionBadge();
+  const settingsAlert = useOffsiteBackupAlert();
 
   const { primaryItems, moreItems } = useMemo(() => {
     const primaryItems: MainNavItem[] = [];
@@ -60,6 +73,7 @@ export function DesktopSidebar() {
             item={item}
             activeRoute={activeRoute}
             badge={item.to === "/tracks" ? attentionCount : 0}
+            alert={item.to === "/settings" && settingsAlert}
           />
         ))}
         {moreItems.length > 0 && (
@@ -72,7 +86,10 @@ export function DesktopSidebar() {
               onClick={() => setOpen((value) => !value)}
               className="flex w-full flex-col items-center gap-1 rounded-row px-1 py-2 text-ink-3 transition-colors hover:bg-surface-hover hover:text-ink"
             >
-              <Icon icon={MORE_NAV_ITEM.icon} size={22} weight="regular" />
+              <span className="relative">
+                <Icon icon={MORE_NAV_ITEM.icon} size={22} weight="regular" />
+                <NavAlertDot show={settingsAlert && moreItems.some((item) => item.to === "/settings")} />
+              </span>
               <span className="td-text-caption">{MORE_NAV_ITEM.label}</span>
             </button>
             {open && (
@@ -85,7 +102,10 @@ export function DesktopSidebar() {
                     onClick={() => setOpen(false)}
                     className="flex items-center gap-2 rounded-row px-3 py-2 td-text-label text-ink-2 hover:bg-surface-hover hover:text-ink"
                   >
-                    <Icon icon={item.icon} size={18} weight="regular" />
+                    <span className="relative">
+                      <Icon icon={item.icon} size={18} weight="regular" />
+                      <NavAlertDot show={item.to === "/settings" && settingsAlert} />
+                    </span>
                     <span>{item.label}</span>
                   </NavLink>
                 ))}

@@ -23,6 +23,7 @@ import {
 import { fetchServerVersion, pollServerUpdate, triggerServerUpdate } from "../lib/serverVersion.ts";
 import type { SyncStreamState } from "../lib/syncStream.js";
 import { formatAppDateTime } from "../lib/time.ts";
+import { OffsiteBackupCard } from "./settings/components/OffsiteBackupCard.tsx";
 import { CLOCK_SKEW_WARN_MS, getClockSkewMs, type RegularSyncResult } from "../sync/engine.ts";
 import type { PendingArbitration } from "../db/index.ts";
 import {
@@ -378,6 +379,9 @@ export default function SettingsPage() {
 
       {/* 状态总览：服务器连接 + 同步摘要合并为一张卡（顺序：服务器配置 → 同步信息） */}
       <ServerStatusCard />
+
+      {/* 异地冷备：异常时红卡（导航「设置」同步亮红点），正常时一行灰字 */}
+      <OffsiteBackupCard />
 
       <SettingsSection title="记录偏好">
         <SettingsRow

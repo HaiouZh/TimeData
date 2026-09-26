@@ -14,6 +14,7 @@ covers:
   - packages/server/src/routes/admin/health.ts
   - packages/server/src/routes/admin/summary.ts
   - packages/server/src/routes/admin/sync.ts
+  - packages/server/src/routes/admin/offsiteBackup.ts
 contracts:
   - packages/server/src/middleware/validate.ts
   - packages/shared/src/admin-schemas.ts
@@ -24,7 +25,7 @@ contracts:
   - packages/server/src/routes/admin/health.ts
   - packages/server/src/routes/admin/summary.ts
   - packages/server/src/routes/admin/sync.ts
-last-reviewed: 2026-08-05
+last-reviewed: 2026-09-26
 ---
 
 # 服务端数据洞察
@@ -46,6 +47,7 @@ last-reviewed: 2026-08-05
 | `GET /api/admin/sync` | 最近 50 条服务端同步日志、rejected/conflict 计数和部分近期问题 |
 | `GET /api/admin/health-checks` | 时间记录健康检查：无效时长、缺分类、归档分类、重叠 |
 | `GET /api/admin/analytics` | 按时间桶与分类做基础聚合 |
+| `GET /api/admin/offsite-backup` | 读宿主机 cron 写的 `backup_runs.jsonl`，给出异地冷备判定；口径与展示见 [backup](backup.md) §6.5 |
 
 同一 admin router 还挂载备份、备份配置、请求日志、TOTP 和 sync-log 清空等端点；这些端点的写入边界由对应主题文档承载。`SettingsAdminInsightsPage` 的洞察区只读；备份管理卡片调用的是 [backup](backup.md) 的端点。
 

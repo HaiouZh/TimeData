@@ -5,6 +5,7 @@ import type {
   AdminCategoriesResponse,
   AdminEntriesResponse,
   AdminHealthChecksResponse,
+  AdminOffsiteBackupResponse,
   AdminRequestLogClientHint,
   AdminRequestLogOutcome,
   AdminRequestLogsResponse,
@@ -70,6 +71,10 @@ export function fetchAdminSync(): Promise<AdminSyncResponse> {
 
 export function fetchAdminBackups(): Promise<AdminBackupsResponse> {
   return apiFetch("/api/admin/backups");
+}
+
+export function fetchOffsiteBackupStatus(): Promise<AdminOffsiteBackupResponse> {
+  return apiFetch("/api/admin/offsite-backup");
 }
 
 export function fetchBackupConfig(): Promise<AdminBackupConfigResponse> {

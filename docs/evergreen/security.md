@@ -36,7 +36,7 @@ contracts:
   - packages/server/src/middleware/auth.ts
   - packages/server/src/middleware/totp.ts
   - packages/client/src/lib/storageKeys.ts
-last-reviewed: 2026-09-16
+last-reviewed: 2026-09-26
 ---
 
 # 安全与凭据处理
@@ -101,7 +101,7 @@ Android 原生环境保持 HTTPS-only：`packages/mobile/capacitor.config.ts` �
 
 `/api/admin/request-logs` 复用同一 admin 保护面，只读查询 `api_request_logs`，用于排查认证失败、限流和 client hint 分布。它不提供清空端点；服务端通过保留窗口和最大行数做自动裁剪。
 
-`/api/admin/backups/*` 与 `/api/admin/backup-config` 同样只在 admin/master token 下可用。备份列表是读操作；备份删除、日备触发和备份配置修改是明确的管理写操作。删除端点只接受 manifest id 或备份目录内已存在的 `.db` basename，最终路径必须解析在 `getBackupDir()` 之下，拒绝带 `/`、`\`、`..` 的路径参数，避免 URL 解码后的 id 逃逸备份目录。
+`/api/admin/offsite-backup` 只读宿主机 cron 写在数据目录的 `backup_runs.jsonl` 并返回冷备判定，路径固定、不接受参数（见 [backup](backup.md) §6.5）。`/api/admin/backups/*` 与 `/api/admin/backup-config` 同样只在 admin/master token 下可用。备份列表是读操作；备份删除、日备触发和备份配置修改是明确的管理写操作。删除端点只接受 manifest id 或备份目录内已存在的 `.db` basename，最终路径必须解析在 `getBackupDir()` 之下，拒绝带 `/`、`\`、`..` 的路径参数，避免 URL 解码后的 id 逃逸备份目录。
 
 ## TOTP 危险操作锁
 

@@ -486,6 +486,18 @@ describe("admin route", () => {
     });
   });
 
+  it("offsite-backup: 数据目录无 backup_runs.jsonl → none；有则读取", async () => {
+    const empty = await (await app.request("/api/admin/offsite-backup")).json();
+    expect(empty).toEqual({ verdict: "none", reason: null, last: null, recent: [] });
+
+    const run = { at: new Date().toISOString(), ok: false, error: "rsync 超时", remote: null };
+    fs.writeFileSync(path.join(tempDir, "backup_runs.jsonl"), `${JSON.stringify(run)}
+`);
+    const res = await app.request("/api/admin/offsite-backup");
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({ verdict: "failed", reason: "rsync 超时", last: run, recent: [run] });
+  });
+
   it("returns server backup metadata", async () => {
     const res = await app.request("/api/admin/backups");
 

@@ -208,6 +208,25 @@ export const AdminRequestLogsResponseSchema = z.object({
   limit: z.number().int().positive(),
 });
 
+// 异地冷备：宿主机 cron 每次推送往数据目录 backup_runs.jsonl 追加一行（写入方在 Run 仓 deploy/backup/）。
+// at / remote 里的时刻是脚本写的秒级 UTC ISO（无毫秒），故不用 UtcIsoStringSchema。
+export const OffsiteBackupVerdictSchema = z.enum(["none", "ok", "stale", "failed"]);
+
+export const OffsiteBackupRunSchema = z.object({
+  at: z.string(),
+  ok: z.boolean(),
+  error: z.string().nullable(),
+  remote: z.string().nullable(),
+});
+
+export const AdminOffsiteBackupResponseSchema = z.object({
+  verdict: OffsiteBackupVerdictSchema,
+  reason: z.string().nullable(),
+  last: OffsiteBackupRunSchema.nullable(),
+  // 最近 7 行，新的在前
+  recent: z.array(OffsiteBackupRunSchema),
+});
+
 export type AdminSummaryResponse = z.infer<typeof AdminSummaryResponseSchema>;
 export type AdminEntryRow = z.infer<typeof AdminEntryRowSchema>;
 export type AdminEntriesResponse = z.infer<typeof AdminEntriesResponseSchema>;
@@ -231,3 +250,6 @@ export type AdminRequestLogTokenTier = z.infer<typeof AdminRequestLogTokenTierSc
 export type AdminRequestLogClientHint = z.infer<typeof AdminRequestLogClientHintSchema>;
 export type AdminRequestLogRow = z.infer<typeof AdminRequestLogRowSchema>;
 export type AdminRequestLogsResponse = z.infer<typeof AdminRequestLogsResponseSchema>;
+export type OffsiteBackupVerdict = z.infer<typeof OffsiteBackupVerdictSchema>;
+export type OffsiteBackupRun = z.infer<typeof OffsiteBackupRunSchema>;
+export type AdminOffsiteBackupResponse = z.infer<typeof AdminOffsiteBackupResponseSchema>;

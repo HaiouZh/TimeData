@@ -1,12 +1,13 @@
 import { NavLink } from "react-router";
 import { BOTTOM_NAV_HEIGHT_PX, useBottomNav } from "../../contexts/BottomNavContext.js";
+import { useOffsiteBackupAlert } from "../../contexts/OffsiteBackupContext.js";
 import { useTrackAttentionBadge } from "../../contexts/TrackAttentionContext.js";
 import { findMainNavItem, type MainNavItem, type MainNavRoute } from "../../lib/navigation/navRegistry.js";
 import { useVisibleTabs } from "../../lib/settings/navVisibleTabsSetting.js";
 import { Icon } from "../Icon.js";
-import { NavBadge } from "./NavBadge.js";
+import { NavAlertDot, NavBadge } from "./NavBadge.js";
 
-function MobileIconLink({ item, badge = 0 }: { item: MainNavItem; badge?: number }) {
+function MobileIconLink({ item, badge = 0, alert = false }: { item: MainNavItem; badge?: number; alert?: boolean }) {
   return (
     <NavLink
       key={item.to}
@@ -25,6 +26,7 @@ function MobileIconLink({ item, badge = 0 }: { item: MainNavItem; badge?: number
       <span className="relative">
         <Icon icon={item.icon} size={23} weight="regular" />
         <NavBadge count={badge} />
+        <NavAlertDot show={alert} />
       </span>
     </NavLink>
   );
@@ -33,6 +35,7 @@ function MobileIconLink({ item, badge = 0 }: { item: MainNavItem; badge?: number
 export function MobileBottomNav() {
   const { hidden } = useBottomNav();
   const attentionCount = useTrackAttentionBadge();
+  const settingsAlert = useOffsiteBackupAlert();
   const visibleTabs = useVisibleTabs();
   const routes = [...visibleTabs, "/settings"] as MainNavRoute[];
   const items = routes.map((route) => findMainNavItem(route)).filter((item) => item !== undefined);
@@ -55,7 +58,12 @@ export function MobileBottomNav() {
       }}
     >
       {items.map((item) => (
-        <MobileIconLink key={item.to} item={item} badge={item.to === "/tracks" ? attentionCount : 0} />
+        <MobileIconLink
+          key={item.to}
+          item={item}
+          badge={item.to === "/tracks" ? attentionCount : 0}
+          alert={item.to === "/settings" && settingsAlert}
+        />
       ))}
     </nav>
   );
