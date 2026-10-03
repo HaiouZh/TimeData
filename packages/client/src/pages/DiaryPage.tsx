@@ -1,4 +1,4 @@
-import { ClockCounterClockwise } from "@phosphor-icons/react";
+import { Check, ClockCounterClockwise } from "@phosphor-icons/react";
 import { type KeyboardEvent, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useNavigate, useSearchParams } from "react-router";
 import DateNav from "../components/DateNav.js";
@@ -37,6 +37,9 @@ import { ResizableSplit } from "./todo/ResizableSplit.js";
  * 谁要是把 dirty 改成内容比对，这里会连带变成"打开就永远脏"。
  */
 const DIARY_SEED = "1. ";
+
+// 保存成功后按钮显示「已保存」的时长
+const SAVED_FLASH_MS = 2000;
 
 export default function DiaryPage() {
   const navigate = useNavigate();
@@ -107,6 +110,25 @@ export default function DiaryPage() {
   // reload 飞着时它是 false、可点）。force save 与 reload 反向交错会让 baseMtime
   // 落地到一份编辑器里已经不存在的内容上，见 handleReload/handleSave 内的用法。
   const [reloading, setReloading] = useState(false);
+  // 保存成功的反馈：按钮文字短暂换成「已保存」。之前成功路径只有按钮变灰，用户看不出存没存上。
+  // 落在按钮上而不是另起 StatusBanner：提示条出现/消失会把正文推下去再弹回，打字时整页晃。
+  // 渲染时还要叠一个 !dirty——又改了字「已保存」就是假话，不等计时器当场复原。
+  const [justSaved, setJustSaved] = useState(false);
+  const justSavedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  function flashSaved() {
+    if (justSavedTimerRef.current) clearTimeout(justSavedTimerRef.current);
+    setJustSaved(true);
+    justSavedTimerRef.current = setTimeout(() => {
+      justSavedTimerRef.current = null;
+      setJustSaved(false);
+    }, SAVED_FLASH_MS);
+  }
+  useEffect(
+    () => () => {
+      if (justSavedTimerRef.current) clearTimeout(justSavedTimerRef.current);
+    },
+    [],
+  );
   const [error, setError] = useState<string | null>(null);
   const [conflict, setConflict] = useState(false);
   const [loadFailed, setLoadFailed] = useState(false);
@@ -176,6 +198,8 @@ export default function DiaryPage() {
     setConflict(false);
     setLoadFailed(false);
     setDirty(false);
+    // 上一天刚存完的「已保存」不能挂到新一天的按钮上（dirty 也刚被清，渲染判据挡不住）
+    setJustSaved(false);
     // 防御性清空，无可观测行为差异（已验证）：handleSave 现在 loading || loadFailed 都早退，
     // 这两个态覆盖了"content 还是上一天残留"的全部窗口，所以 saveDiary 不可能在 baseMtime
     // 仍是上面这次重置的旧值时被调用——要么早退（loading/loadFailed 未清），要么 fetchDiary
@@ -309,6 +333,7 @@ export default function DiaryPage() {
       // （textarea 按 HTML 规范把 \r\n 归一成 \n，与加载值天然不等，见上面 dirty 的警示注释）。
       if (editRevisionRef.current === revisionAtRequest) setDirty(false);
       setConflict(false);
+      flashSaved();
     } catch (err) {
       // 同理：A 日的冲突/错误不该挂到 B 日头上（世代号闸，理由同上）
       if (loadEpochRef.current !== epochAtRequest) return;
@@ -494,9 +519,16 @@ export default function DiaryPage() {
               aria-label="保存"
               disabled={!dirty || saving || reloading || loading || loadFailed}
               onClick={() => void handleSave()}
-              className="min-h-11 rounded-ctl bg-accent px-3 py-1.5 td-text-body font-medium text-page transition hover:bg-accent-strong disabled:cursor-not-allowed disabled:bg-surface-hover disabled:text-ink-3"
+              className="flex min-h-11 items-center gap-1 rounded-ctl bg-accent px-3 py-1.5 td-text-body font-medium text-page transition hover:bg-accent-strong disabled:cursor-not-allowed disabled:bg-surface-hover disabled:text-ink-3"
             >
-              保存
+              {justSaved && !dirty ? (
+                <>
+                  <Icon icon={Check} size={14} className="text-ok" />
+                  <span className="text-ok">已保存</span>
+                </>
+              ) : (
+                "保存"
+              )}
             </button>
           </>
         }

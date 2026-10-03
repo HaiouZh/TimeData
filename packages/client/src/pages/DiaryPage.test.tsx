@@ -244,6 +244,47 @@ describe("DiaryPage", () => {
     await unmount(root);
   });
 
+  // 用户实测：保存成功后页面上唯一的变化是按钮变灰，看不出到底存没存上。成功反馈就落在
+  // 按钮自己身上（文字换成「已保存」，约 2 秒后复原），不另起提示条——提示条会把正文推下去再弹回。
+  it("保存成功：按钮文字换成「已保存」，再打字立刻复原成「保存」", async () => {
+    saveDiary.mockResolvedValue({ mtime: 200 });
+    const { host, root } = await renderPage();
+    const save = host.querySelector('button[aria-label="保存"]');
+    if (!(save instanceof HTMLButtonElement)) throw new Error("missing save button");
+
+    expect(save.textContent).toBe("保存");
+    await typeInto(textarea(host), "1. y");
+    await click(save);
+
+    expect(save.textContent).toBe("已保存");
+
+    // 又有了没存的改动，「已保存」就是假话了——不等计时器，当场复原
+    await typeInto(textarea(host), "1. yz");
+    expect(save.textContent).toBe("保存");
+    expect(save.disabled).toBe(false);
+
+    await unmount(root);
+  });
+
+  it("保存失败（出错 / 冲突）不显示「已保存」", async () => {
+    saveDiary.mockRejectedValueOnce(new Error("网络错误"));
+    saveDiary.mockRejectedValueOnce(new DiaryConflictError(150));
+    const { host, root } = await renderPage();
+    const save = host.querySelector('button[aria-label="保存"]');
+    if (!(save instanceof HTMLButtonElement)) throw new Error("missing save button");
+
+    await typeInto(textarea(host), "1. y");
+    await click(save);
+    expect(host.textContent).toContain("网络错误");
+    expect(save.textContent).toBe("保存");
+
+    await click(save);
+    expect(host.textContent).toContain("日记已被其他窗口修改");
+    expect(save.textContent).toBe("保存");
+
+    await unmount(root);
+  });
+
   it("保存在途中继续打字：回来不清脏标记，那段内容仍能保存出去", async () => {
     // 无条件 setDirty(false) 会把这段从未上传的内容的脏标记一起抹掉——保存按钮变灰、
     // useUnsavedChangesGuard 也不再拦截，换页即静默丢数据。
