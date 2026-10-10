@@ -284,6 +284,19 @@ describe("apiFetch 原生通道回退 WebView", () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
+  it("WebView 备份先败、原生仍挂着：总时限照样生效，不因备份收尾被清掉", async () => {
+    vi.spyOn(nativeHttp, "request").mockReturnValue(new Promise<NativeResponse>(() => {}));
+    vi.spyOn(globalThis, "fetch").mockRejectedValue(new TypeError("fetch failed"));
+    const promise = apiFetch("/api/sync/status?n=8", {
+      transport: "native-android",
+      hedge: { delayMs: 3000 },
+      timeoutMs: 15_000,
+    });
+    const assertion = expect(promise).rejects.toThrow(/超时/);
+    await vi.advanceTimersByTimeAsync(15_000);
+    await assertion;
+  });
+
   it("两条都失败：报网络失败", async () => {
     vi.spyOn(nativeHttp, "request").mockRejectedValue(new Error("UnknownHostException"));
     vi.spyOn(globalThis, "fetch").mockRejectedValue(new TypeError("fetch failed"));

@@ -288,9 +288,10 @@ async function webFetch<T>(
       throw error;
     }
     throw describeFetchFailure(url, error);
-  } finally {
-    ctx.clearTotalTimer();
   }
+  // 响应头到了才停总计时器，读 body 不受它约束（与改动前一致）。竞速里的备份不停：
+  // 它先败时原生可能还挂着，总时限是那条原生唯一的 JS 侧上限，由 apiFetch 收尾统一清。
+  if (!raceSignal) ctx.clearTotalTimer();
 
   if (!res.ok) {
     let details = "";
