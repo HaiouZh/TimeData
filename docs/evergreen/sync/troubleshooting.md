@@ -60,7 +60,7 @@ last-reviewed: 2026-10-10
 
 ## 3. 分段耗时观测
 
-`useSync.sync()` 每轮用 `createPhaseRecorder()`（`packages/client/src/sync/phaseTimings.ts`）给 status / push / pull / bumpApply 阶段计时。写后路径只有 push/pull；补差路径只有 status/pull；SSE bump payload 就地应用只有 bumpApply。无论成功还是失败，收尾都会落一条 `SyncTimingEntry` 到 localStorage `timedata_sync_phase_timings` 环形缓冲（最多 20 条，最新在前）。
+`useSync.sync()` 每轮用 `createPhaseRecorder()`（`packages/client/src/sync/phaseTimings.ts`）给 status / push / pull / bumpApply 阶段计时。写后路径只有 push/pull；补差路径有游标时只有 pull（status 预查只留给无游标设备，见 [ADR 0037](../../adr/0037-incremental-sync-skips-status-preflight.md)），无游标时 status/pull；SSE bump payload 就地应用只有 bumpApply。无论成功还是失败，收尾都会落一条 `SyncTimingEntry` 到 localStorage `timedata_sync_phase_timings` 环形缓冲（最多 20 条，最新在前）。
 
 `SyncTimingEntry` 的诊断字段来自调度器 `SyncExecutorMeta`、SSE 连接态与本轮实际请求：`waitMs`（executor 触发前排队时长）、`reason`（`SyncRequestReason`）、`connection`（触发时的 `SyncStreamState`）、`transport`（`web`、`native-android` 或 `mixed`）和可选 `protocol`。`getSyncTimings()` 读取时做逐元素 shape 校验，坏元素丢弃；`phases` 允许携带未知阶段键，存量旧数据无需迁移。
 
@@ -76,7 +76,7 @@ last-reviewed: 2026-10-10
 - **发送成功只删「这一批发出去的那几条」**，不整清队列——发送在途时新攒的记录会被一起抹掉，那是静默丢数据。在途期间新来的发送只带自己的 logs，不重复搭队列。
 - **被挤出和被拒收的都计在 `timedata_dropped_reports`**，随下一条 `open_session` 的 `dropped` 字段上报。没有这个数，「没有坏数据」和「坏数据被丢了」在报告里长得一模一样。
 
-`open_session` 一条记一次打开：`kind`（cold / resume）、`ttiMs`（打开到能点）、`syncMs`（新数据到达）、`endedBy`（complete / cap / hidden / reload）、`net`（建连 / 首字节 / 传输，来自 `sync/resourceTimingCache.ts`）、`storageMs` / `storageErr`、`dropped`。资源计时走 PerformanceObserver 缓存而不是 `getEntriesByType`——后者的缓冲有 250 条上限，满了新条目不入。
+`open_session` 一条记一次打开：`kind`（cold / resume）、`ttiMs`（打开到能点）、`syncMs`（新数据到达）、`endedBy`（complete / cap / hidden / reload）、`net`（本次打开首个同步读请求——status 或 pull，取发起最早者——的建连 / 首字节 / 传输，来自 `sync/resourceTimingCache.ts` 的 `syncNetTimingSince`）、`storageMs` / `storageErr`、`dropped`。资源计时走 PerformanceObserver 缓存而不是 `getEntriesByType`——后者的缓冲有 250 条上限，满了新条目不入。
 
 **两处接线断了，指标会静默变空而不是报错**，排查时先确认它们还在：`main.tsx` 里的 `installResourceTimingCache()` 一旦没装，`net` 全为 null，报告 M3 的建连 / 首字节列整列是「—」，看起来像服务端没发 `Timing-Allow-Origin`；`SchedulerWatchdog` 里订阅 `phaseTimings` 的 `onSyncTimingRecorded` 一旦被当成死代码删掉，`syncMs` 恒为 null、三件事永远齐不了，M3 会整列变成「> 20 s」，看起来像网络全挂。两者都不会抛错、不会有测试变红。
 

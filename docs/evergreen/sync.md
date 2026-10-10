@@ -89,16 +89,18 @@ last-reviewed: 2026-10-10
    latestSeq/appliedCount，无别的设备插队（latestSeq − baseSeq === appliedCount 且 push 全干净）时
    直接推进游标、跳过回声 pull（写后仅 1 请求）；否则 syncPullSinceSeq() 补差。
    不发 /api/sync/status——status 的唯一用途是 no-op 判定，有待上传时该判定恒为假
-3. unsyncedCount=0：GET /api/sync/status 取云端 latestSeq；
-   latestSeq <= 本地读数 → no-op（不 push、不 pull）；否则 syncPullSinceSeq() 补差
+3. unsyncedCount=0 且有游标：直接 syncPullSinceSeq()（sinceSeq = 游标），一次往返同时判定与补差：
+   首批 latestSeq == 游标 → no-op（服务器回空批）；低于游标 → 账本异常、不落库；更高 → 同批落库
+   unsyncedCount=0 且无游标（新设备）：GET /api/sync/status 取云端 latestSeq；
+   latestSeq <= 本地读数 → no-op（不 push、不 pull）；否则 syncPullSinceSeq() 补差（见 ADR 0037）
 4. resolveConflicts()（UI 决定）keep_local 还是 use_remote
 5. reportToServer() 通过 `/api/admin/sync-logs` 写一条 sync_logs 摘要
    （fire-and-forget：不 await、不计入同步窗口，自身吞错）
 6. 有实际动作的成功分支收尾 pruneSyncedLogs()：synced=1 的历史日志按 7 天窗口清理
-   （第 3 步 no-op 早退不清理——那条路径零写入、零请求，连回执都不产生）
+   （第 3 步 no-op 早退不清理——那条路径零写入，连回执都不产生）
 ```
 
-写后阻塞链路因此至多 push + pull 两个网络请求，且无插队时进一步降到仅 push 一个（push 回执带 latestSeq/appliedCount，判定无插队即跳过回声 pull，见 [ADR 0016](../adr/0016-push-latestseq-and-pull-pagination.md)）。主链无前置探活：服务器不可达时由 push/status 请求本身报错走 `setError`（`lib/serverHealth.ts` 仅供诊断场景）。同步前不创建本地快照备份（[ADR 0015](../adr/0015-remove-client-auto-snapshots.md)）。
+写后阻塞链路因此至多 push + pull 两个网络请求，且无插队时进一步降到仅 push 一个（push 回执带 latestSeq/appliedCount，判定无插队即跳过回声 pull，见 [ADR 0016](../adr/0016-push-latestseq-and-pull-pagination.md)）。主链无前置探活：服务器不可达时由 push / pull / status 请求本身报错走 `setError`（`lib/serverHealth.ts` 仅供诊断场景）。同步前不创建本地快照备份（[ADR 0015](../adr/0015-remove-client-auto-snapshots.md)）。
 
 no-op 判定只比较账本读数，不算哈希、不数行数、不拉快照。`contentHash` 只是诊断工具：`getSyncHealth()`（设置页同步健康诊断）仍用它做本地与云端的深度体检。
 

@@ -4,6 +4,7 @@ import {
   latestNetTimingSince,
   latestSyncProtocol,
   netTimingOf,
+  syncNetTimingSince,
   recordResourceEntry,
   resetResourceTimingCache,
 } from "./resourceTimingCache.js";
@@ -52,6 +53,18 @@ describe("缓存", () => {
     recordResourceEntry(entry({ startTime: 900 }));
     expect(latestNetTimingSince("status", 800)).not.toBeNull();
     expect(latestNetTimingSince("pull", 0)).toBeNull();
+  });
+
+  it("同步首个读请求的细分：有游标时回前台只发 pull，没有 status 也要取得到", () => {
+    recordResourceEntry(entry({ name: "https://api.example/api/sync/pull", startTime: 900, connectEnd: 1100 }));
+    expect(syncNetTimingSince(800)).toMatchObject({ connectMs: 90 });
+    expect(syncNetTimingSince(950)).toBeNull();
+  });
+
+  it("status 与 pull 都在会话内：取先发出的那个（它才是这次打开的首个往返）", () => {
+    recordResourceEntry(entry({ name: "https://api.example/api/sync/status", startTime: 900, connectEnd: 1050 }));
+    recordResourceEntry(entry({ name: "https://api.example/api/sync/pull", startTime: 1300, connectEnd: 1400 }));
+    expect(syncNetTimingSince(800)).toMatchObject({ connectMs: 40 });
   });
 
   it("任一 /api/sync/ 条目带协议就更新协议；非同步请求忽略", () => {

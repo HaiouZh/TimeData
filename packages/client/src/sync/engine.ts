@@ -992,9 +992,13 @@ async function applyPullChangesBatch(
   return { applied: batchApplied, conflicts: batchConflicts };
 }
 
+function ledgerBehindError(serverSeq: number, localSeq: number): Error {
+  return new Error(`同步账本异常：服务器序号 ${serverSeq} 低于本地序号 ${localSeq}，请先执行全量拉取或检查服务器数据恢复状态。`);
+}
+
 export async function syncPullSinceSeq(
-  options: { transport?: SyncTransport } = {},
-): Promise<{ applied: number; conflicts: SyncConflict[]; transport: SyncTransport }> {
+  options: { transport?: SyncTransport; ledgerGuard?: boolean } = {},
+): Promise<{ applied: number; conflicts: SyncConflict[]; transport: SyncTransport; identical: boolean }> {
   const startSeq = buildPullCursor("incremental").sinceSeq;
   const transport = startSeq > 0 ? options.transport ?? "web" : "web";
   // 原生请求可能由 WebView 备份答复：任一批走了 web 就如实报 web，计时通道据此记 mixed / web。
@@ -1006,15 +1010,26 @@ export async function syncPullSinceSeq(
   let applied = 0;
   const conflicts: SyncConflict[] = [];
   const protectedCascadeRecords = new Set<string>();
+  let sawFirstBatch = false;
+  let firstLatestSeq: number | null = null;
 
   const last = await fetchPullBatches(startSeq, async (response) => {
+    if (!sawFirstBatch) {
+      sawFirstBatch = true;
+      // 响应缺 latestSeq（旧服务器）时既不判 identical 也不做倒退检查，按「有动作」走——安全方向。
+      firstLatestSeq = typeof response.latestSeq === "number" ? response.latestSeq : null;
+      // 直接 pull 顶替了 status 预查，那里的账本倒退检查随之搬到首批：落库与推游标之前就拦下。
+      if (options.ledgerGuard && firstLatestSeq !== null && firstLatestSeq < startSeq) {
+        throw ledgerBehindError(firstLatestSeq, startSeq);
+      }
+    }
     const batch = await applyPullChangesBatch(response.changes, protectedCascadeRecords);
     applied += batch.applied;
     conflicts.push(...batch.conflicts);
   }, { transport, onServedBy });
 
   advanceSeqCursor(last); // 末批收尾兜底到 latestSeq
-  return { applied, conflicts, transport: served };
+  return { applied, conflicts, transport: served, identical: startSeq > 0 && firstLatestSeq === startSeq };
 }
 
 export async function syncForceReplace(): Promise<number> {
@@ -1293,7 +1308,47 @@ async function runRegularSync(options: RegularSyncOptions = {}): Promise<Regular
         };
       }
 
-      // 无 pending：status 预查仅在此路径保留，承担 no-op 判定。
+      // 有游标：直接增量 pull，一次往返同时回答「有没有新数据」并把它拉回来（服务器无新数据时返回空批）。
+      // status 在这里的两个用途——latestSeq 判 no-op、serverTime 记时钟偏差——pull 响应里都有，
+      // 账本倒退检查由 ledgerGuard 在首批做。省掉的那个串行往返，安卓回前台实测约 1s。
+      const cursor = getLastSyncedSeq() ?? 0;
+      if (cursor > 0) {
+        const pull = () => syncPullSinceSeq({ transport: options.transport, ledgerGuard: true });
+        const pulled = rec ? await rec.time("pull", pull) : await pull();
+        if (rec) rec.transport = mergeSyncTimingTransport(rec.transport, pulled.transport);
+        resetConsecutiveSyncFailures();
+        if (pulled.identical) {
+          return {
+            checked: true,
+            identical: true,
+            pushed: 0,
+            rejected: 0,
+            pushConflicts: 0,
+            pushIssues: [],
+            pulled: 0,
+            conflicts: [],
+          };
+        }
+        const logs: Array<{ action: string; detail?: string; record_count?: number }> = [
+          { action: "pull_seq_catchup", record_count: pulled.applied },
+        ];
+        if (rec) logs.push({ action: "phase_timings", detail: JSON.stringify(rec.phases), record_count: 0 });
+        void reportToServer(logs); // fire-and-forget：不 await，不计入 syncing 窗口
+        void pruneSyncedLogs().catch(() => undefined); // 清理失败不应算作整轮同步失败，也不占同步窗口
+        return {
+          checked: true,
+          identical: false,
+          pushed: 0,
+          rejected: 0,
+          pushConflicts: 0,
+          pushIssues: [],
+          pulled: pulled.applied,
+          conflicts: pulled.conflicts,
+        };
+      }
+
+      // 没有游标（新设备 / 重置后）：保留 status 预查——直接 pull 会是 sinceSeq=0 的全量拉取，
+      // 那要验 TOTP；服务器为空时 status 一次就能判 no-op，不打扰用户。
       // contentHash 不再参与主路径，仅保留在 getSyncHealth() 诊断工具里做深度体检。
       let statusServedBy: SyncTransport = options.transport ?? "web";
       const statusRequestOptions = syncReadTransportOptions(statusServedBy, (served) => {
@@ -1307,9 +1362,7 @@ async function runRegularSync(options: RegularSyncOptions = {}): Promise<Regular
       recordClockSkew(serverStatus.serverTime);
       const serverSeq = serverStatus.latestSeq ?? 0;
       const localSeq = getLastSyncedSeq() ?? 0;
-      if (serverSeq < localSeq) {
-        throw new Error(`同步账本异常：服务器序号 ${serverSeq} 低于本地序号 ${localSeq}，请先执行全量拉取或检查服务器数据恢复状态。`);
-      }
+      if (serverSeq < localSeq) throw ledgerBehindError(serverSeq, localSeq);
       if (serverSeq === localSeq) {
         resetConsecutiveSyncFailures();
         return {

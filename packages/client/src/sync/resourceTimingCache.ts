@@ -62,6 +62,18 @@ export function latestNetTimingSince(key: SyncPathKey, sinceMs: number): NetTimi
   return netTimingOf(entry);
 }
 
+/**
+ * 本次打开的首个同步读请求（status 或 pull，取发起最早者）的细分。有游标时回前台只发一次增量 pull、
+ * 不再发 status——只看 status 会让 open_session.net 整列变空，看起来像服务端没发 Timing-Allow-Origin。
+ */
+export function syncNetTimingSince(sinceMs: number): NetTiming | null {
+  const candidates = (["status", "pull"] as const)
+    .map((key) => latest.get(key))
+    .filter((entry): entry is ResourceEntryLike => entry !== undefined && entry.startTime >= sinceMs)
+    .sort((a, b) => a.startTime - b.startTime);
+  return netTimingOf(candidates[0]);
+}
+
 export function latestSyncProtocol(): string | undefined {
   return protocol;
 }

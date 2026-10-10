@@ -3137,17 +3137,9 @@ describe("regularSync", () => {
     expect(apiFetchMock).toHaveBeenCalledWith("/api/sync/pull", expect.objectContaining({ hedge: { delayMs: SYNC_HEDGE_DELAY_MS } }));
   });
 
-  it("native transport 只用于 status 与增量 pull，且都带跨通道 WebView 备份", async () => {
+  it("有游标时 native transport 只用于那一次增量 pull，且带跨通道 WebView 备份", async () => {
     setLastSyncedSeq(4);
     apiFetchMock
-      .mockResolvedValueOnce({
-        categoryCount: 0,
-        entryCount: 0,
-        quickNoteCount: 0,
-        lastUpdatedAt: null,
-        latestSeq: 5,
-        serverTime: "2026-05-17T00:00:00.000Z",
-      })
       .mockResolvedValueOnce({
         changes: [],
         latestSeq: 5,
@@ -3158,12 +3150,9 @@ describe("regularSync", () => {
 
     await regularSync({ transport: "native-android" });
 
-    expect(apiFetchMock).toHaveBeenNthCalledWith(1, "/api/sync/status", expect.objectContaining({
-      transport: "native-android",
-      hedge: { delayMs: SYNC_NATIVE_FALLBACK_DELAY_MS },
-    }));
+    expect(apiFetchMock).not.toHaveBeenCalledWith("/api/sync/status", expect.anything());
     expect(apiFetchMock).toHaveBeenNthCalledWith(
-      2,
+      1,
       "/api/sync/pull",
       expect.objectContaining({
         method: "POST",
@@ -3180,14 +3169,6 @@ describe("regularSync", () => {
       return body;
     };
     apiFetchMock
-      .mockImplementationOnce(servedByWeb({
-        categoryCount: 0,
-        entryCount: 0,
-        quickNoteCount: 0,
-        lastUpdatedAt: null,
-        latestSeq: 5,
-        serverTime: "2026-05-17T00:00:00.000Z",
-      }))
       .mockImplementationOnce(servedByWeb({
         changes: [],
         latestSeq: 5,
@@ -3225,7 +3206,10 @@ describe("regularSync", () => {
 
     await regularSync({ transport: "native-android", phases });
 
-    expect(apiFetchMock).toHaveBeenNthCalledWith(1, "/api/sync/status", expect.objectContaining({ transport: "native-android" }));
+    expect(apiFetchMock).toHaveBeenNthCalledWith(1, "/api/sync/status", expect.objectContaining({
+      transport: "native-android",
+      hedge: { delayMs: SYNC_NATIVE_FALLBACK_DELAY_MS },
+    }));
     expect(apiFetchMock).toHaveBeenNthCalledWith(
       2,
       "/api/sync/pull",
@@ -3291,7 +3275,111 @@ describe("regularSync", () => {
     );
   });
 
-  it("returns identical from meta status without pulling a full snapshot", async () => {
+  // 有游标、无 pending：直接增量 pull，一次往返同时完成「有没有新数据」与「拉回来」。
+  // status 的两个用途（latestSeq、serverTime）pull 响应里都有；省掉的那个往返安卓实测约 1s。
+  it("有游标且无 pending：不发 status，直接增量 pull；服务器无新数据即判 identical", async () => {
+    setLastSyncedSeq(7);
+    apiFetchMock.mockResolvedValueOnce({
+      changes: [],
+      latestSeq: 7,
+      nextSinceSeq: 7,
+      hasMore: false,
+      serverTime: "2026-05-08T10:00:00.000Z",
+    });
+
+    const result = await regularSync();
+
+    expect(result).toMatchObject({ identical: true, pushed: 0, pulled: 0 });
+    expect(apiFetchMock).toHaveBeenCalledTimes(1);
+    expect(apiFetchMock).toHaveBeenCalledWith("/api/sync/pull", expect.objectContaining({
+      method: "POST",
+      body: JSON.stringify({ sinceSeq: 7, limit: 500 }),
+    }));
+    expect(getLastSyncedSeq()).toBe(7);
+  });
+
+  it("有游标且服务器有新数据：同一次 pull 直接落库并推进游标", async () => {
+    setLastSyncedSeq(7);
+    apiFetchMock
+      .mockResolvedValueOnce({
+        changes: [{
+          tableName: "quick_notes",
+          recordId: "note-direct",
+          action: "update",
+          data: {
+            id: "note-direct",
+            text: "direct",
+            occurredAt: "2026-06-01T04:01:30.123Z",
+            createdAt: "2026-06-01T04:02:00.000Z",
+            updatedAt: "2026-06-01T04:02:00.000Z",
+          },
+          timestamp: "2026-06-01T04:02:00.000Z",
+        }],
+        latestSeq: 8,
+        nextSinceSeq: 8,
+        hasMore: false,
+        serverTime: "2026-06-01T04:04:00.000Z",
+      })
+      .mockResolvedValueOnce({ ok: true });
+    const phases = createPhaseRecorder();
+
+    const result = await regularSync({ phases });
+
+    expect(result).toMatchObject({ identical: false, pulled: 1 });
+    expect(apiFetchMock).not.toHaveBeenCalledWith("/api/sync/status", expect.anything());
+    await expect(db.quickNotes.get("note-direct")).resolves.toMatchObject({ text: "direct" });
+    expect(getLastSyncedSeq()).toBe(8);
+    expect(phases.phases.status).toBeUndefined();
+    expect(phases.phases.pull).toBeTypeOf("number");
+  });
+
+  it("直接 pull 时服务器序号低于本地游标：照旧报账本异常，不落库、不动游标", async () => {
+    setLastSyncedSeq(9);
+    apiFetchMock.mockResolvedValueOnce({
+      changes: [],
+      latestSeq: 4,
+      nextSinceSeq: 9,
+      hasMore: false,
+      serverTime: "2026-05-08T10:00:00.000Z",
+    });
+
+    await expect(regularSync()).rejects.toThrow(/同步账本异常：服务器序号 4 低于本地序号 9/);
+    expect(getLastSyncedSeq()).toBe(9);
+  });
+
+  it("直接 pull 的响应缺 latestSeq（旧服务器）：不判 identical、不报账本异常", async () => {
+    setLastSyncedSeq(9);
+    apiFetchMock.mockResolvedValueOnce({
+      changes: [],
+      nextSinceSeq: 9,
+      hasMore: false,
+      serverTime: "2026-05-08T10:00:00.000Z",
+    });
+
+    const result = await regularSync();
+
+    expect(result).toMatchObject({ identical: false, pulled: 0 });
+    expect(getLastSyncedSeq()).toBe(9);
+  });
+
+  it("没有游标（新设备）：仍先发 status，服务器为空时不触发要验证码的全量 pull", async () => {
+    apiFetchMock.mockResolvedValueOnce({
+      categoryCount: 0,
+      entryCount: 0,
+      quickNoteCount: 0,
+      lastUpdatedAt: null,
+      latestSeq: 0,
+      serverTime: "2026-05-08T10:00:00.000Z",
+    });
+
+    const result = await regularSync();
+
+    expect(result).toMatchObject({ identical: true });
+    expect(apiFetchMock).toHaveBeenCalledTimes(1);
+    expect(apiFetchMock).toHaveBeenCalledWith("/api/sync/status", expect.anything());
+  });
+
+  it("returns identical from one incremental pull without pulling a full snapshot", async () => {
     await db.categories.add({
       id: "cat-1",
       name: "Work",
@@ -3315,11 +3403,10 @@ describe("regularSync", () => {
     setLastSyncedSeq(7);
 
     apiFetchMock.mockResolvedValue({
-      categoryCount: 1,
-      entryCount: 1,
-      quickNoteCount: 0,
-      lastUpdatedAt: "2026-05-08T09:00:00.000Z",
+      changes: [],
       latestSeq: 7,
+      nextSinceSeq: 7,
+      hasMore: false,
       serverTime: "2026-05-08T10:00:00.000Z",
     });
 
@@ -3327,8 +3414,11 @@ describe("regularSync", () => {
 
     expect(result).toMatchObject({ identical: true, pushed: 0, pulled: 0, rejected: 0, pushConflicts: 0 });
     expect(apiFetchMock).toHaveBeenCalledTimes(1);
-    expect(apiFetchMock).toHaveBeenCalledWith("/api/sync/status", { hedge: { delayMs: SYNC_HEDGE_DELAY_MS } });
-    expect(apiFetchMock).not.toHaveBeenCalledWith("/api/sync/pull", expect.anything());
+    expect(apiFetchMock).toHaveBeenCalledWith("/api/sync/pull", expect.objectContaining({
+      body: JSON.stringify({ sinceSeq: 7, limit: 500 }),
+      hedge: { delayMs: SYNC_HEDGE_DELAY_MS },
+    }));
+    expect(apiFetchMock).not.toHaveBeenCalledWith("/api/sync/status", expect.anything());
     expect(getLastSyncedSeq()).toBe(7);
   });
 
@@ -3854,21 +3944,20 @@ describe("bump 载荷就地 apply", () => {
     expect(result).toMatchObject({ pulled: 1, conflicts: [], identical: false });
   });
 
-  it("游标不连续：清 stash、走现状 status 路径", async () => {
+  it("游标不连续：清 stash、走网络判定（增量 pull）", async () => {
     setLastSyncedSeq(3);
     stashBumpPayload({ fromSeq: 5, latestSeq: 6, changes: [] });
     apiFetchMock.mockResolvedValue({
-      categoryCount: 0,
-      entryCount: 0,
-      quickNoteCount: 0,
-      lastUpdatedAt: null,
+      changes: [],
       latestSeq: 3,
+      nextSinceSeq: 3,
+      hasMore: false,
       serverTime: "2026-07-10T00:00:00.000Z",
     });
 
     const result = await regularSync();
 
-    expect(apiFetchMock).toHaveBeenCalledWith("/api/sync/status", expect.objectContaining({ hedge: { delayMs: SYNC_HEDGE_DELAY_MS } }));
+    expect(apiFetchMock).toHaveBeenCalledWith("/api/sync/pull", expect.objectContaining({ hedge: { delayMs: SYNC_HEDGE_DELAY_MS } }));
     expect(result).toMatchObject({ identical: true });
 
     // stash 已被 take 清空：即便游标随后恰好推进到原 stash.fromSeq，也不会补吃一次
@@ -3876,17 +3965,16 @@ describe("bump 载荷就地 apply", () => {
     apiFetchMock.mockClear();
     setLastSyncedSeq(5);
     apiFetchMock.mockResolvedValue({
-      categoryCount: 0,
-      entryCount: 0,
-      quickNoteCount: 0,
-      lastUpdatedAt: null,
+      changes: [],
       latestSeq: 5,
+      nextSinceSeq: 5,
+      hasMore: false,
       serverTime: "2026-07-10T00:00:01.000Z",
     });
 
     const result2 = await regularSync();
 
-    expect(apiFetchMock).toHaveBeenCalledWith("/api/sync/status", expect.anything());
+    expect(apiFetchMock).toHaveBeenCalledWith("/api/sync/pull", expect.anything());
     expect(result2).toMatchObject({ identical: true });
   });
 
@@ -3943,18 +4031,17 @@ describe("bump 载荷就地 apply", () => {
     stashBumpPayload({ fromSeq: 6, latestSeq: 7, changes: [] });
 
     apiFetchMock.mockResolvedValueOnce({
-      categoryCount: 0,
-      entryCount: 0,
-      quickNoteCount: 0,
-      lastUpdatedAt: null,
+      changes: [],
       latestSeq: 5,
+      nextSinceSeq: 5,
+      hasMore: false,
       serverTime: "2026-07-10T00:00:00.000Z",
     });
 
     const result = await regularSync();
 
-    // 新 stash.fromSeq=6 与游标 5 不匹配（旧槽已被覆盖，不再是 5）→ 退化 status 路径。
-    expect(apiFetchMock).toHaveBeenCalledWith("/api/sync/status", expect.anything());
+    // 新 stash.fromSeq=6 与游标 5 不匹配（旧槽已被覆盖，不再是 5）→ 退化网络判定（增量 pull）。
+    expect(apiFetchMock).toHaveBeenCalledWith("/api/sync/pull", expect.anything());
     expect(result).toMatchObject({ identical: true });
   });
 

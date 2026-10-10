@@ -45,10 +45,11 @@ status: living
 | [0034](0034-task-relations-as-own-table.md) | 前置关系独立成表，父子仍留在 `Task.parentId` | 2026-08-16 | 前置挂在 `Goal.prerequisites` 这类实体字段上时，一条边的增删是整行写，LWW 下两台设备各连一条会互相覆盖、先连的静默消失。独立成表后每条边是自己的同步单元。父子不跟着搬：恒一层、承载排序与级联删除，搬进通用关系表要把这三样摊平成额外校验；子任务松绑改为逐条解除守卫达成，`parentId` 结构未动 | 修正 metaspec 拍板③措辞 |
 | [0035](0035-track-milestones-and-signal-priority.md) | 阶段骨架独立成表 `track_milestones`，调度信号显式宣告优先 | 2026-08-20 | 轨道用不起来的根因是没有推进感：阶段骨架给「离目标多远」一个家（刻度出生、可挂任务镜像完成、七种修改操作第一类公民、进度=手动分段条且 dropped 剔除分母）；调度台判定反转为 等我接>agent在跑>等外部>推进中，停滞退出分组降为 `stalledDays` 提醒——信号是用户宣告的，系统只提醒不改判 | 改写 tracks.md §8 判定优先级；track-workbench metaspec 阶段1 |
 | [0036](0036-scheduler-transport-owned-by-app.md) | React 调度器的排队信道归应用管：index.html 早期注入 `setImmediate`，死了就换 | 2026-09-21 | WebKit 在网络进程断连时把页面里所有 MessagePort 永久清空且不重建，scheduler 自建的信道从此哑掉、补拍与直驱都救不了；注入 setImmediate 让 scheduler 走应用持有的可换信道，回前台死端口即换、50 ms 兜底、看门狗降为最后防线 | ios-instant-open 阶段2；重写 ios/scheduler-resilience §1/§3/§4/§5 |
+| [0037](0037-incremental-sync-skips-status-preflight.md) | 有游标的无 pending 同步直接增量 pull，status 预查只留给无游标设备 | 2026-10-10 | status 在补差路径上的两个用途（latestSeq 判 no-op、serverTime 记偏差）增量 pull 响应都带；省掉串行的那一个往返，有新数据的回前台从两个往返降到一个，无新数据仍是一个。账本倒退检查搬到 pull 首批、落库前拦下；无游标时直接 pull 会是要 TOTP 的全量拉取，故保留 status | 不修订 [0012](0012-sync-ledger-and-domain-registry.md) 的 no-op 判据，只换 latestSeq 来源 |
 
 ## 按主题速查
 
-- **同步内核**：0012（账本+登记簿）→ 0006（墓碑）、0016（免回声+分页）、0017（staleGuard）、0018（完成 op）、0019（破坏性操作）、0020（push 幂等）、0021（bump 带数据）
+- **同步内核**：0012（账本+登记簿）→ 0006（墓碑）、0016（免回声+分页）、0017（staleGuard）、0018（完成 op）、0019（破坏性操作）、0020（push 幂等）、0021（bump 带数据）、0037（补差免 status 预查）
 - **写入边界与鉴权**：0001 → 0011 → 0013、0005、0025（陌生来源收敛）、0033（agent 建任务）
 - **备份**：0002、0003、0007、0015
 - **数据建模**：0004（UTC）、0008（Dexie 版本链）、0010（QuickNote 域）、0014（tags vs 字段）、0035（阶段骨架 + 信号显式宣告）
