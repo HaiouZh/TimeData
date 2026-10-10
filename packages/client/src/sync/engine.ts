@@ -42,6 +42,22 @@ type SyncLog = SyncLogEntry;
 // 对冲策略归 engine（api.ts 只提供机制）：仅幂等同步请求启用；≈热连接 p75 的 3 倍。
 export const SYNC_HEDGE_DELAY_MS = 1500;
 const SYNC_HEDGE = { delayMs: SYNC_HEDGE_DELAY_MS } as const;
+/**
+ * Android 原生读请求的跨通道备份：原生网络失败立即、这么久没回也并发一条 WebView fetch，先回者胜。
+ * 取 3s：30 天线上 Android 原生 status 成功轮 p95 不到 2s，正常轮几乎不触发备份；
+ * 2026-10-10 那次原生挂满 10s 才报错，WebView 同一时刻是通的。只用于 status 与增量 pull（纯读）。
+ */
+export const SYNC_NATIVE_FALLBACK_DELAY_MS = 3_000;
+const SYNC_NATIVE_FALLBACK = { delayMs: SYNC_NATIVE_FALLBACK_DELAY_MS } as const;
+
+function syncReadTransportOptions(
+  transport: SyncTransport,
+  onServedBy: (served: SyncTransport) => void,
+): { transport: "native-android"; hedge: typeof SYNC_NATIVE_FALLBACK; onServedBy: (served: SyncTransport) => void } | { hedge: typeof SYNC_HEDGE } {
+  return transport === "native-android"
+    ? { transport, hedge: SYNC_NATIVE_FALLBACK, onServedBy }
+    : { hedge: SYNC_HEDGE };
+}
 
 export interface SyncConflict {
   tableName: "categories" | "time_entries" | "settings";
@@ -330,15 +346,16 @@ function isFullPullBody(body: unknown): boolean {
 
 async function fetchSyncPullResponse(
   body: unknown,
-  options: { timeoutMs?: number; transport?: SyncTransport } = {},
+  options: { timeoutMs?: number; transport?: SyncTransport; onServedBy?: (served: SyncTransport) => void } = {},
 ): Promise<SyncPullResponse> {
   const fullPull = isFullPullBody(body);
   const transport = fullPull ? "web" : options.transport ?? "web";
+  const onServedBy = options.onServedBy ?? (() => undefined);
   const request = (totpHeaders: Record<string, string>) =>
     apiFetch<unknown>("/api/sync/pull", {
       method: "POST",
       body: JSON.stringify(body),
-      ...(transport === "native-android" ? { transport } : { hedge: SYNC_HEDGE }),
+      ...syncReadTransportOptions(transport, onServedBy),
       ...(options.timeoutMs === undefined ? {} : { timeoutMs: options.timeoutMs }),
       ...(Object.keys(totpHeaders).length > 0 ? { headers: totpHeaders } : {}),
     });
@@ -379,14 +396,14 @@ function validatePullPageProgress(response: SyncPullResponse, cursor: number): v
 async function fetchPullBatches(
   startSeq: number,
   applyBatch: (response: SyncPullResponse) => Promise<void>,
-  options: { transport?: SyncTransport } = {},
+  options: { transport?: SyncTransport; onServedBy?: (served: SyncTransport) => void } = {},
 ): Promise<SyncPullResponse> {
   let cursor = startSeq;
   let lastResponse: SyncPullResponse | undefined;
   for (;;) {
     const response = await fetchSyncPullResponse(
       { sinceSeq: cursor, limit: PULL_PAGE_LIMIT },
-      { transport: options.transport },
+      { transport: options.transport, onServedBy: options.onServedBy },
     );
     recordClockSkew(response.serverTime);
     validatePullPageProgress(response, cursor);
@@ -980,6 +997,11 @@ export async function syncPullSinceSeq(
 ): Promise<{ applied: number; conflicts: SyncConflict[]; transport: SyncTransport }> {
   const startSeq = buildPullCursor("incremental").sinceSeq;
   const transport = startSeq > 0 ? options.transport ?? "web" : "web";
+  // 原生请求可能由 WebView 备份答复：任一批走了 web 就如实报 web，计时通道据此记 mixed / web。
+  let served: SyncTransport = transport;
+  const onServedBy = (next: SyncTransport) => {
+    if (next === "web") served = "web";
+  };
 
   let applied = 0;
   const conflicts: SyncConflict[] = [];
@@ -989,10 +1011,10 @@ export async function syncPullSinceSeq(
     const batch = await applyPullChangesBatch(response.changes, protectedCascadeRecords);
     applied += batch.applied;
     conflicts.push(...batch.conflicts);
-  }, { transport });
+  }, { transport, onServedBy });
 
   advanceSeqCursor(last); // 末批收尾兜底到 latestSeq
-  return { applied, conflicts, transport };
+  return { applied, conflicts, transport: served };
 }
 
 export async function syncForceReplace(): Promise<number> {
@@ -1273,14 +1295,15 @@ async function runRegularSync(options: RegularSyncOptions = {}): Promise<Regular
 
       // 无 pending：status 预查仅在此路径保留，承担 no-op 判定。
       // contentHash 不再参与主路径，仅保留在 getSyncHealth() 诊断工具里做深度体检。
-      const statusRequestOptions = options.transport === "native-android"
-        ? { transport: options.transport }
-        : { hedge: SYNC_HEDGE };
+      let statusServedBy: SyncTransport = options.transport ?? "web";
+      const statusRequestOptions = syncReadTransportOptions(statusServedBy, (served) => {
+        statusServedBy = served;
+      });
       const statusResponse = rec
         ? await rec.time("status", () => apiFetch<unknown>("/api/sync/status", statusRequestOptions))
         : await apiFetch<unknown>("/api/sync/status", statusRequestOptions);
       const serverStatus = parseSyncStatusResponse(statusResponse);
-      if (rec) rec.transport = mergeSyncTimingTransport(rec.transport, options.transport ?? "web");
+      if (rec) rec.transport = mergeSyncTimingTransport(rec.transport, statusServedBy);
       recordClockSkew(serverStatus.serverTime);
       const serverSeq = serverStatus.latestSeq ?? 0;
       const localSeq = getLastSyncedSeq() ?? 0;

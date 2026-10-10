@@ -1,6 +1,6 @@
-import { Capacitor } from "@capacitor/core";
+import { Capacitor, type CapacitorHttp } from "@capacitor/core";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { ApiError, apiFetch, buildApiUrl } from "./api.js";
+import { ApiError, apiFetch, buildApiUrl, nativeHttp } from "./api.js";
 
 describe("buildApiUrl", () => {
   it("does not create double slashes when base URL has a trailing slash", () => {
@@ -215,6 +215,98 @@ describe("apiFetch hedging", () => {
     vi.spyOn(globalThis, "fetch").mockRejectedValue(new TypeError("fetch failed"));
     await expect(apiFetch("/api/sync/status")).rejects.toThrow();
     expect(globalThis.fetch).toHaveBeenCalledTimes(1);
+  });
+});
+
+// 2026-10-10 安卓事故：原生通道（HttpURLConnection）连不上时 WebView 那条已经通了，
+// 同步却还在原生上干等。读请求带 hedge 时，原生失败立即、迟迟不回到点，都改走 WebView fetch。
+// 原生请求按 url+headers 去重（模块级 map），挂死的 mock 会留在 map 里——每条用例用不同 path。
+describe("apiFetch 原生通道回退 WebView", () => {
+  type NativeResponse = Awaited<ReturnType<typeof CapacitorHttp.request>>;
+  const nativeOk = (data: unknown): NativeResponse => ({ status: 200, data, headers: {}, url: "" });
+
+  beforeEach(() => {
+    localStorage.clear();
+    localStorage.setItem("timedata_api_url", "https://example.com");
+    vi.restoreAllMocks();
+    vi.useFakeTimers();
+    vi.spyOn(Capacitor, "getPlatform").mockReturnValue("android");
+    vi.spyOn(Capacitor, "isPluginAvailable").mockReturnValue(true);
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("原生先回：只走原生，不发 WebView fetch，回报 native-android", async () => {
+    vi.spyOn(nativeHttp, "request").mockResolvedValue(nativeOk({ ok: "native" }));
+    const fetchMock = vi.spyOn(globalThis, "fetch");
+    const servedBy: string[] = [];
+    await expect(apiFetch("/api/sync/status?n=1", {
+      transport: "native-android",
+      hedge: { delayMs: 3000 },
+      onServedBy: (t) => servedBy.push(t),
+    })).resolves.toEqual({ ok: "native" });
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(servedBy).toEqual(["native-android"]);
+  });
+
+  it("原生网络错误：不等 delayMs 立即改走 WebView，回报 web", async () => {
+    vi.spyOn(nativeHttp, "request").mockRejectedValue(new Error("UnknownHostException"));
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse({ ok: "web" }));
+    const servedBy: string[] = [];
+    await expect(apiFetch("/api/sync/status?n=2", {
+      transport: "native-android",
+      hedge: { delayMs: 3000 },
+      onServedBy: (t) => servedBy.push(t),
+    })).resolves.toEqual({ ok: "web" });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(servedBy).toEqual(["web"]);
+  });
+
+  it("原生挂住超过 delayMs：并发 WebView，先回者胜", async () => {
+    vi.spyOn(nativeHttp, "request").mockReturnValue(new Promise<NativeResponse>(() => {}));
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse({ ok: "web" }));
+    const promise = apiFetch("/api/sync/status?n=3", { transport: "native-android", hedge: { delayMs: 3000 } });
+    await vi.advanceTimersByTimeAsync(2999);
+    expect(fetchMock).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(1);
+    await expect(promise).resolves.toEqual({ ok: "web" });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("原生回了 HTTP 错误码：那是服务端的答复，照抛 ApiError，不改走 WebView", async () => {
+    vi.spyOn(nativeHttp, "request").mockResolvedValue({ status: 500, data: { error: "boom" }, headers: {}, url: "" });
+    const fetchMock = vi.spyOn(globalThis, "fetch");
+    await expect(apiFetch("/api/sync/status?n=4", {
+      transport: "native-android",
+      hedge: { delayMs: 3000 },
+    })).rejects.toBeInstanceOf(ApiError);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("两条都失败：报网络失败", async () => {
+    vi.spyOn(nativeHttp, "request").mockRejectedValue(new Error("UnknownHostException"));
+    vi.spyOn(globalThis, "fetch").mockRejectedValue(new TypeError("fetch failed"));
+    await expect(apiFetch("/api/sync/status?n=5", {
+      transport: "native-android",
+      hedge: { delayMs: 3000 },
+    })).rejects.toThrow(/请求失败|failed/i);
+  });
+
+  it("原生失败的报错把底层异常留作 cause（失败上报靠它分 DNS / 建连 / 读超时）", async () => {
+    const nativeError = new Error("java.net.UnknownHostException: Unable to resolve host");
+    vi.spyOn(nativeHttp, "request").mockRejectedValue(nativeError);
+    const error = await apiFetch("/api/sync/status?n=7", { transport: "native-android" }).catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(Error);
+    expect((error as Error).message).toMatch(/^网络请求失败/);
+    expect((error as Error).cause).toBe(nativeError);
+  });
+
+  it("不带 hedge：原生失败不改走 WebView（现状回归）", async () => {
+    vi.spyOn(nativeHttp, "request").mockRejectedValue(new Error("UnknownHostException"));
+    const fetchMock = vi.spyOn(globalThis, "fetch");
+    await expect(apiFetch("/api/sync/status?n=6", { transport: "native-android" })).rejects.toThrow();
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 });
 

@@ -20,7 +20,7 @@ vi.mock("../lib/api.js", () => ({
   apiFetch: apiFetchMock,
 }));
 
-import { advanceSeqCursor, canSkipEchoPull, clearBumpStash, compactSyncLogs, getClockSkewMs, getConsecutiveSyncFailureCount, getLastSyncedSeq, getQuarantinedSyncLogs, getSyncHealth, hasSyncAttemptThisSession, localContentHash, prepareForcePush, pruneSyncedLogs, requeueQuarantinedSyncLogs, recordClockSkew, recordRegularSyncFailure, recordSyncLog, recordSyncLogs, regularSync, resetConsecutiveSyncFailures, resetSyncAttempt, setLastSyncedSeq, shouldOpenSyncDiagnostics, stashBumpPayload, syncForcePushToServer, syncPush, syncPull, syncPullSinceSeq, syncForceReplace, yieldToMainThread, SYNC_HEDGE_DELAY_MS, SYNC_LOG_QUARANTINED } from "./engine.js";
+import { advanceSeqCursor, canSkipEchoPull, clearBumpStash, compactSyncLogs, getClockSkewMs, getConsecutiveSyncFailureCount, getLastSyncedSeq, getQuarantinedSyncLogs, getSyncHealth, hasSyncAttemptThisSession, localContentHash, prepareForcePush, pruneSyncedLogs, requeueQuarantinedSyncLogs, recordClockSkew, recordRegularSyncFailure, recordSyncLog, recordSyncLogs, regularSync, resetConsecutiveSyncFailures, resetSyncAttempt, setLastSyncedSeq, shouldOpenSyncDiagnostics, stashBumpPayload, syncForcePushToServer, syncPush, syncPull, syncPullSinceSeq, syncForceReplace, yieldToMainThread, SYNC_HEDGE_DELAY_MS, SYNC_LOG_QUARANTINED, SYNC_NATIVE_FALLBACK_DELAY_MS } from "./engine.js";
 import { listPendingArbitrations } from "./arbitration.ts";
 import { createPhaseRecorder } from "./phaseTimings.js";
 import { syncScheduler } from "./scheduler.js";
@@ -3137,7 +3137,7 @@ describe("regularSync", () => {
     expect(apiFetchMock).toHaveBeenCalledWith("/api/sync/pull", expect.objectContaining({ hedge: { delayMs: SYNC_HEDGE_DELAY_MS } }));
   });
 
-  it("native transport 只用于 status 与增量 pull，且不叠加 Web hedge", async () => {
+  it("native transport 只用于 status 与增量 pull，且都带跨通道 WebView 备份", async () => {
     setLastSyncedSeq(4);
     apiFetchMock
       .mockResolvedValueOnce({
@@ -3158,14 +3158,49 @@ describe("regularSync", () => {
 
     await regularSync({ transport: "native-android" });
 
-    expect(apiFetchMock).toHaveBeenNthCalledWith(1, "/api/sync/status", { transport: "native-android" });
+    expect(apiFetchMock).toHaveBeenNthCalledWith(1, "/api/sync/status", expect.objectContaining({
+      transport: "native-android",
+      hedge: { delayMs: SYNC_NATIVE_FALLBACK_DELAY_MS },
+    }));
     expect(apiFetchMock).toHaveBeenNthCalledWith(
       2,
       "/api/sync/pull",
-      expect.objectContaining({ method: "POST", transport: "native-android" }),
+      expect.objectContaining({
+        method: "POST",
+        transport: "native-android",
+        hedge: { delayMs: SYNC_NATIVE_FALLBACK_DELAY_MS },
+      }),
     );
-    expect(apiFetchMock.mock.calls[0][1]).not.toHaveProperty("hedge");
-    expect(apiFetchMock.mock.calls[1][1]).not.toHaveProperty("hedge");
+  });
+
+  it("原生请求实际由 WebView 备份答复时，计时通道如实记 web", async () => {
+    setLastSyncedSeq(4);
+    const servedByWeb = (body: unknown) => async (_path: string, options?: { onServedBy?: (t: string) => void }) => {
+      options?.onServedBy?.("web");
+      return body;
+    };
+    apiFetchMock
+      .mockImplementationOnce(servedByWeb({
+        categoryCount: 0,
+        entryCount: 0,
+        quickNoteCount: 0,
+        lastUpdatedAt: null,
+        latestSeq: 5,
+        serverTime: "2026-05-17T00:00:00.000Z",
+      }))
+      .mockImplementationOnce(servedByWeb({
+        changes: [],
+        latestSeq: 5,
+        nextSinceSeq: 5,
+        hasMore: false,
+        serverTime: "2026-05-17T00:00:01.000Z",
+      }))
+      .mockResolvedValueOnce({ ok: true });
+    const phases = createPhaseRecorder();
+
+    await regularSync({ transport: "native-android", phases });
+
+    expect(phases.transport).toBe("web");
   });
 
   it("native status 后游标为 0 的全量 pull 保持 Web，并把计时通道记为 mixed", async () => {
@@ -3190,7 +3225,7 @@ describe("regularSync", () => {
 
     await regularSync({ transport: "native-android", phases });
 
-    expect(apiFetchMock).toHaveBeenNthCalledWith(1, "/api/sync/status", { transport: "native-android" });
+    expect(apiFetchMock).toHaveBeenNthCalledWith(1, "/api/sync/status", expect.objectContaining({ transport: "native-android" }));
     expect(apiFetchMock).toHaveBeenNthCalledWith(
       2,
       "/api/sync/pull",
@@ -3248,9 +3283,12 @@ describe("regularSync", () => {
     expect(apiFetchMock).toHaveBeenNthCalledWith(
       2,
       "/api/sync/pull",
-      expect.objectContaining({ method: "POST", transport: "native-android" }),
+      expect.objectContaining({
+        method: "POST",
+        transport: "native-android",
+        hedge: { delayMs: SYNC_NATIVE_FALLBACK_DELAY_MS },
+      }),
     );
-    expect(apiFetchMock.mock.calls[1][1]).not.toHaveProperty("hedge");
   });
 
   it("returns identical from meta status without pulling a full snapshot", async () => {

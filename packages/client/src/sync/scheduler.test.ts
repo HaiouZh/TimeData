@@ -245,6 +245,28 @@ describe("createSyncScheduler", () => {
     scheduler.dispose();
   });
 
+  it("自家指数退避窗口内 reconnect 破例安排同步（网络恢复的实证不该陪退避干等）", async () => {
+    const executor = vi.fn().mockResolvedValue(false);
+    const scheduler = createSyncScheduler({ getUnsyncedCount: async () => 0 });
+    scheduler.setExecutor(executor);
+    await vi.advanceTimersByTimeAsync(0);
+
+    // 连败把退避拉长到 4s 窗口
+    scheduler.requestSync("bump");
+    await vi.advanceTimersByTimeAsync(SYNC_SCHEDULE_DEBOUNCE_MS);
+    await vi.advanceTimersByTimeAsync(SYNC_RETRY_BASE_MS);
+    await vi.advanceTimersByTimeAsync(SYNC_RETRY_BASE_MS * 2);
+    expect(executor).toHaveBeenCalledTimes(3);
+
+    executor.mockResolvedValueOnce(true);
+    scheduler.requestSync("reconnect");
+    await vi.advanceTimersByTimeAsync(SYNC_SCHEDULE_DEBOUNCE_MS);
+    expect(executor).toHaveBeenCalledTimes(4);
+    expect(executor.mock.calls[3][0].reason).toBe("reconnect");
+
+    scheduler.dispose();
+  });
+
   it("executor reject 也进入退避重试", async () => {
     const executor = vi.fn().mockRejectedValueOnce(new Error("offline")).mockResolvedValueOnce(true);
     const scheduler = createSyncScheduler({ getUnsyncedCount: async () => 0 });

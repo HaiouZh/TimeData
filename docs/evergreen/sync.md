@@ -53,7 +53,7 @@ contracts:
   - packages/server/src/db/utcReset.ts
   - packages/server/src/routes/data.ts
   - packages/server/src/sync/domains.ts
-last-reviewed: 2026-09-18
+last-reviewed: 2026-10-10
 ---
 
 # 同步机制
@@ -106,7 +106,7 @@ no-op 判定只比较账本读数，不算哈希、不数行数、不拉快照�
 
 Android 原生同步通道是显式、窄范围的 transport 选择：只有 `Capacitor.getPlatform() === "android"` 且调度原因是 `resume` 时，普通同步的 `/api/sync/status` 与 `sinceSeq > 0` 的增量 `/api/sync/pull` 才使用 `native-android`；Web/PWA 以及启动、写入、重连、定时兜底等原因继续使用 Web `fetch`。原生适配调用 Capacitor 7 内置 `CapacitorHttp`（Android `HttpURLConnection`），复用 URL、Bearer、`Content-Type`、`X-TimeData-Client-Build` 和 TOTP headers，并继续由客户端做 pull schema 校验与分页游标推进。`sinceSeq: 0` 全量拉取、push、force-push、健康诊断、管理/日记/备份 API 和 SSE 均保持 Web `fetch`；不启用全局 `CapacitorHttp` fetch/XHR patch。
 
-`CapacitorHttp` 返回完整响应体且没有逐请求 `AbortSignal`/cancel，因此原生请求不复用 Web hedge：一次 JS 超时或调用方 abort 只停止等待，底层 Android 连接可能仍在完成；原生 HTTP 失败不盲目重发 Web 请求，避免已到达服务端的 POST 产生重复写。原生 HTTP 错误仍归一为 `ApiError`（保留 status、headers 和 body），不可用或非 Android 平台在请求发出前回到 Web 默认路径。Android 原生路径绕过浏览器 CORS enforcement，但不绕过系统 DNS、VPN、代理、TLS 或服务器链路，HTTPS-only 约束仍然有效。
+`CapacitorHttp` 返回完整响应体且没有逐请求 `AbortSignal`/cancel：一次 JS 超时或调用方 abort 只停止等待，底层 Android 连接可能仍在完成。走原生的只有 status（GET）与增量 pull（POST 但服务端纯读、只记审计），因此它们带**跨通道 WebView 备份**（`SYNC_NATIVE_FALLBACK_DELAY_MS` = 3s）：原生网络失败立即、3 秒没回也并发一条 Web `fetch`，先回者胜，实际答复通道经 `onServedBy` 记进阶段计时的 `transport`。原生回了 HTTP 状态码（服务端已答复）、调用方 abort 或总超时都不换道。写请求（push 等）本就不走原生，「换道重发可能重复写」的顾虑不适用于这条备份。原生 HTTP 错误仍归一为 `ApiError`（保留 status、headers 和 body），不可用或非 Android 平台在请求发出前回到 Web 默认路径。Android 原生路径绕过浏览器 CORS enforcement，但不绕过系统 DNS、VPN、代理、TLS 或服务器链路，HTTPS-only 约束仍然有效。
 
 客户端 UI 层的同步状态由 `SyncContext` 统一提供，同步指示灯区分 `pending`（本地 Dexie `syncLog.synced=0` 计数大于 0）和 `success` / `idle`。所有自动触发统一走模块级调度器 `syncScheduler`（`packages/client/src/sync/scheduler.ts`），页面不再人肉接线，见下方"1.6 调度器"。设置页"上次同步"展示时间来自 `STORAGE_KEYS.lastSyncDisplayAt`，纯展示，不参与任何同步判定。
 

@@ -1,4 +1,4 @@
-import { Capacitor, CapacitorHttp } from "@capacitor/core";
+import { Capacitor, CapacitorHttp, type HttpOptions } from "@capacitor/core";
 import { isDesktopShell } from "./desktop/shell.js";
 import { CURRENT_BUILD_ID } from "./frontendUpdate.js";
 import { messages } from "./messages.ts";
@@ -32,29 +32,43 @@ export function getToken(): string {
   return safeGetItem(STORAGE_KEYS.apiToken) || "";
 }
 
-function describeFetchFailure(url: string): Error {
+// cause 留住底层异常：原生通道的 Java 异常名是分辨 DNS / 建连 / 读超时的唯一线索（失败轮上报会带出）。
+function describeFetchFailure(url: string, cause?: unknown): Error {
+  const options = cause === undefined ? undefined : { cause };
   if (isDesktopShell()) {
-    return new Error(messages.network.fetchFailed.desktop(url));
+    return new Error(messages.network.fetchFailed.desktop(url), options);
   }
   const platform = Capacitor.getPlatform();
   if (platform === "android" || platform === "ios") {
-    return new Error(messages.network.fetchFailed.mobile(url));
+    return new Error(messages.network.fetchFailed.mobile(url), options);
   }
-  return new Error(messages.network.fetchFailed.web(url));
+  return new Error(messages.network.fetchFailed.web(url), options);
 }
 
 export interface ApiFetchOptions extends RequestInit {
   timeoutMs?: number;
   /** 对冲：delayMs 内响应头未到并发第二枪，网络错误立即补枪；共 2 枪。仅限幂等请求 + 字符串 body。 */
   hedge?: { delayMs: number };
-  /** 显式 Android 原生通道；平台或插件能力不满足时在请求发出前回退 Web fetch。 */
-  transport?: "web" | "native-android";
+  /**
+   * 显式 Android 原生通道；平台或插件能力不满足时在请求发出前回退 Web fetch。
+   * 原生通道同时带 hedge 时，hedge 改作跨通道备份：原生网络失败立即、delayMs 内未回也并发一条 WebView fetch。
+   */
+  transport?: ApiTransport;
+  /** 实际由哪条通道答复（成功时回调一次）。原生带 hedge 时可能是 web。 */
+  onServedBy?: (transport: ApiTransport) => void;
 }
+
+export type ApiTransport = "web" | "native-android";
 
 const DEFAULT_TIMEOUT_MS = 15_000;
 const HEDGE_MAX_ATTEMPTS = 2;
 type NativeHttpResponse = Awaited<ReturnType<typeof CapacitorHttp.request>>;
 const activeNativeRequests = new Map<string, Promise<NativeHttpResponse>>();
+
+/** 测试缝：CapacitorHttp 是插件 Proxy，vi.spyOn 挂不上；vi.mock 又会把测试文件踢出快桶。 */
+export const nativeHttp = {
+  request: (options: HttpOptions): Promise<NativeHttpResponse> => CapacitorHttp.request(options),
+};
 
 function combineSignals(signals: Array<AbortSignal | null | undefined>): AbortSignal {
   const activeSignals = signals.filter((signal): signal is AbortSignal => Boolean(signal));
@@ -106,125 +120,107 @@ function nativeRequestKey(
   return JSON.stringify([url, method, headers, body ?? null]);
 }
 
-export async function apiFetch<T>(path: string, options: ApiFetchOptions = {}): Promise<T> {
-  const {
-    timeoutMs: requestedTimeoutMs,
-    hedge,
-    transport = "web",
-    signal: callerSignal,
-    ...fetchOptions
-  } = options;
-  const url = buildApiUrl(getApiBase(), path);
-  const headers = new Headers(fetchOptions.headers);
-  if (!headers.has("Content-Type")) {
-    headers.set("Content-Type", "application/json");
+interface RequestContext {
+  url: string;
+  headers: Headers;
+  fetchOptions: RequestInit;
+  timeoutMs: number;
+  callerSignal: AbortSignal | null | undefined;
+  totalSignal: AbortSignal;
+  isTimedOut: () => boolean;
+  clearTotalTimer: () => void;
+}
+
+// 「这条通道没连上」而不是「服务端答复了 / 调用方放弃了 / 总时限到了」——只有前者值得换通道再试。
+function isTransportFailure(error: unknown, ctx: RequestContext): boolean {
+  if (error instanceof ApiError) return false;
+  if (ctx.isTimedOut() || ctx.callerSignal?.aborted) return false;
+  return (error as Error | null)?.name !== "AbortError";
+}
+
+async function nativeAndroidFetch<T>(ctx: RequestContext): Promise<T> {
+  const { url, headers, fetchOptions, timeoutMs } = ctx;
+  const abortSignal = combineSignals([ctx.callerSignal, ctx.totalSignal]);
+  if (abortSignal.aborted) {
+    throw abortSignal.reason ?? new DOMException("Aborted", "AbortError");
   }
-
-  // 观测线（只记录不拦截）：让服务端日志能看出来包出自哪个构建，
-  // 为 sync.md §5.8「旧客户端清空新列」提供排查依据。服务端不据此拒绝请求。
-  headers.set("X-TimeData-Client-Build", CURRENT_BUILD_ID);
-
-  const token = getToken();
-  if (token) {
-    headers.set("Authorization", `Bearer ${token}`);
-  }
-
-  const totalController = new AbortController();
-  const timeoutMs = requestedTimeoutMs ?? DEFAULT_TIMEOUT_MS;
-  let timedOut = false;
-  const totalTimer = setTimeout(() => {
-    timedOut = true;
-    totalController.abort();
-  }, timeoutMs);
-
-  const useNativeAndroidTransport =
-    transport === "native-android"
-    && Capacitor.getPlatform() === "android"
-    && Capacitor.isPluginAvailable("CapacitorHttp");
-
-  if (useNativeAndroidTransport) {
-    if (fetchOptions.body != null && typeof fetchOptions.body !== "string") {
-      clearTimeout(totalTimer);
-      throw new TypeError("Native Android transport only supports string request bodies");
-    }
-
-    const abortSignal = combineSignals([callerSignal, totalController.signal]);
+  const nativeHeaders = Object.fromEntries(headers.entries());
+  const nativeMethod = fetchOptions.method ?? "GET";
+  const nativeBody = typeof fetchOptions.body === "string" ? fetchOptions.body : undefined;
+  const requestKey = nativeRequestKey(url, nativeMethod, nativeHeaders, nativeBody);
+  let abortListener: (() => void) | null = null;
+  const abortPromise = new Promise<never>((_resolve, reject) => {
+    const rejectFromSignal = () => {
+      reject(abortSignal.reason ?? new DOMException("Aborted", "AbortError"));
+    };
     if (abortSignal.aborted) {
-      clearTimeout(totalTimer);
-      throw abortSignal.reason ?? new DOMException("Aborted", "AbortError");
+      rejectFromSignal();
+      return;
     }
-    const nativeHeaders = Object.fromEntries(headers.entries());
-    const nativeMethod = fetchOptions.method ?? "GET";
-    const nativeBody = typeof fetchOptions.body === "string" ? fetchOptions.body : undefined;
-    const requestKey = nativeRequestKey(url, nativeMethod, nativeHeaders, nativeBody);
-    let abortListener: (() => void) | null = null;
-    const abortPromise = new Promise<never>((_resolve, reject) => {
-      const rejectFromSignal = () => {
-        reject(abortSignal.reason ?? new DOMException("Aborted", "AbortError"));
-      };
-      if (abortSignal.aborted) {
-        rejectFromSignal();
-        return;
-      }
-      abortListener = rejectFromSignal;
-      abortSignal.addEventListener("abort", rejectFromSignal, { once: true });
-    });
+    abortListener = rejectFromSignal;
+    abortSignal.addEventListener("abort", rejectFromSignal, { once: true });
+  });
 
-    try {
-      let nativeRequest = activeNativeRequests.get(requestKey);
-      if (!nativeRequest) {
-        nativeRequest = CapacitorHttp.request({
-          url,
-          method: nativeMethod,
-          headers: nativeHeaders,
-          ...(nativeBody === undefined ? {} : { data: nativeBody }),
-          connectTimeout: timeoutMs,
-          readTimeout: timeoutMs,
-        });
-        activeNativeRequests.set(requestKey, nativeRequest);
-        void nativeRequest.then(
-          () => {
-            if (activeNativeRequests.get(requestKey) === nativeRequest) activeNativeRequests.delete(requestKey);
-          },
-          () => {
-            if (activeNativeRequests.get(requestKey) === nativeRequest) activeNativeRequests.delete(requestKey);
-          },
-        );
-      }
-      // CapacitorHttp 没有逐请求 cancel；abort/timeout 只停止 JS 等待，底层请求可能继续完成。
-      const nativeResponse = await Promise.race([
-        nativeRequest,
-        abortPromise,
-      ]);
-      const responseHeaders = new Headers(nativeResponse.headers);
-      if (nativeResponse.status < 200 || nativeResponse.status >= 300) {
-        const body = nativeResponseBody(nativeResponse.data);
-        throw new ApiError(
-          nativeResponse.status,
-          "",
-          nativeResponseDetails(nativeResponse.data),
-          body,
-          responseHeaders,
-        );
-      }
-      if (nativeResponse.status === 204 || nativeResponse.data === "" || nativeResponse.data === undefined) {
-        return undefined as T;
-      }
-      // CapacitorHttp 已按响应 Content-Type 解码 application/json；不能再次 JSON.parse，
-      // 否则原生层返回的 JSON 字符串值会被误判为非法 JSON。
-      return nativeResponse.data as T;
-    } catch (error) {
-      if (error instanceof ApiError) throw error;
-      if (timedOut) throw new Error(messages.network.timeout(timeoutMs, url));
-      if (callerSignal?.aborted) throw error;
-      if ((error as Error).name === "AbortError") throw error;
-      throw describeFetchFailure(url);
-    } finally {
-      clearTimeout(totalTimer);
-      if (abortListener) abortSignal.removeEventListener("abort", abortListener);
+  try {
+    let nativeRequest = activeNativeRequests.get(requestKey);
+    if (!nativeRequest) {
+      nativeRequest = nativeHttp.request({
+        url,
+        method: nativeMethod,
+        headers: nativeHeaders,
+        ...(nativeBody === undefined ? {} : { data: nativeBody }),
+        connectTimeout: timeoutMs,
+        readTimeout: timeoutMs,
+      });
+      activeNativeRequests.set(requestKey, nativeRequest);
+      void nativeRequest.then(
+        () => {
+          if (activeNativeRequests.get(requestKey) === nativeRequest) activeNativeRequests.delete(requestKey);
+        },
+        () => {
+          if (activeNativeRequests.get(requestKey) === nativeRequest) activeNativeRequests.delete(requestKey);
+        },
+      );
     }
+    // CapacitorHttp 没有逐请求 cancel；abort/timeout 只停止 JS 等待，底层请求可能继续完成。
+    const nativeResponse = await Promise.race([
+      nativeRequest,
+      abortPromise,
+    ]);
+    const responseHeaders = new Headers(nativeResponse.headers);
+    if (nativeResponse.status < 200 || nativeResponse.status >= 300) {
+      const body = nativeResponseBody(nativeResponse.data);
+      throw new ApiError(
+        nativeResponse.status,
+        "",
+        nativeResponseDetails(nativeResponse.data),
+        body,
+        responseHeaders,
+      );
+    }
+    if (nativeResponse.status === 204 || nativeResponse.data === "" || nativeResponse.data === undefined) {
+      return undefined as T;
+    }
+    // CapacitorHttp 已按响应 Content-Type 解码 application/json；不能再次 JSON.parse，
+    // 否则原生层返回的 JSON 字符串值会被误判为非法 JSON。
+    return nativeResponse.data as T;
+  } catch (error) {
+    if (error instanceof ApiError) throw error;
+    if (ctx.isTimedOut()) throw new Error(messages.network.timeout(timeoutMs, url));
+    if (ctx.callerSignal?.aborted) throw error;
+    if ((error as Error).name === "AbortError") throw error;
+    throw describeFetchFailure(url, error);
+  } finally {
+    if (abortListener) abortSignal.removeEventListener("abort", abortListener);
   }
+}
 
+async function webFetch<T>(
+  ctx: RequestContext,
+  hedge: { delayMs: number } | undefined,
+  raceSignal?: AbortSignal,
+): Promise<T> {
+  const { url, headers, fetchOptions, callerSignal, totalSignal } = ctx;
   // 竞速多枪：先到的响应头定胜负，输家 abort；HTTP 状态错误算"有响应"，照走下方 ApiError 路径。
   const raceAttempts = (): Promise<Response> =>
     new Promise<Response>((resolve, reject) => {
@@ -250,7 +246,7 @@ export async function apiFetch<T>(path: string, options: ApiFetchOptions = {}): 
         fetch(url, {
           ...fetchOptions,
           headers,
-          signal: combineSignals([callerSignal, totalController.signal, controller.signal]),
+          signal: combineSignals([callerSignal, totalSignal, raceSignal, controller.signal]),
         }).then(
           (response) => {
             settle(() => {
@@ -263,7 +259,7 @@ export async function apiFetch<T>(path: string, options: ApiFetchOptions = {}): 
           (error: unknown) => {
             failures += 1;
             if (settled) return;
-            if (!timedOut && !callerSignal?.aborted && launched < maxAttempts) {
+            if (!ctx.isTimedOut() && !callerSignal?.aborted && !raceSignal?.aborted && launched < maxAttempts) {
               launch(); // 快重试：不等 TCP 重传长尾
               return;
             }
@@ -282,18 +278,18 @@ export async function apiFetch<T>(path: string, options: ApiFetchOptions = {}): 
   try {
     res = await raceAttempts();
   } catch (error) {
-    if (timedOut) {
-      throw new Error(messages.network.timeout(timeoutMs, url));
+    if (ctx.isTimedOut()) {
+      throw new Error(messages.network.timeout(ctx.timeoutMs, url));
     }
-    if (callerSignal?.aborted) {
+    if (callerSignal?.aborted || raceSignal?.aborted) {
       throw error;
     }
     if ((error as Error).name === "AbortError") {
       throw error;
     }
-    throw describeFetchFailure(url);
+    throw describeFetchFailure(url, error);
   } finally {
-    clearTimeout(totalTimer);
+    ctx.clearTotalTimer();
   }
 
   if (!res.ok) {
@@ -315,5 +311,128 @@ export async function apiFetch<T>(path: string, options: ApiFetchOptions = {}): 
     return JSON.parse(bodyText) as T;
   } catch (error) {
     throw new Error(messages.network.invalidJson(url, bodyText.slice(0, 200)), { cause: error });
+  }
+}
+
+// 2026-10-10 安卓事故：原生通道（系统 HttpURLConnection）连不上时，WebView 那条已经通了，
+// 同步却一直在原生上干等。只读请求在原生之外再备一条 WebView：原生网络失败立即发、
+// delayMs 内没回到点也发，先回者胜。原生输家没法取消（见上），只是不再等它。
+function raceNativeThenWeb<T>(
+  ctx: RequestContext,
+  hedge: { delayMs: number },
+  onServedBy: ((transport: ApiTransport) => void) | undefined,
+): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const webRace = new AbortController();
+    let settled = false;
+    let webStarted = false;
+    let pending = 1;
+    let fallbackTimer: ReturnType<typeof setTimeout> | null = null;
+
+    const finish = (): void => {
+      settled = true;
+      if (fallbackTimer) clearTimeout(fallbackTimer);
+    };
+    const win = (transport: ApiTransport, value: T): void => {
+      if (settled) return;
+      finish();
+      webRace.abort();
+      onServedBy?.(transport);
+      resolve(value);
+    };
+    // final=服务端已答复 / 调用方放弃 / 总时限到：不必再等另一条。否则等两条都输完才报错。
+    const lose = (error: unknown, final: boolean): void => {
+      pending -= 1;
+      if (settled) return;
+      if (final || pending === 0) {
+        finish();
+        webRace.abort();
+        reject(error);
+      }
+    };
+    const startWeb = (): void => {
+      if (settled || webStarted) return;
+      webStarted = true;
+      pending += 1;
+      webFetch<T>(ctx, hedge, webRace.signal).then(
+        (value) => win("web", value),
+        (error: unknown) => lose(error, !isTransportFailure(error, ctx)),
+      );
+    };
+
+    fallbackTimer = setTimeout(startWeb, hedge.delayMs);
+    nativeAndroidFetch<T>(ctx).then(
+      (value) => win("native-android", value),
+      (error: unknown) => {
+        const transportFailure = isTransportFailure(error, ctx);
+        if (transportFailure) startWeb();
+        lose(error, !transportFailure);
+      },
+    );
+  });
+}
+
+export async function apiFetch<T>(path: string, options: ApiFetchOptions = {}): Promise<T> {
+  const {
+    timeoutMs: requestedTimeoutMs,
+    hedge,
+    transport = "web",
+    onServedBy,
+    signal: callerSignal,
+    ...fetchOptions
+  } = options;
+  const url = buildApiUrl(getApiBase(), path);
+  const headers = new Headers(fetchOptions.headers);
+  if (!headers.has("Content-Type")) {
+    headers.set("Content-Type", "application/json");
+  }
+
+  // 观测线（只记录不拦截）：让服务端日志能看出来包出自哪个构建，
+  // 为 sync.md §5.8「旧客户端清空新列」提供排查依据。服务端不据此拒绝请求。
+  headers.set("X-TimeData-Client-Build", CURRENT_BUILD_ID);
+
+  const token = getToken();
+  if (token) {
+    headers.set("Authorization", `Bearer ${token}`);
+  }
+
+  const totalController = new AbortController();
+  const timeoutMs = requestedTimeoutMs ?? DEFAULT_TIMEOUT_MS;
+  let timedOut = false;
+  const totalTimer = setTimeout(() => {
+    timedOut = true;
+    totalController.abort();
+  }, timeoutMs);
+  const ctx: RequestContext = {
+    url,
+    headers,
+    fetchOptions,
+    timeoutMs,
+    callerSignal,
+    totalSignal: totalController.signal,
+    isTimedOut: () => timedOut,
+    clearTotalTimer: () => clearTimeout(totalTimer),
+  };
+
+  const useNativeAndroidTransport =
+    transport === "native-android"
+    && Capacitor.getPlatform() === "android"
+    && Capacitor.isPluginAvailable("CapacitorHttp");
+
+  try {
+    if (!useNativeAndroidTransport) {
+      const result = await webFetch<T>(ctx, hedge);
+      onServedBy?.("web");
+      return result;
+    }
+    if (fetchOptions.body != null && typeof fetchOptions.body !== "string") {
+      throw new TypeError("Native Android transport only supports string request bodies");
+    }
+    if (hedge) return await raceNativeThenWeb<T>(ctx, hedge, onServedBy);
+    const result = await nativeAndroidFetch<T>(ctx);
+    onServedBy?.("native-android");
+    return result;
+  } finally {
+    clearTimeout(totalTimer);
   }
 }

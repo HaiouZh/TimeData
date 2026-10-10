@@ -112,6 +112,16 @@ export function SyncProvider({ children }: { children: ReactNode }) {
   }, [cloudSyncEnabled, apiUrl]);
 
   useAppResumeRefresh(() => syncScheduler.requestSync("resume"));
+
+  // 系统报告网络恢复，与 SSE 连通同义：上一轮失败才补一次（reconnect 可穿过自家指数退避）。
+  useEffect(() => {
+    if (!cloudSyncEnabled || !apiUrl) return;
+    const onOnline = () => {
+      if (lastRunFailedRef.current) syncScheduler.requestSync("reconnect");
+    };
+    window.addEventListener("online", onOnline);
+    return () => window.removeEventListener("online", onOnline);
+  }, [cloudSyncEnabled, apiUrl]);
   useAppHideFlush(() => syncScheduler.flushNow());
 
   const handleSyncStreamMessage = useCallback((message: SyncStreamMessage) => {

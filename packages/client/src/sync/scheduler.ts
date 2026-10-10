@@ -82,6 +82,8 @@ export function createSyncScheduler(deps: SyncSchedulerDeps = {}): SyncScheduler
   let retryAttempt = 0;
   let retrySince: number | null = null;
   let retryNotBefore: number | null = null;
+  // 当前退避窗口是不是服务端 Retry-After 定的：那是服务端在喊停，网络恢复的信号也不该穿过它。
+  let retryWindowFromServer = false;
   let retryReason: SyncRequestReason = "write";
   let retryFlushAttempted = false;
   let executorGeneration = 0;
@@ -111,6 +113,7 @@ export function createSyncScheduler(deps: SyncSchedulerDeps = {}): SyncScheduler
     retryAttempt = 0;
     retrySince = null;
     retryNotBefore = null;
+    retryWindowFromServer = false;
     retryFlushAttempted = false;
   }
 
@@ -118,8 +121,11 @@ export function createSyncScheduler(deps: SyncSchedulerDeps = {}): SyncScheduler
     if (pendingSince === null) pendingSince = now();
     pendingReason ??= reason;
     if (!executor) return; // bootstrap/关闭期：只留脏标记，setExecutor 时兑现
-    // resume=用户回到前台，破例穿过退避窗口；其余触发不提前打失败中的服务器
-    if (reason !== "resume" && retryNeeded && retryNotBefore !== null && now() < retryNotBefore) return;
+    // resume=用户回到前台，破例穿过退避窗口；reconnect=SSE 刚连通、网络恢复的实证，穿过自家指数退避
+    //（不穿服务端 Retry-After）——否则断网期间退避已拉到 60s，网络回来后还要白等一整个窗口。
+    // 其余触发不提前打失败中的服务器。
+    const bypassesBackoff = reason === "resume" || (reason === "reconnect" && !retryWindowFromServer);
+    if (!bypassesBackoff && retryNeeded && retryNotBefore !== null && now() < retryNotBefore) return;
     clearRetryTimer();
     if (debounceTimer) clearTimeout(debounceTimer);
     // 恢复类触发要快（用户正盯着看），写入类维持长防抖（等更多写入攒批）。
@@ -134,6 +140,7 @@ export function createSyncScheduler(deps: SyncSchedulerDeps = {}): SyncScheduler
     clearRetryTimer();
     if (!executor || !retryNeeded) return;
     const delayMs = nextSyncRetryDelayMs(retryAttempt, retryAfterMs);
+    retryWindowFromServer = delayMs > nextSyncRetryDelayMs(retryAttempt);
     retryAttempt += 1;
     retryNotBefore = now() + delayMs;
     retryTimer = setTimeout(() => {

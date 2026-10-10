@@ -26,6 +26,7 @@ import {
 } from "../sync/phaseTimings.ts";
 import type { SyncExecutorMeta, SyncExecutorOutcome } from "../sync/scheduler.ts";
 import { selectSyncTransport } from "../sync/transport.ts";
+import { syncFailures } from "../lib/recovery/syncFailureRuntime.ts";
 import type { SyncForcePushPrepareResponse, SyncForcePushResponse, SyncHealthReport } from "@timedata/shared";
 import { SYNC_DIAGNOSTIC_FAILURE_THRESHOLD } from "@timedata/shared";
 
@@ -107,6 +108,7 @@ export function useSync({ autoSyncOnMount = false }: UseSyncOptions = {}) {
     const startedAt = new Date().toISOString();
     const t0 = performance.now();
     let outcome: SyncTimingOutcome = "error";
+    let failure: unknown = null;
     const platform = Capacitor.getPlatform();
     const transport = selectSyncTransport({
       platform,
@@ -124,15 +126,30 @@ export function useSync({ autoSyncOnMount = false }: UseSyncOptions = {}) {
       await refreshSyncStatus();
       return true;
     } catch (e: unknown) {
+      failure = e;
       setError(e instanceof Error ? e.message : "同步失败");
       const retryAfterMs = getSyncRetryAfterMs(e);
       return retryAfterMs === undefined ? false : { ok: false, retryAfterMs };
     } finally {
       const timingTransport = recorder.transport ?? resolveSyncTimingTransport(transport, recorder.phases);
+      const totalMs = Math.round(performance.now() - t0);
+      if (outcome === "error") {
+        syncFailures.recordFailure({
+          reason: meta?.reason ?? null,
+          transport: timingTransport ?? null,
+          connection: meta?.connection ?? null,
+          waitMs: meta?.waitMs ?? null,
+          totalMs,
+          phases: recorder.phases,
+          error: failure,
+        });
+      } else {
+        syncFailures.recordSuccess({ reason: meta?.reason ?? null, transport: timingTransport ?? null, totalMs });
+      }
       recordSyncTiming({
         at: startedAt,
         outcome,
-        totalMs: Math.round(performance.now() - t0),
+        totalMs,
         phases: recorder.phases,
         visibility: typeof document !== "undefined" ? document.visibilityState : undefined,
         unsyncedAtStart,

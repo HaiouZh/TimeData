@@ -433,6 +433,49 @@ describe("SyncProvider", () => {
     await unmount(root);
   });
 
+  it("requests a reconnect sync when the browser reports online after a previously failed run", async () => {
+    const setExecutorSpy = vi.spyOn(syncScheduler, "setExecutor");
+    const requestSyncSpy = vi.spyOn(syncScheduler, "requestSync");
+    localStorage.setItem("timedata_api_url", "https://example.com");
+    localStorage.setItem("timedata_cloud_sync_enabled", "true");
+    mockSyncActions.sync.mockResolvedValueOnce(false);
+
+    const { root } = await renderDom(createElement(SyncProvider, null, createElement("span", null, "probe")));
+
+    const registeredExecutor = setExecutorSpy.mock.calls.at(-1)?.[0];
+    await act(async () => {
+      await registeredExecutor?.({ reason: "write", waitMs: 0 });
+    });
+
+    requestSyncSpy.mockClear();
+
+    await act(async () => {
+      window.dispatchEvent(new Event("online"));
+    });
+
+    expect(requestSyncSpy).toHaveBeenCalledWith("reconnect");
+
+    await unmount(root);
+  });
+
+  it("does not request a reconnect sync on online when the previous run succeeded", async () => {
+    const requestSyncSpy = vi.spyOn(syncScheduler, "requestSync");
+    localStorage.setItem("timedata_api_url", "https://example.com");
+    localStorage.setItem("timedata_cloud_sync_enabled", "true");
+
+    const { root } = await renderDom(createElement(SyncProvider, null, createElement("span", null, "probe")));
+
+    requestSyncSpy.mockClear();
+
+    await act(async () => {
+      window.dispatchEvent(new Event("online"));
+    });
+
+    expect(requestSyncSpy).not.toHaveBeenCalledWith("reconnect");
+
+    await unmount(root);
+  });
+
   it("does not request a reconnect sync when the previous run succeeded", async () => {
     const requestSyncSpy = vi.spyOn(syncScheduler, "requestSync");
     localStorage.setItem("timedata_api_url", "https://example.com");
