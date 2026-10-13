@@ -1,5 +1,5 @@
 import { db, migrateGoalPrerequisitesToRelations } from "../db/index.ts";
-import { ApiError, apiFetch } from "../lib/api.ts";
+import { ApiError, apiFetch, type ApiFetchOptions, type LaneOutcome } from "../lib/api.ts";
 import { sendWithPending } from "../lib/recovery/pendingReports.ts";
 import { STORAGE_KEYS } from "../lib/storageKeys.ts";
 import { callWithTotp, TotpCancelledError } from "../lib/totpChallenge.ts";
@@ -8,7 +8,7 @@ import type { Table } from "dexie";
 import { isImplicitDeleteChange, recordPendingArbitration } from "./arbitration.ts";
 import { classifyReasonCode } from "./reason.ts";
 import { CLIENT_SYNC_DOMAINS, parseRemoteRecord, type ClientDomainConfig } from "./clientDomains.ts";
-import { mergeSyncTimingTransport, type PhaseRecorder } from "./phaseTimings.ts";
+import { mergeSyncTimingTransport, recordLaneOutcome, type PhaseRecorder } from "./phaseTimings.ts";
 import { syncScheduler } from "./scheduler.js";
 import type { SyncTransport } from "./transport.js";
 import {
@@ -43,20 +43,34 @@ type SyncLog = SyncLogEntry;
 export const SYNC_HEDGE_DELAY_MS = 1500;
 const SYNC_HEDGE = { delayMs: SYNC_HEDGE_DELAY_MS } as const;
 /**
- * Android 原生读请求的跨通道备份：原生网络失败立即、这么久没回也并发一条 WebView fetch，先回者胜。
- * 取 3s：30 天线上 Android 原生 status 成功轮 p95 不到 2s，正常轮几乎不触发备份；
- * 2026-10-10 那次原生挂满 10s 才报错，WebView 同一时刻是通的。只用于 status 与增量 pull（纯读）。
+ * 安卓双车道的备份延迟：主路这么久没回就从另一条车道再发一次，先回者胜（ADR 0038）。
+ * 取 2s：近 30 天安卓有动作的同步轮 pull / push p95 均约 1.9s（2026-10-13 统计），正常轮约 5% 触发。
  */
-export const SYNC_NATIVE_FALLBACK_DELAY_MS = 3_000;
-const SYNC_NATIVE_FALLBACK = { delayMs: SYNC_NATIVE_FALLBACK_DELAY_MS } as const;
+export const SYNC_LANE_BACKUP_DELAY_MS = 2_000;
+const SYNC_LANE_BACKUP = { delayMs: SYNC_LANE_BACKUP_DELAY_MS } as const;
 
-function syncReadTransportOptions(
-  transport: SyncTransport,
-  onServedBy: (served: SyncTransport) => void,
-): { transport: "native-android"; hedge: typeof SYNC_NATIVE_FALLBACK; onServedBy: (served: SyncTransport) => void } | { hedge: typeof SYNC_HEDGE } {
-  return transport === "native-android"
-    ? { transport, hedge: SYNC_NATIVE_FALLBACK, onServedBy }
-    : { hedge: SYNC_HEDGE };
+export interface SyncNetOptions {
+  /** 安卓且原生插件可用：每个同步请求都带第二车道。 */
+  dualLane?: boolean;
+  onLaneOutcome?: (outcome: LaneOutcome) => void;
+}
+
+// 原生主路总是带 WebView 备份（与 dualLane 无关，保持 resume 的既有行为）；
+// 非双车道的 WebView 请求保持同源对冲，iOS / 桌面 / PWA 的参数逐字节不变。
+function syncNetRequestOptions(
+  primary: SyncTransport,
+  net: SyncNetOptions,
+  onServedBy?: (served: SyncTransport) => void,
+): Pick<ApiFetchOptions, "transport" | "hedge" | "laneBackup" | "onServedBy" | "onLaneOutcome"> {
+  if (primary === "native-android" || net.dualLane) {
+    return {
+      transport: primary,
+      laneBackup: SYNC_LANE_BACKUP,
+      ...(onServedBy ? { onServedBy } : {}),
+      ...(net.onLaneOutcome ? { onLaneOutcome: net.onLaneOutcome } : {}),
+    };
+  }
+  return { hedge: SYNC_HEDGE };
 }
 
 export interface SyncConflict {
@@ -110,6 +124,7 @@ export interface RegularSyncResult {
 export interface RegularSyncOptions {
   phases?: PhaseRecorder;
   transport?: SyncTransport;
+  dualLane?: boolean;
 }
 
 interface CompactedSyncLog extends SyncLog {
@@ -346,16 +361,17 @@ function isFullPullBody(body: unknown): boolean {
 
 async function fetchSyncPullResponse(
   body: unknown,
-  options: { timeoutMs?: number; transport?: SyncTransport; onServedBy?: (served: SyncTransport) => void } = {},
+  options: { timeoutMs?: number; transport?: SyncTransport; onServedBy?: (served: SyncTransport) => void } & SyncNetOptions = {},
 ): Promise<SyncPullResponse> {
   const fullPull = isFullPullBody(body);
   const transport = fullPull ? "web" : options.transport ?? "web";
+  const net: SyncNetOptions = fullPull ? {} : options; // 全量拉取要验 TOTP、体量大，保持单路 Web
   const onServedBy = options.onServedBy ?? (() => undefined);
   const request = (totpHeaders: Record<string, string>) =>
     apiFetch<unknown>("/api/sync/pull", {
       method: "POST",
       body: JSON.stringify(body),
-      ...syncReadTransportOptions(transport, onServedBy),
+      ...syncNetRequestOptions(transport, net, onServedBy),
       ...(options.timeoutMs === undefined ? {} : { timeoutMs: options.timeoutMs }),
       ...(Object.keys(totpHeaders).length > 0 ? { headers: totpHeaders } : {}),
     });
@@ -396,14 +412,19 @@ function validatePullPageProgress(response: SyncPullResponse, cursor: number): v
 async function fetchPullBatches(
   startSeq: number,
   applyBatch: (response: SyncPullResponse) => Promise<void>,
-  options: { transport?: SyncTransport; onServedBy?: (served: SyncTransport) => void } = {},
+  options: { transport?: SyncTransport; onServedBy?: (served: SyncTransport) => void } & SyncNetOptions = {},
 ): Promise<SyncPullResponse> {
   let cursor = startSeq;
   let lastResponse: SyncPullResponse | undefined;
   for (;;) {
     const response = await fetchSyncPullResponse(
       { sinceSeq: cursor, limit: PULL_PAGE_LIMIT },
-      { transport: options.transport, onServedBy: options.onServedBy },
+      {
+        transport: options.transport,
+        onServedBy: options.onServedBy,
+        dualLane: options.dualLane,
+        onLaneOutcome: options.onLaneOutcome,
+      },
     );
     recordClockSkew(response.serverTime);
     validatePullPageProgress(response, cursor);
@@ -582,6 +603,7 @@ async function applyAtomicRejectedPushResponse(
   sourceLogIdsByChangeKey: Map<string, string[]>,
   changeKey: (tableName: SyncChange["tableName"], recordId: string, action: SyncChange["action"]) => string,
   baseSeq: number | null,
+  net: SyncPushNetOptions,
 ): Promise<SyncPushResult> {
   const retryKeys = new Set(
     changes.map((change) => changeKey(change.tableName, change.recordId, change.action)),
@@ -714,7 +736,7 @@ async function applyAtomicRejectedPushResponse(
 
   let retryResult: SyncPushResult | null = null;
   if (retryChanges.length > 0) {
-    retryResult = await submitPushBatch(retryChanges, sourceLogIdsByChangeKey, changeKey, baseSeq);
+    retryResult = await submitPushBatch(retryChanges, sourceLogIdsByChangeKey, changeKey, baseSeq, net);
   }
 
   return {
@@ -731,11 +753,14 @@ async function applyAtomicRejectedPushResponse(
   };
 }
 
+type SyncPushNetOptions = SyncNetOptions & { onServedBy?: (served: SyncTransport) => void };
+
 async function submitPushBatch(
   changes: SyncChange[],
   sourceLogIdsByChangeKey: Map<string, string[]>,
   changeKey: (tableName: SyncChange["tableName"], recordId: string, action: SyncChange["action"]) => string,
   baseSeq: number | null,
+  net: SyncPushNetOptions,
 ): Promise<SyncPushResult> {
   try {
     const requestId = crypto.randomUUID(); // 每批独立幂等键；409 拆批走递归自然换新
@@ -745,8 +770,11 @@ async function submitPushBatch(
       apiFetch<SyncPushResponse>("/api/sync/push", {
         method: "POST",
         body: JSON.stringify({ changes, baseSeq, requestId }),
-        hedge: SYNC_HEDGE,
-        ...(Object.keys(totpHeaders).length > 0 ? { headers: totpHeaders } : {}),
+        // 带 TOTP 头 = 大批删除：服务端走「先建安全备份」路径，那里有 await 窗口且不写回放表；
+        // 原生输家取消不了、可能晚到很久，这类 push 不加第二车道（ADR 0038）。
+        ...(Object.keys(totpHeaders).length > 0
+          ? { hedge: SYNC_HEDGE, headers: totpHeaders }
+          : syncNetRequestOptions("web", net, net.onServedBy)),
       }),
     );
     recordClockSkew(response.serverTime);
@@ -754,13 +782,13 @@ async function submitPushBatch(
   } catch (error) {
     if (error instanceof ApiError && error.status === 409 && isSyncPushResponse(error.body)) {
       recordClockSkew(error.body.serverTime);
-      return applyAtomicRejectedPushResponse(error.body, changes, sourceLogIdsByChangeKey, changeKey, baseSeq);
+      return applyAtomicRejectedPushResponse(error.body, changes, sourceLogIdsByChangeKey, changeKey, baseSeq, net);
     }
     throw error;
   }
 }
 
-export async function syncPush(): Promise<SyncPushResult> {
+export async function syncPush(net: SyncPushNetOptions = {}): Promise<SyncPushResult> {
   const baseSeq = getLastSyncedSeq();
   const unsynced = await db.syncLog.where("synced").equals(0).toArray();
   if (unsynced.length === 0) return { accepted: 0, rejected: 0, conflicts: 0, issues: [], clientBugIssues: [], userActionableIssues: [], serverAdjusted: 0, baseSeq, serverLatestSeq: null, appliedCount: null };
@@ -825,7 +853,7 @@ export async function syncPush(): Promise<SyncPushResult> {
     return { accepted: 0, rejected: 0, conflicts: 0, issues: [], clientBugIssues: [], userActionableIssues: [], serverAdjusted: 0, baseSeq, serverLatestSeq: null, appliedCount: null };
   }
 
-  const result = await submitPushBatch(changes, sourceLogIdsByChangeKey, changeKey, baseSeq);
+  const result = await submitPushBatch(changes, sourceLogIdsByChangeKey, changeKey, baseSeq, net);
   if (omittedLogIds.length > 0) {
     await db.syncLog.bulkUpdate(omittedLogIds.map((id) => ({ key: id, changes: { synced: 1 } })));
   }
@@ -997,14 +1025,14 @@ function ledgerBehindError(serverSeq: number, localSeq: number): Error {
 }
 
 export async function syncPullSinceSeq(
-  options: { transport?: SyncTransport; ledgerGuard?: boolean } = {},
+  options: { transport?: SyncTransport; ledgerGuard?: boolean } & SyncNetOptions = {},
 ): Promise<{ applied: number; conflicts: SyncConflict[]; transport: SyncTransport; identical: boolean }> {
   const startSeq = buildPullCursor("incremental").sinceSeq;
   const transport = startSeq > 0 ? options.transport ?? "web" : "web";
-  // 原生请求可能由 WebView 备份答复：任一批走了 web 就如实报 web，计时通道据此记 mixed / web。
+  // 实际答复车道与主路不同就如实报（原生主路被 WebView 救回、或 WebView 主路被原生救回），计时通道据此记 mixed 等。
   let served: SyncTransport = transport;
   const onServedBy = (next: SyncTransport) => {
-    if (next === "web") served = "web";
+    if (next !== transport) served = next;
   };
 
   let applied = 0;
@@ -1026,7 +1054,7 @@ export async function syncPullSinceSeq(
     const batch = await applyPullChangesBatch(response.changes, protectedCascadeRecords);
     applied += batch.applied;
     conflicts.push(...batch.conflicts);
-  }, { transport, onServedBy });
+  }, { transport, onServedBy, dualLane: options.dualLane, onLaneOutcome: options.onLaneOutcome });
 
   advanceSeqCursor(last); // 末批收尾兜底到 latestSeq
   return { applied, conflicts, transport: served, identical: startSeq > 0 && firstLatestSeq === startSeq };
@@ -1274,6 +1302,10 @@ export async function regularSync(options: RegularSyncOptions = {}): Promise<Reg
 
 async function runRegularSync(options: RegularSyncOptions = {}): Promise<RegularSyncResult> {
   const rec = options.phases;
+  const net: SyncNetOptions = {
+    dualLane: options.dualLane,
+    ...(rec ? { onLaneOutcome: (outcome: LaneOutcome) => recordLaneOutcome(rec, outcome) } : {}),
+  };
   try {
     const unsyncedCount = await db.syncLog.where("synced").equals(0).count();
 
@@ -1313,7 +1345,7 @@ async function runRegularSync(options: RegularSyncOptions = {}): Promise<Regular
       // 账本倒退检查由 ledgerGuard 在首批做。省掉的那个串行往返，安卓回前台实测约 1s。
       const cursor = getLastSyncedSeq() ?? 0;
       if (cursor > 0) {
-        const pull = () => syncPullSinceSeq({ transport: options.transport, ledgerGuard: true });
+        const pull = () => syncPullSinceSeq({ transport: options.transport, ledgerGuard: true, ...net });
         const pulled = rec ? await rec.time("pull", pull) : await pull();
         if (rec) rec.transport = mergeSyncTimingTransport(rec.transport, pulled.transport);
         resetConsecutiveSyncFailures();
@@ -1351,7 +1383,7 @@ async function runRegularSync(options: RegularSyncOptions = {}): Promise<Regular
       // 那要验 TOTP；服务器为空时 status 一次就能判 no-op，不打扰用户。
       // contentHash 不再参与主路径，仅保留在 getSyncHealth() 诊断工具里做深度体检。
       let statusServedBy: SyncTransport = options.transport ?? "web";
-      const statusRequestOptions = syncReadTransportOptions(statusServedBy, (served) => {
+      const statusRequestOptions = syncNetRequestOptions(statusServedBy, net, (served) => {
         statusServedBy = served;
       });
       const statusResponse = rec
@@ -1377,7 +1409,7 @@ async function runRegularSync(options: RegularSyncOptions = {}): Promise<Regular
         };
       }
 
-      const pull = () => syncPullSinceSeq({ transport: options.transport });
+      const pull = () => syncPullSinceSeq({ transport: options.transport, ...net });
       const pulled = rec ? await rec.time("pull", pull) : await pull();
       if (rec) rec.transport = mergeSyncTimingTransport(rec.transport, pulled.transport);
       const { applied, conflicts } = pulled;
@@ -1402,8 +1434,10 @@ async function runRegularSync(options: RegularSyncOptions = {}): Promise<Regular
 
     // 有 pending（写后路径）：跳过 status——它唯一的用途是 no-op 判定，此处恒不成立；
     // 冲突分析在服务端 baseSeq 逻辑里，push 后回声 pull 追平。
-    const pushResult = rec ? await rec.time("push", () => syncPush()) : await syncPush();
-    if (rec) rec.transport = mergeSyncTimingTransport(rec.transport, "web");
+    let pushServedBy: SyncTransport = "web";
+    const push = () => syncPush({ ...net, onServedBy: (served) => { pushServedBy = served; } });
+    const pushResult = rec ? await rec.time("push", push) : await push();
+    if (rec) rec.transport = mergeSyncTimingTransport(rec.transport, pushServedBy);
 
     let applied = 0;
     let conflicts: SyncConflict[] = [];
@@ -1412,7 +1446,7 @@ async function runRegularSync(options: RegularSyncOptions = {}): Promise<Regular
       setLastSyncedSeq(pushResult.serverLatestSeq); // 无插队：本地即最新，直接推游标
       pullSkipped = true;
     } else {
-      const pull = () => syncPullSinceSeq({ transport: options.transport });
+      const pull = () => syncPullSinceSeq({ transport: options.transport, ...net });
       const pulled = rec ? await rec.time("pull", pull) : await pull();
       if (rec) rec.transport = mergeSyncTimingTransport(rec.transport, pulled.transport);
       applied = pulled.applied;

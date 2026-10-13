@@ -9,6 +9,7 @@ import {
   mergeSyncTimingTransport,
   onSyncTimingRecorded,
   readSyncTransportProtocol,
+  recordLaneOutcome,
   recordSyncTiming,
   resolveSyncTimingTransport,
   timingTotalsPercentiles,
@@ -62,6 +63,18 @@ describe("createPhaseRecorder", () => {
     ).rejects.toThrow("boom");
 
     expect(recorder.phases.push).toBe(50);
+  });
+});
+
+describe("recordLaneOutcome", () => {
+  it("只在发了备份时计数；备份先回才算 backupWon", () => {
+    const rec = createPhaseRecorder();
+    recordLaneOutcome(rec, { primary: "web", backupFired: false, servedBy: "web" });
+    expect(rec.lanes).toBeUndefined();
+    recordLaneOutcome(rec, { primary: "web", backupFired: true, servedBy: "web" });
+    recordLaneOutcome(rec, { primary: "web", backupFired: true, servedBy: "native-android" });
+    recordLaneOutcome(rec, { primary: "native-android", backupFired: true, servedBy: null });
+    expect(rec.lanes).toEqual({ backupFired: 3, backupWon: 1 });
   });
 });
 

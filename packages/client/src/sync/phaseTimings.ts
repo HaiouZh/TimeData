@@ -1,3 +1,4 @@
+import type { LaneOutcome } from "../lib/api.js";
 import { safeGetItem, safeSetItem } from "../lib/safeStorage.js";
 import { STORAGE_KEYS } from "../lib/storageKeys.js";
 import { latestSyncProtocol } from "./resourceTimingCache.js";
@@ -5,10 +6,23 @@ import type { SyncTransport } from "./transport.js";
 
 export type SyncPhaseName = "status" | "push" | "pull" | "bumpApply";
 
+export interface SyncLaneStats {
+  backupFired: number; // 本轮发了几次第二车道
+  backupWon: number; // 其中几次是第二车道先回（= 救回）
+}
+
 export interface PhaseRecorder {
   time<T>(phase: SyncPhaseName, fn: () => Promise<T>): Promise<T>; // 异常照抛，仍记耗时
   readonly phases: Partial<Record<SyncPhaseName, number>>; // 整数 ms
   transport?: SyncTimingTransport; // engine 按实际网络阶段汇总
+  lanes?: SyncLaneStats; // 只在发过第二车道时出现（ADR 0038）
+}
+
+export function recordLaneOutcome(rec: PhaseRecorder, outcome: LaneOutcome): void {
+  if (!outcome.backupFired) return;
+  const lanes = rec.lanes ?? (rec.lanes = { backupFired: 0, backupWon: 0 });
+  lanes.backupFired += 1;
+  if (outcome.servedBy !== null && outcome.servedBy !== outcome.primary) lanes.backupWon += 1;
 }
 
 export function createPhaseRecorder(now: () => number = () => performance.now()): PhaseRecorder {

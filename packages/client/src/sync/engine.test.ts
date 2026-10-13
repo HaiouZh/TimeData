@@ -20,10 +20,28 @@ vi.mock("../lib/api.js", () => ({
   apiFetch: apiFetchMock,
 }));
 
-import { advanceSeqCursor, canSkipEchoPull, clearBumpStash, compactSyncLogs, getClockSkewMs, getConsecutiveSyncFailureCount, getLastSyncedSeq, getQuarantinedSyncLogs, getSyncHealth, hasSyncAttemptThisSession, localContentHash, prepareForcePush, pruneSyncedLogs, requeueQuarantinedSyncLogs, recordClockSkew, recordRegularSyncFailure, recordSyncLog, recordSyncLogs, regularSync, resetConsecutiveSyncFailures, resetSyncAttempt, setLastSyncedSeq, shouldOpenSyncDiagnostics, stashBumpPayload, syncForcePushToServer, syncPush, syncPull, syncPullSinceSeq, syncForceReplace, yieldToMainThread, SYNC_HEDGE_DELAY_MS, SYNC_LOG_QUARANTINED, SYNC_NATIVE_FALLBACK_DELAY_MS } from "./engine.js";
+import { advanceSeqCursor, canSkipEchoPull, clearBumpStash, compactSyncLogs, getClockSkewMs, getConsecutiveSyncFailureCount, getLastSyncedSeq, getQuarantinedSyncLogs, getSyncHealth, hasSyncAttemptThisSession, localContentHash, prepareForcePush, pruneSyncedLogs, requeueQuarantinedSyncLogs, recordClockSkew, recordRegularSyncFailure, recordSyncLog, recordSyncLogs, regularSync, resetConsecutiveSyncFailures, resetSyncAttempt, setLastSyncedSeq, shouldOpenSyncDiagnostics, stashBumpPayload, syncForcePushToServer, syncPush, syncPull, syncPullSinceSeq, syncForceReplace, yieldToMainThread, SYNC_HEDGE_DELAY_MS, SYNC_LANE_BACKUP_DELAY_MS, SYNC_LOG_QUARANTINED } from "./engine.js";
 import { listPendingArbitrations } from "./arbitration.ts";
 import { createPhaseRecorder } from "./phaseTimings.js";
+import { registerTotpPrompt } from "../lib/totpChallenge.ts";
 import { syncScheduler } from "./scheduler.js";
+
+const DUAL_LANE_PUSH_RESPONSE = {
+  accepted: 1,
+  rejected: 0,
+  conflicts: 0,
+  outcomes: [{
+    tableName: "settings",
+    recordId: "theme",
+    action: "update",
+    status: "accepted",
+    reasonCode: "applied",
+    message: "Applied",
+    incomingTimestamp: "2026-07-31T00:00:01.000Z",
+  }],
+  backupId: null,
+  serverTime: "2026-07-31T00:00:02.000Z",
+};
 
 const localStorageMock = (() => {
   let store = new Map<string, string>();
@@ -3157,7 +3175,7 @@ describe("regularSync", () => {
       expect.objectContaining({
         method: "POST",
         transport: "native-android",
-        hedge: { delayMs: SYNC_NATIVE_FALLBACK_DELAY_MS },
+        laneBackup: { delayMs: SYNC_LANE_BACKUP_DELAY_MS },
       }),
     );
   });
@@ -3208,7 +3226,7 @@ describe("regularSync", () => {
 
     expect(apiFetchMock).toHaveBeenNthCalledWith(1, "/api/sync/status", expect.objectContaining({
       transport: "native-android",
-      hedge: { delayMs: SYNC_NATIVE_FALLBACK_DELAY_MS },
+      laneBackup: { delayMs: SYNC_LANE_BACKUP_DELAY_MS },
     }));
     expect(apiFetchMock).toHaveBeenNthCalledWith(
       2,
@@ -3270,9 +3288,147 @@ describe("regularSync", () => {
       expect.objectContaining({
         method: "POST",
         transport: "native-android",
-        hedge: { delayMs: SYNC_NATIVE_FALLBACK_DELAY_MS },
+        laneBackup: { delayMs: SYNC_LANE_BACKUP_DELAY_MS },
       }),
     );
+  });
+
+  it("dualLane：无 TOTP 的 push 以 WebView 为主路、原生作备份；回声 pull 同样带备份", async () => {
+    await db.settings.add({ key: "theme", value: "dark", updatedAt: "2026-07-31T00:00:00.000Z" });
+    await db.syncLog.add({
+      id: "setting-log-dual",
+      tableName: "settings",
+      recordId: "theme",
+      action: "update",
+      timestamp: "2026-07-31T00:00:01.000Z",
+      synced: 0,
+    });
+    setLastSyncedSeq(3);
+    apiFetchMock
+      .mockResolvedValueOnce(DUAL_LANE_PUSH_RESPONSE)
+      .mockResolvedValueOnce({ changes: [], latestSeq: 4, nextSinceSeq: 4, hasMore: false, serverTime: "2026-07-31T00:00:03.000Z" })
+      .mockResolvedValueOnce({ ok: true });
+
+    await regularSync({ transport: "web", dualLane: true });
+
+    expect(apiFetchMock).toHaveBeenNthCalledWith(1, "/api/sync/push", expect.objectContaining({
+      method: "POST",
+      transport: "web",
+      laneBackup: { delayMs: SYNC_LANE_BACKUP_DELAY_MS },
+    }));
+    expect(apiFetchMock.mock.calls[0][1]).not.toHaveProperty("hedge");
+    expect(apiFetchMock.mock.calls.filter(([path]) => path === "/api/sync/push")).toHaveLength(1);
+  });
+
+  it("dualLane：有游标的增量 pull 以 WebView 为主路、原生作备份（非 resume 原因）", async () => {
+    setLastSyncedSeq(4);
+    apiFetchMock.mockResolvedValueOnce({ changes: [], latestSeq: 4, nextSinceSeq: 4, hasMore: false, serverTime: "2026-05-17T00:00:01.000Z" });
+
+    await regularSync({ transport: "web", dualLane: true });
+
+    expect(apiFetchMock).toHaveBeenNthCalledWith(1, "/api/sync/pull", expect.objectContaining({
+      transport: "web",
+      laneBackup: { delayMs: SYNC_LANE_BACKUP_DELAY_MS },
+    }));
+  });
+
+  it("dualLane 不影响 sinceSeq=0 的全量 pull：仍是单路 Web 对冲", async () => {
+    apiFetchMock
+      .mockResolvedValueOnce({
+        categoryCount: 0,
+        entryCount: 0,
+        quickNoteCount: 0,
+        lastUpdatedAt: null,
+        latestSeq: 1,
+        serverTime: "2026-07-31T00:00:00.000Z",
+      })
+      .mockResolvedValueOnce({ changes: [], latestSeq: 1, nextSinceSeq: 1, hasMore: false, serverTime: "2026-07-31T00:00:01.000Z" })
+      .mockResolvedValueOnce({ ok: true });
+
+    await regularSync({ transport: "web", dualLane: true });
+
+    expect(apiFetchMock).toHaveBeenNthCalledWith(1, "/api/sync/status", expect.objectContaining({
+      transport: "web",
+      laneBackup: { delayMs: SYNC_LANE_BACKUP_DELAY_MS },
+    }));
+    expect(apiFetchMock.mock.calls[1][1]).toMatchObject({ hedge: { delayMs: SYNC_HEDGE_DELAY_MS } });
+    expect(apiFetchMock.mock.calls[1][1]).not.toHaveProperty("laneBackup");
+  });
+
+  // 本文件 vi.mock 了 "../lib/api.js"，totpChallenge 里 import 的 ./api.ts 解析到同一模块，
+  // 所以 callWithTotp 用的就是 ApiErrorMock；弹码走 registerTotpPrompt 注册的实现。
+  it("dualLane 下带 TOTP 头的 push 不走原生备份（大批删除进服务端安全备份路径，不扩大重复请求暴露）", async () => {
+    await db.settings.add({ key: "theme", value: "dark", updatedAt: "2026-07-31T00:00:00.000Z" });
+    await db.syncLog.add({
+      id: "setting-log-totp",
+      tableName: "settings",
+      recordId: "theme",
+      action: "update",
+      timestamp: "2026-07-31T00:00:01.000Z",
+      synced: 0,
+    });
+    setLastSyncedSeq(3);
+    registerTotpPrompt(async () => "123456");
+    try {
+      apiFetchMock
+        .mockRejectedValueOnce(new ApiErrorMock(401, "", "", { error: "totp_required" }))
+        .mockResolvedValueOnce(DUAL_LANE_PUSH_RESPONSE);
+
+      await syncPush({ dualLane: true });
+
+      const pushCalls = apiFetchMock.mock.calls.filter(([path]) => path === "/api/sync/push");
+      expect(pushCalls).toHaveLength(2);
+      expect(pushCalls[0][1]).toMatchObject({ transport: "web", laneBackup: { delayMs: SYNC_LANE_BACKUP_DELAY_MS } });
+      expect(pushCalls[1][1]).toMatchObject({
+        hedge: { delayMs: SYNC_HEDGE_DELAY_MS },
+        headers: { "X-TOTP-Code": "123456" },
+      });
+      expect(pushCalls[1][1]).not.toHaveProperty("laneBackup");
+      expect(JSON.parse(pushCalls[1][1].body).requestId).toBe(JSON.parse(pushCalls[0][1].body).requestId);
+    } finally {
+      registerTotpPrompt(null);
+    }
+  });
+
+  it("onLaneOutcome 汇总进 PhaseRecorder.lanes，计时通道记实际答复车道", async () => {
+    setLastSyncedSeq(4);
+    apiFetchMock.mockImplementationOnce(async (_path: string, options?: { onLaneOutcome?: (o: unknown) => void; onServedBy?: (t: string) => void }) => {
+      options?.onLaneOutcome?.({ primary: "web", backupFired: true, servedBy: "native-android" });
+      options?.onServedBy?.("native-android");
+      return { changes: [], latestSeq: 4, nextSinceSeq: 4, hasMore: false, serverTime: "2026-05-17T00:00:01.000Z" };
+    });
+    const phases = createPhaseRecorder();
+
+    await regularSync({ transport: "web", dualLane: true, phases });
+
+    expect(phases.lanes).toEqual({ backupFired: 1, backupWon: 1 });
+    expect(phases.transport).toBe("native-android");
+  });
+
+  it("dualLane push 由原生答复时，计时通道记 native-android 而非恒记 web", async () => {
+    await db.settings.add({ key: "theme", value: "dark", updatedAt: "2026-07-31T00:00:00.000Z" });
+    await db.syncLog.add({
+      id: "setting-log-native-served",
+      tableName: "settings",
+      recordId: "theme",
+      action: "update",
+      timestamp: "2026-07-31T00:00:01.000Z",
+      synced: 0,
+    });
+    setLastSyncedSeq(3);
+    apiFetchMock
+      .mockImplementationOnce(async (_path: string, options?: { onServedBy?: (t: string) => void }) => {
+        options?.onServedBy?.("native-android");
+        return DUAL_LANE_PUSH_RESPONSE;
+      })
+      .mockResolvedValueOnce({ changes: [], latestSeq: 4, nextSinceSeq: 4, hasMore: false, serverTime: "2026-07-31T00:00:03.000Z" })
+      .mockResolvedValueOnce({ ok: true });
+    const phases = createPhaseRecorder();
+
+    await regularSync({ transport: "web", dualLane: true, phases });
+
+    // push 原生答复 + 回声 pull WebView 答复 = mixed；push 若恒记 web，这里会是 web。
+    expect(phases.transport).toBe("mixed");
   });
 
   // 有游标、无 pending：直接增量 pull，一次往返同时完成「有没有新数据」与「拉回来」。
