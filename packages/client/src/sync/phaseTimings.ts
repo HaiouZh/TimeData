@@ -20,7 +20,8 @@ export interface PhaseRecorder {
 
 export function recordLaneOutcome(rec: PhaseRecorder, outcome: LaneOutcome): void {
   if (!outcome.backupFired) return;
-  const lanes = rec.lanes ?? (rec.lanes = { backupFired: 0, backupWon: 0 });
+  rec.lanes ??= { backupFired: 0, backupWon: 0 };
+  const lanes = rec.lanes;
   lanes.backupFired += 1;
   if (outcome.servedBy !== null && outcome.servedBy !== outcome.primary) lanes.backupWon += 1;
 }
