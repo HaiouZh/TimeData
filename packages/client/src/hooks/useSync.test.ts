@@ -233,13 +233,6 @@ describe("useSync", () => {
     const { regularSync } = await import("../sync/engine.ts");
     vi.mocked(regularSync).mockClear();
     const original = db.syncLog.where;
-    db.syncLog.where = (() => ({
-      equals: () => ({
-        count: async () => {
-          throw new Error("DatabaseClosedError");
-        },
-      }),
-    })) as unknown as typeof original;
 
     try {
       const captured: { value: ReturnType<typeof useSync> | null } = { value: null };
@@ -248,6 +241,20 @@ describe("useSync", () => {
         return createElement("span", null, "probe");
       }
       const { root } = await renderDom(createElement(Probe));
+
+      // 挂载后再换桩、且只抛一次：只让 sync() 开头那次计数报错，挂载与收尾的刷新照常
+      let thrown = false;
+      db.syncLog.where = ((index: string) => {
+        if (thrown) return original.call(db.syncLog, index);
+        thrown = true;
+        return {
+          equals: () => ({
+            count: async () => {
+              throw new Error("DatabaseClosedError");
+            },
+          }),
+        };
+      }) as unknown as typeof original;
 
       await act(async () => {
         await captured.value?.sync();
