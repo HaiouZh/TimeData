@@ -350,8 +350,10 @@ describe("apiFetch 安卓双车道", () => {
 
   it("WebView 主路挂住超过 delayMs：发原生备份，原生先回则 WebView 被 abort", async () => {
     let webSignal: AbortSignal | null = null;
+    let webBody: unknown = null;
     vi.spyOn(globalThis, "fetch").mockImplementation((_input, init) => {
       webSignal = (init?.signal as AbortSignal) ?? null;
+      webBody = init?.body;
       return new Promise<Response>(() => {});
     });
     const nativeMock = vi.spyOn(nativeHttp, "request").mockResolvedValue(nativeOk({ ok: "native" }));
@@ -373,6 +375,8 @@ describe("apiFetch 安卓双车道", () => {
       method: "POST",
       data: JSON.stringify({ requestId: "r-1" }),
     }));
+    // 两条车道发的是同一份 body（同一个 requestId）：原生输家晚到只会命中服务端回放
+    expect(webBody).toBe(JSON.stringify({ requestId: "r-1" }));
     expect((webSignal as AbortSignal | null)?.aborted).toBe(true);
     expect(servedBy).toEqual(["native-android"]);
     expect(outcomes).toEqual([{ primary: "web", backupFired: true, servedBy: "native-android" }]);
@@ -403,6 +407,28 @@ describe("apiFetch 安卓双车道", () => {
     await vi.advanceTimersByTimeAsync(5000);
     await assertion;
     expect(nativeMock).not.toHaveBeenCalled();
+  });
+
+  it("WebView 主路挂住、原生备份回了 HTTP 错误码：那是服务端的答复，立即照抛，不等主路", async () => {
+    vi.spyOn(globalThis, "fetch").mockImplementation(() => new Promise<Response>(() => {}));
+    vi.spyOn(nativeHttp, "request").mockResolvedValue({ status: 500, data: { error: "boom" }, headers: {}, url: "" });
+    const outcomes: LaneOutcome[] = [];
+    let settledAt: number | null = null;
+    const promise = apiFetch("/api/sync/pull?w=7", {
+      method: "POST",
+      body: "{}",
+      transport: "web",
+      laneBackup: { delayMs: 2000 },
+      onLaneOutcome: (o) => outcomes.push(o),
+    });
+    promise.catch(() => {
+      settledAt = Date.now();
+    });
+    const startedAt = Date.now();
+    await vi.advanceTimersByTimeAsync(2000);
+    await expect(promise).rejects.toMatchObject({ status: 500 });
+    expect(settledAt).toBe(startedAt + 2000);
+    expect(outcomes).toEqual([{ primary: "web", backupFired: true, servedBy: null }]);
   });
 
   it("两车道都失败：outcome 只回调一次且 servedBy 为 null", async () => {

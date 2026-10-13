@@ -320,6 +320,31 @@ describe("useSync", () => {
     await unmount(root);
   });
 
+  it("失败轮发过第二车道：sync_error 也带上本轮 lanes", async () => {
+    const { regularSync } = await import("../sync/engine.ts");
+    vi.mocked(regularSync).mockImplementationOnce(async (options) => {
+      if (options?.phases) options.phases.lanes = { backupFired: 2, backupWon: 0 };
+      throw new Error("网络请求超时（15000ms）：/api/sync/pull");
+    });
+
+    const captured: { value: ReturnType<typeof useSync> | null } = { value: null };
+    function Probe() {
+      captured.value = useSync();
+      return createElement("span", null, "probe");
+    }
+    const { root } = await renderDom(createElement(Probe));
+
+    await act(async () => {
+      await captured.value?.sync({ reason: "write", waitMs: 0 });
+    });
+
+    const report = readPendingReports().find((r) => r.action === "sync_error");
+    expect(report).toBeDefined();
+    expect(JSON.parse(report?.detail ?? "{}").lanes).toEqual({ backupFired: 2, backupWon: 0 });
+
+    await unmount(root);
+  });
+
   it("regularSync 抛错时也落一条 outcome=error 的计时记录", async () => {
     const { regularSync } = await import("../sync/engine.ts");
     vi.mocked(regularSync).mockRejectedValueOnce(new Error("网络请求失败：boom"));

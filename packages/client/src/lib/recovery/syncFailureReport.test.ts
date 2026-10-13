@@ -157,5 +157,10 @@ describe("lanes 与救回上报", () => {
     h.advance(SYNC_LANE_RESCUE_MIN_INTERVAL_MS);
     h.tracker.recordSuccess({ reason: "write", transport: "native-android", totalMs: 1, lanes });
     expect(h.details()[1]).toMatchObject({ action: "sync_lane_rescue", suppressed: 2 });
+    // 记完清零：下一条只数它自己那个窗口里被压掉的
+    h.tracker.recordSuccess({ reason: "write", transport: "native-android", totalMs: 1, lanes });
+    h.advance(SYNC_LANE_RESCUE_MIN_INTERVAL_MS);
+    h.tracker.recordSuccess({ reason: "write", transport: "native-android", totalMs: 1, lanes });
+    expect(h.details()[2]).toMatchObject({ action: "sync_lane_rescue", suppressed: 1 });
   });
 });

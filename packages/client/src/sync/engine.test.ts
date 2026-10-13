@@ -937,12 +937,14 @@ describe("syncPush", () => {
         appliedCount: 1,
       });
 
-    await syncPush();
+    await syncPush({ dualLane: true });
 
     expect(apiFetchMock).toHaveBeenCalledTimes(2);
     const firstBody = JSON.parse(apiFetchMock.mock.calls[0][1].body);
     const retryBody = JSON.parse(apiFetchMock.mock.calls[1][1].body);
     expect(retryBody.requestId).not.toBe(firstBody.requestId);
+    // 拆批重试那一枪同样带第二车道，不退回单路
+    expect(apiFetchMock.mock.calls[1][1]).toMatchObject({ transport: "web", laneBackup: { delayMs: SYNC_LANE_BACKUP_DELAY_MS } });
   });
 
   it("原子 409 的死信日志被隔离后不再进入下一轮 push，可手动重新入队", async () => {
@@ -3317,6 +3319,7 @@ describe("regularSync", () => {
       laneBackup: { delayMs: SYNC_LANE_BACKUP_DELAY_MS },
     }));
     expect(apiFetchMock.mock.calls[0][1]).not.toHaveProperty("hedge");
+    expect(JSON.parse(apiFetchMock.mock.calls[0][1].body).requestId).toEqual(expect.any(String));
     expect(apiFetchMock.mock.calls.filter(([path]) => path === "/api/sync/push")).toHaveLength(1);
   });
 
@@ -3402,6 +3405,25 @@ describe("regularSync", () => {
     await regularSync({ transport: "web", dualLane: true, phases });
 
     expect(phases.lanes).toEqual({ backupFired: 1, backupWon: 1 });
+    expect(phases.transport).toBe("native-android");
+  });
+
+  it("多页增量 pull 里有一页被原生救回：计时通道记原生，不被后一页的主路答复盖掉", async () => {
+    setLastSyncedSeq(4);
+    apiFetchMock
+      .mockImplementationOnce(async (_path: string, options?: { onServedBy?: (t: string) => void }) => {
+        options?.onServedBy?.("native-android");
+        return { changes: [], latestSeq: 6, nextSinceSeq: 5, hasMore: true, serverTime: "2026-05-17T00:00:01.000Z" };
+      })
+      .mockImplementationOnce(async (_path: string, options?: { onServedBy?: (t: string) => void }) => {
+        options?.onServedBy?.("web");
+        return { changes: [], latestSeq: 6, nextSinceSeq: 6, hasMore: false, serverTime: "2026-05-17T00:00:02.000Z" };
+      });
+    const phases = createPhaseRecorder();
+
+    await regularSync({ transport: "web", dualLane: true, phases });
+
+    expect(apiFetchMock.mock.calls.filter(([path]) => path === "/api/sync/pull")).toHaveLength(2);
     expect(phases.transport).toBe("native-android");
   });
 

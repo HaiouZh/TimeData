@@ -50,7 +50,10 @@ export const SYNC_LANE_BACKUP_DELAY_MS = 2_000;
 const SYNC_LANE_BACKUP = { delayMs: SYNC_LANE_BACKUP_DELAY_MS } as const;
 
 export interface SyncNetOptions {
-  /** 安卓且原生插件可用：每个同步请求都带第二车道。 */
+  /**
+   * 安卓且原生插件可用：普通同步的 status / 增量 pull / push 带第二车道。
+   * 例外（仍单路 Web）：`sinceSeq: 0` 全量拉取（fetchSyncPullResponse）、带 TOTP 头的 push（submitPushBatch）。
+   */
   dualLane?: boolean;
   onLaneOutcome?: (outcome: LaneOutcome) => void;
 }
@@ -770,8 +773,9 @@ async function submitPushBatch(
       apiFetch<SyncPushResponse>("/api/sync/push", {
         method: "POST",
         body: JSON.stringify({ changes, baseSeq, requestId }),
-        // 带 TOTP 头 = 大批删除：服务端走「先建安全备份」路径，那里有 await 窗口且不写回放表；
-        // 原生输家取消不了、可能晚到很久，这类 push 不加第二车道（ADR 0038）。
+        // totpHeaders 非空 ⇔ 服务端已对这批弹过码（callWithTotp 首次总是空头裸调，只在 totp_required 后才带头重发）。
+        // 那是超阈值的大批删除，可能落进服务端安全备份路径：建备份的 await 窗口里到达的同 id 请求查不到回放、
+        // 可能被判 409 要求重试。这类 push 不再加一枪取消不了、可能晚到很久的原生请求（ADR 0038）。
         ...(Object.keys(totpHeaders).length > 0
           ? { hedge: SYNC_HEDGE, headers: totpHeaders }
           : syncNetRequestOptions("web", net, net.onServedBy)),

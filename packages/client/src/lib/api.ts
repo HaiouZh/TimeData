@@ -57,6 +57,7 @@ export interface ApiFetchOptions extends RequestInit {
   /**
    * 安卓双车道：主路（transport）之外用另一条车道作备份——主路网络失败立即发、delayMs 内没回也发，先回者胜。
    * 非安卓或原生插件不可用时忽略，退回单路 Web。仅限幂等请求 + 字符串 body。见 ADR 0038。
+   * 竞速时 WebView 车道不带同源对冲：同传的 hedge 被忽略（它只在退回单路 Web 时生效）。
    */
   laneBackup?: { delayMs: number };
   /** 实际由哪条通道答复（成功时回调一次）。 */
