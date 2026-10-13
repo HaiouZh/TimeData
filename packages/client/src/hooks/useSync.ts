@@ -25,7 +25,7 @@ import {
   type SyncTimingOutcome,
 } from "../sync/phaseTimings.ts";
 import type { SyncExecutorMeta, SyncExecutorOutcome } from "../sync/scheduler.ts";
-import { selectSyncTransport } from "../sync/transport.ts";
+import { selectSyncTransport, supportsDualLane } from "../sync/transport.ts";
 import { syncFailures } from "../lib/recovery/syncFailureRuntime.ts";
 import type { SyncForcePushPrepareResponse, SyncForcePushResponse, SyncHealthReport } from "@timedata/shared";
 import { SYNC_DIAGNOSTIC_FAILURE_THRESHOLD } from "@timedata/shared";
@@ -103,20 +103,20 @@ export function useSync({ autoSyncOnMount = false }: UseSyncOptions = {}) {
     setSyncing(true);
     setError(null);
     setConflicts([]);
-    const unsyncedAtStart = await db.syncLog.where("synced").equals(0).count();
     const recorder = createPhaseRecorder();
     const startedAt = new Date().toISOString();
     const t0 = performance.now();
+    let unsyncedAtStart: number | undefined;
     let outcome: SyncTimingOutcome = "error";
     let failure: unknown = null;
     const platform = Capacitor.getPlatform();
-    const transport = selectSyncTransport({
-      platform,
-      reason: meta?.reason,
-      nativeHttpAvailable: platform !== "android" || Capacitor.isPluginAvailable("CapacitorHttp"),
-    });
+    const nativeHttpAvailable = platform !== "android" || Capacitor.isPluginAvailable("CapacitorHttp");
+    const transport = selectSyncTransport({ platform, reason: meta?.reason, nativeHttpAvailable });
+    const dualLane = supportsDualLane({ platform, nativeHttpAvailable });
     try {
-      const result = await regularSync({ phases: recorder, transport });
+      // 计数也在 try 里：它在 setSyncing(true) 之后，抛错若漏到 finally 之外，黄灯会一直亮到重启。
+      unsyncedAtStart = await db.syncLog.where("synced").equals(0).count();
+      const result = await regularSync({ phases: recorder, transport, dualLane });
       setLastResult(result);
       if (result.conflicts.length > 0) {
         setConflicts(result.conflicts);
@@ -141,10 +141,16 @@ export function useSync({ autoSyncOnMount = false }: UseSyncOptions = {}) {
           waitMs: meta?.waitMs ?? null,
           totalMs,
           phases: recorder.phases,
+          lanes: recorder.lanes ?? null,
           error: failure,
         });
       } else {
-        syncFailures.recordSuccess({ reason: meta?.reason ?? null, transport: timingTransport ?? null, totalMs });
+        syncFailures.recordSuccess({
+          reason: meta?.reason ?? null,
+          transport: timingTransport ?? null,
+          totalMs,
+          lanes: recorder.lanes ?? null,
+        });
       }
       recordSyncTiming({
         at: startedAt,
@@ -160,6 +166,7 @@ export function useSync({ autoSyncOnMount = false }: UseSyncOptions = {}) {
         protocol: timingTransport === "native-android" || timingTransport === undefined
           ? undefined
           : readSyncTransportProtocol(),
+        ...(recorder.lanes ? { lanes: recorder.lanes } : {}),
       });
       setSyncFailureCount(getConsecutiveSyncFailureCount());
       setSyncing(false);

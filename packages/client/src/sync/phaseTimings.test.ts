@@ -166,6 +166,29 @@ describe("recordSyncTiming / getSyncTimings", () => {
     expect(getSyncTimings(kv)[0].protocol).toBe("h3");
   });
 
+  it("lanes 计数随条目读回；计数不是有限数的坏元素被丢弃", () => {
+    const kv = createMemoryKV();
+    const good: SyncTimingEntry = {
+      at: "2026-10-13T00:00:00.000Z",
+      outcome: "pull_only",
+      totalMs: 2300,
+      phases: { pull: 2290 },
+      lanes: { backupFired: 1, backupWon: 1 },
+    };
+    kv.set(
+      STORAGE_KEYS.syncPhaseTimings,
+      JSON.stringify([
+        good,
+        // biome-ignore lint/suspicious/noExplicitAny: 模拟 localStorage 里 lanes 被污染
+        { ...good, lanes: { backupFired: "x", backupWon: 0 } } as any,
+        // biome-ignore lint/suspicious/noExplicitAny: 模拟 localStorage 里 lanes 被污染
+        { ...good, lanes: null } as any,
+      ]),
+    );
+
+    expect(getSyncTimings(kv)).toEqual([good]);
+  });
+
   it("protocol 非 string 的坏元素被丢弃", () => {
     const kv = createMemoryKV();
     const good: SyncTimingEntry = {

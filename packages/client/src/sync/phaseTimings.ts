@@ -63,6 +63,7 @@ export interface SyncTimingEntry {
   connection?: string; // SyncStreamState，触发时的 SSE 连接状态
   transport?: SyncTimingTransport; // 本轮实际请求通道；push(Web)+pull(native) 记 mixed
   protocol?: string; // nextHopProtocol（h2/h3/http/1.1），resource timing 缺失时 undefined
+  lanes?: SyncLaneStats; // 只在发过第二车道时出现
 }
 
 export interface TimingsKV {
@@ -121,6 +122,11 @@ function isValidTimingEntry(value: unknown): value is SyncTimingEntry {
     return false;
   }
   if (entry.protocol !== undefined && typeof entry.protocol !== "string") return false;
+  if (entry.lanes !== undefined) {
+    const lanes = entry.lanes as Record<string, unknown> | null;
+    if (typeof lanes !== "object" || lanes === null) return false;
+    if (!Number.isFinite(lanes.backupFired) || !Number.isFinite(lanes.backupWon)) return false;
+  }
   return true;
 }
 

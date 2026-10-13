@@ -189,7 +189,7 @@ describe("useSync", () => {
       await captured.value?.sync({ reason: "resume", waitMs: 0 });
     });
 
-    expect(regularSync).toHaveBeenCalledWith(expect.objectContaining({ transport: "native-android" }));
+    expect(regularSync).toHaveBeenCalledWith(expect.objectContaining({ transport: "native-android", dualLane: true }));
     expect(getSyncTimings()[0].transport).toBe("native-android");
     expect(getSyncTimings()[0].protocol).toBeUndefined();
 
@@ -222,8 +222,93 @@ describe("useSync", () => {
       await captured.value?.sync({ reason: "resume", waitMs: 0 });
     });
 
-    expect(regularSync).toHaveBeenCalledWith(expect.objectContaining({ transport: "web" }));
+    expect(regularSync).toHaveBeenCalledWith(expect.objectContaining({ transport: "web", dualLane: false }));
     expect(getSyncTimings()[0].transport).toBe("web");
+
+    await unmount(root);
+  });
+
+  it("同步开头的本地计数报错：黄灯照样复位，本轮记为失败", async () => {
+    const { db } = await import("../db/index.ts");
+    const { regularSync } = await import("../sync/engine.ts");
+    vi.mocked(regularSync).mockClear();
+    const original = db.syncLog.where;
+    db.syncLog.where = (() => ({
+      equals: () => ({
+        count: async () => {
+          throw new Error("DatabaseClosedError");
+        },
+      }),
+    })) as unknown as typeof original;
+
+    try {
+      const captured: { value: ReturnType<typeof useSync> | null } = { value: null };
+      function Probe() {
+        captured.value = useSync();
+        return createElement("span", null, "probe");
+      }
+      const { root } = await renderDom(createElement(Probe));
+
+      await act(async () => {
+        await captured.value?.sync();
+      });
+
+      expect(captured.value?.syncing).toBe(false);
+      expect(captured.value?.error).toBeTruthy();
+      expect(regularSync).not.toHaveBeenCalled();
+      expect(getSyncTimings()[0].outcome).toBe("error");
+
+      await unmount(root);
+    } finally {
+      db.syncLog.where = original;
+    }
+  });
+
+  it("本轮发过第二车道：lanes 落进计时记录", async () => {
+    const { regularSync } = await import("../sync/engine.ts");
+    const identical = {
+      checked: true,
+      identical: true,
+      pushed: 0,
+      rejected: 0,
+      pushConflicts: 0,
+      pushIssues: [],
+      pulled: 0,
+      conflicts: [],
+    };
+    // syncFailures 是模块级单例：先跑一轮普通成功清掉前面用例留下的连败，再清掉它攒的上报。
+    vi.mocked(regularSync).mockResolvedValueOnce(identical);
+    vi.mocked(regularSync).mockImplementationOnce(async (options) => {
+      if (options?.phases) options.phases.lanes = { backupFired: 1, backupWon: 1 };
+      return {
+        checked: true,
+        identical: true,
+        pushed: 0,
+        rejected: 0,
+        pushConflicts: 0,
+        pushIssues: [],
+        pulled: 0,
+        conflicts: [],
+      };
+    });
+
+    const captured: { value: ReturnType<typeof useSync> | null } = { value: null };
+    function Probe() {
+      captured.value = useSync();
+      return createElement("span", null, "probe");
+    }
+    const { root } = await renderDom(createElement(Probe));
+
+    await act(async () => {
+      await captured.value?.sync();
+    });
+    localStorage.clear();
+    await act(async () => {
+      await captured.value?.sync({ reason: "write", waitMs: 0 });
+    });
+
+    expect(getSyncTimings()[0].lanes).toEqual({ backupFired: 1, backupWon: 1 });
+    expect(readPendingReports().map((r) => r.action)).toEqual(["sync_lane_rescue"]);
 
     await unmount(root);
   });

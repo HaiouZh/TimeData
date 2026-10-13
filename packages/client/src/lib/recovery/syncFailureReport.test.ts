@@ -3,6 +3,7 @@ import { ApiError } from "../api.js";
 import type { PendingReport } from "./pendingReports.js";
 import {
   SYNC_ERROR_REPORTS_PER_STREAK,
+  SYNC_LANE_RESCUE_MIN_INTERVAL_MS,
   classifySyncError,
   createSyncFailureTracker,
 } from "./syncFailureReport.js";
@@ -115,5 +116,46 @@ describe("createSyncFailureTracker", () => {
     tracker.recordSuccess({ reason: "write", transport: "web", totalMs: 100 });
     tracker.recordFailure({ ...failure, error: new Error("网络请求失败：u") });
     expect(details().at(-1)).toMatchObject({ action: "sync_error", streak: 1 });
+  });
+});
+
+describe("lanes 与救回上报", () => {
+  const lanes = { backupFired: 1, backupWon: 1 };
+
+  it("sync_error / sync_recovered 带上本轮 lanes", () => {
+    const h = setup();
+    h.tracker.recordFailure({ ...failure, lanes: { backupFired: 1, backupWon: 0 }, error: new Error("网络请求超时（15000ms）：x") });
+    h.tracker.recordSuccess({ reason: "reconnect", transport: "mixed", totalMs: 900, lanes });
+    expect(h.details()).toMatchObject([
+      { action: "sync_error", lanes: { backupFired: 1, backupWon: 0 } },
+      { action: "sync_recovered", lanes },
+    ]);
+  });
+
+  it("无连败的成功轮被第二车道救回：攒一条 sync_lane_rescue", () => {
+    const h = setup();
+    h.tracker.recordSuccess({ reason: "write", transport: "native-android", totalMs: 2_300, lanes });
+    expect(h.details()).toEqual([
+      { action: "sync_lane_rescue", id: "id1", build: "b1", reason: "write", transport: "native-android", totalMs: 2_300, lanes, suppressed: 0 },
+    ]);
+  });
+
+  it("发了备份但主路先回不算救回；没发备份不记", () => {
+    const h = setup();
+    h.tracker.recordSuccess({ reason: "write", transport: "web", totalMs: 2_100, lanes: { backupFired: 1, backupWon: 0 } });
+    h.tracker.recordSuccess({ reason: "write", transport: "web", totalMs: 300 });
+    expect(h.stashed).toEqual([]);
+  });
+
+  it("10 分钟内只记一条，其余计入下一条的 suppressed", () => {
+    const h = setup();
+    h.tracker.recordSuccess({ reason: "write", transport: "native-android", totalMs: 1, lanes });
+    h.advance(60_000);
+    h.tracker.recordSuccess({ reason: "write", transport: "native-android", totalMs: 1, lanes });
+    h.tracker.recordSuccess({ reason: "write", transport: "native-android", totalMs: 1, lanes });
+    expect(h.stashed).toHaveLength(1);
+    h.advance(SYNC_LANE_RESCUE_MIN_INTERVAL_MS);
+    h.tracker.recordSuccess({ reason: "write", transport: "native-android", totalMs: 1, lanes });
+    expect(h.details()[1]).toMatchObject({ action: "sync_lane_rescue", suppressed: 2 });
   });
 });

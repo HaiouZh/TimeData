@@ -3405,7 +3405,7 @@ describe("regularSync", () => {
     expect(phases.transport).toBe("native-android");
   });
 
-  it("dualLane push 由原生答复时，计时通道记 native-android 而非恒记 web", async () => {
+  it("dualLane push 由原生答复时，计时通道如实记入（不再恒记 web）", async () => {
     await db.settings.add({ key: "theme", value: "dark", updatedAt: "2026-07-31T00:00:00.000Z" });
     await db.syncLog.add({
       id: "setting-log-native-served",
