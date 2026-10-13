@@ -1,6 +1,6 @@
 import { Capacitor, type CapacitorHttp } from "@capacitor/core";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { ApiError, apiFetch, buildApiUrl, nativeHttp } from "./api.js";
+import { ApiError, apiFetch, buildApiUrl, nativeHttp, type LaneOutcome } from "./api.js";
 
 describe("buildApiUrl", () => {
   it("does not create double slashes when base URL has a trailing slash", () => {
@@ -219,9 +219,10 @@ describe("apiFetch hedging", () => {
 });
 
 // 2026-10-10 安卓事故：原生通道（HttpURLConnection）连不上时 WebView 那条已经通了，
-// 同步却还在原生上干等。读请求带 hedge 时，原生失败立即、迟迟不回到点，都改走 WebView fetch。
+// 同步却还在原生上干等；2026-10-13 反过来，WebView 那条 HTTP/2 连接卡住时原生是通的。
+// 带 laneBackup 时主路失败立即、迟迟不回到点，都改走另一条车道。
 // 原生请求按 url+headers 去重（模块级 map），挂死的 mock 会留在 map 里——每条用例用不同 path。
-describe("apiFetch 原生通道回退 WebView", () => {
+describe("apiFetch 安卓双车道", () => {
   type NativeResponse = Awaited<ReturnType<typeof CapacitorHttp.request>>;
   const nativeOk = (data: unknown): NativeResponse => ({ status: 200, data, headers: {}, url: "" });
 
@@ -243,7 +244,7 @@ describe("apiFetch 原生通道回退 WebView", () => {
     const servedBy: string[] = [];
     await expect(apiFetch("/api/sync/status?n=1", {
       transport: "native-android",
-      hedge: { delayMs: 3000 },
+      laneBackup: { delayMs: 3000 },
       onServedBy: (t) => servedBy.push(t),
     })).resolves.toEqual({ ok: "native" });
     expect(fetchMock).not.toHaveBeenCalled();
@@ -256,7 +257,7 @@ describe("apiFetch 原生通道回退 WebView", () => {
     const servedBy: string[] = [];
     await expect(apiFetch("/api/sync/status?n=2", {
       transport: "native-android",
-      hedge: { delayMs: 3000 },
+      laneBackup: { delayMs: 3000 },
       onServedBy: (t) => servedBy.push(t),
     })).resolves.toEqual({ ok: "web" });
     expect(fetchMock).toHaveBeenCalledTimes(1);
@@ -266,7 +267,7 @@ describe("apiFetch 原生通道回退 WebView", () => {
   it("原生挂住超过 delayMs：并发 WebView，先回者胜", async () => {
     vi.spyOn(nativeHttp, "request").mockReturnValue(new Promise<NativeResponse>(() => {}));
     const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse({ ok: "web" }));
-    const promise = apiFetch("/api/sync/status?n=3", { transport: "native-android", hedge: { delayMs: 3000 } });
+    const promise = apiFetch("/api/sync/status?n=3", { transport: "native-android", laneBackup: { delayMs: 3000 } });
     await vi.advanceTimersByTimeAsync(2999);
     expect(fetchMock).not.toHaveBeenCalled();
     await vi.advanceTimersByTimeAsync(1);
@@ -279,7 +280,7 @@ describe("apiFetch 原生通道回退 WebView", () => {
     const fetchMock = vi.spyOn(globalThis, "fetch");
     await expect(apiFetch("/api/sync/status?n=4", {
       transport: "native-android",
-      hedge: { delayMs: 3000 },
+      laneBackup: { delayMs: 3000 },
     })).rejects.toBeInstanceOf(ApiError);
     expect(fetchMock).not.toHaveBeenCalled();
   });
@@ -289,7 +290,7 @@ describe("apiFetch 原生通道回退 WebView", () => {
     vi.spyOn(globalThis, "fetch").mockRejectedValue(new TypeError("fetch failed"));
     const promise = apiFetch("/api/sync/status?n=8", {
       transport: "native-android",
-      hedge: { delayMs: 3000 },
+      laneBackup: { delayMs: 3000 },
       timeoutMs: 15_000,
     });
     const assertion = expect(promise).rejects.toThrow(/超时/);
@@ -302,7 +303,7 @@ describe("apiFetch 原生通道回退 WebView", () => {
     vi.spyOn(globalThis, "fetch").mockRejectedValue(new TypeError("fetch failed"));
     await expect(apiFetch("/api/sync/status?n=5", {
       transport: "native-android",
-      hedge: { delayMs: 3000 },
+      laneBackup: { delayMs: 3000 },
     })).rejects.toThrow(/请求失败|failed/i);
   });
 
@@ -315,11 +316,121 @@ describe("apiFetch 原生通道回退 WebView", () => {
     expect((error as Error).cause).toBe(nativeError);
   });
 
-  it("不带 hedge：原生失败不改走 WebView（现状回归）", async () => {
+  it("不带 laneBackup：原生失败不改走 WebView", async () => {
     vi.spyOn(nativeHttp, "request").mockRejectedValue(new Error("UnknownHostException"));
     const fetchMock = vi.spyOn(globalThis, "fetch");
     await expect(apiFetch("/api/sync/status?n=6", { transport: "native-android" })).rejects.toThrow();
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("原生主路只带 hedge 不带 laneBackup：hedge 不再兼作跨车道备份", async () => {
+    vi.spyOn(nativeHttp, "request").mockRejectedValue(new Error("UnknownHostException"));
+    const fetchMock = vi.spyOn(globalThis, "fetch");
+    await expect(apiFetch("/api/sync/status?n=9", {
+      transport: "native-android",
+      hedge: { delayMs: 1500 },
+    })).rejects.toThrow();
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("WebView 主路在 delayMs 内回：不发原生，outcome 记主路答复", async () => {
+    const nativeMock = vi.spyOn(nativeHttp, "request");
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse({ ok: "web" }));
+    const outcomes: LaneOutcome[] = [];
+    await expect(apiFetch("/api/sync/pull?w=1", {
+      method: "POST",
+      body: "{}",
+      transport: "web",
+      laneBackup: { delayMs: 2000 },
+      onLaneOutcome: (o) => outcomes.push(o),
+    })).resolves.toEqual({ ok: "web" });
+    expect(nativeMock).not.toHaveBeenCalled();
+    expect(outcomes).toEqual([{ primary: "web", backupFired: false, servedBy: "web" }]);
+  });
+
+  it("WebView 主路挂住超过 delayMs：发原生备份，原生先回则 WebView 被 abort", async () => {
+    let webSignal: AbortSignal | null = null;
+    vi.spyOn(globalThis, "fetch").mockImplementation((_input, init) => {
+      webSignal = (init?.signal as AbortSignal) ?? null;
+      return new Promise<Response>(() => {});
+    });
+    const nativeMock = vi.spyOn(nativeHttp, "request").mockResolvedValue(nativeOk({ ok: "native" }));
+    const servedBy: string[] = [];
+    const outcomes: LaneOutcome[] = [];
+    const promise = apiFetch("/api/sync/push?w=2", {
+      method: "POST",
+      body: JSON.stringify({ requestId: "r-1" }),
+      transport: "web",
+      laneBackup: { delayMs: 2000 },
+      onServedBy: (t) => servedBy.push(t),
+      onLaneOutcome: (o) => outcomes.push(o),
+    });
+    await vi.advanceTimersByTimeAsync(1999);
+    expect(nativeMock).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(1);
+    await expect(promise).resolves.toEqual({ ok: "native" });
+    expect(nativeMock).toHaveBeenCalledWith(expect.objectContaining({
+      method: "POST",
+      data: JSON.stringify({ requestId: "r-1" }),
+    }));
+    expect((webSignal as AbortSignal | null)?.aborted).toBe(true);
+    expect(servedBy).toEqual(["native-android"]);
+    expect(outcomes).toEqual([{ primary: "web", backupFired: true, servedBy: "native-android" }]);
+  });
+
+  it("WebView 主路网络错误：不等 delayMs 立即发原生", async () => {
+    vi.spyOn(globalThis, "fetch").mockRejectedValue(new TypeError("fetch failed"));
+    const nativeMock = vi.spyOn(nativeHttp, "request").mockResolvedValue(nativeOk({ ok: "native" }));
+    await expect(apiFetch("/api/sync/pull?w=3", {
+      method: "POST",
+      body: "{}",
+      transport: "web",
+      laneBackup: { delayMs: 2000 },
+    })).resolves.toEqual({ ok: "native" });
+    expect(nativeMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("WebView 主路回了 HTTP 错误码：照抛 ApiError，不发原生", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({ error: "conflict" }), { status: 409 }));
+    const nativeMock = vi.spyOn(nativeHttp, "request");
+    const promise = apiFetch("/api/sync/push?w=4", {
+      method: "POST",
+      body: "{}",
+      transport: "web",
+      laneBackup: { delayMs: 2000 },
+    });
+    const assertion = expect(promise).rejects.toMatchObject({ status: 409 });
+    await vi.advanceTimersByTimeAsync(5000);
+    await assertion;
+    expect(nativeMock).not.toHaveBeenCalled();
+  });
+
+  it("两车道都失败：outcome 只回调一次且 servedBy 为 null", async () => {
+    vi.spyOn(globalThis, "fetch").mockRejectedValue(new TypeError("fetch failed"));
+    vi.spyOn(nativeHttp, "request").mockRejectedValue(new Error("SocketTimeoutException"));
+    const outcomes: LaneOutcome[] = [];
+    await expect(apiFetch("/api/sync/pull?w=5", {
+      method: "POST",
+      body: "{}",
+      transport: "web",
+      laneBackup: { delayMs: 2000 },
+      onLaneOutcome: (o) => outcomes.push(o),
+    })).rejects.toThrow(/请求失败|failed/i);
+    expect(outcomes).toEqual([{ primary: "web", backupFired: true, servedBy: null }]);
+  });
+
+  it("非安卓平台带 laneBackup：退回单路 WebView，不碰原生", async () => {
+    vi.spyOn(Capacitor, "getPlatform").mockReturnValue("ios");
+    const nativeMock = vi.spyOn(nativeHttp, "request");
+    vi.spyOn(globalThis, "fetch").mockRejectedValue(new TypeError("fetch failed"));
+    await expect(apiFetch("/api/sync/pull?w=6", {
+      method: "POST",
+      body: "{}",
+      transport: "web",
+      laneBackup: { delayMs: 2000 },
+    })).rejects.toThrow();
+    expect(nativeMock).not.toHaveBeenCalled();
+    expect(globalThis.fetch).toHaveBeenCalledTimes(1);
   });
 });
 

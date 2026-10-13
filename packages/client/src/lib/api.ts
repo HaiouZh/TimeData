@@ -47,18 +47,32 @@ function describeFetchFailure(url: string, cause?: unknown): Error {
 
 export interface ApiFetchOptions extends RequestInit {
   timeoutMs?: number;
-  /** 对冲：delayMs 内响应头未到并发第二枪，网络错误立即补枪；共 2 枪。仅限幂等请求 + 字符串 body。 */
-  hedge?: { delayMs: number };
   /**
-   * 显式 Android 原生通道；平台或插件能力不满足时在请求发出前回退 Web fetch。
-   * 原生通道同时带 hedge 时，hedge 改作跨通道备份：原生网络失败立即、delayMs 内未回也并发一条 WebView fetch。
+   * 对冲：delayMs 内响应头未到并发第二枪，网络错误立即补枪；共 2 枪。仅限幂等请求 + 字符串 body。
+   * 同源两枪走同一条 HTTP/2 连接，那条连接卡住时两枪一起卡（2026-10-13 实测），换连接要用 laneBackup。
    */
+  hedge?: { delayMs: number };
+  /** 请求主路；`native-android` 在平台或插件能力不满足时于请求发出前回退 Web fetch。 */
   transport?: ApiTransport;
-  /** 实际由哪条通道答复（成功时回调一次）。原生带 hedge 时可能是 web。 */
+  /**
+   * 安卓双车道：主路（transport）之外用另一条车道作备份——主路网络失败立即发、delayMs 内没回也发，先回者胜。
+   * 非安卓或原生插件不可用时忽略，退回单路 Web。仅限幂等请求 + 字符串 body。见 ADR 0038。
+   */
+  laneBackup?: { delayMs: number };
+  /** 实际由哪条通道答复（成功时回调一次）。 */
   onServedBy?: (transport: ApiTransport) => void;
+  /** 双车道竞速收尾时回调一次（成功或失败都回调）。 */
+  onLaneOutcome?: (outcome: LaneOutcome) => void;
 }
 
 export type ApiTransport = "web" | "native-android";
+
+export interface LaneOutcome {
+  primary: ApiTransport;
+  backupFired: boolean;
+  /** 实际答复的车道；两路都失败为 null。 */
+  servedBy: ApiTransport | null;
+}
 
 const DEFAULT_TIMEOUT_MS = 15_000;
 const HEDGE_MAX_ATTEMPTS = 2;
@@ -289,8 +303,8 @@ async function webFetch<T>(
     }
     throw describeFetchFailure(url, error);
   }
-  // 响应头到了才停总计时器，读 body 不受它约束（与改动前一致）。竞速里的备份不停：
-  // 它先败时原生可能还挂着，总时限是那条原生唯一的 JS 侧上限，由 apiFetch 收尾统一清。
+  // 响应头到了才停总计时器，读 body 不受它约束（与改动前一致）。竞速里的车道不停：
+  // 另一条可能还挂着，总时限是它唯一的 JS 侧上限，由 apiFetch 收尾统一清。
   if (!raceSignal) ctx.clearTotalTimer();
 
   if (!res.ok) {
@@ -315,30 +329,35 @@ async function webFetch<T>(
   }
 }
 
-// 2026-10-10 安卓事故：原生通道（系统 HttpURLConnection）连不上时，WebView 那条已经通了，
-// 同步却一直在原生上干等。只读请求在原生之外再备一条 WebView：原生网络失败立即发、
-// delayMs 内没回到点也发，先回者胜。原生输家没法取消（见上），只是不再等它。
-function raceNativeThenWeb<T>(
+// 2026-10-10：原生（HttpURLConnection）连不上时 WebView 是通的；2026-10-13：WebView 那条 HTTP/2 连接卡住时
+// 原生是通的。两条车道连接池互不相干，一条卡住就换另一条：主路网络失败立即、delayMs 内没回到点也发备份，
+// 先回者胜。原生输家没法取消（见 nativeAndroidFetch），只是不再等它；WebView 输家被 abort。
+function raceLanes<T>(
   ctx: RequestContext,
-  hedge: { delayMs: number },
+  primary: ApiTransport,
+  delayMs: number,
   onServedBy: ((transport: ApiTransport) => void) | undefined,
+  onLaneOutcome: ((outcome: LaneOutcome) => void) | undefined,
 ): Promise<T> {
+  const backup: ApiTransport = primary === "web" ? "native-android" : "web";
   return new Promise<T>((resolve, reject) => {
     const webRace = new AbortController();
     let settled = false;
-    let webStarted = false;
+    let backupFired = false;
     let pending = 1;
-    let fallbackTimer: ReturnType<typeof setTimeout> | null = null;
+    const runLane = (lane: ApiTransport): Promise<T> =>
+      lane === "web" ? webFetch<T>(ctx, undefined, webRace.signal) : nativeAndroidFetch<T>(ctx);
 
-    const finish = (): void => {
+    const finish = (servedBy: ApiTransport | null): void => {
       settled = true;
-      if (fallbackTimer) clearTimeout(fallbackTimer);
-    };
-    const win = (transport: ApiTransport, value: T): void => {
-      if (settled) return;
-      finish();
+      clearTimeout(backupTimer);
       webRace.abort();
-      onServedBy?.(transport);
+      onLaneOutcome?.({ primary, backupFired, servedBy });
+    };
+    const win = (lane: ApiTransport, value: T): void => {
+      if (settled) return;
+      finish(lane);
+      onServedBy?.(lane);
       resolve(value);
     };
     // final=服务端已答复 / 调用方放弃 / 总时限到：不必再等另一条。否则等两条都输完才报错。
@@ -346,27 +365,26 @@ function raceNativeThenWeb<T>(
       pending -= 1;
       if (settled) return;
       if (final || pending === 0) {
-        finish();
-        webRace.abort();
+        finish(null);
         reject(error);
       }
     };
-    const startWeb = (): void => {
-      if (settled || webStarted) return;
-      webStarted = true;
+    const startBackup = (): void => {
+      if (settled || backupFired) return;
+      backupFired = true;
       pending += 1;
-      webFetch<T>(ctx, hedge, webRace.signal).then(
-        (value) => win("web", value),
+      runLane(backup).then(
+        (value) => win(backup, value),
         (error: unknown) => lose(error, !isTransportFailure(error, ctx)),
       );
     };
 
-    fallbackTimer = setTimeout(startWeb, hedge.delayMs);
-    nativeAndroidFetch<T>(ctx).then(
-      (value) => win("native-android", value),
+    const backupTimer = setTimeout(startBackup, delayMs);
+    runLane(primary).then(
+      (value) => win(primary, value),
       (error: unknown) => {
         const transportFailure = isTransportFailure(error, ctx);
-        if (transportFailure) startWeb();
+        if (transportFailure) startBackup();
         lose(error, !transportFailure);
       },
     );
@@ -378,7 +396,9 @@ export async function apiFetch<T>(path: string, options: ApiFetchOptions = {}): 
     timeoutMs: requestedTimeoutMs,
     hedge,
     transport = "web",
+    laneBackup,
     onServedBy,
+    onLaneOutcome,
     signal: callerSignal,
     ...fetchOptions
   } = options;
@@ -415,21 +435,24 @@ export async function apiFetch<T>(path: string, options: ApiFetchOptions = {}): 
     clearTotalTimer: () => clearTimeout(totalTimer),
   };
 
-  const useNativeAndroidTransport =
-    transport === "native-android"
-    && Capacitor.getPlatform() === "android"
-    && Capacitor.isPluginAvailable("CapacitorHttp");
+  const nativeAvailable = Capacitor.getPlatform() === "android" && Capacitor.isPluginAvailable("CapacitorHttp");
+  const assertStringBody = (): void => {
+    if (fetchOptions.body != null && typeof fetchOptions.body !== "string") {
+      throw new TypeError("Native Android transport only supports string request bodies");
+    }
+  };
 
   try {
-    if (!useNativeAndroidTransport) {
+    if (laneBackup && nativeAvailable) {
+      assertStringBody();
+      return await raceLanes<T>(ctx, transport, laneBackup.delayMs, onServedBy, onLaneOutcome);
+    }
+    if (transport !== "native-android" || !nativeAvailable) {
       const result = await webFetch<T>(ctx, hedge);
       onServedBy?.("web");
       return result;
     }
-    if (fetchOptions.body != null && typeof fetchOptions.body !== "string") {
-      throw new TypeError("Native Android transport only supports string request bodies");
-    }
-    if (hedge) return await raceNativeThenWeb<T>(ctx, hedge, onServedBy);
+    assertStringBody();
     const result = await nativeAndroidFetch<T>(ctx);
     onServedBy?.("native-android");
     return result;
