@@ -22,7 +22,7 @@ contracts:
   - packages/server/src/routes/admin/sync.ts
   - packages/server/src/routes/sync.ts
   - packages/server/src/routes/syncLog.ts
-last-reviewed: 2026-10-10
+last-reviewed: 2026-10-13
 ---
 
 # 同步 · 观测与排障
@@ -67,6 +67,8 @@ last-reviewed: 2026-10-10
 设置页同步卡片展示最近一次各阶段耗时、p50/p95，以及最新一条的 `waitMs` / `reason` / `connection` / `transport`。带 push 或补差的那一轮，客户端审计日志会多写 `action: "phase_timings"`；服务端侧 push/pull 在 `sync_logs.detail.timings` 记录 parse / validate / apply / read / total 等阶段耗时。这套观测纯附加，不改变任何同步判定或行为。
 
 **失败轮也有记录**：`useSync` 每轮收尾把结果报给 `lib/recovery/syncFailureRuntime.ts` 的追踪器——一段连败的前 5 轮各攒一条 `action: "sync_error"`（`streak` 连败序号、`reason` / `transport` / `connection` / `waitMs` / `totalMs` / `phases`、`kind` = `timeout` | `network` | `http_<status>` | `abort` | `other`、`cause` = 底层异常前 120 字，原生通道是 Java 异常名，分 DNS / 建连 / 读超时靠它），连败后首次成功攒一条 `action: "sync_recovered"`（总连败轮数 `streak`、从首败起算的 `outageMs`、恢复那轮的 `reason` / `transport`）。每段封顶 5 条是为了断网时不把 30 条的待发送队列挤满；真实轮数看 `sync_recovered.streak`。连败计数只在内存里，重载即清零。
+
+**安卓双车道的读法**（[ADR 0038](../../adr/0038-android-sync-dual-lane.md)）：本轮只要发过第二车道，本机计时、`sync_error`、`sync_recovered` 都带 `lanes { backupFired, backupWon }`——发了几次备份、其中几次是备份先回。没有连败、但有请求被第二车道救回（`backupWon > 0`）的成功轮另攒一条 `action: "sync_lane_rescue"`（`reason` / `transport` / `totalMs` / `lanes`，10 分钟最多一条，期间被压掉的轮数记在下一条的 `suppressed`）。`transport` 记的是实际答复的车道：WebView 主路被原生救回会记成 `native-android` 或 `mixed`，不再恒记主路。判读：`sync_lane_rescue` 多而 `sync_error` 少 = 双车道在起作用；`sync_error` 里 `lanes.backupFired > 0` 且 `kind = timeout` = 两条车道一起卡，是线路级拥堵，双车道救不了。
 
 同一条上报通道还搭载几类与同步无关的客户端观测：冷启动分段 `action: "cold_start"`、调度器看门狗现场 `action: "scheduler_probe"`、一次打开的全程 `action: "open_session"`。 键盘探针会话 `action: "kbd_session"`（设置 → 数据 → 高级 · 诊断 打开后才产生，每次打开最多 20 条；字段与读法见 [design-language/invariants 第 12 条](../design-language/invariants.md)，报告走 `node scripts/kbd-report.mjs`）。它们不单独发请求，先攒在 localStorage `timedata_pending_reports`（上限 30 条），随下一次带上报的同步轮一起 POST；因此服务端 `timestamp` 是上报时刻而非发生时刻，同一秒出现多条即是一次补投。
 
