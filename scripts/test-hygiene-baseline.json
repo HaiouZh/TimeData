@@ -138,6 +138,7 @@
   "dirty-in-clean-bucket:pages/goals/useGoalGraphLayout.test.tsx",
   "dirty-in-clean-bucket:pages/overview/OverviewEntryBox.test.tsx",
   "dirty-in-clean-bucket:pages/overview/OverviewList.test.tsx",
+  "dirty-in-clean-bucket:pages/overview/OverviewPage.test.tsx",
   "dirty-in-clean-bucket:pages/overview/OverviewSky.test.tsx",
   "dirty-in-clean-bucket:pages/overview/OverviewStarSheet.test.tsx",
   "dirty-in-clean-bucket:pages/overview/OverviewTallyPanel.test.tsx",
