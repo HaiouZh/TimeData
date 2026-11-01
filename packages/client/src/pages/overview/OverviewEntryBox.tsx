@@ -2,8 +2,8 @@ import { useRef, useState, type KeyboardEvent } from "react";
 import { addQuickNote } from "../../lib/quickNotes.js";
 
 /** 全貌顶部的速记入口框，打一句按「丢进去」就变成一条速记。 */
-export function OverviewEntryBox(props: { wide: boolean }): React.JSX.Element {
-  const { wide } = props;
+export function OverviewEntryBox(props: { wide: boolean; onSubmitted?: () => void }): React.JSX.Element {
+  const { wide, onSubmitted } = props;
   const [text, setText] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -12,15 +12,17 @@ export function OverviewEntryBox(props: { wide: boolean }): React.JSX.Element {
 
   async function submit(): Promise<void> {
     if (inFlightRef.current) return;
-    if (text.trim() === "") return;
+    const submitted = text;
+    if (submitted.trim() === "") return;
     inFlightRef.current = true;
     setSubmitting(true);
     setError(null);
     setSaved(false);
     try {
-      await addQuickNote(text);
-      setText("");
+      await addQuickNote(submitted);
+      setText((current) => (current.startsWith(submitted) ? current.slice(submitted.length).trimStart() : current));
       setSaved(true);
+      onSubmitted?.();
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {

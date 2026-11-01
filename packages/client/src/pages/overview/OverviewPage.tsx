@@ -37,12 +37,17 @@ export function OverviewPage(): React.JSX.Element {
   const wide = useIsWideScreen();
   const navigate = useNavigate();
   const [query, setQuery] = useState("");
-  const [openStar, setOpenStar] = useState<OverviewStar | null>(null);
+  const [openStarKey, setOpenStarKey] = useState<string | null>(null);
 
   const index = useMemo(() => {
     if (tasks === undefined || tracks === undefined || steps === undefined || quickNotes === undefined) return null;
     return buildOverviewStars({ tasks, tracks, steps, quickNotes, now });
   }, [tasks, tracks, steps, quickNotes, now]);
+
+  const openStar = useMemo(() => {
+    if (openStarKey === null || index === null) return null;
+    return index.stars.find((star) => star.key === openStarKey) ?? null;
+  }, [index, openStarKey]);
 
   const model = useMemo(() => {
     if (goals === undefined || index === null) return null;
@@ -59,7 +64,9 @@ export function OverviewPage(): React.JSX.Element {
     return clusterTitlesByStarKey(model.clusters);
   }, [model]);
 
-  const closeSheet = useCallback(() => setOpenStar(null), []);
+  const closeSheet = useCallback(() => setOpenStarKey(null), []);
+
+  const clearQuery = useCallback(() => setQuery(""), []);
 
   const handleOpenStar = useCallback(
     (star: OverviewStar) => {
@@ -68,7 +75,7 @@ export function OverviewPage(): React.JSX.Element {
         navigate(star.href);
         return;
       }
-      setOpenStar(star);
+      setOpenStarKey(star.key);
     },
     [navigate],
   );
@@ -89,11 +96,11 @@ export function OverviewPage(): React.JSX.Element {
         }
       />
       <div className="mx-auto flex w-full max-w-3xl flex-col gap-4 px-4 py-4 pb-24 lg:max-w-6xl">
-        <OverviewEntryBox wide={wide} />
+        <OverviewEntryBox wide={wide} onSubmitted={clearQuery} />
         <div className="flex items-center gap-2 rounded-card border border-border bg-surface px-3 py-2">
           <Icon icon={MagnifyingGlass} size={16} className="text-ink-3" />
           <input type="search" aria-label="找星星" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="找星星…" className="min-w-0 flex-1 bg-transparent text-ink placeholder:text-ink-3 outline-none" />
-          {search !== null && <span className="shrink-0 td-text-caption text-ink-3">{`找到 ${search.matchCount} 颗`}</span>}
+          <span role="status" className="shrink-0 td-text-caption text-ink-3">{search === null ? "" : `找到 ${search.matchCount} 颗`}</span>
         </div>
         {nothingFound ? (
           <EmptyState title="没找到匹配的星" description="换个词试试" />

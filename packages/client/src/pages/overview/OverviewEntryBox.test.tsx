@@ -164,4 +164,50 @@ describe("OverviewEntryBox", () => {
     expect(host.querySelector('[role="status"]')?.textContent).toBe("已收下，在「散着」里");
     await unmount(root);
   });
+
+  it("存的途中接着打的字，存完之后留在框里", async () => {
+    const { host, root } = await renderDom(<OverviewEntryBox wide />);
+    await typeInto(textarea(host), "第一句");
+    await keyDown(textarea(host), { key: "Enter" });
+    await typeInto(textarea(host), "第一句\n第二句");
+    expect(submitButton(host).disabled).toBe(true);
+    await flush();
+    expect(textarea(host).value).toBe("第二句");
+    expect((await db.quickNotes.toArray()).map((n) => n.text)).toEqual(["第一句"]);
+    await unmount(root);
+  });
+
+  it("存的途中把字改了，存完之后原样留着", async () => {
+    const { host, root } = await renderDom(<OverviewEntryBox wide />);
+    await typeInto(textarea(host), "第一句");
+    await keyDown(textarea(host), { key: "Enter" });
+    await typeInto(textarea(host), "改过的");
+    expect(submitButton(host).disabled).toBe(true);
+    await flush();
+    expect(textarea(host).value).toBe("改过的");
+    expect((await db.quickNotes.toArray()).map((n) => n.text)).toEqual(["第一句"]);
+    await unmount(root);
+  });
+
+  it("存上之后通知外层", async () => {
+    const onSubmitted = vi.fn();
+    const { host, root } = await renderDom(<OverviewEntryBox wide onSubmitted={onSubmitted} />);
+    await typeInto(textarea(host), "一条");
+    await keyDown(textarea(host), { key: "Enter" });
+    await flush();
+    expect(onSubmitted).toHaveBeenCalledTimes(1);
+    await unmount(root);
+  });
+
+  it("存失败不通知外层", async () => {
+    vi.spyOn(db.syncLog, "add").mockRejectedValueOnce(new Error("写库失败"));
+    const onSubmitted = vi.fn();
+    const { host, root } = await renderDom(<OverviewEntryBox wide onSubmitted={onSubmitted} />);
+    await typeInto(textarea(host), "会失败的一条");
+    await click(submitButton(host));
+    await flush();
+    expect(host.querySelector('[role="alert"]')).not.toBeNull();
+    expect(onSubmitted).not.toHaveBeenCalled();
+    await unmount(root);
+  });
 });

@@ -133,6 +133,20 @@ async function typeInto(element: HTMLInputElement, value: string): Promise<void>
   });
 }
 
+async function typeIntoTextarea(element: HTMLTextAreaElement, value: string): Promise<void> {
+  await act(async () => {
+    const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")?.set;
+    setter?.call(element, value);
+    element.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+}
+
+async function pressEnter(element: HTMLTextAreaElement): Promise<void> {
+  await act(async () => {
+    element.dispatchEvent(new KeyboardEvent("keydown", { bubbles: true, cancelable: true, key: "Enter" }));
+  });
+}
+
 function dialogText(host: HTMLElement): string {
   return host.querySelector('[role="dialog"]')?.textContent ?? "";
 }
@@ -242,6 +256,57 @@ describe("OverviewPage", () => {
     await click(starButton(host, "项目进度：全貌改版"));
     await flush();
     expect(host.textContent ?? "").toContain("轨道页占位");
+    expect(host.querySelector('[role="dialog"]')).toBeNull();
+    await unmount(root);
+  });
+
+  it("搜索框里留着词时丢进一条，搜索清空，新的星露出来", async () => {
+    await seed();
+    const { host, root } = await renderPage();
+    await typeInto(searchBox(host), "跑鞋");
+    expect(starButton(host, "你丢的：看步频视频")).toBeNull();
+    const entry = host.querySelector('textarea[aria-label="丢进来"]');
+    if (!(entry instanceof HTMLTextAreaElement)) throw new Error("missing entry");
+    await typeIntoTextarea(entry, "新想法 一条");
+    await pressEnter(entry);
+    await flush();
+    expect(searchBox(host).value).toBe("");
+    expect(starButton(host, "你丢的：新想法 一条")).not.toBeNull();
+    await unmount(root);
+  });
+
+  it("「找到 N 颗」写在一直挂着的播报区里", async () => {
+    await seed();
+    const { host, root } = await renderPage();
+    const status = searchBox(host).parentElement?.querySelector('[role="status"]');
+    expect(status).not.toBeNull();
+    expect(status?.textContent).toBe("");
+    await typeInto(searchBox(host), "跑鞋");
+    expect(status?.isConnected).toBe(true);
+    expect(status?.textContent).toBe("找到 2 颗");
+    await typeInto(searchBox(host), "");
+    expect(status?.textContent).toBe("");
+    await unmount(root);
+  });
+
+  it("详情开着时那颗星的内容变了，详情跟着变", async () => {
+    await seed();
+    const { host, root } = await renderPage();
+    await click(starButton(host, "你丢的：看步频视频"));
+    expect(dialogText(host)).toContain("看步频视频");
+    await db.quickNotes.update("n1", { text: "看步频视频 第二遍", updatedAt: new Date().toISOString() });
+    await flush();
+    expect(dialogText(host)).toContain("看步频视频 第二遍");
+    await unmount(root);
+  });
+
+  it("详情开着时那颗星被删了，详情关上", async () => {
+    await seed();
+    const { host, root } = await renderPage();
+    await click(starButton(host, "你丢的：看步频视频"));
+    expect(host.querySelector('[role="dialog"]')).not.toBeNull();
+    await db.quickNotes.delete("n1");
+    await flush();
     expect(host.querySelector('[role="dialog"]')).toBeNull();
     await unmount(root);
   });
