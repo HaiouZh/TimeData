@@ -404,6 +404,46 @@ describe("overviewModel", () => {
     expect(titles.get("task:tArch")).toEqual(["还没归到哪件事"]);
   });
 
+  it("团的星种计数把暗处的星也算上", () => {
+    const { model } = build([], {
+      quickNotes: [
+        note({ id: "nOld", occurredAt: ago(20 * DAY), updatedAt: ago(20 * DAY) }),
+        note({ id: "nNew", occurredAt: ago(DAY), updatedAt: ago(DAY) }),
+      ],
+      tasks: [task({ id: "tDone", title: "买菜", done: true, completedAt: ago(2 * DAY), updatedAt: ago(2 * DAY) })],
+    });
+    const loose = model.clusters.find((c) => c.key === "loose");
+    expect(loose?.darkStars.map((s) => s.key)).toEqual(["quick_note:nOld"]);
+    expect(loose?.kindCounts).toEqual({ input: 2, done: 1, progress: 0, recurring: 0 });
+  });
+
+  it("统计按种类数全部星，并逐项带出不上天的去处", () => {
+    const { model } = build([], {
+      quickNotes: [note({ id: "n1", occurredAt: ago(DAY), updatedAt: ago(DAY) })],
+      tasks: [
+        task({ id: "p", updatedAt: ago(DAY) }),
+        task({ id: "c", parentId: "p", updatedAt: ago(DAY) }),
+        task({ id: "dNew", done: true, completedAt: ago(DAY), updatedAt: ago(DAY) }),
+        task({ id: "dOld", done: true, completedAt: ago(40 * DAY), updatedAt: ago(40 * DAY) }),
+        task({ id: "r1", recurrence: { freq: "daily", interval: 1, basis: "due" }, updatedAt: ago(DAY) }),
+      ],
+      tracks: [
+        track({ id: "kActive", status: "active", updatedAt: ago(DAY) }),
+        track({ id: "kDone", status: "concluded", updatedAt: ago(DAY) }),
+        track({ id: "kParked", status: "parked", updatedAt: ago(DAY) }),
+      ],
+    });
+    expect(model.tally.starsByKind).toEqual({ input: 2, done: 1, progress: 1, recurring: 1 });
+    expect(model.tally.exclusions).toEqual({
+      occurrence: 0,
+      child: 1,
+      "rule-exhausted": 0,
+      "done-old": 1,
+      "track-concluded": 1,
+      "track-parked": 1,
+    });
+  });
+
   it("clusterTitlesByStarKey 给出每颗星所在的全部团名", () => {
     const { model } = build(
       [
