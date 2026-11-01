@@ -137,4 +137,31 @@ describe("OverviewEntryBox", () => {
     expect(await db.quickNotes.count()).toBe(0);
     await unmount(root);
   });
+
+  it("收下后接着打字，「已收下」提示收起", async () => {
+    const { host, root } = await renderDom(<OverviewEntryBox wide />);
+    await typeInto(textarea(host), "第一条");
+    await keyDown(textarea(host), { key: "Enter" });
+    await flush();
+    expect(host.querySelector('[role="status"]')?.textContent).toBe("已收下，在「散着」里");
+    await typeInto(textarea(host), "第");
+    expect(host.querySelector('[role="status"]')).toBeNull();
+    await unmount(root);
+  });
+
+  it("写库失败后再点一次就能存上，错误提示随之消失", async () => {
+    vi.spyOn(db.syncLog, "add").mockRejectedValueOnce(new Error("写库失败"));
+    const { host, root } = await renderDom(<OverviewEntryBox wide />);
+    await typeInto(textarea(host), "再试一次");
+    await click(submitButton(host));
+    await flush();
+    expect(host.querySelector('[role="alert"]')).not.toBeNull();
+    await click(submitButton(host));
+    await flush();
+    const notes = await db.quickNotes.toArray();
+    expect(notes.map((n) => n.text)).toEqual(["再试一次"]);
+    expect(host.querySelector('[role="alert"]')).toBeNull();
+    expect(host.querySelector('[role="status"]')?.textContent).toBe("已收下，在「散着」里");
+    await unmount(root);
+  });
 });
