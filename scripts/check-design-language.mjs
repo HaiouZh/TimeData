@@ -449,12 +449,12 @@ function isTestFile(file) {
 }
 
 // index.css @theme 里的设计 token 定义本身是颜色的唯一事实源，不算「裸色」。
-// 覆盖 --color-* / --galaxy-* 颜色值，以及 --shadow-* 阴影 token（其值含 rgba 但同属 token 定义）。
+// 覆盖 --color-* / --galaxy-* / --sky-* 颜色值，以及 --shadow-* 阴影 token（其值含 rgba 但同属 token 定义）。
 function isThemeTokenDeclaration(file, line) {
   const normalized = normalizePath(file);
   if (normalized !== "packages/client/src/index.css" && normalized !== "index.css") return false;
   return (
-    /^\s*--(?:color|galaxy)-[\w-]+:\s*(?:#[0-9A-Fa-f]{3,8}\b|rgba?\(|hsla?\(|oklch\(|oklab\(|lch\(|lab\()/.test(line) ||
+    /^\s*--(?:color|galaxy|sky)-[\w-]+:\s*(?:#[0-9A-Fa-f]{3,8}\b|rgba?\(|hsla?\(|oklch\(|oklab\(|lch\(|lab\()/.test(line) ||
     /^\s*--shadow-[\w-]+:/.test(line)
   );
 }

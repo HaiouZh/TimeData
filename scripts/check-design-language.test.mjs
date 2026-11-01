@@ -434,6 +434,13 @@ test("does not flag theme token declarations as bare raw colors", () => {
     ),
     true,
   );
+  assert.equal(classifyLine("packages/client/src/index.css", "  --sky-star-done: #f5c451;").length, 0);
+  assert.equal(
+    classifyLine("packages/client/src/feature.css", "  --sky-star-done: #f5c451;").some(
+      (violation) => violation.rule === "bare-raw-color",
+    ),
+    true,
+  );
 });
 
 test("does not flag shadow token declarations in index.css", () => {

@@ -93,6 +93,15 @@
   --shadow-galaxy-star-core: 0 0 26px rgba(155,188,255,0.22);
   --shadow-galaxy-star-core-strong: 0 0 26px rgba(155,188,255,0.32);
   --shadow-galaxy-star-core-wide: 0 0 34px rgba(155,188,255,0.2);
+
+  /* —— 全貌天空专属色（仅 pages/overview/** 使用，不外溢到全站 chrome） —— */
+  --sky-star-input: #cfe0ff;
+  --sky-star-done: #f5c451;
+  --sky-star-progress: #5ad1e6;
+  --sky-recurring: #b9a6ff;
+  --sky-status-moving: #5fe08a;
+  --sky-status-saving: #ffcc66;
+  --shadow-sky-done: 0 0 8px rgba(245,196,81,0.55);
 }
 
 /* 安全区变量：默认取 env(safe-area-inset-*)，各让位点统一经 var(--safe-*) 消费（不散写裸 env()）。
