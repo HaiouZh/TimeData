@@ -136,6 +136,7 @@
   "dirty-in-clean-bucket:pages/goals/test/reactFlowMock.test.tsx",
   "dirty-in-clean-bucket:pages/goals/useGalaxySettleEngine.test.tsx",
   "dirty-in-clean-bucket:pages/goals/useGoalGraphLayout.test.tsx",
+  "dirty-in-clean-bucket:pages/overview/OverviewEntryBox.test.tsx",
   "dirty-in-clean-bucket:pages/overview/OverviewList.test.tsx",
   "dirty-in-clean-bucket:pages/overview/OverviewSky.test.tsx",
   "dirty-in-clean-bucket:pages/search/CategoryPickerSheet.test.tsx",
