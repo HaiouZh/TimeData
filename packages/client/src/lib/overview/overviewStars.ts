@@ -21,7 +21,7 @@ export interface OverviewStar {
   key: string;
   kind: OverviewStarKind;
   title: string;
-  /** 已小写。 */
+  /** 由 toOverviewSearchText 拼成，已小写。 */
   searchText: string;
   /** 最近一次动静。 */
   at: string;
@@ -55,6 +55,11 @@ export interface OverviewStarIndex {
   /** 键为 "task:<id>" / "track:<id>"，每个待办、每条轨道恰好一条；速记不进。 */
   placements: Map<string, OverviewPlacement>;
   exclusions: Record<OverviewExclusionReason, number>;
+}
+
+/** 搜索用的文本：各段用空格连起来再转小写。星的 searchText 与团名都走这一处。 */
+export function toOverviewSearchText(...parts: string[]): string {
+  return parts.join(" ").toLowerCase();
 }
 
 /** 速记标题取第一行 trim 后非空的文字，超 80 码点截断。 */
@@ -102,7 +107,7 @@ export function buildOverviewStars(input: {
       key: `quick_note:${note.id}`,
       kind: "input",
       title: quickNoteTitle(note.text),
-      searchText: note.text.toLowerCase(),
+      searchText: toOverviewSearchText(note.text),
       at: quickNoteAt(note),
       pinned: note.pinned === true,
       href: `/quick-notes?date=${getDateString(new Date(note.occurredAt))}`,
@@ -128,7 +133,7 @@ export function buildOverviewStars(input: {
         key: `track:${track.id}`,
         kind: "progress",
         title: track.title,
-        searchText: `${track.title} ${track.summary ?? ""}`.toLowerCase(),
+        searchText: toOverviewSearchText(track.title, track.summary ?? ""),
         at,
         pinned: false,
         href: `/tracks/${encodeURIComponent(track.id)}`,
@@ -182,7 +187,7 @@ export function buildOverviewStars(input: {
       key: `task:${task.id}`,
       kind,
       title: task.title,
-      searchText: `${task.title} ${task.tags.join(" ")}`.toLowerCase(),
+      searchText: toOverviewSearchText(task.title, task.tags.join(" ")),
       at,
       pinned: false,
       href: `/todo?taskId=${encodeURIComponent(task.id)}`,

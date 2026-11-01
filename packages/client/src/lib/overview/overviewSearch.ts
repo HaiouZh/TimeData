@@ -1,5 +1,6 @@
 import { matchesAllTerms, parseSearchTerms } from "../../quick-notes/searchTerms.js";
 import { countOverviewStarKinds, type OverviewCluster } from "./overviewModel.js";
+import { toOverviewSearchText } from "./overviewStars.js";
 
 /** 搜索的结果：留下的团与去重后的星数。 */
 export interface OverviewSearchResult {
@@ -17,7 +18,7 @@ export function searchOverview(
   const kept: OverviewCluster[] = [];
   const seen = new Set<string>();
   for (const cluster of clusters) {
-    if (matchesAllTerms(cluster.title.toLowerCase(), terms)) {
+    if (matchesAllTerms(toOverviewSearchText(cluster.title), terms)) {
       const litStars = [...cluster.litStars, ...cluster.darkStars].sort((a, b) => {
         const diff = Date.parse(b.at) - Date.parse(a.at);
         if (diff !== 0) return diff;

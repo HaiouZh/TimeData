@@ -26,6 +26,14 @@ export interface OverviewClusterStatusResult {
 
 const DAY_MS = 86_400_000;
 
+/** 每种星在团状态里算什么：推进、在攒，或只是固定重复（不算动静）。新加星种时这里必须补一格。 */
+const OVERVIEW_STATUS_ROLE: Record<OverviewStarKind, "moving" | "saving" | "fixed"> = {
+  input: "saving",
+  done: "moving",
+  progress: "moving",
+  recurring: "fixed",
+};
+
 /** 时刻是否落在以 now 为终点的滚动窗口内（含边界，未来时刻自然为真）。 */
 export function isWithinOverviewDays(at: string, now: Date, days: number): boolean {
   return now.getTime() - Date.parse(at) <= days * DAY_MS;
@@ -55,7 +63,7 @@ export function computeOverviewClusterStatus(input: {
   if (events.length === 0) {
     return { status: "empty", lastActivityAt: null, quietDays: null };
   }
-  const active = events.filter((e) => e.kind !== "recurring");
+  const active = events.filter((e) => OVERVIEW_STATUS_ROLE[e.kind] !== "fixed");
   if (active.length === 0) {
     const lastActivityAt = latestAt(events);
     return {
@@ -65,10 +73,9 @@ export function computeOverviewClusterStatus(input: {
     };
   }
   const lastActivityAt = latestAt(active);
-  const recent = (kind: OverviewStarKind): boolean =>
-    active.some((e) => e.kind === kind && isWithinOverviewDays(e.at, now, OVERVIEW_RECENT_DAYS));
-  const status: OverviewClusterStatus =
-    recent("done") || recent("progress") ? "moving" : recent("input") ? "saving" : "shelved";
+  const recent = (role: "moving" | "saving"): boolean =>
+    active.some((e) => OVERVIEW_STATUS_ROLE[e.kind] === role && isWithinOverviewDays(e.at, now, OVERVIEW_RECENT_DAYS));
+  const status: OverviewClusterStatus = recent("moving") ? "moving" : recent("saving") ? "saving" : "shelved";
   return {
     status,
     lastActivityAt,
