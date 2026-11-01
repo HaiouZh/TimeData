@@ -139,6 +139,8 @@
   "dirty-in-clean-bucket:pages/overview/OverviewEntryBox.test.tsx",
   "dirty-in-clean-bucket:pages/overview/OverviewList.test.tsx",
   "dirty-in-clean-bucket:pages/overview/OverviewSky.test.tsx",
+  "dirty-in-clean-bucket:pages/overview/OverviewStarSheet.test.tsx",
+  "dirty-in-clean-bucket:pages/overview/OverviewTallyPanel.test.tsx",
   "dirty-in-clean-bucket:pages/search/CategoryPickerSheet.test.tsx",
   "dirty-in-clean-bucket:pages/settings/SettingsAdminInsightsPage.test.tsx",
   "dirty-in-clean-bucket:pages/settings/SettingsCategoriesPage.test.tsx",
