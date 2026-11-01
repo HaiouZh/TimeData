@@ -310,4 +310,17 @@ describe("OverviewPage", () => {
     expect(host.querySelector('[role="dialog"]')).toBeNull();
     await unmount(root);
   });
+
+  it("窄屏搜索时命中的行直接展开，清空搜索后收回", async () => {
+    installMatchMedia(false);
+    await seed();
+    const { host, root } = await renderPage();
+    expect(starButton(host, "你丢的：看步频视频")).toBeNull();
+    await typeInto(searchBox(host), "跑鞋");
+    expect(starButton(host, "你丢的：旧想法 跑鞋")).not.toBeNull();
+    expect(starButton(host, "你丢的：跑鞋 换新")).not.toBeNull();
+    await typeInto(searchBox(host), "");
+    expect(starButton(host, "你丢的：看步频视频")).toBeNull();
+    await unmount(root);
+  });
 });

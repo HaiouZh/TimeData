@@ -110,7 +110,7 @@ export function OverviewPage(): React.JSX.Element {
             <OverviewSky clusters={clusters} onOpenStar={handleOpenStar} />
           </div>
         ) : (
-          <OverviewList clusters={clusters} onOpenStar={handleOpenStar} />
+          <OverviewList key={search === null ? "all" : "search"} clusters={clusters} defaultOpen={search !== null} onOpenStar={handleOpenStar} />
         )}
         <OverviewTallyPanel tally={model.tally} />
       </div>

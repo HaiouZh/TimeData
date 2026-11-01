@@ -13,6 +13,9 @@ export const OVERVIEW_LOOSE_STAR_CAP = 24;
 /** 暗处点开后最多渲染的星数。 */
 export const OVERVIEW_DARK_RENDER_CAP = 200;
 
+/** 亮处点开后最多渲染的星数。 */
+export const OVERVIEW_LIT_RENDER_CAP = 200;
+
 /** 点中一颗星时交出去的回调。 */
 export type OpenStarHandler = (star: OverviewStar) => void;
 
@@ -27,8 +30,9 @@ export function OverviewStarList(props: {
   const [darkOpen, setDarkOpen] = useState(false);
 
   const cap = cluster.kind === "loose" ? OVERVIEW_LOOSE_STAR_CAP : OVERVIEW_CLUSTER_STAR_CAP;
-  const visibleLit = showAllLit ? cluster.litStars : cluster.litStars.slice(0, cap);
-  const hiddenLitCount = cluster.litStars.length - visibleLit.length;
+  const litOverflow = cluster.litStars.length > cap;
+  const visibleLit = cluster.litStars.slice(0, showAllLit ? OVERVIEW_LIT_RENDER_CAP : cap);
+  const unrenderedLitCount = cluster.litStars.length - OVERVIEW_LIT_RENDER_CAP;
   const visibleDark = darkOpen ? cluster.darkStars.slice(0, OVERVIEW_DARK_RENDER_CAP) : [];
   const unrenderedDarkCount = cluster.darkStars.length - OVERVIEW_DARK_RENDER_CAP;
 
@@ -69,22 +73,26 @@ export function OverviewStarList(props: {
   }
 
   return (
-    <div className="flex flex-col gap-1.5">
+    <div className="flex flex-col gap-1.5" role="group" aria-label={cluster.title}>
       {cluster.litStars.length > 0 && (
         <ul className={listClassName}>
           {visibleLit.map((star) => renderStarButton(star, false))}
-          {hiddenLitCount > 0 && (
+          {litOverflow && (
             <li className="max-w-full">
               <button
                 type="button"
-                onClick={() => setShowAllLit(true)}
+                aria-expanded={showAllLit}
+                onClick={() => setShowAllLit((open) => !open)}
                 className="rounded-pill px-2 py-0.5 td-text-caption text-ink-3 transition hover:bg-surface-hover hover:text-ink"
               >
-                {`还有 ${hiddenLitCount} 颗`}
+                {showAllLit ? "收起" : `还有 ${cluster.litStars.length - cap} 颗`}
               </button>
             </li>
           )}
         </ul>
+      )}
+      {showAllLit && unrenderedLitCount > 0 && (
+        <p className="px-2 td-text-caption text-ink-3">{`还有 ${unrenderedLitCount} 颗，用搜索找`}</p>
       )}
       {cluster.darkStars.length > 0 && (
         <button

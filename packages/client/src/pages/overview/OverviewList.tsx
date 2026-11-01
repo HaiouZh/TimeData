@@ -10,25 +10,33 @@ import { type OpenStarHandler, OverviewStarList } from "./OverviewStarList.js";
 /** 星种在行里的展示顺序。 */
 const KIND_ORDER: readonly OverviewStarKind[] = ["input", "done", "progress", "recurring"];
 
-/** 全貌窄屏清单：一团一行，默认全部收起。 */
-export function OverviewList(props: { clusters: readonly OverviewCluster[]; onOpenStar: OpenStarHandler }): React.JSX.Element {
-  const { clusters, onOpenStar } = props;
+/** 全貌窄屏清单：一团一行，默认收起，外层可让行一开始就展开。 */
+export function OverviewList(props: {
+  clusters: readonly OverviewCluster[];
+  onOpenStar: OpenStarHandler;
+  defaultOpen?: boolean;
+}): React.JSX.Element {
+  const { clusters, onOpenStar, defaultOpen = false } = props;
   if (clusters.length === 0) {
     return <EmptyState title="天上还没有星星" description="在上面丢一条进来" />;
   }
   return (
     <ul className="flex flex-col gap-2">
       {clusters.map((cluster) => (
-        <OverviewListRow key={cluster.key} cluster={cluster} onOpenStar={onOpenStar} />
+        <OverviewListRow key={cluster.key} cluster={cluster} onOpenStar={onOpenStar} defaultOpen={defaultOpen} />
       ))}
     </ul>
   );
 }
 
 /** 清单里的一行，自带展开状态。 */
-function OverviewListRow(props: { cluster: OverviewCluster; onOpenStar: OpenStarHandler }): React.JSX.Element {
-  const { cluster, onOpenStar } = props;
-  const [open, setOpen] = useState(false);
+function OverviewListRow(props: {
+  cluster: OverviewCluster;
+  onOpenStar: OpenStarHandler;
+  defaultOpen: boolean;
+}): React.JSX.Element {
+  const { cluster, onOpenStar, defaultOpen } = props;
+  const [open, setOpen] = useState(defaultOpen);
   const total = cluster.litStars.length + cluster.darkStars.length;
   const countText =
     cluster.lastActivityAt === null

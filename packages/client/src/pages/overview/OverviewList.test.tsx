@@ -165,4 +165,17 @@ describe("OverviewList", () => {
     expect(rowButtons(host)[1]?.textContent ?? "").toContain("还没归到哪件事");
     await unmount(root);
   });
+
+  it("星种串把暗处的星也算上", async () => {
+    const { host, root } = await renderList([
+      looseCluster({
+        litStars: stars("n", 2),
+        darkStars: stars("d", 3, { kind: "done" }),
+        kindCounts: { input: 2, done: 3, progress: 0, recurring: 0 },
+      }),
+    ]);
+    expect(host.querySelector('[aria-label="你丢的2 颗"]')).not.toBeNull();
+    expect(host.querySelector('[aria-label="做完的3 颗"]')).not.toBeNull();
+    await unmount(root);
+  });
 });

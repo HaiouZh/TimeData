@@ -183,4 +183,93 @@ describe("OverviewSky", () => {
     expect(starButtons(flow.host, "你丢的")[0]?.textContent).toBe("写周报");
     await unmount(flow.root);
   });
+
+  it("亮处展开按钮一直在、带展开态，点开变「收起」，再点收回", async () => {
+    const { host, root } = await renderSky([
+      cluster({ key: "goal:g1", kind: "goal", goalId: "g1", title: "发布 v2", litStars: stars("t", 15) }),
+    ]);
+    const toggle = buttonByText(host, "还有 3 颗");
+    expect(toggle.getAttribute("aria-expanded")).toBe("false");
+    toggle.focus();
+    await click(toggle);
+    expect(toggle.isConnected).toBe(true);
+    expect(toggle.textContent).toBe("收起");
+    expect(toggle.getAttribute("aria-expanded")).toBe("true");
+    expect(document.activeElement === toggle).toBe(true);
+    expect(starButtons(host, "你丢的").length).toBe(15);
+    await click(toggle);
+    expect(starButtons(host, "你丢的").length).toBe(12);
+    expect(toggle.textContent).toBe("还有 3 颗");
+    expect(toggle.getAttribute("aria-expanded")).toBe("false");
+    await unmount(root);
+  });
+
+  it("亮处点开最多渲染 200 颗，多出来的提示用搜索找", async () => {
+    const { host, root } = await renderSky([looseCluster({ litStars: stars("n", 250) })]);
+    expect(starButtons(host, "你丢的").length).toBe(24);
+    expect(host.textContent ?? "").not.toContain("用搜索找");
+    await click(buttonByText(host, "还有 226 颗"));
+    expect(starButtons(host, "你丢的").length).toBe(200);
+    expect(host.textContent ?? "").toContain("还有 50 颗，用搜索找");
+    await unmount(root);
+  });
+
+  it("每团恰好 12 颗、散着恰好 24 颗时没有展开按钮，多 1 颗才有", async () => {
+    const first = await renderSky([
+      cluster({ key: "goal:a", kind: "goal", goalId: "a", litStars: stars("a", 12) }),
+      cluster({ key: "goal:b", kind: "goal", goalId: "b", litStars: stars("b", 13) }),
+      cluster({ key: "prefix:c", kind: "prefix", litStars: stars("c", 13) }),
+      looseCluster({ litStars: stars("n", 24) }),
+    ]);
+    const overflowButtons = [...first.host.querySelectorAll("button")].filter((b) =>
+      (b.textContent ?? "").startsWith("还有"),
+    );
+    expect(overflowButtons.length).toBe(2);
+    expect(overflowButtons[0]?.textContent).toBe("还有 1 颗");
+    expect(overflowButtons[1]?.textContent).toBe("还有 1 颗");
+    expect(starButtons(first.host, "你丢的").length).toBe(60);
+    await unmount(first.root);
+    const second = await renderSky([looseCluster({ litStars: stars("n", 25) })]);
+    expect(starButtons(second.host, "你丢的").length).toBe(24);
+    expect(buttonByText(second.host, "还有 1 颗") instanceof HTMLButtonElement).toBe(true);
+    await unmount(second.root);
+  });
+
+  it("暗处恰好 200 颗点开后不提示用搜索找，201 颗才提示", async () => {
+    const first = await renderSky([
+      looseCluster({ litStars: stars("n", 1), darkStars: stars("d", 200) }),
+    ]);
+    await click(buttonByText(first.host, "暗处还有 200 颗"));
+    expect(starButtons(first.host, "你丢的").length).toBe(201);
+    expect(first.host.textContent ?? "").not.toContain("用搜索找");
+    await unmount(first.root);
+    const second = await renderSky([
+      looseCluster({ litStars: stars("n", 1), darkStars: stars("d", 201) }),
+    ]);
+    await click(buttonByText(second.host, "暗处还有 201 颗"));
+    expect(second.host.textContent ?? "").toContain("还有 1 颗，用搜索找");
+    await unmount(second.root);
+  });
+
+  it("每团的星装在以团名命名的分组里", async () => {
+    const { host, root } = await renderSky([
+      cluster({
+        key: "goal:g1",
+        kind: "goal",
+        goalId: "g1",
+        title: "TimeData",
+        litStars: [star("t1", { title: "写周报" })],
+      }),
+      cluster({
+        key: "goal:g2",
+        kind: "goal",
+        goalId: "g2",
+        title: "发布 v2",
+        litStars: [star("t1", { title: "写周报" })],
+      }),
+    ]);
+    expect(host.querySelector('[role="group"][aria-label="TimeData"] button[aria-label="你丢的：写周报"]')).not.toBeNull();
+    expect(host.querySelector('[role="group"][aria-label="发布 v2"] button[aria-label="你丢的：写周报"]')).not.toBeNull();
+    await unmount(root);
+  });
 });
