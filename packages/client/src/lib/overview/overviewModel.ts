@@ -59,6 +59,13 @@ function emptyKindCounts(): Record<OverviewStarKind, number> {
   return { input: 0, done: 0, progress: 0, recurring: 0 };
 }
 
+/** 按星种计数，四个键都在。 */
+export function countOverviewStarKinds(stars: readonly OverviewStar[]): Record<OverviewStarKind, number> {
+  const counts = emptyKindCounts();
+  for (const star of stars) counts[star.kind] += 1;
+  return counts;
+}
+
 /** 按 index.stars 同样的规则排序：at 倒序，同刻 key 升序。 */
 function compareStars(a: OverviewStar, b: OverviewStar): number {
   const diff = Date.parse(b.at) - Date.parse(a.at);
@@ -207,8 +214,7 @@ export function buildOverviewModel(input: {
       if (dark) darkStars.push(star);
       else litStars.push(star);
     }
-    const kindCounts = emptyKindCounts();
-    for (const star of sorted) kindCounts[star.kind] += 1;
+    const kindCounts = countOverviewStarKinds(sorted);
     if (builder.kind === "loose") {
       return {
         key: builder.key,

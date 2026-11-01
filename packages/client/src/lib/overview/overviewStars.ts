@@ -270,7 +270,16 @@ export function buildOverviewStars(input: {
           });
         }
       } else {
-        placement = { type: "excluded", reason: "child", event: null };
+        const childDone: OverviewStatusEvent | null = task.done
+          ? { kind: "done", at: task.completedAt ?? task.updatedAt }
+          : null;
+        placement = { type: "excluded", reason: "child", event: childDone };
+        if (
+          childDone !== null &&
+          (resolvedRoot.event === null || Date.parse(childDone.at) > Date.parse(resolvedRoot.event.at))
+        ) {
+          resolvedRoot.event = childDone;
+        }
       }
       placements.set(key, placement);
     } else {

@@ -165,6 +165,37 @@ describe("overviewModel", () => {
     expect(g1?.litStars).toEqual([]);
   });
 
+  it("目标成员是 30 天前做完的根任务，它的子任务昨天刚做完：团算在推进", () => {
+    const { model } = build(
+      [goal({ id: "g1", title: "G1", members: [{ kind: "task", id: "q" }] })],
+      {
+        tasks: [
+          task({ id: "q", done: true, completedAt: ago(40 * DAY), updatedAt: ago(40 * DAY) }),
+          task({ id: "d1", parentId: "q", done: true, completedAt: ago(DAY), updatedAt: ago(DAY) }),
+        ],
+      },
+    );
+    const g1 = model.clusters.find((c) => c.key === "goal:g1");
+    expect(g1?.status).toBe("moving");
+    expect(g1?.lastActivityAt).toBe(ago(DAY));
+    expect(g1?.litStars).toEqual([]);
+  });
+
+  it("目标成员只有那个子任务：它自己的完成动静也让团算在推进", () => {
+    const { model } = build(
+      [goal({ id: "g1", title: "G1", members: [{ kind: "task", id: "d1" }] })],
+      {
+        tasks: [
+          task({ id: "q", done: true, completedAt: ago(40 * DAY), updatedAt: ago(40 * DAY) }),
+          task({ id: "d1", parentId: "q", done: true, completedAt: ago(DAY), updatedAt: ago(DAY) }),
+        ],
+      },
+    );
+    const g1 = model.clusters.find((c) => c.key === "goal:g1");
+    expect(g1?.status).toBe("moving");
+    expect(g1?.lastActivityAt).toBe(ago(DAY));
+  });
+
   it("轨道两天前刚结束：团里没有星，也算在推进", () => {
     const { model } = build(
       [goal({ id: "g1", title: "G1", members: [{ kind: "track", id: "k" }] })],

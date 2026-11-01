@@ -1,5 +1,5 @@
 import { matchesAllTerms, parseSearchTerms } from "../../quick-notes/searchTerms.js";
-import type { OverviewCluster } from "./overviewModel.js";
+import { countOverviewStarKinds, type OverviewCluster } from "./overviewModel.js";
 
 /** 搜索的结果：留下的团与去重后的星数。 */
 export interface OverviewSearchResult {
@@ -25,7 +25,7 @@ export function searchOverview(
         if (a.key > b.key) return 1;
         return 0;
       });
-      kept.push({ ...cluster, litStars, darkStars: [] });
+      kept.push({ ...cluster, litStars, darkStars: [], kindCounts: countOverviewStarKinds(litStars) });
       for (const star of litStars) seen.add(star.key);
     } else {
       const litStars = [...cluster.litStars, ...cluster.darkStars]
@@ -38,7 +38,7 @@ export function searchOverview(
           return 0;
         });
       if (litStars.length === 0) continue;
-      kept.push({ ...cluster, litStars, darkStars: [] });
+      kept.push({ ...cluster, litStars, darkStars: [], kindCounts: countOverviewStarKinds(litStars) });
       for (const star of litStars) seen.add(star.key);
     }
   }

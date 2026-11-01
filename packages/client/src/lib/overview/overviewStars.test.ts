@@ -289,8 +289,105 @@ describe("overviewStars", () => {
 
     expect(result.stars.find((s) => s.key === "task:q")).toBeUndefined();
     expect(result.stars.find((s) => s.key === "task:d1")).toBeUndefined();
-    expect(result.placements.get("task:d1")).toEqual({ type: "excluded", reason: "child", event: null });
+    expect(result.placements.get("task:d1")).toEqual({ type: "excluded", reason: "child", event: { kind: "done", at: ago(DAY) } });
+    expect(result.placements.get("task:q")).toEqual({ type: "excluded", reason: "done-old", event: { kind: "done", at: ago(DAY) } });
     expect(result.exclusions.child).toBe(1);
+  });
+
+  it("根任务不上天时，没做完的子任务不带动静，也不改根的动静", () => {
+    const result = buildOverviewStars({
+      tasks: [
+        task({ id: "q", done: true, completedAt: ago(40 * DAY) }),
+        task({ id: "d1", parentId: "q", updatedAt: ago(DAY) }),
+      ],
+      tracks: [],
+      steps: [],
+      quickNotes: [],
+      now,
+    });
+
+    expect(result.stars.find((s) => s.key === "task:q")).toBeUndefined();
+    expect(result.stars.find((s) => s.key === "task:d1")).toBeUndefined();
+    expect(result.placements.get("task:d1")).toEqual({ type: "excluded", reason: "child", event: null });
+    expect(result.placements.get("task:q")).toEqual({
+      type: "excluded",
+      reason: "done-old",
+      event: { kind: "done", at: ago(40 * DAY) },
+    });
+    expect(result.exclusions.child).toBe(1);
+  });
+
+  it("根任务不上天时，子任务里最晚的那次完成记在根的动静上", () => {
+    const result = buildOverviewStars({
+      tasks: [
+        task({ id: "q", done: true, completedAt: ago(40 * DAY) }),
+        task({ id: "d1", parentId: "q", done: true, completedAt: ago(DAY) }),
+        task({ id: "d2", parentId: "q", done: true, completedAt: ago(20 * DAY) }),
+      ],
+      tracks: [],
+      steps: [],
+      quickNotes: [],
+      now,
+    });
+
+    expect(result.stars.find((s) => s.key === "task:q")).toBeUndefined();
+    expect(result.stars.find((s) => s.key === "task:d1")).toBeUndefined();
+    expect(result.stars.find((s) => s.key === "task:d2")).toBeUndefined();
+    expect(result.placements.get("task:q")).toEqual({
+      type: "excluded",
+      reason: "done-old",
+      event: { kind: "done", at: ago(DAY) },
+    });
+    expect(result.placements.get("task:d2")).toEqual({
+      type: "excluded",
+      reason: "child",
+      event: { kind: "done", at: ago(20 * DAY) },
+    });
+    expect(result.exclusions.child).toBe(2);
+  });
+
+  it("重复模板的发生里夹着没做完的那次，at 仍取做完里最晚的", () => {
+    const result = buildOverviewStars({
+      tasks: [
+        task({ id: "r1", recurrence: { freq: "daily", interval: 1, basis: "due" }, updatedAt: "2026-10-01T00:00:00.000Z" }),
+        task({ id: "o1", ruleId: "r1", done: true, scheduledAt: "2026-10-28T00:00:00.000Z", completedAt: "2026-10-28T09:00:00.000Z" }),
+        task({ id: "o2", ruleId: "r1", scheduledAt: "2026-10-29T00:00:00.000Z" }),
+        task({ id: "o3", ruleId: "r1", done: true, scheduledAt: "2026-10-30T00:00:00.000Z", completedAt: "2026-10-30T09:00:00.000Z" }),
+      ],
+      tracks: [],
+      steps: [],
+      quickNotes: [],
+      now,
+    });
+
+    expect(result.stars.find((s) => s.key === "task:r1")?.at).toBe("2026-10-30T09:00:00.000Z");
+  });
+
+  it("恰好 30 天整之前做完的仍是 done 星", () => {
+    const result = buildOverviewStars({
+      tasks: [task({ id: "t30", done: true, completedAt: ago(30 * DAY) })],
+      tracks: [],
+      steps: [],
+      quickNotes: [],
+      now,
+    });
+
+    expect(result.stars.find((s) => s.key === "task:t30")?.kind).toBe("done");
+    expect(result.exclusions["done-old"]).toBe(0);
+  });
+
+  it("速记标题按字符截断，不把表情劈成两半", () => {
+    const grin = String.fromCodePoint(0x1f600);
+    const result = buildOverviewStars({
+      tasks: [],
+      tracks: [],
+      steps: [],
+      quickNotes: [note({ id: "e81", text: grin.repeat(81) }), note({ id: "e41", text: grin.repeat(41) })],
+      now,
+    });
+
+    expect(result.stars.find((s) => s.key === "quick_note:e81")?.title).toBe(`${grin.repeat(80)}…`);
+    expect(result.stars.find((s) => s.key === "quick_note:e41")?.title).toBe(grin.repeat(41));
   });
 
   it("父任务已删的子任务当根待办上天", () => {

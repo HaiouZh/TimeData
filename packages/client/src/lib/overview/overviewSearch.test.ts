@@ -121,6 +121,23 @@ describe("overviewSearch", () => {
     expect(result?.matchCount).toBe(2);
   });
 
+  it("只留下部分星的团，星种计数按留下的星重算", () => {
+    const { model } = build([], {
+      quickNotes: [
+        note({ id: "nA", text: "跑鞋", occurredAt: ago(DAY), updatedAt: ago(DAY) }),
+        note({ id: "nB", text: "看书", occurredAt: ago(DAY), updatedAt: ago(DAY) }),
+        note({ id: "nC", text: "买菜", occurredAt: ago(20 * DAY), updatedAt: ago(20 * DAY) }),
+      ],
+      tasks: [task({ id: "tD", title: "跑步", done: true, completedAt: ago(2 * DAY), updatedAt: ago(2 * DAY) })],
+    });
+    const loose = model.clusters.find((c) => c.key === "loose");
+    expect(loose?.kindCounts).toEqual({ input: 3, done: 1, progress: 0, recurring: 0 });
+    const result = searchOverview(model.clusters, "跑");
+    const searched = result?.clusters.find((c) => c.key === "loose");
+    expect(searched?.litStars.map((s) => s.key)).toEqual(["quick_note:nA", "task:tD"]);
+    expect(searched?.kindCounts).toEqual({ input: 1, done: 1, progress: 0, recurring: 0 });
+  });
+
   it("没有匹配的团被拿掉，matchCount 按星去重", () => {
     const { model } = build(
       [
