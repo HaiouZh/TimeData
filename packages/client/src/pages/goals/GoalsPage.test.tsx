@@ -191,9 +191,19 @@ describe("GoalsPage", () => {
     await unmount(root);
   });
 
-  it("顶栏有返回全貌", async () => {
+  it("星图模式的顶栏有返回全貌", async () => {
     const { host, root } = await renderPage();
 
+    expect(host.querySelector("[data-galaxy]")).toBeTruthy();
+    expect(host.querySelector('a[href="/goals"][aria-label="返回全貌"]')).not.toBeNull();
+    await unmount(root);
+  });
+
+  it("列表模式的顶栏也有返回全貌", async () => {
+    mockedUseIsWideScreen.mockReturnValue(false);
+    const { host, root } = await renderPage();
+
+    expect(host.querySelector("[data-goals-list]")).toBeTruthy();
     expect(host.querySelector('a[href="/goals"][aria-label="返回全貌"]')).not.toBeNull();
     await unmount(root);
   });

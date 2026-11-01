@@ -417,6 +417,24 @@ describe("overviewStars", () => {
     expect(result.exclusions.child).toBe(0);
   });
 
+  it("模板挂在自己某次发生的下面：不无限递归，两条都指向同一颗星", () => {
+    const result = buildOverviewStars({
+      tasks: [
+        task({ id: "r1", parentId: "o1", recurrence: { freq: "daily", interval: 1, basis: "due" } }),
+        task({ id: "o1", ruleId: "r1", done: true, completedAt: ago(DAY) }),
+      ],
+      tracks: [],
+      steps: [],
+      quickNotes: [],
+      now,
+    });
+
+    expect(result.stars.length).toBe(1);
+    const only = result.stars[0]?.key;
+    expect(result.placements.get("task:r1")).toEqual({ type: "star", starKey: only });
+    expect(result.placements.get("task:o1")).toEqual({ type: "star", starKey: only });
+  });
+
   it("模板已删的发生：没跳过的上天，跳过的不上天", () => {
     const result = buildOverviewStars({
       tasks: [task({ id: "o4", ruleId: "gone" }), task({ id: "o5", ruleId: "gone", skipped: true })],

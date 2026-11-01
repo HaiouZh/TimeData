@@ -21,6 +21,8 @@ import { OverviewStarSheet } from "./OverviewStarSheet.js";
 import { OverviewTallyPanel } from "./OverviewTallyPanel.js";
 import { OverviewLegend } from "./overviewGlyphs.js";
 
+const HOUR_MS = 3_600_000;
+
 /** 全貌页：五份数据到齐前只放加载占位，到齐后按宽窄屏摆天空或清单。 */
 export function OverviewPage(): React.JSX.Element {
   const goals = useLiveQuery(() => listGoals());
@@ -28,7 +30,10 @@ export function OverviewPage(): React.JSX.Element {
   const tracks = useLiveQuery(() => listTracks());
   const steps = useLiveQuery(() => listAllTrackSteps());
   const quickNotes = useLiveQuery(() => listAllQuickNotesForOverview());
-  const now = useNowMinute();
+  const nowMinute = useNowMinute();
+  // 状态章、暗处、做完窗口都按天算，「现在」整点换一次就够；跟着分钟走会每分钟重算全部星
+  const nowHourMs = Math.floor(nowMinute.getTime() / HOUR_MS) * HOUR_MS;
+  const now = useMemo(() => new Date(nowHourMs), [nowHourMs]);
   const wide = useIsWideScreen();
   const navigate = useNavigate();
   const [query, setQuery] = useState("");

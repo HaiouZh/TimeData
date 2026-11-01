@@ -462,7 +462,7 @@ describe("GoalGraphEditor", () => {
     expect(toolbarOverlay?.querySelector(".pointer-events-auto")).toContain(addMemberButton);
   });
 
-  it("点击返回触发回到目标页导航", async () => {
+  it("点「返回全貌」导航回全貌", async () => {
     const goalValue = goal();
     const onNavigate = vi.fn<(to: string) => void>();
     await seed(goalValue);
