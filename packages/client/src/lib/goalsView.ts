@@ -54,7 +54,7 @@ function taskActivityAt(task: Task): string {
   return task.completedAt ?? task.updatedAt;
 }
 
-function trackActivityAt(track: Track, steps: TrackStep[]): string {
+export function trackActivityAt(track: Track, steps: TrackStep[]): string {
   const stepTimes = steps.map((step) => step.endedAt ?? step.startedAt ?? step.updatedAt);
   return [track.updatedAt, ...stepTimes].sort().at(-1) ?? track.updatedAt;
 }
