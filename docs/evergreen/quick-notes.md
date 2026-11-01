@@ -34,7 +34,7 @@ last-reviewed: 2026-09-18
 
 ## 承上启下
 
-- **上游**：用户在 `QuickNotesPage` 自记/编辑/置顶/删除；授权 agent 经 `POST /api/quick-notes` 投递 `source="agent"`；CLI `timedata notes` 只读查询。
+- **上游**：用户在 `QuickNotesPage` 自记/编辑/置顶/删除，也可在全貌页的入口框经 `addQuickNote` 自记（见 [overview](overview.md)）；授权 agent 经 `POST /api/quick-notes` 投递 `source="agent"`；CLI `timedata notes` 只读查询。
 - **下游**：本地 mutation 经 `syncLog(tableName="quick_notes")` → [sync](sync.md) 推送 → 服务端通用 LWW 域 + `sync_seq` → 其他设备拉取。备份有两条路径（见 [backup](backup.md)）：速记随 `backup: "bundled"` 角色进完整备份 `timedata.backup`，同时保留独立格式 `timedata.quick-notes.backup`；完整备份是它的超集，不是替代。
 - **契约**：`QuickNote` 字段 schema 见本文 §2，定义在 `entitySchemas.ts:QuickNoteSchema`（`schemas.ts` re-export）；跨域约定见 [data-model](data-model.md)。
 - **邻居**：[todo](todo.md)（composer「存待办」调 `addTask`）、[tracks](tracks.md)（TrackStep 复用 `source/sourceLabel` 的人/agent 来源口径）、[timeline](timeline.md)（composer「打点」建 time_entry，分类来自 [categories-settings](categories-settings.md) 的打点分类设置）、[sync](sync.md)。

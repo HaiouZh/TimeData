@@ -22,8 +22,8 @@ last-reviewed: 2026-08-14
 
 # 目标层 · 星图画布
 
-> [goals](../goals.md) 的子文档。星图画布是目标层的**视图与就地编辑面**：`/goals` 的全局星图（每颗恒星一个 active Goal）与 `/goals/:id` 的局部图编辑器（Goal 锚 + 成员卫星），两者共享一套确定性布局纯函数与 React Flow 壳。
-> 本文讲：`/goals` 视图模式与三段式工作台、全局画布纯函数分层、就地编辑与 pin 写入语义、未归类托盘与拖入命中、引擎模式开关、局部编辑器布局/交互/轻撤销口径、画布侧模块速查与 galaxy scoped palette。
+> [goals](../goals.md) 的子文档。星图画布是目标层的**视图与就地编辑面**：`/goals/manage` 的全局星图（每颗恒星一个 active Goal）与 `/goals/:id` 的局部图编辑器（Goal 锚 + 成员卫星），两者共享一套确定性布局纯函数与 React Flow 壳。
+> 本文讲：`/goals/manage` 视图模式与三段式工作台、全局画布纯函数分层、就地编辑与 pin 写入语义、未归类托盘与拖入命中、引擎模式开关、局部编辑器布局/交互/轻撤销口径、画布侧模块速查与 galaxy scoped palette。
 > 不讲：`Goal` schema 与 `members`/`prerequisites` 契约、存储与同步域登记、roll-up 计算口径（均见母文档 [goals](../goals.md)）。
 
 ## 承上启下
@@ -35,7 +35,7 @@ last-reviewed: 2026-08-14
 
 ## 1. 全局星图就地编辑
 
-`/goals` 的视图模式以 localStorage `timedata_goals_view_mode` 为准：手选过就一直用手选值、窗口尺寸翻转不覆盖；从未手选时才按宽窄给默认（宽屏星图、窄屏列表）。两端都提供“星图 / 列表”切换。模式是派生值（`resolveGoalsViewMode(wide, stored)`）而非 state 副本，`GoalsPage` 里没有按宽窄重置模式的 effect。全局星图只展示 `status:"active"` 的 Goal；archived Goal 仍在列表的归档区，不进入画布。宽屏星图是三段式目标工作台：中间保持 Goal 星座画布，左侧“目标”抽屉是 active Goal 索引，右侧“未归类”抽屉是未被任何 active Goal 收编的活跃 Task/Track 托盘。两个抽屉默认收起，由左上控件群的 pill 唤起，作为画布内 overlay 出现，不推动 React Flow 布局重排。
+`/goals/manage` 的视图模式以 localStorage `timedata_goals_view_mode` 为准：手选过就一直用手选值、窗口尺寸翻转不覆盖；从未手选时才按宽窄给默认（宽屏星图、窄屏列表）。两端都提供“星图 / 列表”切换。模式是派生值（`resolveGoalsViewMode(wide, stored)`）而非 state 副本，`GoalsPage` 里没有按宽窄重置模式的 effect。全局星图只展示 `status:"active"` 的 Goal；archived Goal 仍在列表的归档区，不进入画布。宽屏星图是三段式目标工作台：中间保持 Goal 星座画布，左侧“目标”抽屉是 active Goal 索引，右侧“未归类”抽屉是未被任何 active Goal 收编的活跃 Task/Track 托盘。两个抽屉默认收起，由左上控件群的 pill 唤起，作为画布内 overlay 出现，不推动 React Flow 布局重排。顶栏左侧的「返回全貌」（`PageBackButton` → `/goals`）是窄屏上唯一可见的回路：`/goals/*` 在窄屏隐藏底栏。
 
 全局星图是 Goal-centered portfolio view，不是自由画布或跨 Goal 依赖编辑器：每个 active Goal 是一颗恒星，展开时该 Goal 的 Task / Track 成员作为卫星；同一个成员被多个已展开 Goal 引用时，只绘制一个桥接节点并用 tether 连到多个 Goal 锚。桥接节点只是共享成员的可视化，不改变进度账、不写反向索引，也不落 `goal_layout_pins`，因为现有钉点复合键没有跨 Goal 所属格式。
 
@@ -49,13 +49,13 @@ last-reviewed: 2026-08-14
 - `goalGalaxyModel` 复用 `buildGoalOverview` 与 `buildGoalGraphModel`，但把局部裸 Goal 锚改写为全局唯一 `goal:<goalId>`，跳过 ghost，并把共享成员合并成多锚节点。
 - `goalGalaxyLayout` 使用确定性布局，不引 `d3-force`。恒星读 `goal_layout_pins` world pin，无 pin 时用确定性螺旋种子；单 Goal 成员有 pin 时使用“锚 + 相对偏移”，无 pin 时使用该 Goal 局部 `goalGraphLayout` seed；桥接成员放在多锚质心附近，再做全局确定性碰撞推挤。
 
-全局画布 C2 起支持就地编辑，但仍不做跨 Goal 依赖编辑器：恒星与单 Goal 成员可拖拽，拖停后经 `goal_layout_pins` 写 pin，恒星保存 world pin，成员保存相对该 Goal 锚点的偏移；桥接成员不可拖、不可落 pin。已钉节点显示图钉角标，选中后的“恢复自动”删除对应 pin。进入局部编辑器有两条路径：桌面双击恒星；任意指针下选中恒星后动作单第一项“打开目标”。聚焦编辑器工具栏提供“返回目标页”回到 `/goals`（文案中性：`/goals` 可能是星图也可能是列表）。
+全局画布 C2 起支持就地编辑，但仍不做跨 Goal 依赖编辑器：恒星与单 Goal 成员可拖拽，拖停后经 `goal_layout_pins` 写 pin，恒星保存 world pin，成员保存相对该 Goal 锚点的偏移；桥接成员不可拖、不可落 pin。已钉节点显示图钉角标，选中后的“恢复自动”删除对应 pin。进入局部编辑器有两条路径：桌面双击恒星；任意指针下选中恒星后动作单第一项“打开目标”。聚焦编辑器工具栏提供“返回全貌”，回到 `/goals` 全貌。
 
 点节点只选中，显式动作才写入或导航：Task 可就地完成/取消完成；单 Goal 成员可确认后移出；同 Goal 内成员可用“连前置”建立 blocker -> blocked 前置，进入连前置草稿态后关闭动作单，并在画布顶部提示“点击目标节点完成连接，点空白处取消”与“取消”按钮；草稿态里任何被拒绝的目标——恒星、自环、已存在、成环、非本 Goal 成员——都给出对应解释并**保留草稿**，用户可继续点别的目标，也不会把被拒目标选中弹动作单；取消草稿会连同这条错误一起清掉（错误位没有自己的关闭入口与计时器）；写入成功在画布右下角给一次确认提示（3 秒自消），与错误红条、灵动模式提示共用同一提示位，优先级为错误 > 确认 > 灵动提示；选择前置边可删除；恒星可打开添加成员 picker，也可进入目标设置 sheet 编辑、归档或确认删除 Goal。所有结构写入仍只经 `lib/goals.ts`、`lib/tasks.ts`（Task 完成走上层 `lib/taskTrackPromote.ts`，它在勾掉挂轨道的任务时附带归档该轨道，见 [tracks](../tracks.md#tracks-s5)）与 `lib/goalLayoutPins.ts` 的既有 Dexie + `syncLog` 边界，写入经 `recordSyncLog` 自动调度上传。桥接节点的原子动作（如 Task 完成）就地生效；“移除成员 / 连前置”这类需要判定“哪个 Goal”的操作会先让用户选择 Goal，再导航到对应 `/goals/:id` 聚焦编辑器处理。
 
 全局星图顶部 HUD 显示 canvas-level rollup（全局完成百分比、本周推进、在动 Goal），它只读现有 Goal/Task/Track/Step 快照；旁边的“目标”“未归类”“回到全图”控制都在同一控件群中，“目标”打开左索引并可 `fitView` 聚焦某颗星，“未归类(N)”打开右托盘且 N 是当前未归类候选数。星图线透明度控件可在“归属线 / 连接线”之间切换：归属线只调 Goal -> 成员 tether 的本地透明度，默认 5%，可拉到 0 隐藏；连接线调前置边整体星云层透明度，默认 100%，不改变前置语义。全局星图继续复用 `goalGraphActions`、`GoalGraphNodeView`、添加成员 picker、目标编辑 sheet 和确认 sheet 等编辑叶子；`GoalGraphEditor` 仍是 `/goals/:id` 的局部编辑器，没有被抽成共享大内核，也不单独提供透明度滑杆。布局默认仍是确定性引擎，OFF 路径不引 `d3-force`。
 
-全局星图另有本地引擎模式开关，localStorage key 为 `timedata_galaxy_engine`：默认 `deterministic` 完全沿用确定性布局；`settle` 模式才通过 hook 动态 import `d3-force`，跑短暂物理 settle 后冻结。`/goals` 壳会等 Goal/Task/Track/Step/布局钉点 live query 全部返回后再挂载星图画布，避免 settle 引擎从空数据或半数据布局起跑；settle 的第一帧位置以当前完整静态布局 seed 为准。settle 模式下 Goal 恒星一律固定在当前画布坐标，只让 Task/Track 成员参与物理排布。**settle 是纯观赏模式**：拖动不落 `goal_layout_pins`，既有钉点只作为确定性 seed 参与、**不做硬锚**，钉点角标与「恢复自动」在该模式下隐藏，拖停给一次「灵动模式不保存位置」提示。切回静态模式回到确定性布局（含既有钉点）；`/goals/:id` 的局部编辑器不受该开关影响。
+全局星图另有本地引擎模式开关，localStorage key 为 `timedata_galaxy_engine`：默认 `deterministic` 完全沿用确定性布局；`settle` 模式才通过 hook 动态 import `d3-force`，跑短暂物理 settle 后冻结。`/goals/manage` 壳会等 Goal/Task/Track/Step/布局钉点 live query 全部返回后再挂载星图画布，避免 settle 引擎从空数据或半数据布局起跑；settle 的第一帧位置以当前完整静态布局 seed 为准。settle 模式下 Goal 恒星一律固定在当前画布坐标，只让 Task/Track 成员参与物理排布。**settle 是纯观赏模式**：拖动不落 `goal_layout_pins`，既有钉点只作为确定性 seed 参与、**不做硬锚**，钉点角标与「恢复自动」在该模式下隐藏，拖停给一次「灵动模式不保存位置」提示。切回静态模式回到确定性布局（含既有钉点）；`/goals/:id` 的局部编辑器不受该开关影响。
 
 <a id="goals-canvas-s2"></a>
 
@@ -65,7 +65,7 @@ last-reviewed: 2026-08-14
 
 **已完成成员不出节点**：`buildGoalGraphModel` 从 `overview.sections.completed` 算出隐藏集合，在**三处**都跳过——成员节点循环、tether 边循环、prerequisite 边循环。只跳第一处不够：后两处的 `ensureGraphNode` 查不到节点就建 ghost，被跳过的成员会以 `ghost:` 前缀重新出现在图上，并把与它相连的前置边判成 `broken-prerequisite`。`summary.completed` 仍按 `sections.completed` 计数，隐藏的只是节点。已完成的 blocker 在 `splitGoalMembers` 的 `waitingOn` 判定里也不再挡任何人，那条边画出来不起作用。全局星图的 `goalGalaxyModel` 复用同一函数（见 §1 分层），这条对两个画布同时生效。
 
-`GoalDetailPage` 壳层的加载门与 `/goals` 壳同口径：Goal、Task、Track、TrackStep、布局钉点**五个 live query 全部返回**才挂编辑器，一律不给 `useLiveQuery` 传 `[]` 默认初值。用 `[]` 兜底会让 `buildGoalOverview` 把全部成员判成失效引用，首帧渲染成 ghost、数据到位后整图重排跳位。
+`GoalDetailPage` 壳层的加载门与 `/goals/manage` 壳同口径：Goal、Task、Track、TrackStep、布局钉点**五个 live query 全部返回**才挂编辑器，一律不给 `useLiveQuery` 传 `[]` 默认初值。用 `[]` 兜底会让 `buildGoalOverview` 把全部成员判成失效引用，首帧渲染成 ghost、数据到位后整图重排跳位。
 
 B 阶段后，`goalGraphLayout` 输出确定性星环 seed：Goal 居中，成员按前置 rank 与成员顺序环绕；自动布局不持久化，也不由 force settle 主导。Goal 锚读 `goal_layout_pins` world pin（无 pin 为 `{x:0,y:0}`），`task` / `track` pins 存相对锚偏移并覆盖 seed。打开 `/goals/:id` 等 pins 后定格并局部解碰撞；拖成员只动当前节点，拖停找最近不重叠落点再写 pin，不重排其它节点；拖 Goal 平移整团并写 world pin。ghost 不可拖且不写 pin。
 
@@ -99,15 +99,15 @@ B 阶段后，`goalGraphLayout` 输出确定性星环 seed：Goal 居中，成�
 | `client/src/lib/goalGraphLayout.ts` | 围绕 Goal 的确定性星环自动布局，不持久化坐标 |
 | `client/src/lib/goalGraphViewport.ts` | 按 Goal id 保存本地 pan/zoom 视口，不同步 |
 | `client/src/lib/goalGraphLod.ts` | zoom → near/far 两档显示密度 |
-| `client/src/lib/goalGalaxyRollup.ts` | `/goals` 全局星图 HUD 汇总：完成度、7 天推进、在动 Goal |
+| `client/src/lib/goalGalaxyRollup.ts` | `/goals/manage` 全局星图 HUD 汇总：完成度、7 天推进、在动 Goal |
 | `client/src/lib/goalGalaxyLod.ts` | 全局星图 cluster collapsed / expanded 滞回 LOD |
 | `client/src/lib/goalGalaxyModel.ts` | active Goals → 恒星、成员卫星、共享成员桥接节点、多锚 tether |
 | `client/src/lib/goalGalaxyLayout.ts` | 全局星图确定性多锚布局、pin/seed/质心和碰撞推挤 |
 | `client/src/lib/goalGalaxySettle.ts` | 全局星图可选 settle 引擎工厂；Goal 恒星和已 pin 成员按 seed 固定，成员短暂解碰撞后冻结 |
-| `client/src/lib/galaxyEngineMode.ts` | `/goals` 星图引擎本地偏好读写；默认 deterministic，只有 settle 模式才启用动态引擎 |
+| `client/src/lib/galaxyEngineMode.ts` | `/goals/manage` 星图引擎本地偏好读写；默认 deterministic，只有 settle 模式才启用动态引擎 |
 | `client/src/lib/goalUnassigned.ts` | 全 active Goal 成员并集排除，得到未归类活跃 Task/Track 托盘候选 |
-| `client/src/pages/goals/GoalsPage.tsx` | `/goals` 视图模式壳：偏好优先、无偏好按宽窄默认、手动切换落偏好 |
-| `client/src/pages/goals/goalsViewPrefs.ts` | `/goals` 视图模式本地偏好读写与 `resolveGoalsViewMode` 纯函数 |
+| `client/src/pages/goals/GoalsPage.tsx` | `/goals/manage` 视图模式壳：偏好优先、无偏好按宽窄默认、手动切换落偏好 |
+| `client/src/pages/goals/goalsViewPrefs.ts` | `/goals/manage` 视图模式本地偏好读写与 `resolveGoalsViewMode` 纯函数 |
 | `client/src/pages/goals/GoalGalaxyCanvas.tsx` | 全局星图 React Flow 画布、HUD、左目标索引/右未归类托盘、拖入加入、就地编辑动作、pin 写入、桥接节点路由 |
 | `client/src/pages/goals/GoalGalaxyActionBar.tsx` | 全局星图节点/边选中后的动作条与窄屏 sheet |
 | `client/src/pages/goals/GoalIndexPanel.tsx` | 左抽屉 active Goal 索引，显示 mini 进度 / 本周势头并聚焦目标星 |

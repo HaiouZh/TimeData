@@ -92,6 +92,9 @@
   "docs/evergreen/ios/scheduler-resilience.md": {
     "covers": 13
   },
+  "docs/evergreen/overview.md": {
+    "covers": 3
+  },
   "docs/evergreen/project-zone.md": {
     "covers": 4
   },

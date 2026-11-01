@@ -26,14 +26,14 @@ last-reviewed: 2026-09-18
 
 ## 子文档索引
 
-- [goals/canvas](goals/canvas.md) —— 星图画布：`/goals` 全局星图与 `/goals/:id` 局部图编辑器的视图模式、确定性布局纯函数分层、就地编辑与 pin 写入、未归类托盘与拖入、引擎模式开关、画布侧模块速查。
+- [goals/canvas](goals/canvas.md) —— 星图画布：`/goals/manage` 全局星图与 `/goals/:id` 局部图编辑器的视图模式、确定性布局纯函数分层、就地编辑与 pin 写入、未归类托盘与拖入、引擎模式开关、画布侧模块速查。
 
 ## 承上启下
 
-- **上游**：用户在 `/goals` 新建 `project` / `theme`，在 `/goals/:id` 编辑标题、备注、状态、成员和前置关系。
+- **上游**：用户在 `/goals/manage` 新建 `project` / `theme`，在 `/goals/:id` 编辑标题、备注、状态、成员和前置关系。
 - **下游**：Web 写入 Dexie 业务表并同事务写 `syncLog` → [sync](sync.md) 的 `goals` LWW 域 → server SQLite `goals` 表 → 其他设备按 `sync_seq` pull。
 - **契约**：`Goal` schema 持有 `members` 与 typed `prerequisites`；Task / Track 不保存 Goal 归属。跨表映射见 [data-model](data-model.md)；完整备份见 [backup](backup.md)。
-- **邻居**：[todo](todo.md) 的 `done` / 重复规则和 [tracks](tracks.md) 的 `status` / steps 都保持原语义，Goal 只做组织视图、展示和前置边解释。
+- **邻居**：[todo](todo.md) 的 `done` / 重复规则和 [tracks](tracks.md) 的 `status` / steps 都保持原语义，Goal 只做组织视图、展示和前置边解释。全貌（[overview](overview.md)）只读 Goal 与成员来给星分团，不回写。
 
 ## 1. Schema
 
@@ -84,7 +84,7 @@ last-reviewed: 2026-09-18
 - `momentum` 固定用 7 天窗口：统计近 7 天有活动的成员数和 `lastActivityAt`，Project / Theme 都会计算。Track 活跃时间取 track `updatedAt` 与 steps 时间中的最新值。
 - 缺失成员不参与 ready/blocked/completed、Project total、Theme momentum；指向非有效成员的前置边忽略。
 
-UI 复用三行主显：动量、前线、完成计数。`/goals` 列表项显示同一口径；Project 不显示百分号和进度条，只保留低对比总数。`/goals/:id` 是 Adaptive Goal Graph Editor，把 `buildGoalOverview` 转成局部图模型（壳层加载门与图语义见 [goals/canvas](goals/canvas.md#goals-canvas-s2)）。详情页内快建 ToDo 仍由 `addTaskForGoal` 在同一 Dexie transaction 内创建普通根 Task、append `{kind:"task",id}` 到 `Goal.members`，并写 `tasks/create` 与 `goals/update` 两条 `syncLog`；归档 Goal 不允许快建任务，但仍允许整理成员和前置关系。
+UI 复用三行主显：动量、前线、完成计数。`/goals/manage` 列表项显示同一口径；Project 不显示百分号和进度条，只保留低对比总数。`/goals/:id` 是 Adaptive Goal Graph Editor，把 `buildGoalOverview` 转成局部图模型（壳层加载门与图语义见 [goals/canvas](goals/canvas.md#goals-canvas-s2)）。详情页内快建 ToDo 仍由 `addTaskForGoal` 在同一 Dexie transaction 内创建普通根 Task、append `{kind:"task",id}` 到 `Goal.members`，并写 `tasks/create` 与 `goals/update` 两条 `syncLog`；归档 Goal 不允许快建任务，但仍允许整理成员和前置关系。
 
 <a id="goals-s4"></a>
 
