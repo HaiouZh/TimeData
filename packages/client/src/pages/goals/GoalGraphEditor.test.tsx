@@ -469,7 +469,7 @@ describe("GoalGraphEditor", () => {
 
     const { host } = await renderEditor({ goal: goalValue, onNavigate });
 
-    await click(buttonByLabel(host, "返回目标页"));
+    await click(buttonByLabel(host, "返回全貌"));
 
     expect(onNavigate).toHaveBeenCalledWith("/goals");
   });

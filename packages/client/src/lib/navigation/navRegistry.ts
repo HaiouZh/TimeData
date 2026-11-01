@@ -90,8 +90,8 @@ export const MAIN_NAV_ITEMS: readonly MainNavItem[] = [
   },
   {
     to: "/goals",
-    label: "目标",
-    ariaLabel: "目标",
+    label: "全貌",
+    ariaLabel: "全貌",
     icon: Planet,
     iconName: "Planet",
     defaultDesktopPlacement: "primary",

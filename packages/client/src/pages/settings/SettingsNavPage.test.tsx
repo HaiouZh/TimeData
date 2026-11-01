@@ -125,10 +125,10 @@ describe("SettingsNavPage", () => {
     await unmount(root);
   });
 
-  it("offers 轨道, 目标 and 时间 as separate toggles, not 统计", async () => {
+  it("offers 轨道, 全貌 and 时间 as separate toggles, not 统计", async () => {
     const { host, root } = await renderPage();
     expect(host.querySelector('[role="switch"][aria-label="显示 轨道"]')).not.toBeNull();
-    expect(host.querySelector('[role="switch"][aria-label="显示 目标"]')).not.toBeNull();
+    expect(host.querySelector('[role="switch"][aria-label="显示 全貌"]')).not.toBeNull();
     expect(host.querySelector('[role="switch"][aria-label="显示 时间"]')).not.toBeNull();
     expect(host.querySelector('[role="switch"][aria-label="显示 统计"]')).toBeNull();
     await unmount(root);

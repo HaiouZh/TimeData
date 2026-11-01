@@ -47,9 +47,9 @@ beforeEach(() => {
 });
 
 describe("AppShell goals nav", () => {
-  it("shows a pure-icon 目标 tab linking to /goals", async () => {
+  it("shows a pure-icon 全貌 tab linking to /goals", async () => {
     const { host, root } = await render("/");
-    const link = host.querySelector('nav a[href="/goals"][aria-label="目标"]');
+    const link = host.querySelector('nav a[href="/goals"][aria-label="全貌"]');
     expect(link).not.toBeNull();
     expect(link?.textContent?.trim()).toBe("");
     await unmount(root);

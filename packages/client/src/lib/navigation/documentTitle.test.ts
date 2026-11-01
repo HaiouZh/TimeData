@@ -12,13 +12,13 @@ describe("documentTitleForPath", () => {
     expect(documentTitleForPath("/quick-notes")).toBe("记录 · TimeData");
     expect(documentTitleForPath("/todo")).toBe("待办 · TimeData");
     expect(documentTitleForPath("/tracks")).toBe("轨道 · TimeData");
-    expect(documentTitleForPath("/goals")).toBe("目标 · TimeData");
+    expect(documentTitleForPath("/goals")).toBe("全貌 · TimeData");
     expect(documentTitleForPath("/stats/time")).toBe("时间 · TimeData");
     expect(documentTitleForPath("/settings")).toBe("设置 · TimeData");
   });
 
   it("normalizes detail and nested paths to their section title", () => {
-    expect(documentTitleForPath("/goals/goal-1")).toBe("目标 · TimeData");
+    expect(documentTitleForPath("/goals/goal-1")).toBe("全貌 · TimeData");
     expect(documentTitleForPath("/tracks/track-1")).toBe("轨道 · TimeData");
     expect(documentTitleForPath("/settings/categories")).toBe("设置 · TimeData");
     expect(documentTitleForPath("/stats")).toBe("时间 · TimeData");
