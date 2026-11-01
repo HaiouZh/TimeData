@@ -12,6 +12,8 @@ vi.mock("./components/AndroidBackButtonHandler.tsx", () => ({ default: () => nul
 vi.mock("./pages/TimelinePage.tsx", () => ({ default: () => createElement("div", null, "时间轴占位") }));
 vi.mock("./pages/goals/GoalsListPage.tsx", () => ({ default: () => createElement("div", null, "目标列表占位") }));
 vi.mock("./pages/goals/GoalDetailPage.tsx", () => ({ default: () => createElement("div", null, "目标详情占位") }));
+vi.mock("./pages/goals/GoalsPage.tsx", () => ({ default: () => createElement("div", null, "目标管理占位") }));
+vi.mock("./pages/overview/OverviewPage.tsx", () => ({ default: () => createElement("div", null, "全貌占位") }));
 vi.mock("./lib/settings/navVisibleTabsSetting.ts", async (importOriginal) => {
   const actual = await importOriginal<typeof import("./lib/settings/navVisibleTabsSetting.ts")>();
   return { ...actual, useVisibleTabs: () => [...actual.CONFIGURABLE_TABS] };
@@ -58,6 +60,22 @@ describe("AppShell goals nav", () => {
   it("hides the bottom nav on a goal detail route", async () => {
     const { host, root } = await render("/goals/goal-1");
     expect(host.textContent).toContain("目标详情占位");
+    expect(host.querySelector("nav")).toBeNull();
+    await unmount(root);
+  });
+
+  it("/goals 渲染全貌，底栏还在", async () => {
+    const { host, root } = await render("/goals");
+    expect(host.textContent).toContain("全貌占位");
+    expect(host.textContent).not.toContain("目标管理占位");
+    expect(host.querySelector("nav")).not.toBeNull();
+    await unmount(root);
+  });
+
+  it("/goals/manage 渲染旧目标页并隐藏底栏", async () => {
+    const { host, root } = await render("/goals/manage");
+    expect(host.textContent).toContain("目标管理占位");
+    expect(host.textContent).not.toContain("目标详情占位");
     expect(host.querySelector("nav")).toBeNull();
     await unmount(root);
   });

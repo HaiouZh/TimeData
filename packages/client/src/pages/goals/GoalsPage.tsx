@@ -1,6 +1,7 @@
 import { useLiveQuery } from "dexie-react-hooks";
 import { useState } from "react";
 import { useNavigate } from "react-router";
+import { PageBackButton } from "../../components/ui/PageBackButton.js";
 import { listAllGoalLayoutPins } from "../../lib/goalLayoutPins.js";
 import { listGoals } from "../../lib/goals.js";
 import { getActiveSession } from "../../lib/sessions.js";
@@ -41,7 +42,8 @@ export function GoalsPage() {
 
   return (
     <div className="flex h-full min-h-full flex-col bg-page text-ink">
-      <div className="flex shrink-0 justify-end px-4 py-3">
+      <div className="flex shrink-0 items-center justify-between px-4 py-3">
+        <PageBackButton to="/goals" label="返回全貌" />
         <div
           className="inline-flex rounded-pill border border-border bg-surface-elevated p-1 shadow-sm"
           role="tablist"

@@ -190,4 +190,11 @@ describe("GoalsPage", () => {
     expect(localStorage.getItem(STORAGE_KEYS.goalsViewMode)).toBeNull();
     await unmount(root);
   });
+
+  it("顶栏有返回全貌", async () => {
+    const { host, root } = await renderPage();
+
+    expect(host.querySelector('a[href="/goals"][aria-label="返回全貌"]')).not.toBeNull();
+    await unmount(root);
+  });
 });

@@ -13,6 +13,7 @@ const StyleguidePage = lazy(trackLazyLoad("StyleguidePage", () => import("../../
 const EntryPage = lazy(trackLazyLoad("EntryPage", () => import("../../pages/EntryPage.tsx")));
 const GoalDetailPage = lazy(trackLazyLoad("GoalDetailPage", () => import("../../pages/goals/GoalDetailPage.tsx")));
 const GoalsPage = lazy(trackLazyLoad("GoalsPage", () => import("../../pages/goals/GoalsPage.tsx")));
+const OverviewPage = lazy(trackLazyLoad("OverviewPage", () => import("../../pages/overview/OverviewPage.tsx")));
 const QuickNotesPage = lazy(trackLazyLoad("QuickNotesPage", () => import("../../pages/QuickNotesPage.tsx")));
 const SearchPage = lazy(trackLazyLoad("SearchPage", () => import("../../pages/SearchPage.tsx")));
 const SettingsPage = lazy(trackLazyLoad("SettingsPage", () => import("../../pages/SettingsPage.tsx")));
@@ -89,7 +90,8 @@ export function AppRoutes({ location }: { location?: Location } = {}) {
         <Route path="/tracks" element={<TracksListPage />} />
         <Route path="/tracks/:id" element={<TrackDetailPage />} />
       </Route>
-      <Route path="/goals" element={<GoalsPage />} />
+      <Route path="/goals" element={<OverviewPage />} />
+      <Route path="/goals/manage" element={<GoalsPage />} />
       <Route path="/goals/:id" element={<GoalDetailPage />} />
       <Route path="/entries/new" element={<EntryPage />} />
       <Route path="/entries/:id/edit" element={<EntryPage />} />

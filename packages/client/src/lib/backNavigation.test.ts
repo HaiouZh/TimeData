@@ -82,6 +82,14 @@ describe("resolveAndroidBackAction", () => {
     });
   });
 
+  it("returns overview parent for /goals/manage", () => {
+    expect(resolveAndroidBackAction("/goals/manage")).toEqual({
+      type: "navigate",
+      to: "/goals",
+      replace: true,
+    });
+  });
+
   it("returns settings parent for /settings/admin-insights", () => {
     expect(resolveAndroidBackAction("/settings/admin-insights")).toEqual({
       type: "navigate",
