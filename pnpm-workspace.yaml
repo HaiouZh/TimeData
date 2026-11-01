@@ -3,7 +3,7 @@ packages:
 catalog:
   typescript: ^6.0.3
   vitest: ^4.1.8
-  zod: ^4.4.3
+  zod: ^4.6.7
 allowBuilds:
   better-sqlite3: true
   esbuild: true
