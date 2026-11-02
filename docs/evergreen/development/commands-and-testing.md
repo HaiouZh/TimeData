@@ -103,4 +103,6 @@ vi.useFakeTimers({ toFake: ["Date", "setTimeout", "clearTimeout", "setInterval",
 
 这不违反本仓「禁真实定时等待」的棘轮本意：棘轮防的是测试代码自己写 `setTimeout(fn, n>0)` 空等真实时间流逝，不防第三方库内部排队机制依赖的宏任务本身仍是真实的。实例见 `packages/client/src/pages/SearchPage.test.tsx` 的 `beforeEach`。
 
+**按次数轮询别只清微任务**：Dexie 的 `liveQuery` 订阅后首查是 `setTimeout(doQuery, 0)` 排的（dexie 4.4.4，Node 里至少 1ms），`act` 里只 `await Promise.resolve()` 的步进只推得动微任务和 `setImmediate`。轮询按次数封顶时，链路一快就会在 1ms 内耗尽、首查还没开始——fake-indexeddb 6.2.7 起实测 40 次只用 0.4ms，症状是首屏等待几毫秒就报超时、整片跑偶红、`-t` 单跑多半绿。轮询要么按真实时间封顶（`TracksShell.wide.test.tsx` 的 2s），要么每步让出一次计时器（`settle()`），要么像 `TodoPage.test.tsx` 的 `waitForCondition` 那样快推耗尽后改用 `settle()` 慢推。
+
 **假时钟是文件级的，用完必须还原——不还原就是一颗定时炸弹**：某条用例 `vi.setSystemTime(X)` 之后不还原，它**后面新增的所有用例**「现在」都停在 X。危险在于症状具迷惑性——单条 `-t <用例名>` 跑是绿的（前面的用例被 skip、时钟没被污染），只有全量跑才红，第一反应会误判成测试间的 db 状态污染、往那个方向排查会全程走空。**判据：同一条用例 `-t` 绿 / 全量红，先查文件里有没有不还原的 `vi.setSystemTime`。**两条纪律：① 文件级 `afterEach` 里放 `vi.useRealTimers()`（client 三个 setup 都已有，server 端 `sync.test.ts` 2026-08-29 补上）；② **用例的时间语义应当自证**——载荷里写死绝对时间戳的用例，自己 `setSystemTime` 钉住依赖的「现在」，不靠别处泄漏。反例实录：`sync.test.ts` 有两条 tombstone 用例的时间戳硬编码在 2026-06，长期是靠上面一条用例泄漏的 2026-05-17 假时钟才绿的；堵住泄漏当场变红，它们本就注定随真实时间推移而失效。

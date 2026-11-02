@@ -120,6 +120,15 @@ async function waitForCondition(
     if (assertion()) return;
     await step();
   }
+  // 快推耗尽再按 settle 慢推同样次数。Dexie 的 liveQuery 订阅后首查是 `setTimeout(doQuery, 0)` 排的（Node 里至少 1ms），
+  // flushAsync 只推微任务和 setImmediate：链路一快，40 次可能不到 1ms 就推完、首查还没开始——fake-indexeddb 6.2.7
+  // 起实测 40 次只用 0.4ms，再 settle 一次数据就到。快推这一段不动，已经能过的等待节奏不变；假定时器下 setTimeout 不走，不慢推。
+  if (step !== settle && !vi.isFakeTimers()) {
+    for (let i = 0; i < attempts; i += 1) {
+      await settle();
+      if (assertion()) return;
+    }
+  }
   throw new Error(`Timed out waiting for ${label}`);
 }
 
