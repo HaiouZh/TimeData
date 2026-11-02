@@ -3189,9 +3189,21 @@ describe("拖拽投递坞", () => {
       });
       await waitForCondition(() => dockState() === "hint", "右拉回位坞收回细条");
 
-      await act(async () => {
-        document.dispatchEvent(new MouseEvent("mouseup", { bubbles: true }));
-      });
+      // 松手后 dnd-kit 在 document 上留一个捕获阶段的 click 拦截器，按真实时钟 50ms 后才摘（防松手那下被当成
+      // 点击，6.3.1 `AbstractPointerSensor.detach`）。jsdom 的 document 整个文件共用，不在本条推掉它，
+      // 紧随其后的用例若在 50ms 内点击会被静默吞掉——「手头子任务拖起时坞不出任何药丸」的展开点击就落进过这个窗口。
+      // 同上面的激活延迟一样用假定时器推过去；只伪造 setTimeout，setImmediate 留给 fake-indexeddb。
+      vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+      try {
+        await act(async () => {
+          document.dispatchEvent(new MouseEvent("mouseup", { bubbles: true }));
+        });
+        await act(async () => {
+          await vi.advanceTimersByTimeAsync(60);
+        });
+      } finally {
+        vi.useRealTimers();
+      }
       await waitForCondition(() => dockState() === "hidden", "松手即散");
       await unmount(root);
     } finally {

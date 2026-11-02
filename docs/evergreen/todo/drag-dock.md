@@ -131,4 +131,5 @@ DOM 见证是容器上的 `data-dock-state`；药丸另有 `data-dock-engaged`�
 - `pages/TodoPage.test.tsx`：键盘拖起时坞出细条预告（恒基线档）、手头子任务拖起坞恒空、**鼠标拖起后左拉过阈值坞展开、右拉回位收回细条**。
 - `pages/todo/todoDockDrop.test.ts`：`applyTodoDockDrop` 的副作用调度——非 dock 落点、grab-to-hand、promote-to-hand、子任务投项目被拒、根任务折算 op，以及坞落位触感。
 - **jsdom 造得出指针拖拽**：`mousedown`（带 `clientX/Y`）→ 等 `MouseSensor` 的 180ms delay → 往 window 发 `pointermove` 即可。车道判定只看坐标差，不依赖 jsdom 量不出的布局；坞矩形恒 0 使 `holdDock` 恒 false，正好把释放路径也测进去。
+- **松手也要在本条用例里收干净**：`MouseSensor` 松手后在 document 上挂一个捕获阶段的 click 拦截器，按真实时钟 50ms 才摘（dnd-kit 6.3.1 `AbstractPointerSensor.detach`）。jsdom 的 document 整个文件共用，不推过去，下一条用例 50ms 内的点击会被静默吞掉——症状是 `-t` 单跑绿、整片跑偶红，点击像没发生过。做法：松手前开白名单假定时器（只伪造 `setTimeout` / `clearTimeout`），推过 50ms 再还原。
 - **覆盖边界**：真投递（`dockAllowed` 传参、末道闸、药丸命中）要 droppable 矩形，jsdom 全 0 量不出，靠代码审读与真机验收，不写恒绿用例充数。
